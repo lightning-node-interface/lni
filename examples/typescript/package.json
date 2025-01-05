@@ -1,0 +1,15 @@
+{
+  "name": "lni.ts",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "lni.ts",
+  "scripts": {
+    "start": "tsc && node --experimental-wasm-modules lni.js"
+  },
+  "dependencies": {
+    "typescript": "^4.0.0"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

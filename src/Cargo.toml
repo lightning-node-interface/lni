@@ -1,0 +1,23 @@
+[package]
+name = "lni"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+homepage = "https://github.com/lightning-node-interface/lni"
+repository = "https://github.com/lightning-node-interface/lni"
+documentation = "https://docs.rs/lni/"
+description = "Connect to the major lightning node implementations with a standard interface. LND, LNDK, CLN, Phoenixd, LNURL. Binding support for Android, IOS, React-Native, Typescript, JavaScript, Linux, Windows and Mac"
+keywords = ["lightning", "lni"]
+readme = "README.md"
+
+[dependencies]
+wasm-bindgen = "0.2"
+uniffi = { version = "0.27.3", features = ["cli"] }
+
+[build-dependencies]
+uniffi_build = "0.27.3"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "lni"
+path = "lib.rs"

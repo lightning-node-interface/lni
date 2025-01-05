@@ -1,0 +1,12 @@
+[bindings.kotlin]
+package_name = "org.lni.core"
+cdylib_name = "lni"
+
+[bindings.python]
+cdylib_name = "lni"
+
+[bindings.swift]
+module_name = "Lni"
+ffi_module_name = "LNIFFI"
+ffi_module_filename ="LNIFFI"
+cdylib_name = "lni"

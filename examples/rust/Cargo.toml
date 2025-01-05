@@ -1,0 +1,17 @@
+[package]
+name = "example-rust"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+homepage = "https://github.com/lightning-node-interface/lni"
+repository = "https://github.com/lightning-node-interface/lni"
+documentation = "https://docs.rs/lni/"
+description = "lni rust example"
+keywords = ["lightning", "lni"]
+
+[dependencies]
+lni = { path = "../../src/" }
+
+[[bin]]
+name = "example-rust"
+path = "main.rs"
