@@ -1,4 +1,9 @@
 pub trait ILightningNode {
+    // config and constructor
+    type Config: LightningConfig;
+    fn new(config: Self::Config) -> Self;
+
+    // methods
     fn get_wallet_transactions(&self, wallet_id: &str) -> Result<Vec<Transaction>, String>;
     fn pay_invoice(&self, invoice: &str) -> Result<String, String>;
     fn get_bolt12_offer(&self) -> Result<String, String>;
@@ -8,6 +13,21 @@ pub trait ILightningNode {
     fn fetch_channel_info(&self, channel_id: &str) -> Result<FetchChannelInfoResponseType, String>;
     fn on_payment_received(&self, event: &str);
 }
+
+pub enum WalletInterface {
+    LND_REST,
+    CLN_REST,
+    PHOENIXD_REST,
+    // add more here like
+    // LND_GRPC,
+}
+
+pub trait LightningConfig {
+    fn get_url(&self) -> &str;
+    fn get_key(&self) -> &str;
+    fn get_type(&self) -> WalletInterface;
+}
+
 
 pub struct FetchWalletBalanceResponseType {
     pub balance: u64,

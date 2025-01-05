@@ -3,30 +3,30 @@ use crate::{interface::{
     PaymentStatus, Transaction,
 }, LightningConfig, WalletInterface};
 
-pub struct LndConfig {
-    pub macaroon: String,
+pub struct ClnConfig {
+    pub rune: String,
     pub url: String,
     pub wallet_interface: WalletInterface,
 }
-pub struct LndNode {
-    config: LndConfig,
+pub struct ClnNode {
+    config: ClnConfig,
 }
 
-impl LightningConfig for LndConfig {
+impl LightningConfig for ClnConfig {
     fn get_url(&self) -> &str {
         &self.url
     }
     fn get_key(&self) -> &str {
-        &self.macaroon
+        &self.rune
     }
     fn get_type(&self) -> WalletInterface {
-        WalletInterface::LND_REST
+        WalletInterface::CLN_REST
     }
 }
 
-impl ILightningNode for LndNode {
+impl ILightningNode for ClnNode {
     // config and constructor
-    type Config = LndConfig;
+    type Config = ClnConfig;
     fn new(config: Self::Config) -> Self {
         Self { config }
     }
@@ -92,13 +92,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lnd_payment() {
-        let config = LndConfig {
-            macaroon: "test_macaroon".to_string(),
-            url: "https://127.0.0.1:8080".to_string(),
-            wallet_interface: WalletInterface::LND_REST,
+    fn test_cln_payment() {
+        let config = ClnConfig {
+            rune: "test_rune".to_string(),
+            url: "https://127.0.0.1:8081".to_string(),
+            wallet_interface: WalletInterface::CLN_REST,
         };
-        let node = LndNode::new(config);
+        let node = ClnNode::new(config);
         let result = node.pay_invoice("test_invoice");
         assert!(result.is_ok());
     }

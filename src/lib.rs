@@ -1,8 +1,10 @@
 pub mod interface;
 pub mod lnd;
+pub mod cln;
 
-pub use lnd::*;
 pub use interface::*;
+pub use lnd::*;
+pub use cln::*;
 
 use wasm_bindgen::prelude::*;
 
