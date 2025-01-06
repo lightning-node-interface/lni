@@ -76,3 +76,16 @@ Inpiration
 ==========
 - https://github.com/ZeusLN/zeus/blob/master/backends/LND.ts
 - https://github.com/fedimint/fedimint/blob/master/gateway/ln-gateway/src/lightning/lnd.rs
+
+Todo
+====
+- [X] make interface
+- [X] wasm 
+- [ ] uniffi bindings for Android and IOS
+- [ ] implement lightning nodes
+    - [ ] phoenixd
+    - [ ] cln
+    - [ ] lndk
+    - [ ] ldknode
+    - [ ] lnd
+    - [ ] eclair
