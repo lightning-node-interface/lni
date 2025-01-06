@@ -1,88 +1,71 @@
-use crate::{interface::{
-    FetchChannelInfoResponseType, FetchWalletBalanceResponseType, ILightningNode, Invoice,
-    PaymentStatus, Transaction,
-}, LightningConfig, WalletInterface};
+use wasm_bindgen::prelude::*;
+use crate::interface::{
+    WalletInterface, Transaction, FetchWalletBalanceResponseType,
+    FetchChannelInfoResponseType, PaymentStatus,
+};
 
-pub struct ClnConfig {
-    pub rune: String,
-    pub url: String,
-    pub wallet_interface: WalletInterface,
-}
+#[wasm_bindgen]
 pub struct ClnNode {
-    config: ClnConfig,
+    rune: String,
+    url: String,
+    wallet_interface: WalletInterface,
 }
 
-impl LightningConfig for ClnConfig {
-    fn get_url(&self) -> &str {
-        &self.url
-    }
-    fn get_key(&self) -> &str {
-        &self.rune
-    }
-    fn get_type(&self) -> WalletInterface {
-        WalletInterface::CLN_REST
-    }
-}
-
-impl ILightningNode for ClnNode {
-    // config and constructor
-    type Config = ClnConfig;
-    fn new(config: Self::Config) -> Self {
-        Self { config }
+#[wasm_bindgen]
+impl ClnNode {
+    #[wasm_bindgen(constructor)]
+    pub fn new(rune: String, url: String) -> ClnNode {
+        ClnNode {
+            rune,
+            url,
+            wallet_interface: WalletInterface::CLN_REST,
+        }
     }
 
-    // methods
-    fn get_wallet_transactions(&self, wallet_id: &str) -> Result<Vec<Transaction>, String> {
-        Ok(vec![
-            Transaction {
-                amount: 100,
-                date: "2023-01-01".to_string(),
-                memo: "Payment from Bob".to_string(),
-            },
-            Transaction {
-                amount: -50,
-                date: "2023-01-02".to_string(),
-                memo: "Payment to Alice".to_string(),
-            },
-        ])
+    #[wasm_bindgen(getter)]
+    pub fn key(&self) -> String {
+        self.rune.clone()
     }
 
-    fn pay_invoice(&self, invoice: &str) -> Result<String, String> {
-        Ok("Payment successful".to_string())
+    #[wasm_bindgen(getter)]
+    pub fn url(&self) -> String {
+        self.url.clone()
     }
 
-    fn get_bolt12_offer(&self) -> Result<String, String> {
-        Ok("lno".to_string())
+    #[wasm_bindgen(getter)]
+    pub fn wallet_interface(&self) -> WalletInterface {
+        self.wallet_interface.clone()
     }
 
-    fn fetch_wallet_balance(&self) -> Result<FetchWalletBalanceResponseType, String> {
-        Ok(FetchWalletBalanceResponseType { balance: 1000 })
+    pub fn fetch_wallet_balance(&self) -> FetchWalletBalanceResponseType {
+        FetchWalletBalanceResponseType::new(1000)
     }
 
-    fn decode_invoice(&self, invoice: &str) -> Result<Invoice, String> {
-        Ok(Invoice {
-            amount: 100,
-            memo: "Payment from Bob".to_string(),
-        })
+    pub fn fetch_channel_info(&self, channel_id: String) -> FetchChannelInfoResponseType {
+        FetchChannelInfoResponseType::new(100, 50)
     }
 
-    fn check_payment_status(&self, payment_id: &str) -> Result<PaymentStatus, String> {
-        Ok(PaymentStatus {
-            status: "PAID".to_string(),
-        })
+    pub fn check_payment_status(&self, payment_id: String) -> PaymentStatus {
+        PaymentStatus::new("PAID".to_string())
     }
 
-    fn fetch_channel_info(&self, channel_id: &str) -> Result<FetchChannelInfoResponseType, String> {
-        Ok(FetchChannelInfoResponseType {
-            send: 100,
-            receive: 50,
-        })
+    pub fn get_wallet_transactions(&self, wallet_id: String) -> Vec<Transaction> {
+        vec![
+            Transaction::new(100, "2023-01-01".to_string(), "Payment from Bob".to_string()),
+            Transaction::new(-50, "2023-01-02".to_string(), "Payment to Alice".to_string()),
+        ]
     }
 
-    fn on_payment_received(&self, event: &str) {
-        // 1. verify payment
-        // 2. write to payment-received file in tor data directory
-        //    paymentHash | expires(null) | amount
+    pub fn pay_invoice(&self, invoice: String) -> String {
+        format!("Paid invoice: {}", invoice)
+    }
+
+    pub fn get_bolt12_offer(&self) -> String {
+        "lno".to_string()
+    }
+
+    pub fn on_payment_received(&self, event: String) {
+        log::info!("Payment received: {}", event);
     }
 }
 
@@ -93,13 +76,8 @@ mod tests {
 
     #[test]
     fn test_cln_payment() {
-        let config = ClnConfig {
-            rune: "test_rune".to_string(),
-            url: "https://127.0.0.1:8081".to_string(),
-            wallet_interface: WalletInterface::CLN_REST,
-        };
-        let node = ClnNode::new(config);
-        let result = node.pay_invoice("test_invoice");
-        assert!(result.is_ok());
+        let cln_node = ClnNode::new("test_rune".to_string(), "https://127.0.0.1:8081".to_string());
+        let result =  cln_node.pay_invoice("invoice".to_string());
+        assert!(!result.is_empty());
     }
 }

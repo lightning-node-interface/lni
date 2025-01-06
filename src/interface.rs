@@ -1,62 +1,105 @@
-pub trait ILightningNode {
-    // config and constructor
-    type Config: LightningConfig;
-    fn new(config: Self::Config) -> Self;
+use wasm_bindgen::prelude::*;
 
-    // methods
-    fn get_wallet_transactions(&self, wallet_id: &str) -> Result<Vec<Transaction>, String>;
-    fn pay_invoice(&self, invoice: &str) -> Result<String, String>;
-    fn get_bolt12_offer(&self) -> Result<String, String>;
-    fn fetch_wallet_balance(&self) -> Result<FetchWalletBalanceResponseType, String>;
-    fn decode_invoice(&self, invoice: &str) -> Result<Invoice, String>;
-    fn check_payment_status(&self, payment_id: &str) -> Result<PaymentStatus, String>;
-    fn fetch_channel_info(&self, channel_id: &str) -> Result<FetchChannelInfoResponseType, String>;
-    fn on_payment_received(&self, event: &str);
-}
+// Enum representing different wallet interfaces
+#[wasm_bindgen]
+#[derive(Clone, Copy)]
 
 pub enum WalletInterface {
     LND_REST,
     CLN_REST,
     PHOENIXD_REST,
-    // add more here like
-    // LND_GRPC,
 }
 
-pub trait LightningConfig {
-    fn get_url(&self) -> &str;
-    fn get_key(&self) -> &str;
-    fn get_type(&self) -> WalletInterface;
-}
-
-
-pub struct FetchWalletBalanceResponseType {
-    pub balance: u64,
-}
-
-pub struct FetchChannelInfoResponseType {
-    pub send: u64,
-    pub receive: u64,
-}
-
+// Struct representing a transaction
+#[wasm_bindgen]
 pub struct Transaction {
-    pub amount: i64,
-    pub date: String,
-    pub memo: String,
+    amount: i64,
+    date: String,
+    memo: String,
 }
 
-pub struct Invoice {
-    pub amount: u64,
-    pub memo: String,
+#[wasm_bindgen]
+impl Transaction {
+    #[wasm_bindgen(constructor)]
+    pub fn new(amount: i64, date: String, memo: String) -> Transaction {
+        Transaction { amount, date, memo }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn amount(&self) -> i64 {
+        self.amount
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn date(&self) -> String {
+        self.date.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn memo(&self) -> String {
+        self.memo.clone()
+    }
 }
 
+// Struct for fetching wallet balance response
+#[wasm_bindgen]
+pub struct FetchWalletBalanceResponseType {
+    balance: u64,
+}
+
+#[wasm_bindgen]
+impl FetchWalletBalanceResponseType {
+    #[wasm_bindgen(constructor)]
+    pub fn new(balance: u64) -> FetchWalletBalanceResponseType {
+        FetchWalletBalanceResponseType { balance }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn balance(&self) -> u64 {
+        self.balance
+    }
+}
+
+// Struct for fetching channel info response
+#[wasm_bindgen]
+pub struct FetchChannelInfoResponseType {
+    send: u64,
+    receive: u64,
+}
+
+#[wasm_bindgen]
+impl FetchChannelInfoResponseType {
+    #[wasm_bindgen(constructor)]
+    pub fn new(send: u64, receive: u64) -> FetchChannelInfoResponseType {
+        FetchChannelInfoResponseType { send, receive }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn send(&self) -> u64 {
+        self.send
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn receive(&self) -> u64 {
+        self.receive
+    }
+}
+
+// Struct for payment status
+#[wasm_bindgen]
 pub struct PaymentStatus {
-    pub status: String,
+    status: String,
 }
 
-pub enum WalletProviderType {
-    Phoenixd,
-    Lndk,
-    CoreLightning,
-    Strike,
-    None,
+#[wasm_bindgen]
+impl PaymentStatus {
+    #[wasm_bindgen(constructor)]
+    pub fn new(status: String) -> PaymentStatus {
+        PaymentStatus { status }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn status(&self) -> String {
+        self.status.clone()
+    }
 }
