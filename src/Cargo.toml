@@ -10,14 +10,30 @@ description = "Connect to the major lightning node implementations with a standa
 keywords = ["lightning", "lni"]
 readme = "README.md"
 
+# GLOBAL DEPS
 [dependencies]
 wasm-bindgen = { version = "0.2", features = ["serde"] }
-uniffi = { version = "0.27.3", features = ["cli"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 log = "0.4"
 
-[build-dependencies]
+# NOT WASM DEPS
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+uniffi = { version = "0.27.3", features = ["cli"] }
+js-sys = "0.3"
+tokio = { version = "1.0", features = ["full"] }
+chrono = "0.4"
+
+# WASM ONLY DEPS
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.5"
+gloo-timers = { version = "0.2", features = ["futures"] }
+
+# NOT WASM BUILD DEPS
+[target.'cfg(not(target_arch = "wasm32"))'.build-dependencies]
 uniffi_build = "0.27.3"
 
 [lib]

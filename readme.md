@@ -44,10 +44,16 @@ lni.wallet_balance()
 ### Channel Management
 lni.fetch_channel_info()
 
-### Events
-lni.on_payment_recievced(invoice_info)
+### Event Polling (Cross platform)
+await lni.on_invoice_events(invoice_id, (event) =>{
+
+})
 
 ```
+
+Event Polling
+============
+LNI does some simple event polling over http to get some basic invoice status events. Polling is used instead of a heavier grpc/pubsub/ websocket event system to make sure the lib runs cross platform and stays lightweight.
 
 Dev
 ====

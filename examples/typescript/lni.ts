@@ -10,6 +10,12 @@ async function run() {
   txn.forEach((t) => {
     console.log("Transaction:", t.amount, t.date, t.memo);
   })
+
+  node.on_payment_received("lni1234", (result) => {
+    console.log("Callback result:", result);
+  })
+
+
 }
 
 run();

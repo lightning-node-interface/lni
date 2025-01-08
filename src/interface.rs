@@ -1,4 +1,6 @@
 use wasm_bindgen::prelude::*;
+use serde::{Serialize, Deserialize};
+
 
 // Enum representing different wallet interfaces
 #[wasm_bindgen]
@@ -101,5 +103,48 @@ impl PaymentStatus {
     #[wasm_bindgen(getter)]
     pub fn status(&self) -> String {
         self.status.clone()
+    }
+}
+
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct InvoiceEvent {
+    invoice_id: String,
+    status: String,
+    amount: u64,
+    datetime: String,
+}
+
+#[wasm_bindgen]
+impl InvoiceEvent {
+    #[wasm_bindgen(constructor)]
+    pub fn new(invoice_id: String, status: String, amount: u64, datetime: String) -> InvoiceEvent {
+        InvoiceEvent {
+            invoice_id,
+            status,
+            amount,
+            datetime,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn invoice_id(&self) -> String {
+        self.invoice_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn status(&self) -> String {
+        self.status.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn amount(&self) -> u64 {
+        self.amount
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn datetime(&self) -> String {
+        self.datetime().clone()
     }
 }
