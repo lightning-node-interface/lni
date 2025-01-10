@@ -44,9 +44,9 @@ lni.wallet_balance()
 ### Channel Management
 lni.fetch_channel_info()
 
-### Event Polling (Cross platform)
+### Event Polling
 await lni.on_invoice_events(invoice_id, (event) =>{
-
+    console.log("Callback result:", result);
 })
 
 ```
