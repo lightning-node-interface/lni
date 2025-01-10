@@ -85,11 +85,17 @@ Inpiration
 - https://github.com/ZeusLN/zeus/blob/master/backends/LND.ts
 - https://github.com/fedimint/fedimint/blob/master/gateway/ln-gateway/src/lightning/lnd.rs
 
+Project Structure
+==================
+This project structure was inpired by this https://github.com/ianthetechie/uniffi-starter/ with the intention of 
+automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+
 Todo
 ====
 - [X] make interface
 - [X] wasm 
 - [X] uniffi bindings for Android and IOS
+- [ ] react-native - uniffi-bindgen-react-native
 - [ ] implement lightning nodes
     - [ ] phoenixd
     - [ ] cln
@@ -97,3 +103,14 @@ Todo
     - [ ] ldknode
     - [ ] lnd
     - [ ] eclair
+
+
+
+New way to build
+
+```
+cd lni
+./install-deps.sh
+./build-ios.sh
+./build-android.sh
+```

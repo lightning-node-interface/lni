@@ -1,5 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
-uniffi::include_scaffolding!("lni");
+uniffi::setup_scaffolding!();
 
 pub mod cln;
 pub mod interface;

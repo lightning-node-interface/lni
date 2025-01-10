@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 
+#[derive(Debug, PartialEq, uniffi::Enum)]
 pub enum WalletInterface {
     LND_REST,
     CLN_REST,

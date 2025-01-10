@@ -1,8 +1,0 @@
-[workspace]
-
-members = [
-    "examples/rust",
-    "lni"
-]
-
-default-members = ["examples/rust"]

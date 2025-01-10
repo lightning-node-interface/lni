@@ -1,0 +1,44 @@
+[package]
+name = "lni"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+homepage = "https://github.com/lightning-node-interface/lni"
+repository = "https://github.com/lightning-node-interface/lni"
+documentation = "https://docs.rs/lni/"
+description = "Connect to the major lightning node implementations with a standard interface. LND, LNDK, CLN, Phoenixd, LNURL. Binding support for Android, IOS, React-Native, Typescript, JavaScript, Linux, Windows and Mac"
+keywords = ["lightning", "lni"]
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib", "lib"]
+
+# GLOBAL DEPS
+[dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+uniffi.workspace = true
+thiserror = "1.0.64"
+
+# NOT WASM DEPS
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+js-sys = "0.3"
+tokio = { version = "1.0", features = ["full"] }
+chrono = "0.4"
+
+# WASM ONLY DEPS
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.5"
+gloo-timers = { version = "0.2", features = ["futures"] }
+
+# NOT WASM BUILD DEPS
+[target.'cfg(not(target_arch = "wasm32"))'.build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+
