@@ -1,5 +1,5 @@
 # Ignore Cargo-specific files
-/target/
+**/target/
 /Cargo.lock
 
 # Ignore Rust-specific files

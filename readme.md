@@ -72,7 +72,9 @@ Bindings
 scripts/wasm.sh
 ```
 - uniffi for Android and IOS
-
+```
+scripts/bindings.sh
+```
 Tor
 ===
 Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy.
@@ -87,7 +89,7 @@ Todo
 ====
 - [X] make interface
 - [X] wasm 
-- [ ] uniffi bindings for Android and IOS
+- [X] uniffi bindings for Android and IOS
 - [ ] implement lightning nodes
     - [ ] phoenixd
     - [ ] cln

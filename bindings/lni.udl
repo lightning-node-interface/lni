@@ -1,3 +1,0 @@
-namespace lni {
-  string greet(string name);
-};

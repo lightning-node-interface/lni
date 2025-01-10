@@ -2,7 +2,7 @@
 
 members = [
     "examples/rust",
-    "src"
+    "lni"
 ]
 
 default-members = ["examples/rust"]

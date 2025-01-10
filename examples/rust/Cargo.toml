@@ -10,7 +10,7 @@ description = "lni rust example"
 keywords = ["lightning", "lni"]
 
 [dependencies]
-lni = { path = "../../src/" }
+lni = { path = "../../lni/" }
 js-sys = "0.3"
 tokio = { version = "1.0", features = ["full"] }
 
