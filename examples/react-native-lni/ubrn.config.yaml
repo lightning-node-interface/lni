@@ -1,5 +1,0 @@
----
-rust:
-  repo: ../..
-  branch: master
-  manifestPath: lni/Cargo.toml
