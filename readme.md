@@ -79,20 +79,21 @@ Bindings
 - Wasm for Javascript and Typescript
 ```
 cd lni
-scripts/build-wasm.sh
+./build-wasm.sh
 ```
-- react-native - uniffi-bindgen-react-native
-```
-see  https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
-```
-
-Other Language Examples
-=======================
-- typescript
 ```
 cd examples/typescript
 npm run start
 ```
+- react-native-lni (uniffi-bindgen-react-native)
+```
+# see https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+
+cd examples/react-native-lni
+yarn
+yarn example start
+```
+
 
 Tor
 ===
@@ -123,13 +124,3 @@ Todo
     - [ ] lnd
     - [ ] eclair
 
-
-
-New way to build
-
-```
-cd lni
-./install-deps.sh
-./build-ios.sh
-./build-android.sh
-```
