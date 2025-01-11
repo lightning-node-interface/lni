@@ -1,12 +1,9 @@
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use serde::{Serialize, Deserialize};
-
 
 // Enum representing different wallet interfaces
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
-
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Enum))]
 pub enum WalletInterface {
@@ -17,6 +14,7 @@ pub enum WalletInterface {
 
 // Struct representing a transaction
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct Transaction {
     amount: i64,
     date: String,
@@ -24,8 +22,10 @@ pub struct Transaction {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), uniffi::export)]
 impl Transaction {
     #[wasm_bindgen(constructor)]
+    #[cfg_attr(not(target_arch = "wasm32"), uniffi::constructor)]
     pub fn new(amount: i64, date: String, memo: String) -> Transaction {
         Transaction { amount, date, memo }
     }
@@ -48,13 +48,16 @@ impl Transaction {
 
 // Struct for fetching wallet balance response
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct FetchWalletBalanceResponseType {
     balance: u64,
 }
 
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), uniffi::export)]
 impl FetchWalletBalanceResponseType {
     #[wasm_bindgen(constructor)]
+    #[cfg_attr(not(target_arch = "wasm32"), uniffi::constructor)]
     pub fn new(balance: u64) -> FetchWalletBalanceResponseType {
         FetchWalletBalanceResponseType { balance }
     }
@@ -67,14 +70,17 @@ impl FetchWalletBalanceResponseType {
 
 // Struct for fetching channel info response
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct FetchChannelInfoResponseType {
     send: u64,
     receive: u64,
 }
 
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), uniffi::export)]
 impl FetchChannelInfoResponseType {
     #[wasm_bindgen(constructor)]
+    #[cfg_attr(not(target_arch = "wasm32"), uniffi::constructor)]
     pub fn new(send: u64, receive: u64) -> FetchChannelInfoResponseType {
         FetchChannelInfoResponseType { send, receive }
     }
@@ -92,13 +98,16 @@ impl FetchChannelInfoResponseType {
 
 // Struct for payment status
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct PaymentStatus {
     status: String,
 }
 
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), uniffi::export)]
 impl PaymentStatus {
     #[wasm_bindgen(constructor)]
+    #[cfg_attr(not(target_arch = "wasm32"), uniffi::constructor)]
     pub fn new(status: String) -> PaymentStatus {
         PaymentStatus { status }
     }
@@ -109,9 +118,9 @@ impl PaymentStatus {
     }
 }
 
-
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct InvoiceEvent {
     invoice_id: String,
     status: String,
@@ -120,8 +129,10 @@ pub struct InvoiceEvent {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(not(target_arch = "wasm32"), uniffi::export)]
 impl InvoiceEvent {
     #[wasm_bindgen(constructor)]
+    #[cfg_attr(not(target_arch = "wasm32"), uniffi::constructor)]
     pub fn new(invoice_id: String, status: String, amount: u64, datetime: String) -> InvoiceEvent {
         InvoiceEvent {
             invoice_id,

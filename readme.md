@@ -56,14 +56,15 @@ Event Polling
 LNI does some simple event polling over http to get some basic invoice status events. 
 Polling is used instead of a heavier grpc/pubsub/ websocket event system to make sure the lib runs cross platform and stays lightweight.
 
-Dev
-====
+Build
+=======
 ```
 cd lni
 ./install-deps.sh
 cargo clean
 cargo build
 cargo test
+cd ..
 ```
 
 Example
@@ -72,6 +73,7 @@ Example
 cd examples/rust
 cargo build
 cargo run
+cd ../../
 ```
 
 Bindings
@@ -80,18 +82,22 @@ Bindings
 ```
 cd lni
 ./build-wasm.sh
+cd ../
 ```
 ```
 cd examples/typescript
 npm run start
+cd ../../
 ```
 - react-native-lni (uniffi-bindgen-react-native)
 ```
-# see https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+# see https://github.com/lightning-node-interface/react-native-lni
+# guide https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 
-cd examples/react-native-lni
+cd examples/react-native
 yarn
 yarn example start
+cd ../../
 ```
 
 
