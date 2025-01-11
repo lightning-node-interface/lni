@@ -1,4 +1,0 @@
-module lniFFI {
-    header "lniFFI.h"
-    export *
-}

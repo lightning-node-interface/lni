@@ -7,7 +7,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { LndNode } from "../../pkg/bundler/lni.js";
+import { LndNode } from "../../lni/pkg/bundler/lni.js";
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const node = new LndNode("test_macaroon", "https://127.0.0.1:8080");

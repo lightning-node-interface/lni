@@ -1,7 +1,7 @@
 # cargo clean
 
 ### Wasm
-cd lni
+cd lib
 cargo build --target wasm32-unknown-unknown --release
 # Build for bundler target (webpack)
 wasm-pack build --target bundler --out-dir ../pkg/bundler

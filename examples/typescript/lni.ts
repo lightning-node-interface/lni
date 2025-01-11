@@ -1,4 +1,4 @@
-import { LndNode } from "../../pkg/bundler/lni.js";
+import { LndNode } from "../../lni/pkg/bundler/lni.js";
 
 async function run() {
   const node = new LndNode("test_macaroon", "https://127.0.0.1:8080");

@@ -53,15 +53,24 @@ await lni.on_invoice_events(invoice_id, (event) =>{
 
 Event Polling
 ============
-LNI does some simple event polling over http to get some basic invoice status events. Polling is used instead of a heavier grpc/pubsub/ websocket event system to make sure the lib runs cross platform and stays lightweight.
+LNI does some simple event polling over http to get some basic invoice status events. 
+Polling is used instead of a heavier grpc/pubsub/ websocket event system to make sure the lib runs cross platform and stays lightweight.
 
 Dev
 ====
 ```
+cd lni
+./install-deps.sh
 cargo clean
-scripts/deps.sh
 cargo build
 cargo test
+```
+
+Example
+========
+```
+cd examples/rust
+cargo build
 cargo run
 ```
 
@@ -69,12 +78,22 @@ Bindings
 ========
 - Wasm for Javascript and Typescript
 ```
-scripts/wasm.sh
+cd lni
+scripts/build-wasm.sh
 ```
-- uniffi for Android and IOS
+- react-native - uniffi-bindgen-react-native
 ```
-scripts/bindings.sh
+see  https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 ```
+
+Other Language Examples
+=======================
+- typescript
+```
+cd examples/typescript
+npm run start
+```
+
 Tor
 ===
 Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy.
