@@ -4,8 +4,6 @@
 // to both WASM + JavaScript (using wasm-bindgen) and native code (using Uniffi).
 
 use wasm_bindgen::prelude::*;
-use std::sync::Arc;
-
 
 // ----------------- WASM-only Imports ------------------
 #[cfg(target_arch = "wasm32")]
@@ -22,6 +20,9 @@ use wasm_bindgen_futures::spawn_local;
 use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time::sleep;
+#[cfg(not(target_arch = "wasm32"))]
+use async_std::future::{timeout, pending};
+
 
 // ===========================================
 // Transaction (a simple record-like struct)
@@ -216,6 +217,13 @@ pub trait PaymentListener: Sync + Send {
     fn on_event(&self, event: InvoiceEvent);
 }
 
+// #[cfg(not(target_arch = "wasm32"))]
+// #[uniffi::export(with_foreign)]
+// #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+// pub trait MyFetcher {
+//     async get(url: String) -> String;
+// }
+
 // --------------- Native (Uniffi) Implementation ---------------
 #[cfg(not(target_arch = "wasm32"))]
 #[uniffi::export]
@@ -265,28 +273,30 @@ impl LndNode {
         "PAID".to_string()
     }
 
-    pub async fn on_payment_received(&self, invoice_id: String, callback: Box<dyn PaymentListener>) {
+    pub async fn get_invoice(&self) -> String {
+        let never = pending::<()>();
+        timeout(Duration::from_secs(3), never).await.unwrap_err();
+        return "lnop12324rrefdsc".to_string();
+    }
+
+    pub async fn on_payment_received(
+        &self,
+        invoice_id: String,
+        callback: Box<dyn PaymentListener>,
+    ) {
         let url = self.url.clone();
         let macaroon = self.macaroon.clone();
         let invoice_id_clone = invoice_id.clone();
         let max = self.polling_timeout.clone();
         let i = self.polling_interval.clone();
 
-        tokio::spawn(async move {
-            for _ in 0..max {
-                let datetime = "a".to_string(); // Placeholder for datetime logic
-                let event = InvoiceEvent::new(
-                    invoice_id.to_string(),
-                    "paid".to_string(),
-                    1000,
-                    datetime,
-                );
-                callback.on_event(event);
-                sleep(Duration::from_secs(i)).await;
-            }
-        })
-        .await
-        .unwrap();
+        for _ in 0..max {
+            let datetime = "a".to_string(); // Placeholder for datetime logic
+            let event =
+                InvoiceEvent::new(invoice_id.to_string(), "paid".to_string(), 1000, datetime);
+            callback.on_event(event.clone());
+            sleep(Duration::from_secs(i)).await;
+        }
     }
 }
 
