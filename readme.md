@@ -129,4 +129,5 @@ Todo
     - [ ] ldknode
     - [ ] lnd
     - [ ] eclair
+    - [ ] Strike?
 
