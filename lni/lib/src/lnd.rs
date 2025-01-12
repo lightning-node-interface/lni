@@ -284,7 +284,7 @@ impl LndNode {
         let times = self.polling_timeout; // e.g. 5
         let interval = self.polling_interval; // e.g. 1
 
-        for count in 0..times {
+        for count in 0..10 {
             let event = InvoiceEvent::new(
                 invoice_id.clone(),
                 "paid".to_string(),
@@ -293,7 +293,7 @@ impl LndNode {
             );
             callback.on_event(event);
 
-            tokio::time::sleep(Duration::from_secs(interval)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
 }
