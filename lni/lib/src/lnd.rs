@@ -211,7 +211,7 @@ impl LndNode {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[uniffi::export]
+#[uniffi::export(callback_interface)]
 pub trait PaymentListener: Sync + Send {
     fn on_event(&self, event: InvoiceEvent);
 }
@@ -265,7 +265,7 @@ impl LndNode {
         "PAID".to_string()
     }
 
-    pub async fn on_payment_received(&self, invoice_id: String, callback: Arc<dyn PaymentListener>) {
+    pub async fn on_payment_received(&self, invoice_id: String, callback: Box<dyn PaymentListener>) {
         let url = self.url.clone();
         let macaroon = self.macaroon.clone();
         let invoice_id_clone = invoice_id.clone();
