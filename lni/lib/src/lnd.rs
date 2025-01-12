@@ -285,6 +285,7 @@ impl LndNode {
         let interval = self.polling_interval; // e.g. 1
 
         for count in 0..10 {
+            eprintln!("Native iteration #{}", count);
             let event = InvoiceEvent::new(
                 invoice_id.clone(),
                 "paid".to_string(),
@@ -292,9 +293,11 @@ impl LndNode {
                 format!("native-datetime #{}", count),
             );
             callback.on_event(event);
-
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            eprintln!("Called callback. Sleeping...");
+            let never = pending::<()>();
+            timeout(Duration::from_secs(1), never).await.unwrap_err();
         }
+        eprintln!("Loop finished!");
     }
 }
 
