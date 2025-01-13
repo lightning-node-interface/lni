@@ -14,6 +14,7 @@ mod lnd {
 
     #[cfg(feature = "wasm")]
     pub mod lnd_wasm;
+
 }
 
 // (Optional) re-export things if you want them public at top-level
@@ -22,10 +23,10 @@ pub use lightning_node_interface::*;
 
 // Conditional re-exports based on features
 #[cfg(feature = "wasm")]
-pub use lnd::lnd_wasm::WasmLndNode as LndNode;
+pub use lnd::lnd_wasm::*;
 
 #[cfg(feature = "uniffi")]
-pub use lnd::lnd::LndNode;
+pub use lnd::lnd_uniffi::*;
 
 // Optionally, you could define feature conflicts:
 #[cfg(all(feature = "wasm", feature = "uniffi"))]

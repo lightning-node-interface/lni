@@ -40,7 +40,7 @@ chrono = "0.4"
 uniffi = { workspace = true, optional = true, features = ["build"] }
 
 [features]
-default = ["uniffi"]
+default = ["uniffi"] # change the deault to help with the the compilers in your IDE and use "uniffi" for the default when running build-uniffi.sh
 
 # Make sure to reference the optional deps with "dep:".
 uniffi = [

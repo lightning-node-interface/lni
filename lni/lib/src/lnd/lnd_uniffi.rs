@@ -1,10 +1,10 @@
 #[cfg(feature = "uniffi")] // Only compile if feature=uniffi
 use uniffi_macros::export;
 
-use async_trait::async_trait;
-use crate::types::Transaction;
+use crate::lnd::lnd::LndNode;
 use crate::lightning_node_interface::LightningNodeInterface;
-use super::lnd::LndNode; // The core struct
+use crate::types::Transaction;
+use async_trait::async_trait; // The core struct
 
 #[cfg(feature = "uniffi")]
 #[async_trait::async_trait]

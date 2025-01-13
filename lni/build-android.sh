@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 cargo clean
-cargo build
+cargo build --features uniffi
 
 set -e
 set -u
