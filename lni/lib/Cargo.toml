@@ -40,7 +40,7 @@ chrono = "0.4"
 uniffi = { workspace = true, optional = true, features = ["build"] }
 
 [features]
-default = []
+default = ["uniffi"]
 
 # Make sure to reference the optional deps with "dep:".
 uniffi = [
