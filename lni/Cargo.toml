@@ -9,3 +9,4 @@ resolver = "2"
 
 [workspace.dependencies]
 uniffi = "0.28.2"
+uniffi_macros = "0.28.2"

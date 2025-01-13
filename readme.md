@@ -131,3 +131,21 @@ Todo
     - [ ] eclair
     - [ ] Strike?
 
+
+To Research
+============
+- [ ] wasm-web-browser (client side js, lightweight no grpc) vs wasm-nodejs (server side and native nodejs module *will not work in vercel edge functions)
+- [ ] can we support more complex grpc in 
+
+
+New Structure
+```
+cargo build
+
+
+cargo build --features uniffi
+
+
+cargo build --features wasm --target wasm32-unknown-unknown
+
+```

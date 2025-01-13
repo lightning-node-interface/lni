@@ -7,20 +7,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { LndNode } from "../../lni/pkg/bundler/lni.js";
+import { WasmLndNode as LndNode } from "../../lni/pkg/bundler/lni.js";
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const node = new LndNode("test_macaroon", "https://127.0.0.1:8080");
         // Fetch wallet balance
-        const res = node.pay_invoice("lno**");
-        console.log("Wallet Balance:", res);
-        const txn = node.get_wallet_transactions("wallet1");
-        txn.forEach((t) => {
-            console.log("Transaction:", t.amount, t.date, t.memo);
-        });
-        node.on_payment_received("lni1234", (result) => {
-            console.log("Callback result:", result);
-        });
+        // const res = node.pay_invoice("lno**");
+        // console.log("Wallet Balance:", res);
+        // const txn = node.get_wallet_transactions("wallet1");
+        // txn.forEach((t) => {
+        //   console.log("Transaction:", t.amount, t.date, t.memo);
+        // })
+        const inv = yield node.check_payment_status("lni1234");
+        console.log("Invoice:", inv);
+        // node.on_payment_received("lni1234", (event: InvoiceEvent) => {
+        //   console.log("Callback result:", event);
+        // })
     });
 }
 run();

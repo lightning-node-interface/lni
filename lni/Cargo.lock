@@ -675,7 +675,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "gloo-timers 0.2.6",
- "js-sys",
  "log",
  "serde",
  "serde-wasm-bindgen",
@@ -683,6 +682,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uniffi",
+ "uniffi_macros",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
