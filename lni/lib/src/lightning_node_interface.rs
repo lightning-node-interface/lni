@@ -1,7 +1,6 @@
 use crate::types::Transaction;
 use async_trait::async_trait;
 
-
 #[async_trait]
 pub trait LightningNodeInterface {
 

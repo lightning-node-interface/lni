@@ -6,6 +6,7 @@ use async_trait::async_trait;
 
 
 /// The main LND node object.
+#[derive(uniffi::Object)]
 pub struct LndNode {
     pub(crate) macaroon: String,
     pub(crate) url: String,
@@ -15,6 +16,7 @@ pub struct LndNode {
 
 impl LndNode {
     /// Public inherent constructor for outside crates
+    #[uniffi::constructor]
     pub fn new(
         macaroon: String,
         url: String,
