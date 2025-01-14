@@ -1,7 +1,4 @@
-use serde::{Serialize, Deserialize};
-
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     amount: i64,
     date: String,
@@ -9,7 +6,6 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    // A constructor for Wasm (and optionally UniFFI).
     pub fn new(amount: i64, date: String, memo: String) -> Transaction {
         Transaction { amount, date, memo }
     }

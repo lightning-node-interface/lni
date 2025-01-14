@@ -15,6 +15,3 @@ rustup component add clippy rustfmt
 
 # Verify the toolchain and targets
 rustup show
-
-cargo install -f wasm-pack
-cargo install -f wasm-bindgen-cli

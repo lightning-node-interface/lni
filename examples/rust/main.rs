@@ -1,8 +1,7 @@
 // use lni::{cln::ClnNode, lnd::LndNode, InvoiceEvent};
-use lni::{lnd::LndNode, InvoiceEvent};
+use lni::{LightningNodeInterface, LndNode};
 use tokio::time::Duration;
 
-#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CLN
@@ -24,15 +23,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let cln_rune = cln_node.key();
 
     // LND
-    let lnd_node = LndNode::new(
-        "test_macaroon".to_string(),
-        "https://127.0.0.1:8080".to_string(),
-        Some(1),
-        Some(5),
-    );
-    let lnd_result = lnd_node.get_invoice().await;
-    println!("Pay LND invoice result {}", lnd_result);
-    // let lnd_txns = lnd_node.get_wallet_transactions();
+    let node = LndNode::new("mac".into(), "http://127.0.0.1".into(), None, None);
+    match node.get_invoice("lnp".to_string()).await {
+        Ok(invoice) => println!("Invoice: {}", invoice),
+        Err(e) => eprintln!("Error getting invoice: {}", e),
+    }
+    // let lnd_txns = lnd_node.get_transactions();
     // lnd_txns.iter().for_each(|txn| {
     //     println!(
     //         "LND Transaction amount: {}, date: {}, memo: {}",

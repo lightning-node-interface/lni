@@ -4,7 +4,7 @@
   "type": "module",
   "main": "lni.ts",
   "scripts": {
-    "start": "tsc && node --experimental-wasm-modules lni.js"
+    "start": "tsc && node lni.js"
   },
   "dependencies": {
     "typescript": "^4.0.0"

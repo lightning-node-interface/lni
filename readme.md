@@ -78,14 +78,14 @@ cd ../../
 
 Bindings
 ========
-- Wasm for Javascript and Typescript
+- NAPI-RS for nodejs
 ```
 cd lni
-./build-wasm.sh
+./build-napi.sh
 cd ../
 ```
 ```
-cd examples/typescript
+cd examples/nodejs
 npm run start
 cd ../../
 ```
@@ -119,7 +119,7 @@ automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-b
 Todo
 ====
 - [X] make interface
-- [X] wasm 
+- [ ] napi-rs for nodejs
 - [X] uniffi bindings for Android and IOS
 - [ ] react-native - uniffi-bindgen-react-native
 - [ ] implement lightning nodes
@@ -134,18 +134,12 @@ Todo
 
 To Research
 ============
-- [ ] wasm-web-browser (client side js, lightweight no grpc) vs wasm-nodejs (server side and native nodejs module *will not work in vercel edge functions)
+- [ ] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
 
 
 New Structure
 ```
 cargo build
-
-
 cargo build --features uniffi
-
-
-cargo build --features wasm --target wasm32-unknown-unknown
-
 ```
