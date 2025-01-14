@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct Transaction {
     amount: i64,
     date: String,
@@ -6,6 +6,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    #[uniffi::constructor]
     pub fn new(amount: i64, date: String, memo: String) -> Transaction {
         Transaction { amount, date, memo }
     }

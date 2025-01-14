@@ -1,3 +1,7 @@
+use std::sync::Arc;
+// You must call this once
+uniffi::setup_scaffolding!();
+
 mod types;
 mod lightning_node_interface;
 mod lnd;

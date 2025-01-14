@@ -93,6 +93,7 @@ cd ../../
 ```
 # see https://github.com/lightning-node-interface/react-native-lni
 # guide https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+# sample https://github.com/ianthetechie/uniffi-starter
 
 cd examples/react-native
 yarn
