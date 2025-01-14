@@ -15,8 +15,6 @@ pub struct LndNode {
 }
 
 #[uniffi::export]
-impl LndNode {}
-
 impl LndNode {
     /// Public inherent constructor for outside crates
     #[uniffi::constructor]
