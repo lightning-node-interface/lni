@@ -14,6 +14,9 @@ pub struct LndNode {
     pub(crate) polling_timeout: u64,
 }
 
+#[uniffi::export]
+impl LndNode {}
+
 impl LndNode {
     /// Public inherent constructor for outside crates
     #[uniffi::constructor]
