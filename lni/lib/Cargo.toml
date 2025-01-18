@@ -12,6 +12,7 @@ readme = "README.md"
 
 [lib]
 crate-type = ["staticlib", "cdylib", "lib"]
+name = "lni"
 
 [dependencies]
 async-trait = "0.1.85"
