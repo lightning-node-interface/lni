@@ -1,0 +1,64 @@
+namespace async_api_client {
+    string test_response_data();
+};
+
+[Error]
+interface ApiError {
+    Http(string reason);
+    Api(string reason);
+    Json(string reason);
+};
+
+// Implemented by the foreign bindings
+[Trait, WithForeign]
+interface HttpClient {
+  [Throws=ApiError, Async]
+  string fetch(string url, string credentials); // fetch an URL and return the body
+};
+
+// Run Rust tasks in a thread pool.
+// Implemented by the foreign bindings
+[Trait, WithForeign]
+interface TaskRunner {
+  [Async]
+  void run_task(RustTask task);
+};
+
+[Trait]
+interface RustTask {
+  void execute();
+};
+
+dictionary Issue {
+    string url;
+    string title;
+    IssueState state;
+};
+
+dictionary Ip {
+    string origin;
+};
+
+enum IssueState {
+    "Open",
+    "Closed",
+};
+
+// Implemented by the Rust code
+interface ApiClient {
+  constructor(HttpClient http_client, TaskRunner task_runner);
+
+  [Throws=ApiError, Async]
+  Issue get_issue(string owner, string repository, u32 issue_number);
+
+  [Throws=ApiError, Async]
+  string get_ip_address();
+};
+
+
+interface Fetcher {
+  constructor();
+
+  [Throws=ApiError, Async]
+  Ip get_ip_address();
+};

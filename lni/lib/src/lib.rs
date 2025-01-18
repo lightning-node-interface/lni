@@ -21,3 +21,20 @@ pub use types::*;
 pub use lightning_node_interface::LightningNodeInterface;
 pub use crate::lnd::lnd::LndNode;
 // pub use crate::nwc::nwc::NwcNode;
+
+
+mod api_client;
+pub use api_client::{ApiClient, HttpClient, Issue, IssueState, Ip, Fetcher};
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("HttpError: {reason}")]
+    Http { reason: String },
+    #[error("ApiError: {reason}")]
+    Api { reason: String },
+    #[error("JsonError: {reason}")]
+    Json { reason: String },
+}
+
+pub type Result<T> = std::result::Result<T, ApiError>;
+
+uniffi::include_scaffolding!("async-api-client");
