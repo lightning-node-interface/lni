@@ -25,8 +25,12 @@ pub use crate::lnd::lnd::LndNode;
 
 mod api_client;
 mod tasks;
+mod test_data;
 
 pub use api_client::{ApiClient, HttpClient, Issue, IssueState, Ip, Fetcher};
+pub use tasks::{run_task, RustTask, TaskRunner};
+pub use test_data::test_response_data;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("HttpError: {reason}")]
@@ -38,5 +42,3 @@ pub enum ApiError {
 }
 
 pub type Result<T> = std::result::Result<T, ApiError>;
-
-uniffi::include_scaffolding!("lni");

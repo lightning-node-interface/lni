@@ -13,10 +13,10 @@ pub struct LndNode {
 }
 
 /// Inherent methods for constructing and configuring LndNode.
-#[uniffi::export]
+// #[uniffi::export]
 impl LndNode {
     /// Public inherent constructor for outside crates.
-    #[uniffi::constructor]
+    // #[uniffi::constructor]
     pub fn new(
         macaroon: String,
         url: String,
