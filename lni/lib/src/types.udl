@@ -1,0 +1,9 @@
+namespace lni {};
+
+dictionary NodeConfig {
+    string endpoint;
+    string key;
+    u64 polling_interval;
+    u64 polling_timeout;
+};
+

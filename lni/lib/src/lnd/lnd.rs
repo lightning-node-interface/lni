@@ -1,11 +1,8 @@
 use crate::{lightning_node_interface::LightningNodeInterface, types::Transaction};
-use crate::lnd_api;
+use crate::lnd::lnd_api;
 use async_trait::async_trait;
-// use napi::bindgen_prelude::*;
-// use napi_derive::napi;
 
-
-/// The main LND node object.
+/// The main LND node object exposed via UniFFI.
 #[derive(uniffi::Object)]
 pub struct LndNode {
     pub(crate) macaroon: String,
@@ -14,9 +11,10 @@ pub struct LndNode {
     pub(crate) polling_timeout: u64,
 }
 
+/// Inherent methods for constructing and configuring LndNode.
 #[uniffi::export]
 impl LndNode {
-    /// Public inherent constructor for outside crates
+    /// Public inherent constructor for outside crates.
     #[uniffi::constructor]
     pub fn new(
         macaroon: String,
@@ -31,14 +29,19 @@ impl LndNode {
             polling_timeout: polling_timeout.unwrap_or(60),
         }
     }
+
+    // Public synchronous method (you can export any non-async function like this as well).
+    // #[uniffi::export]
+    // pub fn key(&self) -> String {
+    //     self.macaroon.clone()
+    // }
 }
 
+/// Trait implementation with async methods, using async_trait for convenience.
 #[async_trait]
 impl LightningNodeInterface for LndNode {
-    
-    /// Note: fn new Core constructor logic above so it can be public
+    // We already have the constructor in inherent form above.
 
-    /// Return the "macaroon" (like a key).
     fn key(&self) -> String {
         self.macaroon.clone()
     }
@@ -59,18 +62,41 @@ impl LightningNodeInterface for LndNode {
         Ok(lnd_api::get_wallet_transactions().await)
     }
 
-    /// Example async function that "gets an invoice" after some delay
     async fn get_invoice(&self, payment_id: String) -> Result<String, Box<dyn std::error::Error>> {
         Ok(lnd_api::get_invoice(payment_id).await)
     }
 
-    /// Another async function for creating an invoice
     async fn create_invoice(
         &self,
         amount: u64,
         memo: String,
     ) -> Result<String, Box<dyn std::error::Error>> {
         Ok(lnd_api::create_invoice(amount, memo).await)
+    }
+}
+
+/// UniFFI-exported async wrapper methods that internally call your trait methods.
+/// The default runtime is "blocking". You may switch with `async_runtime = "spawn"` or `"none"`.
+impl LndNode {
+    pub async fn get_invoice_uniffi(&self, payment_id: String) -> String {
+        match self.get_invoice(payment_id).await {
+            Ok(invoice) => invoice,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    pub async fn create_invoice_uniffi(&self, amount: u64, memo: String) -> String {
+        match self.create_invoice(amount, memo).await {
+            Ok(invoice) => invoice,
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    pub async fn get_transactions_uniffi(&self) -> Vec<Transaction> {
+        match self.get_transactions().await {
+            Ok(txs) => txs,
+            Err(_) => vec![],
+        }
     }
 }
 

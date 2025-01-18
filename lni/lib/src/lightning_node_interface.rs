@@ -4,7 +4,7 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait LightningNodeInterface {
 
-    // Implement the new inherent downstream in your implementation
+    // Implement the constructor downstream in your implementation
     // pub fn new(
     //     key: String,
     //     url: String,

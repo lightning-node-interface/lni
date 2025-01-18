@@ -1,12 +1,18 @@
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     amount: i64,
     date: String,
     memo: String,
 }
 
+pub struct NodeConfig {
+    key: String,
+    endpoint: String,
+    polling_interval: u64,
+    polling_timeout: u64,
+}
+
 impl Transaction {
-    #[uniffi::constructor]
     pub fn new(amount: i64, date: String, memo: String) -> Transaction {
         Transaction { amount, date, memo }
     }
