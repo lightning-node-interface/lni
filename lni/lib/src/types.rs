@@ -6,10 +6,10 @@ pub struct Transaction {
 }
 
 pub struct NodeConfig {
-    key: String,
-    endpoint: String,
-    polling_interval: u64,
-    polling_timeout: u64,
+    pub key: String,
+    pub endpoint: String,
+    pub polling_interval: u64,
+    pub polling_timeout: u64,
 }
 
 impl Transaction {

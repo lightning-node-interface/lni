@@ -1,5 +1,6 @@
 use crate::{lightning_node_interface::LightningNodeInterface, types::Transaction};
 use crate::lnd::lnd_api;
+use crate::types::NodeConfig;
 use async_trait::async_trait;
 
 /// The main LND node object exposed via UniFFI.
@@ -43,6 +44,13 @@ impl LightningNodeInterface for LndNode {
     // We already have the constructor in inherent form above.
 
     fn key(&self) -> String {
+        let n =  NodeConfig {
+            key: self.macaroon.clone(),
+            endpoint: self.url.clone(),
+            polling_interval: self.polling_interval,
+            polling_timeout: self.polling_timeout,
+        };  
+        eprint!("Key: {}", n.key);
         self.macaroon.clone()
     }
 
