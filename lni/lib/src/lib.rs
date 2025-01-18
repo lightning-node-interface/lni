@@ -1,5 +1,5 @@
 // You must call this once
-uniffi::setup_scaffolding!("types");
+uniffi::setup_scaffolding!("lni");
 
 mod types;
 mod lightning_node_interface;
@@ -17,7 +17,8 @@ mod nwc {
 }
 
 // Re-export or declare modules
-pub use types::*;
+pub use types::NodeConfig;
+pub use types::Transaction;
 pub use lightning_node_interface::LightningNodeInterface;
 pub use crate::lnd::lnd::LndNode;
 // pub use crate::nwc::nwc::NwcNode;
