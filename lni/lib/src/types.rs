@@ -5,6 +5,7 @@ pub struct Transaction {
     memo: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
 pub struct NodeConfig {
     pub key: String,
     pub endpoint: String,
