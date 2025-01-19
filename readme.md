@@ -1,17 +1,18 @@
 LNI - Lightning Node Interface
 ==============================
 
-<img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
+LNI - Lightning Node Interface. Connect to the major lightning node implementations with a standard interface. 
 
-- LNI - Lightning Node Interface. Connect to the major lightning node implementations with a standard interface. 
 - Supports *CLN, *LND, *LNDK, *Phoenixd, *LNURL, *BOLT 11 and *BOLT 12 (WIP). 
 - Language Binding support for kotlin, swift, react-native, nodejs (typescript, javaScript). No support for WASM (yet)
 - Runs on Android, iOS, Linux, Windows and Mac
 
-```
-### Examples
+<img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
 
-# LND
+### Interface API
+
+#### LND
+```rust
 let lnd_node = LndNode::new("test_macaroon".to_string(), "https://127.0.0.1:8080".to_string());
 let lnd_result =  lnd_node.pay_invoice("invoice".to_string());
 println!("Pay LND invoice result {}", lnd_result);
@@ -20,8 +21,10 @@ lnd_txns.iter().for_each(|txn| {
     println!("LND Transaction amount: {}, date: {}, memo: {}", txn.amount(), txn.date(), txn.memo()); 
 });
 let lnd_macaroon = lnd_node.key();
+```
 
-# CLN
+#### CLN
+```rust
 let cln_node = ClnNode::new("test_rune".to_string(), "https://127.0.0.1:8081".to_string());
 let cln_result =  cln_node.pay_invoice("invoice".to_string());
 println!("Pay CLN invoice result {}", cln_result);
@@ -30,34 +33,42 @@ cln_txns.iter().for_each(|txn| {
     println!("CLN Transaction amount: {}, date: {}, memo: {}", txn.amount(), txn.date(), txn.memo()); 
 });
 let cln_rune = cln_node.key();
+```
 
 
-### Payments
+#### Payments
+```rust
 lni.create_invoice(amount, expiration, memo, BOLT11 | BOLT12)
 lni.pay_invoice()
 lni.fetch_invoice_from_offer('lno***')
 lni.decode_invoice(invoice)
 lni.check_invoice_status(invoice)
+```
 
-### Node Management
+#### Node Management
+```
 lni.get_info()
 lni.get_transactions(limit, skip)
 lni.wallet_balance()
+```
 
-### Channel Management
+#### Channel Management
+```
 lni.fetch_channel_info()
+```
 
-### Event Polling
+#### Event Polling
+```
 await lni.on_invoice_events(invoice_id, (event) =>{
     console.log("Callback result:", result);
 })
-
 ```
+
 
 Event Polling
 ============
-LNI does some simple event polling over http to get some basic invoice status events. 
-Polling is used instead of a heavier grpc/pubsub/ websocket event system to make sure the lib runs cross platform and stays lightweight.
+LNI does some simple event polling over https to get some basic invoice status events. 
+Polling is used instead of a heavier grpc/pubsub (for now) event system to make sure the lib runs cross platform and stays lightweight. TODO websockets
 
 Build
 =======
@@ -68,16 +79,31 @@ cargo build
 cargo test
 ```
 
+Folder Structure
+================
+```
+lni
+├── bindings
+│   ├── lni_nodejs
+│   ├── lni_react_native
+│   ├── lni_uniffi
+├── crates
+│   ├── lni
+│       |─── lnd
+│       |─── cln
+│       |─── phoenixd
+```
+
 Example
 ========
-- react-native
+react-native
 ```
 cd bindings/lni_react_native
 cat example/src/App.tsx 
 yarn start
 ```
 
-- nodejs 
+nodejs 
 ```
 cd bindings/lni_nodejs
 cat main.mjs
@@ -109,9 +135,10 @@ Tor
 Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy.
 
 
-Inpiration
+Inspiration
 ==========
 - https://github.com/ZeusLN/zeus/blob/master/backends/LND.ts
+- https://github.com/getAlby/hub/tree/master/lnclient
 - https://github.com/fedimint/fedimint/blob/master/gateway/ln-gateway/src/lightning/lnd.rs
 
 Project Structure
@@ -141,3 +168,4 @@ To Research
 ============
 - [X] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
+- [ ] wasm
