@@ -1,0 +1,15 @@
+{
+  "name": "lni_js-darwin-universal",
+  "version": "0.0.0",
+  "os": [
+    "darwin"
+  ],
+  "main": "lni_js.darwin-universal.node",
+  "files": [
+    "lni_js.darwin-universal.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

@@ -114,3 +114,6 @@ xcuserdata/
 
 **/android
 **/apple
+
+**/rust_modules
+**/node_modules
