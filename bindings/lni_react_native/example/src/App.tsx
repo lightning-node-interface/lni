@@ -1,12 +1,22 @@
+import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from 'react-native-lni';
-
-const result = multiply(3, 7);
+import { Fetcher } from 'react-native-lni';
 
 export default function App() {
+  const fetcher = new Fetcher();
+  const [ip, setIp] = useState<string>('');
+
+  const main = async () => {
+    const ipAddr = await fetcher.getIpAddress();
+    setIp(ipAddr.origin);
+    console.log('IP Address', ipAddr);
+  };
+
+  main();
+
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Text>Your IP address is: {ip}</Text>
     </View>
   );
 }

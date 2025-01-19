@@ -6,7 +6,6 @@
 export interface Ip {
   origin: string
 }
-export declare function sayHello(): string
 export declare class Fetcher {
   constructor()
   getIpAddress(): Promise<Ip>

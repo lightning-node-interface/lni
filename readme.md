@@ -71,7 +71,20 @@ cargo test
 Example
 ========
 - react-native
+```
+cd bindings/lni_react_native
+cat example/src/App.tsx 
+yarn start
+```
+
 - nodejs 
+```
+cd bindings/lni_nodejs
+cat main.mjs
+yarn
+yarn build
+node main.mjs
+```
 
 Bindings
 ========

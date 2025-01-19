@@ -310,7 +310,6 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Fetcher, sayHello } = nativeBinding
+const { Fetcher } = nativeBinding
 
 module.exports.Fetcher = Fetcher
-module.exports.sayHello = sayHello
