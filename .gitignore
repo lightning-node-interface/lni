@@ -111,3 +111,9 @@ xcuserdata/
 
 # Android (cargo-ndk outputs; they end up in the Android source tree)
 *.so
+
+**/android
+**/apple
+
+**/rust_modules
+**/node_modules

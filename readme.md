@@ -3,7 +3,10 @@ LNI - Lightning Node Interface
 
 <img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
 
-LNI - Lightning Node Interface. Connect to the major lightning node implementations with a standard interface. CLN, LND, LNDK, Phoenixd, LNURL (BOLT 11 and BOLT 12). Binding support for Android, IOS, React-Native, Typescript, JavaScript, Linux, Windows and Mac
+- LNI - Lightning Node Interface. Connect to the major lightning node implementations with a standard interface. 
+- Supports *CLN, *LND, *LNDK, *Phoenixd, *LNURL, *BOLT 11 and *BOLT 12 (WIP). 
+- Language Binding support for kotlin, swift, react-native, nodejs (typescript, javaScript). No support for WASM (yet)
+- Runs on Android, iOS, Linux, Windows and Mac
 
 ```
 ### Examples
@@ -59,46 +62,33 @@ Polling is used instead of a heavier grpc/pubsub/ websocket event system to make
 Build
 =======
 ```
-cd lni
-./install-deps.sh
+cd crates/lni
 cargo clean
 cargo build
 cargo test
-cd ..
 ```
 
 Example
 ========
-```
-cd examples/rust
-cargo build
-cargo run
-cd ../../
-```
+- react-native
+- nodejs 
 
 Bindings
 ========
-- Wasm for Javascript and Typescript
-```
-cd lni
-./build-wasm.sh
-cd ../
-```
-```
-cd examples/typescript
-npm run start
-cd ../../
-```
-- react-native-lni (uniffi-bindgen-react-native)
-```
-# see https://github.com/lightning-node-interface/react-native-lni
-# guide https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 
-cd examples/react-native
-yarn
-yarn example start
-cd ../../
-```
+- nodejs 
+    - napi_rs
+    - https://napi.rs/docs/introduction/simple-package
+    - `cd bindings/lni_nodejs && cargo build`
+
+- react-native 
+    - uniffi-bindgen-react-native 
+    - https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html
+    - sample https://github.com/ianthetechie/uniffi-starter  
+    - `cd`
+- uniffi (kotlin, swift) 
+    - https://mozilla.github.io/uniffi-rs/latest/
+    - `cd bindings/lni_uniffi && cargo build`
 
 
 Tor
@@ -119,9 +109,10 @@ automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-b
 Todo
 ====
 - [X] make interface
-- [X] wasm 
+- [X] napi-rs for nodejs
 - [X] uniffi bindings for Android and IOS
-- [ ] react-native - uniffi-bindgen-react-native
+- [X] react-native - uniffi-bindgen-react-native
+- [X] async promise architecture for bindings
 - [ ] implement lightning nodes
     - [ ] phoenixd
     - [ ] cln
@@ -129,4 +120,11 @@ Todo
     - [ ] ldknode
     - [ ] lnd
     - [ ] eclair
+    - [ ] Strike? (BOLT 12 support, BOLT 11 blinded path support?)
+    - [ ] NWC? (AlbyHub - blinded path support?)
 
+
+To Research
+============
+- [X] napi-rs https://napi.rs/docs/introduction/simple-package
+- [ ] can we support more complex grpc in 

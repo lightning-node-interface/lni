@@ -1,0 +1,5 @@
+---
+rust:
+  repo: ../
+  branch: master
+  manifestPath: bindings/lni_uniffi/Cargo.toml

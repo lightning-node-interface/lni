@@ -1,0 +1,18 @@
+{
+  "name": "lni_js-freebsd-x64",
+  "version": "0.0.0",
+  "os": [
+    "freebsd"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "lni_js.freebsd-x64.node",
+  "files": [
+    "lni_js.freebsd-x64.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}
