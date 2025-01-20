@@ -10,6 +10,10 @@ export interface PhoenixdConfig {
   url: string
   password: string
 }
+export interface PhoenixdNode {
+  url: string
+  password: string
+}
 export declare class Fetcher {
   constructor()
   getIpAddress(): Promise<Ip>

@@ -129,6 +129,30 @@ Bindings
     - https://mozilla.github.io/uniffi-rs/latest/
     - `cd bindings/lni_uniffi && cargo build`
 
+Shared Binding Objects
+====================
+If you do not want to copy objects to the foreign language bindings we can simply use the features `napi_rs` or `uniffi_rs`
+to turn on or off language specific decorators and then implement them in their respective bindings project.
+
+Example:
+```
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
+pub struct PhoenixdConfig {
+    pub url: String,
+    pub password: String,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
+pub struct PhoenixdNode {
+    pub url: String,
+    pub password: String,
+}
+```
 
 Tor
 ===

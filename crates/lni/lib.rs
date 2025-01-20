@@ -3,6 +3,8 @@ use reqwest;
 use napi_derive::napi;
 #[cfg(feature = "napi_rs")]
 use napi::bindgen_prelude::*;
+#[cfg(feature = "uniffi_rs")]
+uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
