@@ -6,7 +6,18 @@
 export interface Ip {
   origin: string
 }
+export interface PhoenixdConfig {
+  url: string
+  password: string
+}
 export declare class Fetcher {
   constructor()
   getIpAddress(): Promise<Ip>
+}
+export declare class PhoenixdNode {
+  constructor(config: PhoenixdConfig)
+  getUrl(): string
+  getPassword(): string
+  getConfig(): PhoenixdConfig
+  getOffer(): Promise<string>
 }

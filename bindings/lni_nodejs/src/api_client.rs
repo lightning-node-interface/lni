@@ -1,20 +1,9 @@
-#[cfg(feature = "napi_rs")]
-use napi::{JsObject, Result};
-#[cfg(feature = "napi_rs")]
+use napi::Result;
 use napi_derive::napi;
-use serde_json::json;
-use std::sync::Arc;
 
-#[cfg(feature = "napi_rs")]
 #[napi]
 pub struct Fetcher {}
 
-// #[napi(object)]
-// pub struct JsIp {
-//   pub origin: String,
-// }
-
-#[cfg(feature = "napi_rs")]
 #[napi]
 impl Fetcher {
   #[napi(constructor)]
