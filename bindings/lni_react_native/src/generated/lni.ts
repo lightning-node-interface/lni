@@ -362,6 +362,7 @@ const FfiConverterTypeApiError = (() => {
 })();
 
 export interface FetcherInterface {
+  getConfig(): string;
   getIpAddress(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<Ip>;
 }
 
@@ -382,6 +383,20 @@ export class Fetcher extends UniffiAbstractObject implements FetcherInterface {
     );
     this[pointerLiteralSymbol] = pointer;
     this[destructorGuardSymbol] = uniffiTypeFetcherObjectFactory.bless(pointer);
+  }
+
+  public getConfig(): string {
+    return FfiConverterString.lift(
+      rustCall(
+        /*caller:*/ (callStatus) => {
+          return nativeModule().uniffi_lni_uniffi_fn_method_fetcher_get_config(
+            uniffiTypeFetcherObjectFactory.clonePointer(this),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
   }
 
   public async getIpAddress(asyncOpts_?: {
@@ -510,6 +525,14 @@ function uniffiEnsureInitialized() {
     throw new UniffiInternalError.ContractVersionMismatch(
       scaffoldingContractVersion,
       bindingsContractVersion
+    );
+  }
+  if (
+    nativeModule().uniffi_lni_uniffi_checksum_method_fetcher_get_config() !==
+    25138
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_lni_uniffi_checksum_method_fetcher_get_config'
     );
   }
   if (

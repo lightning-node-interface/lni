@@ -7,9 +7,9 @@ export default function App() {
   const [ip, setIp] = useState<string>('');
 
   const main = async () => {
-    const ipAddr = await fetcher.getIpAddress();
-    setIp(ipAddr.origin);
-    console.log('IP Address', ipAddr);
+    const config = fetcher.getConfig();
+    setIp(config);
+    console.log('Config', config);
   };
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text>Your IP address is shit: {ip}</Text>
+      <Text>Config: {ip}</Text>
     </View>
   );
 }

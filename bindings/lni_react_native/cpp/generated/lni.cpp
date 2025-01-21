@@ -107,6 +107,9 @@ void uniffi_lni_uniffi_fn_free_fetcher(void *ptr,
 void *
 uniffi_lni_uniffi_fn_constructor_fetcher_new(RustBuffer url,
                                              RustCallStatus *uniffi_out_err);
+RustBuffer
+uniffi_lni_uniffi_fn_method_fetcher_get_config(void *ptr,
+                                               RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t
 uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(void *ptr);
 RustBuffer ffi_lni_uniffi_rustbuffer_alloc(uint64_t size,
@@ -235,6 +238,7 @@ void ffi_lni_uniffi_rust_future_free_void(
     /*handle*/ uint64_t handle);
 void ffi_lni_uniffi_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+uint16_t uniffi_lni_uniffi_checksum_method_fetcher_get_config();
 uint16_t uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address();
 uint16_t uniffi_lni_uniffi_checksum_constructor_fetcher_new();
 uint32_t ffi_lni_uniffi_uniffi_contract_version();
@@ -1585,6 +1589,17 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_uniffi_lni_uniffi_fn_constructor_fetcher_new(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_fn_method_fetcher_get_config"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_method_fetcher_get_config"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_method_fetcher_get_config(
+                rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_fn_method_fetcher_get_ip_address"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2144,6 +2159,18 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_ffi_lni_uniffi_rust_future_complete_void(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_checksum_method_fetcher_get_config"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_method_fetcher_get_config"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_config(
+                    rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2304,6 +2331,18 @@ jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_constructor_fetcher_new(
                                                     args[count - 1]);
 
   return uniffi_jsi::Bridging<void *>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_fetcher_get_config(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_method_fetcher_get_config(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi::lni::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
 }
 jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
@@ -2898,6 +2937,13 @@ jsi::Value NativeLni::cpp_ffi_lni_uniffi_rust_future_complete_void(
                                                     args[count - 1]);
 
   return jsi::Value::undefined();
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_config(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_fetcher_get_config();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
 jsi::Value
 NativeLni::cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address(

@@ -39,6 +39,9 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_fn_constructor_fetcher_new(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_fetcher_get_config(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -220,6 +223,9 @@ protected:
                                                       const jsi::Value *args,
                                                       size_t count);
   jsi::Value cpp_ffi_lni_uniffi_rust_future_complete_void(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_config(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address(
