@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode, Fetcher } from '../../src';
+import { PhoenixdNode, Fetcher } from 'react-native-lni';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');

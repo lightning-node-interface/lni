@@ -10,4 +10,4 @@ pub use api_client::Fetcher;
 pub use phoenixd::PhoenixdNode;
 
 // for use with uniffi decorators (not udl files)
-// uniffi::setup_scaffolding!("lni_sdk");
+uniffi::setup_scaffolding!("lni_sdk");
