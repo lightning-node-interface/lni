@@ -23,4 +23,5 @@ interface Fetcher {
 
 interface PhoenixdNode {
   constructor(string url, string password);
+
 };

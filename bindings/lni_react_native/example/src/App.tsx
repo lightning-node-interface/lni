@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode, Fetcher } from 'react-native-lni';
+import { PhoenixdNode, Fetcher } from '../../src';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
@@ -8,6 +8,8 @@ export default function App() {
   const main = async () => {
     try {
       const node = new PhoenixdNode();
+
+      const f = new Fetcher();
 
       //const offerRes = await node.getOffer();
       //setOffer(offerRes);
