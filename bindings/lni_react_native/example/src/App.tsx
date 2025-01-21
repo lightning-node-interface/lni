@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode } from '../../src/generated/lni_uniffi';
+import { PhoenixdNode } from '../../src';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
@@ -11,7 +11,7 @@ export default function App() {
       url: 'username',
     });
     const offerRes = await node.getOffer();
-    // setOffer(offerRes);
+    setOffer(offerRes.offer);
   };
 
   main();

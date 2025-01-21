@@ -13,22 +13,25 @@ impl PhoenixdNode {
         Self { inner: config }
     }
 
-    pub fn get_url(&self) -> String {
+    pub fn get_url(self: Arc<Self>) -> String {
         self.inner.url.clone()
     }
 
-    pub fn get_password(&self) -> String {
+    pub fn get_password(self: Arc<Self>) -> String {
         self.inner.password.clone()
     }
 
-    pub fn get_config(&self) -> PhoenixdConfig {
+    pub fn get_config(self: Arc<Self>) -> PhoenixdConfig {
         PhoenixdConfig {
             url: self.inner.url.clone(),
             password: self.inner.password.clone(),
         }
     }
 
-    pub async fn get_offer(&self) -> lni::Result<String> {
-        lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone()).await
+    pub async fn get_offer(self: Arc<Self>) -> Result<String, lni::ApiError> {
+        match lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone()).await {
+            Ok(offer) => Ok(offer),
+            Err(e) => Err(lni::ApiError::from(e)),
+        }
     }
 }
