@@ -22,22 +22,22 @@ impl Fetcher {
 //     }
 // }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    async fn test_get_ip_address() {
-        let fetcher = Arc::new(Fetcher::new());
-        let result = fetcher.get_ip_address().await;
+//     async fn test_get_ip_address() {
+//         let fetcher = Arc::new(Fetcher::new());
+//         let result = fetcher.get_ip_address().await;
 
-        match result {
-            Ok(ip) => {
-                println!("IP Address: {:?}", ip.origin);
-                assert!(!ip.origin.is_empty());
-            }
-            Err(e) => {
-                panic!("Failed to get IP address: {:?}", e);
-            }
-        }
-    }
-}
+//         match result {
+//             Ok(ip) => {
+//                 println!("IP Address: {:?}", ip.origin);
+//                 assert!(!ip.origin.is_empty());
+//             }
+//             Err(e) => {
+//                 panic!("Failed to get IP address: {:?}", e);
+//             }
+//         }
+//     }
+// }
