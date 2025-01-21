@@ -1,5 +1,5 @@
 ---
 rust:
   repo: https://github.com/lightning-node-interface/lni
-  branch: 336b0a498f80cd32177c76ec13ef339e7f45d646
+  branch: 82b0f1a2bcc826caf5b29c1fb4c20436ad779e9e
   manifestPath: bindings/lni_uniffi/Cargo.toml
