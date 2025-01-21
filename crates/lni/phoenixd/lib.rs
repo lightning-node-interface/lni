@@ -9,7 +9,7 @@ pub struct PhoenixdConfig {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
+#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Object))]
 pub struct PhoenixdNode {
     pub url: String,
     pub password: String,
