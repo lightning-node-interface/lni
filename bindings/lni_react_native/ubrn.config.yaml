@@ -1,5 +1,5 @@
 ---
 rust:
   repo: https://github.com/lightning-node-interface/lni
-  branch: lni_uniffi_react_native
+  branch: e5e10b34344273f3c0d8467fa5b46bdd2c5e2aed
   manifestPath: bindings/lni_uniffi/Cargo.toml
