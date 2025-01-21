@@ -29,12 +29,10 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(self: Arc<Self>) -> lni::Result<String> {
+    pub async fn get_offer(self: Arc<Self>) -> Result<String, String> {
         match lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await {
             Ok(offer) => Ok(offer),
-            Err(e) => Err(lni::ApiError::Api {
-                reason: e.to_string(),
-            }),
+            Err(e) => Err(e.to_string()),
         }
     }
 }

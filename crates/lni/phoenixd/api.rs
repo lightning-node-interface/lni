@@ -1,4 +1,4 @@
-pub async fn get_offer(url: String, password: String) -> crate::Result<String> {
+pub async fn get_offer(url: String, password: String) -> Result<String, reqwest::Error> {
     let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
     let req_url = format!("{}/getoffer", url);
     let response: reqwest::blocking::Response = client

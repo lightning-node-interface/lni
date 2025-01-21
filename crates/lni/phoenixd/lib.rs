@@ -23,7 +23,7 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(&self) -> crate::Result<String> {
+    pub async fn get_offer(&self) -> Result<String, reqwest::Error> {
         crate::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await
     }
 }
