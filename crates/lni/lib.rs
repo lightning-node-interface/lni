@@ -16,20 +16,16 @@ pub enum ApiError {
     #[error("JsonError: {reason}")]
     Json { reason: String },
 }
-impl From<serde_json::Error> for ApiError {
-    fn from(e: serde_json::Error) -> Self {
-        Self::Json {
-            reason: e.to_string(),
-        }
-    }
-}
-
 impl From<reqwest::Error> for ApiError {
     fn from(err: reqwest::Error) -> Self {
         ApiError::Http { reason: err.to_string() }
     }
 }
-
+impl From<serde_json::Error> for ApiError {
+    fn from(err: serde_json::Error) -> Self {
+        ApiError::Json { reason: err.to_string() }
+    }
+}
 pub type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
