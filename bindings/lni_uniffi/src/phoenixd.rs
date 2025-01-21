@@ -29,9 +29,9 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(&self) -> Result<String, ApiError> {
+    pub async fn get_offer(&self) -> crate::Result<String> {
         lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone())
             .await
-            .map_err(ApiError::from)
+            .map_err(|e| crate::error::LniSdkError::from(e))
     }
 }
