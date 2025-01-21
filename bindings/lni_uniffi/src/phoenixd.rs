@@ -10,8 +10,11 @@ struct PhoenixdNode {
 #[uniffi::export(async_runtime = "tokio")]
 impl PhoenixdNode {
     #[uniffi::constructor]
-    pub fn new(url: String, password: String) -> Self {
-        Self { url, password }
+    pub fn new(config: PhoenixdConfig) -> Self {
+        Self {
+            url: config.url,
+            password: config.password,
+        }
     }
 
     pub fn get_url(self: Arc<Self>) -> String {
@@ -29,7 +32,7 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(&self) -> crate::Result<String> {
+    pub async fn get_offer(self: Arc<Self>) -> crate::Result<String> {
         lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone())
             .await
             .map_err(|e| crate::error::LniSdkError::from(e))

@@ -31,7 +31,7 @@ import nativeModule, {
   type UniffiForeignFutureCompleteRustBuffer,
   type UniffiForeignFutureStructVoid,
   type UniffiForeignFutureCompleteVoid,
-} from './lni_uniffi-ffi';
+} from './lni_sdk-ffi';
 import { type PhoenixdConfig } from './lni';
 import {
   type FfiConverter,
@@ -49,6 +49,7 @@ import {
   destructorGuardSymbol,
   pointerLiteralSymbol,
   rustCall,
+  uniffiRustCallAsync,
   uniffiTypeNameSymbol,
   variantOrdinalSymbol,
 } from 'uniffi-bindgen-react-native';
@@ -183,6 +184,7 @@ const FfiConverterTypeLniSdkError = (() => {
 
 export interface PhoenixdNodeInterface {
   getConfig(): PhoenixdConfig;
+  getOffer(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<string>;
   getPassword(): string;
   getUrl(): string;
 }
@@ -223,6 +225,40 @@ export class PhoenixdNode
         /*liftString:*/ FfiConverterString.lift
       )
     );
+  }
+
+  public async getOffer(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<string> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
+            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_free_rust_buffer,
+        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*liftString:*/ FfiConverterString.lift,
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLniSdkError.lift.bind(
+          FfiConverterTypeLniSdkError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
   }
 
   public getPassword(): string {
@@ -361,6 +397,14 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_config'
+    );
+  }
+  if (
+    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer() !==
+    44954
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer'
     );
   }
   if (
