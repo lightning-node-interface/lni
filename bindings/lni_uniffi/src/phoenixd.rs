@@ -28,10 +28,10 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(self: Arc<Self>) -> crate::Result<String> {
-        match lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone()).await {
-            Ok(offer) => Ok(offer),
-            Err(e) => Err(crate::ApiError::Api { reason: e.to_string() }),
-        }
-    }
+    // pub async fn get_offer(self: Arc<Self>) -> crate::Result<String> {
+    //     match lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone()).await {
+    //         Ok(offer) => Ok(offer),
+    //         Err(e) => Err(crate::ApiError::Api { reason: e.to_string() }),
+    //     }
+    // }
 }
