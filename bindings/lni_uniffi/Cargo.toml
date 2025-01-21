@@ -12,7 +12,7 @@ name = "lni_uniffi"
 [dependencies]
 lni = { path = "../../crates/lni", features = ["uniffi_rs"] }
 async-trait = "0.1"
-uniffi = { version = "0.28", features = ["cli"] }
+uniffi = { version = "0.28", features = ["cli", "tokio"] }
 thiserror = "1.0"
 serde = { version = "1", features=["derive"] }
 serde_json = "1"
