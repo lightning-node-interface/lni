@@ -38,8 +38,8 @@
   ],
   "scripts": {
     "start": "yarn example start",
-    "ubrn:ios":      "ubrn build ios     --config ubrn.config.yaml --and-generate && (cd example/ios && pod install)",
-    "ubrn:android":  "ubrn build android --config ubrn.config.yaml --and-generate",
+    "ubrn:ios": "ubrn build ios     --config ubrn.config.yaml --and-generate && (cd example/ios && pod install)",
+    "ubrn:android": "ubrn build android --config ubrn.config.yaml --and-generate",
     "ubrn:checkout": "ubrn checkout      --config ubrn.config.yaml",
     "ubrn:clean": "rm -Rf cpp/ android/src/main/java ios/ src/Native* src/generated/ src/index.ts*",
     "example": "yarn workspace react-native-lni-example",

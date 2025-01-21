@@ -124,7 +124,7 @@ Bindings
     - uniffi-bindgen-react-native 
     - https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html
     - sample https://github.com/ianthetechie/uniffi-starter  
-    - `cd`
+    - `cd bindings/lni_react_native` && ./build.sh
 - uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
     - `cd bindings/lni_uniffi && cargo build`
