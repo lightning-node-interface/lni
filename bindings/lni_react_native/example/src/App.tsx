@@ -7,9 +7,7 @@ export default function App() {
 
   const main = async () => {
     try {
-      const node =  new PhoenixdNode();
-
-
+      const node = new PhoenixdNode();
 
       //const offerRes = await node.getOffer();
       //setOffer(offerRes);
