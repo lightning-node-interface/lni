@@ -25,3 +25,8 @@ interface PhoenixdNode {
   constructor(string url, string password);
 
 };
+
+interface Feenix {
+  constructor();
+
+};
