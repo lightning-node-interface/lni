@@ -1,16 +1,13 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode } from '../../src/generated/lni_sdk-ffi';
+import { PhoenixdNode, Fetcher } from 'react-native-lni';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
 
   const main = async () => {
     try {
-      const result = new PhoenixdNode().uniffiUse((obj) => {
-        obj.callSomeMethod();
-        return obj.callAnotherMethod();
-      });
+      const node =  new PhoenixdNode();
 
       //const offerRes = await node.getOffer();
       //setOffer(offerRes);
