@@ -31,7 +31,7 @@ import nativeModule, {
   type UniffiForeignFutureCompleteRustBuffer,
   type UniffiForeignFutureStructVoid,
   type UniffiForeignFutureCompleteVoid,
-} from './lni_sdk-ffi';
+} from './lni_uniffi-ffi';
 import { type PhoenixdConfig } from './lni';
 import {
   type FfiConverter,

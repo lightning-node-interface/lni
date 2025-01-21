@@ -203,13 +203,13 @@ interface NativeModuleInterface {
   ): UniffiRustArcPtr;
 }
 
-// Casting globalThis to any allows us to look for `NativeLniSdk`
+// Casting globalThis to any allows us to look for `NativeLniUniffi`
 // if it was added via JSI.
 //
-// We use a getter here rather than simply `globalThis.NativeLniSdk` so that
+// We use a getter here rather than simply `globalThis.NativeLniUniffi` so that
 // if/when the startup sequence isn't just so, an empty value isn't inadvertantly cached.
 const getter: () => NativeModuleInterface = () =>
-  (globalThis as any).NativeLniSdk;
+  (globalThis as any).NativeLniUniffi;
 export default getter;
 
 // Structs and function types for calling back into Typescript from Rust.

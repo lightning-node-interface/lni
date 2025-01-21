@@ -6,21 +6,21 @@ installer.installRustCrate();
 
 // Export the generated bindings to the app.
 export * from './generated/lni';
-export * from './generated/lni_sdk';
+export * from './generated/lni_uniffi';
 
 // Now import the bindings so we can:
 // - intialize them
 // - export them as namespaced objects as the default export.
 import * as lni from './generated/lni';
-import * as lni_sdk from './generated/lni_sdk';
+import * as lni_uniffi from './generated/lni_uniffi';
 
 // Initialize the generated bindings: mostly checksums, but also callbacks.
 lni.default.initialize();
-lni_sdk.default.initialize();
+lni_uniffi.default.initialize();
 
 // Export the crates as individually namespaced objects.
 export default {
   lni,
-  lni_sdk,
+  lni_uniffi,
 };
 

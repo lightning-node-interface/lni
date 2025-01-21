@@ -12,7 +12,7 @@
 namespace react = facebook::react;
 namespace jsi = facebook::jsi;
 
-class NativeLniSdk : public jsi::HostObject {
+class NativeLniUniffi : public jsi::HostObject {
 private:
   // For calling back into JS from Rust.
   std::shared_ptr<uniffi_runtime::UniffiCallInvoker> callInvoker;
@@ -252,14 +252,15 @@ protected:
       size_t count);
 
 public:
-  NativeLniSdk(jsi::Runtime &rt,
-               std::shared_ptr<uniffi_runtime::UniffiCallInvoker> callInvoker);
-  virtual ~NativeLniSdk();
+  NativeLniUniffi(
+      jsi::Runtime &rt,
+      std::shared_ptr<uniffi_runtime::UniffiCallInvoker> callInvoker);
+  virtual ~NativeLniUniffi();
 
   /**
    * The entry point into the crate.
    *
-   * React Native must call `NativeLniSdk.registerModule(rt, callInvoker)`
+   * React Native must call `NativeLniUniffi.registerModule(rt, callInvoker)`
    * before using the Javascript interface.
    */
   static void registerModule(jsi::Runtime &rt,
@@ -271,7 +272,7 @@ public:
    * Current implementation is empty, however, this is not guaranteed to always
    * be the case.
    *
-   * Clients should call `NativeLniSdk.unregisterModule(rt)` after final use
+   * Clients should call `NativeLniUniffi.unregisterModule(rt)` after final use
    * where possible.
    */
   static void unregisterModule(jsi::Runtime &rt);

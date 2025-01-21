@@ -2,7 +2,7 @@ use lni::phoenixd::lib::PhoenixdConfig;
 use std::sync::Arc;
 
 #[derive(uniffi::Object)]
-pub struct PhoenixdNode {
+struct PhoenixdNode {
     url: String,
     password: String,
 }
