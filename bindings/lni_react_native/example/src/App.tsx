@@ -9,6 +9,8 @@ export default function App() {
     try {
       const node =  new PhoenixdNode();
 
+
+
       //const offerRes = await node.getOffer();
       //setOffer(offerRes);
     } catch (e) {

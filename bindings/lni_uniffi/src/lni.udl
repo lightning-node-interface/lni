@@ -19,3 +19,11 @@ interface Fetcher {
   [Throws=ApiError, Async]
   Ip get_ip_address();
 };
+
+
+interface PhoenixdNode {
+  constructor(string url, string password);
+
+  [Throws=ApiError, Async]
+  string get_offer();
+};
