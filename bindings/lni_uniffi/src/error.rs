@@ -1,11 +1,7 @@
 use std::fmt;
 
-use uniffi::Error;
-
 pub type Result<T, E = LniSdkError> = std::result::Result<T, E>;
 
-#[derive(Debug, Error)]
-#[uniffi(flat_error)]
 pub enum LniSdkError {
     Generic(String),
 }

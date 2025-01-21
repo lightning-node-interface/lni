@@ -32,31 +32,19 @@ import nativeModule, {
   type UniffiForeignFutureStructVoid,
   type UniffiForeignFutureCompleteVoid,
 } from './lni_sdk-ffi';
-import { type PhoenixdConfig } from './lni';
 import {
   type FfiConverter,
-  type UniffiObjectFactory,
-  type UniffiRustArcPtr,
-  type UnsafeMutableRawPointer,
   AbstractFfiConverterArrayBuffer,
   FfiConverterInt32,
-  FfiConverterObject,
-  FfiConverterUInt64,
   RustBuffer,
-  UniffiAbstractObject,
   UniffiError,
   UniffiInternalError,
-  destructorGuardSymbol,
-  pointerLiteralSymbol,
   rustCall,
-  uniffiRustCallAsync,
   uniffiTypeNameSymbol,
   variantOrdinalSymbol,
 } from 'uniffi-bindgen-react-native';
 
 // Get converters from the other files, if any.
-import uniffiLniModule from './lni';
-const { FfiConverterTypePhoenixdConfig } = uniffiLniModule.converters;
 
 const uniffiIsDebug =
   // @ts-ignore -- The process global might not be defined
@@ -182,193 +170,6 @@ const FfiConverterTypeLniSdkError = (() => {
   return new FfiConverter();
 })();
 
-export interface PhoenixdNodeInterface {
-  getConfig(): PhoenixdConfig;
-  getOffer(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<string>;
-  getPassword(): string;
-  getUrl(): string;
-}
-
-export class PhoenixdNode
-  extends UniffiAbstractObject
-  implements PhoenixdNodeInterface
-{
-  readonly [uniffiTypeNameSymbol] = 'PhoenixdNode';
-  readonly [destructorGuardSymbol]: UniffiRustArcPtr;
-  readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(url: string, password: string) {
-    super();
-    const pointer = rustCall(
-      /*caller:*/ (callStatus) => {
-        return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-          FfiConverterString.lower(url),
-          FfiConverterString.lower(password),
-          callStatus
-        );
-      },
-      /*liftString:*/ FfiConverterString.lift
-    );
-    this[pointerLiteralSymbol] = pointer;
-    this[destructorGuardSymbol] =
-      uniffiTypePhoenixdNodeObjectFactory.bless(pointer);
-  }
-
-  public getConfig(): PhoenixdConfig {
-    return FfiConverterTypePhoenixdConfig.lift(
-      rustCall(
-        /*caller:*/ (callStatus) => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_config(
-            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift
-      )
-    );
-  }
-
-  public async getOffer(asyncOpts_?: {
-    signal: AbortSignal;
-  }): Promise<string> /*throws*/ {
-    const __stack = uniffiIsDebug ? new Error().stack : undefined;
-    try {
-      return await uniffiRustCallAsync(
-        /*rustFutureFunc:*/ () => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
-            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this)
-          );
-        },
-        /*pollFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
-        /*cancelFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
-        /*completeFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
-        /*freeFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_free_rust_buffer,
-        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
-        /*liftString:*/ FfiConverterString.lift,
-        /*asyncOpts:*/ asyncOpts_,
-        /*errorHandler:*/ FfiConverterTypeLniSdkError.lift.bind(
-          FfiConverterTypeLniSdkError
-        )
-      );
-    } catch (__error: any) {
-      if (uniffiIsDebug && __error instanceof Error) {
-        __error.stack = __stack;
-      }
-      throw __error;
-    }
-  }
-
-  public getPassword(): string {
-    return FfiConverterString.lift(
-      rustCall(
-        /*caller:*/ (callStatus) => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_password(
-            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift
-      )
-    );
-  }
-
-  public getUrl(): string {
-    return FfiConverterString.lift(
-      rustCall(
-        /*caller:*/ (callStatus) => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_url(
-            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift
-      )
-    );
-  }
-
-  /**
-   * {@inheritDoc uniffi-bindgen-react-native#UniffiAbstractObject.uniffiDestroy}
-   */
-  uniffiDestroy(): void {
-    if ((this as any)[destructorGuardSymbol]) {
-      const pointer = uniffiTypePhoenixdNodeObjectFactory.pointer(this);
-      uniffiTypePhoenixdNodeObjectFactory.freePointer(pointer);
-      this[destructorGuardSymbol].markDestroyed();
-      delete (this as any)[destructorGuardSymbol];
-    }
-  }
-
-  static instanceOf(obj: any): obj is PhoenixdNode {
-    return uniffiTypePhoenixdNodeObjectFactory.isConcreteType(obj);
-  }
-}
-
-const uniffiTypePhoenixdNodeObjectFactory: UniffiObjectFactory<PhoenixdNodeInterface> =
-  {
-    create(pointer: UnsafeMutableRawPointer): PhoenixdNodeInterface {
-      const instance = Object.create(PhoenixdNode.prototype);
-      instance[pointerLiteralSymbol] = pointer;
-      instance[destructorGuardSymbol] = this.bless(pointer);
-      instance[uniffiTypeNameSymbol] = 'PhoenixdNode';
-      return instance;
-    },
-
-    bless(p: UnsafeMutableRawPointer): UniffiRustArcPtr {
-      return rustCall(
-        /*caller:*/ (status) =>
-          nativeModule().uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
-            p,
-            status
-          ),
-        /*liftString:*/ FfiConverterString.lift
-      );
-    },
-
-    pointer(obj: PhoenixdNodeInterface): UnsafeMutableRawPointer {
-      if ((obj as any)[destructorGuardSymbol] === undefined) {
-        throw new UniffiInternalError.UnexpectedNullPointer();
-      }
-      return (obj as any)[pointerLiteralSymbol];
-    },
-
-    clonePointer(obj: PhoenixdNodeInterface): UnsafeMutableRawPointer {
-      const pointer = this.pointer(obj);
-      return rustCall(
-        /*caller:*/ (callStatus) =>
-          nativeModule().uniffi_lni_uniffi_fn_clone_phoenixdnode(
-            pointer,
-            callStatus
-          ),
-        /*liftString:*/ FfiConverterString.lift
-      );
-    },
-
-    freePointer(pointer: UnsafeMutableRawPointer): void {
-      rustCall(
-        /*caller:*/ (callStatus) =>
-          nativeModule().uniffi_lni_uniffi_fn_free_phoenixdnode(
-            pointer,
-            callStatus
-          ),
-        /*liftString:*/ FfiConverterString.lift
-      );
-    },
-
-    isConcreteType(obj: any): obj is PhoenixdNodeInterface {
-      return (
-        obj[destructorGuardSymbol] &&
-        obj[uniffiTypeNameSymbol] === 'PhoenixdNode'
-      );
-    },
-  };
-// FfiConverter for PhoenixdNodeInterface
-const FfiConverterTypePhoenixdNode = new FfiConverterObject(
-  uniffiTypePhoenixdNodeObjectFactory
-);
-
 /**
  * This should be called before anything else.
  *
@@ -391,51 +192,8 @@ function uniffiEnsureInitialized() {
       bindingsContractVersion
     );
   }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_config() !==
-    1373
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_config'
-    );
-  }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer() !==
-    44954
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer'
-    );
-  }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_password() !==
-    46530
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_password'
-    );
-  }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_url() !==
-    24839
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_url'
-    );
-  }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new() !==
-    30819
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new'
-    );
-  }
 }
 
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
-  converters: {
-    FfiConverterTypePhoenixdNode,
-  },
 });

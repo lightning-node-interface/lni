@@ -29,3 +29,12 @@ impl PhoenixdNode {
     //     lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await
     // }
 }
+
+impl Default for PhoenixdNode {
+    fn default() -> Self {
+        Self {
+            url: String::from("default_url"),
+            password: String::from("default_password"),
+        }
+    }
+}
