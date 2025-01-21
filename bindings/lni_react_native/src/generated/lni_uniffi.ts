@@ -49,6 +49,7 @@ import {
   destructorGuardSymbol,
   pointerLiteralSymbol,
   rustCall,
+  uniffiRustCallAsync,
   uniffiTypeNameSymbol,
   variantOrdinalSymbol,
 } from 'uniffi-bindgen-react-native';
@@ -237,6 +238,7 @@ const FfiConverterTypeApiError = (() => {
 
 export interface PhoenixdNodeInterface {
   getConfig(): PhoenixdConfig;
+  getOffer(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<string>;
   getPassword(): string;
   getUrl(): string;
 }
@@ -248,12 +250,13 @@ export class PhoenixdNode
   readonly [uniffiTypeNameSymbol] = 'PhoenixdNode';
   readonly [destructorGuardSymbol]: UniffiRustArcPtr;
   readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(config: PhoenixdConfig) {
+  constructor(url: string, password: string) {
     super();
     const pointer = rustCall(
       /*caller:*/ (callStatus) => {
         return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-          FfiConverterTypePhoenixdConfig.lower(config),
+          FfiConverterString.lower(url),
+          FfiConverterString.lower(password),
           callStatus
         );
       },
@@ -276,6 +279,40 @@ export class PhoenixdNode
         /*liftString:*/ FfiConverterString.lift
       )
     );
+  }
+
+  public async getOffer(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<string> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
+            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_free_rust_buffer,
+        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*liftString:*/ FfiConverterString.lift,
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeApiError.lift.bind(
+          FfiConverterTypeApiError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
   }
 
   public getPassword(): string {
@@ -417,6 +454,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer() !==
+    4360
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer'
+    );
+  }
+  if (
     nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_password() !==
     46530
   ) {
@@ -434,7 +479,7 @@ function uniffiEnsureInitialized() {
   }
   if (
     nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new() !==
-    30726
+    30819
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new'
