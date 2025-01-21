@@ -14,7 +14,7 @@ dictionary Ip {
 };
 
 interface Fetcher {
-  constructor();
+  constructor(string url);
 
   [Throws=ApiError, Async]
   Ip get_ip_address();

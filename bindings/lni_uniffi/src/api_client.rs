@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-pub struct Fetcher {}
+pub struct Fetcher {
+    url: String,
+}
 impl Fetcher {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(url: String) -> Self {
+        Self { url }
     }
     pub async fn get_ip_address(self: Arc<Self>) -> lni::Result<lni::Ip> {
         // match lni::get_ip_address().await {
@@ -14,11 +16,11 @@ impl Fetcher {
     }
 }
 
-impl Default for Fetcher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// impl Default for Fetcher {
+//     fn default(url: String) -> Self {
+//         Self::new("https:")
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
