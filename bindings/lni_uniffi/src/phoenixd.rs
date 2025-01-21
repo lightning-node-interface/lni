@@ -28,12 +28,7 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(&self) {
-        match lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
-            .await
-        {
-            Ok(offer) => Ok(offer),
-            Err(e) => Err(e),
-        };
+    pub async fn get_offer(&self) -> lni::Result<String> {
+        lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone()).await
     }
 }

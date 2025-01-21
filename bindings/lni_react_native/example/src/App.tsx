@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher } from 'react-native-lni';
+import { PhoenixdNode } from '../../src/generated/lni_uniffi';
 
 export default function App() {
-  const fetcher = new Fetcher();
-  const [ip, setIp] = useState<string>('');
+  const [offer, setOffer] = useState<string>('');
 
   const main = async () => {
-    const ipAddr = await fetcher.getIpAddress();
-    setIp(ipAddr.origin);
-    console.log('IP Address', ipAddr);
+    const node = new PhoenixdNode({
+      password: 'password',
+      url: 'username',
+    });
+    const offerRes = await node.getOffer();
+    // setOffer(offerRes);
   };
 
   main();
 
   return (
     <View style={styles.container}>
-      <Text>Your IP address is: {ip}</Text>
+      <Text>Offer: {offer}</Text>
     </View>
   );
 }

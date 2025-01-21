@@ -7,6 +7,7 @@ use napi::bindgen_prelude::*;
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error)]
+#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Error))]
 pub enum ApiError {
     #[error("HttpError: {reason}")]
     Http { reason: String },
