@@ -10,8 +10,8 @@ export default function App() {
       password: 'password',
       url: 'username',
     });
-    const offerRes = await node.getOffer();
-    setOffer(offerRes.offer);
+    //const offerRes = await node.getOffer();
+    //setOffer(offerRes.offer);
   };
 
   main();
