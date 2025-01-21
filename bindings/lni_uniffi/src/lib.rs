@@ -1,4 +1,4 @@
-uniffi::setup_scaffolding!("lni_uniffi");
+uniffi::setup_scaffolding!();
 mod api_client;
 mod phoenixd;
 
