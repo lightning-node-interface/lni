@@ -196,13 +196,12 @@ export class PhoenixdNode
   readonly [uniffiTypeNameSymbol] = 'PhoenixdNode';
   readonly [destructorGuardSymbol]: UniffiRustArcPtr;
   readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(url: string, password: string) {
+  constructor(config: PhoenixdConfig) {
     super();
     const pointer = rustCall(
       /*caller:*/ (callStatus) => {
         return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-          FfiConverterString.lower(url),
-          FfiConverterString.lower(password),
+          FfiConverterTypePhoenixdConfig.lower(config),
           callStatus
         );
       },
@@ -425,7 +424,7 @@ function uniffiEnsureInitialized() {
   }
   if (
     nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new() !==
-    30819
+    30726
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new'

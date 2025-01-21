@@ -105,7 +105,7 @@ void *uniffi_lni_uniffi_fn_clone_phoenixdnode(void *ptr,
 void uniffi_lni_uniffi_fn_free_phoenixdnode(void *ptr,
                                             RustCallStatus *uniffi_out_err);
 void *uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-    RustBuffer url, RustBuffer password, RustCallStatus *uniffi_out_err);
+    RustBuffer config, RustCallStatus *uniffi_out_err);
 RustBuffer uniffi_lni_uniffi_fn_method_phoenixdnode_get_config(
     void *ptr, RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t
@@ -1591,7 +1591,7 @@ NativeLniSdk::NativeLniSdk(
           rt,
           jsi::PropNameID::forAscii(
               rt, "uniffi_lni_uniffi_fn_constructor_phoenixdnode_new"),
-          2,
+          1,
           [this](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
@@ -2385,7 +2385,6 @@ jsi::Value NativeLniSdk::cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
       uniffi::lni_sdk::Bridging<RustCallStatus>::rustSuccess(rt);
   auto value = uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
       uniffi::lni_sdk::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]),
-      uniffi::lni_sdk::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]),
       &status);
   uniffi::lni_sdk::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
                                                         args[count - 1]);

@@ -9,13 +9,15 @@ struct PhoenixdNode {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl PhoenixdNode {
-    #[uniffi::constructor]
+    
+    #[uniffi::constructor(name = "create")]
     pub fn new(config: PhoenixdConfig) -> Self {
         Self {
             url: config.url,
             password: config.password,
         }
     }
+
 
     pub fn get_url(self: Arc<Self>) -> String {
         self.url.clone()

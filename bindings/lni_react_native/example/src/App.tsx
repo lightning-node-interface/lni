@@ -1,24 +1,18 @@
 import { useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode } from 'react-native-lni';
+import { PhoenixdNode } from '../../src';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
 
   const main = async () => {
-    const z = PhoenixdNode.create({
-      password: 'password',
-      url: 'username',
-    });
-
-
-
-    // const node = new PhoenixdNode({
-    //   password: 'password',
-    //   url: 'username',
-    // });
-    //const offerRes = await node.getOffer();
-    //setOffer(offerRes.offer);
+    try {
+      const node = PhoenixdNode.create({});
+      //const offerRes = await node.getOffer();
+      //setOffer(offerRes);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   main();

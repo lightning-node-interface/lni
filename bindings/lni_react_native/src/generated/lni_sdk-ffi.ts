@@ -31,8 +31,7 @@ interface NativeModuleInterface {
     uniffi_out_err: UniffiRustCallStatus
   ): void;
   uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-    url: ArrayBuffer,
-    password: ArrayBuffer,
+    config: ArrayBuffer,
     uniffi_out_err: UniffiRustCallStatus
   ): bigint;
   uniffi_lni_uniffi_fn_method_phoenixdnode_get_config(
