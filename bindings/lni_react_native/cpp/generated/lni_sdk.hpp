@@ -34,7 +34,7 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_fn_free_phoenixdnode(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
-  jsi::Value cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+  jsi::Value cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_create(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_config(
@@ -241,7 +241,7 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_url(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
-  jsi::Value cpp_uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_constructor_phoenixdnode_create(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_ffi_lni_uniffi_uniffi_contract_version(

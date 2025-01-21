@@ -196,20 +196,26 @@ export class PhoenixdNode
   readonly [uniffiTypeNameSymbol] = 'PhoenixdNode';
   readonly [destructorGuardSymbol]: UniffiRustArcPtr;
   readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(config: PhoenixdConfig) {
+  // No primary constructor declared for this class.
+  private constructor(pointer: UnsafeMutableRawPointer) {
     super();
-    const pointer = rustCall(
-      /*caller:*/ (callStatus) => {
-        return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
-          FfiConverterTypePhoenixdConfig.lower(config),
-          callStatus
-        );
-      },
-      /*liftString:*/ FfiConverterString.lift
-    );
     this[pointerLiteralSymbol] = pointer;
     this[destructorGuardSymbol] =
       uniffiTypePhoenixdNodeObjectFactory.bless(pointer);
+  }
+
+  public static create(config: PhoenixdConfig): PhoenixdNodeInterface {
+    return FfiConverterTypePhoenixdNode.lift(
+      rustCall(
+        /*caller:*/ (callStatus) => {
+          return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_create(
+            FfiConverterTypePhoenixdConfig.lower(config),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift
+      )
+    );
   }
 
   public getConfig(): PhoenixdConfig {
@@ -423,11 +429,11 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
-    nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new() !==
-    30726
+    nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_create() !==
+    40682
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new'
+      'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_create'
     );
   }
 }

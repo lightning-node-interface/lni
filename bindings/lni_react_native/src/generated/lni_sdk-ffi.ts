@@ -30,7 +30,7 @@ interface NativeModuleInterface {
     ptr: bigint,
     uniffi_out_err: UniffiRustCallStatus
   ): void;
-  uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+  uniffi_lni_uniffi_fn_constructor_phoenixdnode_create(
     config: ArrayBuffer,
     uniffi_out_err: UniffiRustCallStatus
   ): bigint;
@@ -194,7 +194,7 @@ interface NativeModuleInterface {
   uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer(): number;
   uniffi_lni_uniffi_checksum_method_phoenixdnode_get_password(): number;
   uniffi_lni_uniffi_checksum_method_phoenixdnode_get_url(): number;
-  uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(): number;
+  uniffi_lni_uniffi_checksum_constructor_phoenixdnode_create(): number;
   ffi_lni_uniffi_uniffi_contract_version(): number;
   uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
     pointer: bigint,

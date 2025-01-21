@@ -1,4 +1,4 @@
-use lni::phoenixd::lib::PhoenixdConfig;
+use lni::{phoenixd::lib::PhoenixdConfig, ApiError};
 use std::sync::Arc;
 
 #[derive(uniffi::Object)]
@@ -9,15 +9,13 @@ struct PhoenixdNode {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl PhoenixdNode {
-    
-    #[uniffi::constructor(name = "create")]
+    #[uniffi::constructor(name = "create2")]
     pub fn new(config: PhoenixdConfig) -> Self {
         Self {
             url: config.url,
             password: config.password,
         }
     }
-
 
     pub fn get_url(self: Arc<Self>) -> String {
         self.url.clone()
@@ -34,9 +32,7 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_offer(self: Arc<Self>) -> crate::Result<String> {
-        lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone())
-            .await
-            .map_err(|e| crate::error::LniSdkError::from(e))
+    pub async fn get_offer(&self) -> Result<String, ApiError> {
+        lni::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await.map_err(ApiError::from)
     }
 }
