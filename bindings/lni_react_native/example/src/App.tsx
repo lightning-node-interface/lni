@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import { Fetcher } from 'react-native-lni';
 
 export default function App() {
-  const fetcher = new Fetcher();
+  const fetcher = new Fetcher('http://woot.com');
   const [ip, setIp] = useState<string>('');
 
   const main = async () => {
@@ -12,11 +12,13 @@ export default function App() {
     console.log('IP Address', ipAddr);
   };
 
-  main();
+  useEffect(() => {
+    main();
+  }, []);
 
   return (
     <View style={styles.container}>
-      <Text>Your IP address is: {ip}</Text>
+      <Text>Your IP address is shit: {ip}</Text>
     </View>
   );
 }

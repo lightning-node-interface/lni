@@ -16,6 +16,8 @@ dictionary Ip {
 interface Fetcher {
   constructor(string url);
 
+  string get_config();
+
   [Throws=ApiError, Async]
   Ip get_ip_address();
 };
