@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode } from '../../src';
+import { Fetcher } from '../../src';
 
 export default function App() {
   const fetcher = new Fetcher('http://woot.com');
@@ -8,7 +8,8 @@ export default function App() {
 
   const main = async () => {
     const config = fetcher.getConfig();
-    setIp(config);
+    const ip = await fetcher.getIpAddress();
+    setIp(ip.origin);
     console.log('Config', config);
   };
 

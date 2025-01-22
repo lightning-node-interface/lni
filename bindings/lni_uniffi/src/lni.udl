@@ -21,3 +21,15 @@ interface Fetcher {
   [Throws=ApiError, Async]
   Ip get_ip_address();
 };
+
+dictionary PhoenixdConfig {
+  string url;
+  string password;
+};
+
+interface PhoenixdNode {
+  constructor(PhoenixdConfig config);
+
+  [Throws=ApiError, Async]
+  string get_offer();
+};

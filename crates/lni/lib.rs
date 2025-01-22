@@ -41,4 +41,6 @@ pub async fn get_ip_address() -> Result<Ip> {
 pub mod phoenixd {
     pub mod lib;
     pub mod api;
+
+    pub use lib::{PhoenixdConfig, PhoenixdNode};
 }
