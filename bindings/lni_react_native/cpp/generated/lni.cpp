@@ -112,6 +112,14 @@ uniffi_lni_uniffi_fn_method_fetcher_get_config(void *ptr,
                                                RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t
 uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(void *ptr);
+void *uniffi_lni_uniffi_fn_clone_phoenixdnode(void *ptr,
+                                              RustCallStatus *uniffi_out_err);
+void uniffi_lni_uniffi_fn_free_phoenixdnode(void *ptr,
+                                            RustCallStatus *uniffi_out_err);
+void *uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+    RustBuffer config, RustCallStatus *uniffi_out_err);
+/*handle*/ uint64_t
+uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(void *ptr);
 RustBuffer ffi_lni_uniffi_rustbuffer_alloc(uint64_t size,
                                            RustCallStatus *uniffi_out_err);
 RustBuffer ffi_lni_uniffi_rustbuffer_from_bytes(ForeignBytes bytes,
@@ -240,7 +248,9 @@ void ffi_lni_uniffi_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
 uint16_t uniffi_lni_uniffi_checksum_method_fetcher_get_config();
 uint16_t uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address();
+uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer();
 uint16_t uniffi_lni_uniffi_checksum_constructor_fetcher_new();
+uint16_t uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new();
 uint32_t ffi_lni_uniffi_uniffi_contract_version();
 }
 
@@ -1611,6 +1621,50 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_fn_clone_phoenixdnode"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt,
+                                    "uniffi_lni_uniffi_fn_clone_phoenixdnode"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_clone_phoenixdnode(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_fn_free_phoenixdnode"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt,
+                                    "uniffi_lni_uniffi_fn_free_phoenixdnode"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_free_phoenixdnode(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_fn_constructor_phoenixdnode_new"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_constructor_phoenixdnode_new"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
+                rt, thisVal, args, count);
+          });
   props["ffi_lni_uniffi_rust_future_poll_u8"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2183,6 +2237,18 @@ NativeLni::NativeLni(jsi::Runtime &rt,
                 ->cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address(
                     rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer(
+                    rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_checksum_constructor_fetcher_new"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2193,6 +2259,18 @@ NativeLni::NativeLni(jsi::Runtime &rt,
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_uniffi_lni_uniffi_checksum_constructor_fetcher_new(
                 rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(
+                    rt, thisVal, args, count);
           });
   props["ffi_lni_uniffi_uniffi_contract_version"] =
       jsi::Function::createFromHostFunction(
@@ -2215,6 +2293,18 @@ NativeLni::NativeLni(jsi::Runtime &rt,
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this
                 ->cpp_uniffi_internal_fn_method_fetcher_ffi__bless_pointer(
+                    rt, thisVal, args, count);
+          });
+  props["uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
                     rt, thisVal, args, count);
           });
 }
@@ -2293,6 +2383,22 @@ jsi::Value NativeLni::cpp_uniffi_internal_fn_method_fetcher_ffi__bless_pointer(
   auto obj = jsi::Object::createFromHostObject(rt, ptrObj);
   return jsi::Value(rt, obj);
 }
+jsi::Value
+NativeLni::cpp_uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto pointer =
+      uniffi_jsi::Bridging<uint64_t>::fromJs(rt, callInvoker, args[0]);
+  auto static destructor = [](uint64_t p) {
+    auto pointer = reinterpret_cast<void *>(static_cast<uintptr_t>(p));
+    RustCallStatus status = {0};
+    uniffi_lni_uniffi_fn_free_phoenixdnode(pointer, &status);
+  };
+  auto ptrObj =
+      std::make_shared<uniffi_jsi::DestructibleObject>(pointer, destructor);
+  auto obj = jsi::Object::createFromHostObject(rt, ptrObj);
+  return jsi::Value(rt, obj);
+}
 
 // Methods calling directly into the uniffi generated C API of the Rust crate.
 jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_clone_fetcher(
@@ -2348,6 +2454,52 @@ jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
   auto value = uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_clone_phoenixdnode(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_clone_phoenixdnode(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi_jsi::Bridging<void *>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_free_phoenixdnode(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_lni_uniffi_fn_free_phoenixdnode(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return jsi::Value::undefined();
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]),
+      &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi_jsi::Bridging<void *>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_fn_method_phoenixdnode_get_offer(
       uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
@@ -2953,10 +3105,26 @@ NativeLni::cpp_uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address(
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
+jsi::Value
+NativeLni::cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_phoenixdnode_get_offer();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
 jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_constructor_fetcher_new(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
   auto value = uniffi_lni_uniffi_checksum_constructor_fetcher_new();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value
+NativeLni::cpp_uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
