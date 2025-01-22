@@ -1,0 +1,35 @@
+namespace lni {
+    
+};
+
+[Error]
+interface ApiError {
+    Http(string reason);
+    Api(string reason);
+    Json(string reason);
+};
+
+dictionary Ip {
+    string origin;
+};
+
+interface Fetcher {
+  constructor(string url);
+
+  string get_config();
+
+  [Throws=ApiError, Async]
+  Ip get_ip_address();
+};
+
+dictionary PhoenixdConfig {
+  string url;
+  string password;
+};
+
+interface PhoenixdNode {
+  constructor(PhoenixdConfig config);
+
+  [Throws=ApiError, Async]
+  string get_offer();
+};

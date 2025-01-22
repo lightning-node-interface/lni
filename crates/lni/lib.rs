@@ -3,11 +3,8 @@ use reqwest;
 use napi_derive::napi;
 #[cfg(feature = "napi_rs")]
 use napi::bindgen_prelude::*;
-#[cfg(feature = "uniffi_rs")]
-uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error)]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Error))]
 pub enum ApiError {
     #[error("HttpError: {reason}")]
     Http { reason: String },
@@ -44,4 +41,6 @@ pub async fn get_ip_address() -> Result<Ip> {
 pub mod phoenixd {
     pub mod lib;
     pub mod api;
+
+    pub use lib::{PhoenixdConfig, PhoenixdNode};
 }

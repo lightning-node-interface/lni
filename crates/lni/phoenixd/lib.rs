@@ -2,14 +2,12 @@
 use napi_derive::napi;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
 pub struct PhoenixdConfig {
     pub url: String,
     pub password: String,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
 pub struct PhoenixdNode {
     pub url: String,
     pub password: String,
