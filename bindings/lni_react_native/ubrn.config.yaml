@@ -1,5 +1,5 @@
 ---
 rust:
-  repo: /Users/nick/code/lni
-  branch: udl-test
+  repo: https://github.com/lightning-node-interface/lni
+  branch: master
   manifestPath: bindings/lni_uniffi/Cargo.toml
