@@ -1,6 +1,8 @@
 use reqwest;
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
+#[cfg(feature = "napi_rs")]
+use napi::bindgen_prelude::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -21,8 +23,6 @@ impl From<serde_json::Error> for ApiError {
 
 pub type Result<T> = std::result::Result<T, ApiError>;
 
-
-
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct Ip {
@@ -37,12 +37,8 @@ pub async fn get_ip_address() -> Result<Ip> {
     Ok(ip_address_response)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    async fn test_make_http_request() {
-        let result = get_ip_address().await;
-        // assert!(result.is_ok());
-    }
+pub mod phoenixd {
+    pub mod lib;
+    pub mod api;
 }

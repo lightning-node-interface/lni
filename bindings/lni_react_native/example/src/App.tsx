@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher } from 'react-native-lni';
+import { PhoenixdNode } from '../../src';
 
 export default function App() {
   const fetcher = new Fetcher('http://woot.com');

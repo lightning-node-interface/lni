@@ -1,5 +1,12 @@
-import { Fetcher } from './index.js'
+import { PhoenixdNode } from './index.js'
  
-const fetcher = new Fetcher()
-const ip = await fetcher.getIpAddress()
-console.log('Your IP address is', ip.origin)
+const config = {
+    url: 'http://localhost:9740',
+    password: ''
+}
+const node = new PhoenixdNode(config)
+const offer = await node.getOffer()
+console.log('Offer:', offer)
+
+const configRes = await node.getConfig()
+console.log('Config:', configRes.url)
