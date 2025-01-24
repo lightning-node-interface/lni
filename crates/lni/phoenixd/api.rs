@@ -49,7 +49,7 @@ pub struct PhoenixService {
 #[derive(Debug, Deserialize)]
 pub struct InfoResponse {
     #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
-    pub node_id: Option<String>,
+    pub node_id: String,
 }
 
 impl PhoenixService {
@@ -113,7 +113,7 @@ mod tests {
         // Test get_info method
         match service.get_info() {
             Ok(info) => {
-                if let Some(node_id) = info.node_id {
+                if let node_id = info.node_id {
                     println!("Node ID: {}", node_id);
                     assert!(!node_id.is_empty(), "Node ID should not be empty");
                 } else {
