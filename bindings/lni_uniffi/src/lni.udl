@@ -33,3 +33,14 @@ interface PhoenixdNode {
   [Throws=ApiError, Async]
   string get_offer();
 };
+
+record InfoResponse {
+  nullable<string> node_id;
+}
+
+interface PhoenixService {
+  constructor(string address, string authorization);
+
+  [Throws=Error]
+  InfoResponse get_info();
+}

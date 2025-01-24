@@ -117,3 +117,5 @@ xcuserdata/
 
 **/rust_modules
 **/node_modules
+
+**.env**
