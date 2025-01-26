@@ -1,4 +1,5 @@
 use crate::phoenixd::lib::Bolt11Resp;
+use crate::ApiError;
 
 // https://phoenix.acinq.co/server/api
 // pub async fn get_offer(url: String, password: String) -> crate::Result<String> {
@@ -54,7 +55,7 @@ pub struct InfoResponse {
 
 impl PhoenixService {
     /// Creates a new `PhoenixService` instance.
-    pub fn new(address: &str, authorization: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(address: String, authorization: String) -> crate::Result<Self> {
         let authorization_base64 = base64::encode(format!(":{}", authorization));
         let address = if address.starts_with("http") {
             address.to_string()
@@ -64,7 +65,7 @@ impl PhoenixService {
 
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
-            .build()?;
+            .build().unwrap();
 
         Ok(Self {
             address,
@@ -74,16 +75,16 @@ impl PhoenixService {
     }
 
     /// Retrieves node information and prints the raw response for debugging.
-    pub fn get_info(&self) -> Result<InfoResponse, Box<dyn Error>> {
+    pub fn get_info(&self) -> crate::Result<InfoResponse> {
         let url = format!("{}/getinfo", self.address);
         let response = self
             .client
             .get(&url)
             .header("Authorization", format!("Basic {}", self.authorization))
-            .send()?;
+            .send();
 
         // Print the raw response body for debugging
-        let response_text = response.text()?;
+        let response_text = response.unwrap().text().unwrap();
         println!("Raw response: {}", response_text);
 
         // Deserialize the response into the InfoResponse struct
@@ -107,7 +108,7 @@ mod tests {
         let authorization = env::var("PHOENIXD_PASSWORD").expect("PHOENIXD_PASSWORD must be set");
 
         // Create a new PhoenixService instance
-        let service = PhoenixService::new(&address, &authorization)
+        let service = PhoenixService::new(address, authorization)
             .expect("Failed to create PhoenixService");
 
         // Test get_info method

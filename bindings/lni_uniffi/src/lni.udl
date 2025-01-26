@@ -9,6 +9,8 @@ interface ApiError {
     Json(string reason);
 };
 
+
+
 dictionary Ip {
     string origin;
 };
@@ -22,25 +24,15 @@ interface Fetcher {
   Ip get_ip_address();
 };
 
-dictionary PhoenixdConfig {
-  string url;
-  string password;
+
+dictionary InfoResponse {
+    string node_id;
 };
-
-interface PhoenixdNode {
-  constructor(PhoenixdConfig config);
-
-  [Throws=ApiError, Async]
-  string get_offer();
-};
-
-record InfoResponse {
-  string node_id;
-}
 
 interface PhoenixService {
-  constructor(string address, string authorization);
+    [Throws=ApiError]
+    constructor(string address, string authorization);
 
-  [Throws=Error]
-  InfoResponse get_info();
-}
+    [Throws=ApiError]
+    InfoResponse get_info();
+};
