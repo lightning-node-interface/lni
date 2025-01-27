@@ -7,6 +7,7 @@ export default function App() {
   const fetcher = new Fetcher('http://woot.com');
   const [ip, setIp] = useState<string>('');
   const [offer, setOffer] = useState<string>('');
+  const [pubKey, setPubKey] = useState<string>('');
   const [config, setConfig] = useState<string>('');
 
   const main = async () => {
@@ -43,7 +44,7 @@ export default function App() {
       });
 
       const info = await node.getInfo();
-      setOffer(info.pubkey);
+      setPubKey(info.pubkey);
     } catch (e) {
       console.error('Error', e);
     }
@@ -67,7 +68,7 @@ export default function App() {
     <View style={styles.container}>
       <Text>Config: {config}</Text>
       <Text>IP: {ip}</Text>
-      <Text>Offer: {offer}</Text>
+      <Text>Node PubKey: {pubKey}</Text>
     </View>
   );
 }
