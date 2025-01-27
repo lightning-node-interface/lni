@@ -40,7 +40,7 @@ interface PhoenixdNode {
 
 
 dictionary TLVRecord {
-    u64 type_;
+    i64 type_;
     string value;
 };
 
@@ -49,7 +49,7 @@ dictionary NodeInfo {
     string color;
     string pubkey;
     string network;
-    u64 block_height;
+    i64 block_height;
     string block_hash;
 };
 
@@ -80,15 +80,15 @@ dictionary Channel {
     string id;
     string remote_pubkey;
     string funding_tx_id;
-    u64 funding_tx_vout;
+    i64 funding_tx_vout;
     boolean active;
     boolean public;
     string internal_channel;
-    u64 confirmations;
-    u64 confirmations_required;
-    u64 forwarding_fee_base_msat;
-    u64 unspendable_punishment_reserve;
-    u64 counterparty_unspendable_punishment_reserve;
+    i64 confirmations;
+    i64 confirmations_required;
+    i64 forwarding_fee_base_msat;
+    i64 unspendable_punishment_reserve;
+    i64 counterparty_unspendable_punishment_reserve;
     string error;
     boolean is_outbound;
 };
@@ -101,7 +101,7 @@ dictionary NodeStatus {
 dictionary ConnectPeerRequest {
     string pubkey;
     string address;
-    u64 port;
+    i64 port;
 };
 
 dictionary OpenChannelRequest {
@@ -123,8 +123,8 @@ dictionary CloseChannelRequest {
 dictionary UpdateChannelRequest {
     string channel_id;
     string node_id;
-    u64 forwarding_fee_base_msat;
-    u64 max_dust_htlc_exposure_from_fee_rate_multiplier;
+    i64 forwarding_fee_base_msat;
+    i64 max_dust_htlc_exposure_from_fee_rate_multiplier;
 };
 
 dictionary CloseChannelResponse {};
@@ -132,16 +132,16 @@ dictionary CloseChannelResponse {};
 dictionary PendingBalanceDetails {
     string channel_id;
     string node_id;
-    u64 amount;
+    i64 amount;
     string funding_tx_id;
-    u64 funding_tx_vout;
+    i64 funding_tx_vout;
 };
 
 dictionary OnchainBalanceResponse {
     i64 spendable;
     i64 total;
     i64 reserved;
-    u64 pending_balances_from_channel_closures;
+    i64 pending_balances_from_channel_closures;
     sequence<PendingBalanceDetails> pending_balances_details;
     string internal_balances;
 };
@@ -164,11 +164,11 @@ dictionary LightningBalanceResponse {
 
 dictionary PayInvoiceResponse {
     string preimage;
-    u64 fee;
+    i64 fee;
 };
 
 dictionary PayKeysendResponse {
-    u64 fee;
+    i64 fee;
 };
 
 dictionary BalancesResponse {
