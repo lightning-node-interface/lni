@@ -45,74 +45,74 @@ impl PhoenixdNode {
     // }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use dotenv::dotenv;
-//     use lazy_static::lazy_static;
-//     use std::env;
-//     use tokio::test;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dotenv::dotenv;
+    use lazy_static::lazy_static;
+    use std::env;
+    use tokio::test;
 
-//     lazy_static! {
-//         static ref URL: String = {
-//             dotenv().ok();
-//             env::var("PHOENIXD_URL").expect("PHOENIXD_URL must be set")
-//         };
-//         static ref PASSWORD: String = {
-//             dotenv().ok();
-//             env::var("PHOENIXD_PASSWORD").expect("PHOENIXD_PASSWORD must be set")
-//         };
-//         static ref NODE2: PhoenixdNode = {
-//             PhoenixdNode::new(PhoenixdConfig {
-//                 url: URL.clone(),
-//                 password: PASSWORD.clone(),
-//             })
-//         };
-//     }
+    lazy_static! {
+        static ref URL: String = {
+            dotenv().ok();
+            env::var("PHOENIXD_URL").expect("PHOENIXD_URL must be set")
+        };
+        static ref PASSWORD: String = {
+            dotenv().ok();
+            env::var("PHOENIXD_PASSWORD").expect("PHOENIXD_PASSWORD must be set")
+        };
+        static ref NODE: PhoenixdNode = {
+            PhoenixdNode::new(PhoenixdConfig {
+                url: URL.clone(),
+                password: PASSWORD.clone(),
+            })
+        };
+    }
 
-//     // #[test]
-//     // async fn test_get_offer() {
-//     //     match NODE.get_offer().await {
-//     //         Ok(offer) => {
-//     //             println!("offer: {:?}", offer);
-//     //             assert!(!offer.is_empty(), "Offer should not be empty");
-//     //         }
-//     //         Err(e) => {
-//     //             panic!("Failed to get offer: {:?}", e);
-//     //         }
-//     //     }
-//     // }
+    #[test]
+    async fn test_get_info() {
+        match NODE.get_info().await {
+            Ok(info) => {
+                println!("info: {:?}", info);
+                assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to get offer: {:?}", e);
+            }
+        }
+    }
 
-//     // #[tokio::test]
-//     // async fn test_get_bolt11() {
-//     //     match NODE.create_bolt_11_invoice().await {
-//     //         Ok(offer) => {
-//     //             println!("offer: {:?}", offer.serialized);
-//     //             assert!(!offer.serialized.is_empty(), "Offer should not be empty");
-//     //         }
-//     //         Err(e) => {
-//     //             panic!("Failed to get offer: {:?}", e);
-//     //         }
-//     //     }
-//     // }
-//     #[tokio::test]
-//     async fn test_make_invoice() {
-//         let amount = 1000;
-//         let description = Some("Test invoice");
-//         let description_hash = None;
-//         let expiry = Some(3600);
+    // #[tokio::test]
+    // async fn test_get_bolt11() {
+    //     match NODE.create_bolt_11_invoice().await {
+    //         Ok(offer) => {
+    //             println!("offer: {:?}", offer.serialized);
+    //             assert!(!offer.serialized.is_empty(), "Offer should not be empty");
+    //         }
+    //         Err(e) => {
+    //             panic!("Failed to get offer: {:?}", e);
+    //         }
+    //     }
+    // }
+    // #[tokio::test]
+    // async fn test_make_invoice() {
+    //     let amount = 1000;
+    //     let description = Some("Test invoice");
+    //     let description_hash = None;
+    //     let expiry = Some(3600);
 
-//         match NODE
-//             .make_invoice(amount, description, description_hash, expiry)
-//             .await
-//         {
-//             Ok(invoice) => {
-//                 println!("invoice: {:?}", invoice);
-//                 assert!(!invoice.is_empty(), "Invoice should not be empty");
-//             }
-//             Err(e) => {
-//                 panic!("Failed to make invoice: {:?}", e);
-//             }
-//         }
-//     }
-// }
+    //     match NODE
+    //         .make_invoice(amount, description, description_hash, expiry)
+    //         .await
+    //     {
+    //         Ok(invoice) => {
+    //             println!("invoice: {:?}", invoice);
+    //             assert!(!invoice.is_empty(), "Invoice should not be empty");
+    //         }
+    //         Err(e) => {
+    //             panic!("Failed to make invoice: {:?}", e);
+    //         }
+    //     }
+    // }
+}

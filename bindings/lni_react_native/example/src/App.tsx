@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher, PhoenixService, type Channel } from '../../src';
+import { Fetcher, PhoenixdNode, type Channel } from '../../src';
+import { PHOENIXD_URL, PHOENIXD_PASSWORD } from '@env';
 
 export default function App() {
   const fetcher = new Fetcher('http://woot.com');
@@ -36,10 +37,13 @@ export default function App() {
     console.log('Channel', c);
 
     try {
-      const node = new PhoenixService('http://localhost:9740', '');
+      const node = new PhoenixdNode({
+        url: PHOENIXD_URL,
+        password: PHOENIXD_PASSWORD,
+      });
 
       const info = await node.getInfo();
-      setOffer(info.nodeId);
+      setOffer(info.pubkey);
     } catch (e) {
       console.error('Error', e);
     }

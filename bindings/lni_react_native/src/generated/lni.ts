@@ -51,7 +51,6 @@ import {
   destructorGuardSymbol,
   pointerLiteralSymbol,
   rustCall,
-  rustCallWithError,
   uniffiCreateRecord,
   uniffiRustCallAsync,
   uniffiTypeNameSymbol,
@@ -413,58 +412,6 @@ const FfiConverterTypeConnectPeerRequest = (() => {
         FfiConverterString.allocationSize(value.address) +
         FfiConverterUInt64.allocationSize(value.port)
       );
-    }
-  }
-  return new FFIConverter();
-})();
-
-export type InfoResponse = {
-  nodeId: string;
-};
-
-/**
- * Generated factory for {@link InfoResponse} record objects.
- */
-export const InfoResponse = (() => {
-  const defaults = () => ({});
-  const create = (() => {
-    return uniffiCreateRecord<InfoResponse, ReturnType<typeof defaults>>(
-      defaults
-    );
-  })();
-  return Object.freeze({
-    /**
-     * Create a frozen instance of {@link InfoResponse}, with defaults specified
-     * in Rust, in the {@link lni} crate.
-     */
-    create,
-
-    /**
-     * Create a frozen instance of {@link InfoResponse}, with defaults specified
-     * in Rust, in the {@link lni} crate.
-     */
-    new: create,
-
-    /**
-     * Defaults specified in the {@link lni} crate.
-     */
-    defaults: () => Object.freeze(defaults()) as Partial<InfoResponse>,
-  });
-})();
-
-const FfiConverterTypeInfoResponse = (() => {
-  type TypeName = InfoResponse;
-  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
-    read(from: RustBuffer): TypeName {
-      return {
-        nodeId: FfiConverterString.read(from),
-      };
-    }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.nodeId, into);
-    }
-    allocationSize(value: TypeName): number {
-      return FfiConverterString.allocationSize(value.nodeId);
     }
   }
   return new FFIConverter();
@@ -1293,6 +1240,64 @@ const FfiConverterTypePendingBalanceDetails = (() => {
   return new FFIConverter();
 })();
 
+export type PhoenixdConfig = {
+  url: string;
+  password: string;
+};
+
+/**
+ * Generated factory for {@link PhoenixdConfig} record objects.
+ */
+export const PhoenixdConfig = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PhoenixdConfig, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PhoenixdConfig}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PhoenixdConfig}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<PhoenixdConfig>,
+  });
+})();
+
+const FfiConverterTypePhoenixdConfig = (() => {
+  type TypeName = PhoenixdConfig;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        url: FfiConverterString.read(from),
+        password: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.url, into);
+      FfiConverterString.write(value.password, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.url) +
+        FfiConverterString.allocationSize(value.password)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type TlvRecord = {
   type: /*u64*/ bigint;
   value: string;
@@ -1762,6 +1767,40 @@ const FfiConverterTypeApiError = (() => {
   return new FFIConverter();
 })();
 
+export enum InvoiceType {
+  Bolt11,
+  Bolt12,
+}
+
+const FfiConverterTypeInvoiceType = (() => {
+  const ordinalConverter = FfiConverterInt32;
+  type TypeName = InvoiceType;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      switch (ordinalConverter.read(from)) {
+        case 1:
+          return InvoiceType.Bolt11;
+        case 2:
+          return InvoiceType.Bolt12;
+        default:
+          throw new UniffiInternalError.UnexpectedEnumCase();
+      }
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      switch (value) {
+        case InvoiceType.Bolt11:
+          return ordinalConverter.write(1, into);
+        case InvoiceType.Bolt12:
+          return ordinalConverter.write(2, into);
+      }
+    }
+    allocationSize(value: TypeName): number {
+      return ordinalConverter.allocationSize(0);
+    }
+  }
+  return new FFIConverter();
+})();
+
 export interface FetcherInterface {
   getConfig(): string;
   getIpAddress(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<Ip>;
@@ -1906,27 +1945,23 @@ const FfiConverterTypeFetcher = new FfiConverterObject(
   uniffiTypeFetcherObjectFactory
 );
 
-export interface PhoenixServiceInterface {
-  getInfo() /*throws*/ : InfoResponse;
+export interface PhoenixdNodeInterface {
+  getInfo(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<NodeInfo>;
 }
 
-export class PhoenixService
+export class PhoenixdNode
   extends UniffiAbstractObject
-  implements PhoenixServiceInterface
+  implements PhoenixdNodeInterface
 {
-  readonly [uniffiTypeNameSymbol] = 'PhoenixService';
+  readonly [uniffiTypeNameSymbol] = 'PhoenixdNode';
   readonly [destructorGuardSymbol]: UniffiRustArcPtr;
   readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(address: string, authorization: string) /*throws*/ {
+  constructor(config: PhoenixdConfig) {
     super();
-    const pointer = rustCallWithError(
-      /*liftError:*/ FfiConverterTypeApiError.lift.bind(
-        FfiConverterTypeApiError
-      ),
+    const pointer = rustCall(
       /*caller:*/ (callStatus) => {
-        return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixservice_new(
-          FfiConverterString.lower(address),
-          FfiConverterString.lower(authorization),
+        return nativeModule().uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+          FfiConverterTypePhoenixdConfig.lower(config),
           callStatus
         );
       },
@@ -1934,24 +1969,43 @@ export class PhoenixService
     );
     this[pointerLiteralSymbol] = pointer;
     this[destructorGuardSymbol] =
-      uniffiTypePhoenixServiceObjectFactory.bless(pointer);
+      uniffiTypePhoenixdNodeObjectFactory.bless(pointer);
   }
 
-  public getInfo(): InfoResponse /*throws*/ {
-    return FfiConverterTypeInfoResponse.lift(
-      rustCallWithError(
-        /*liftError:*/ FfiConverterTypeApiError.lift.bind(
-          FfiConverterTypeApiError
-        ),
-        /*caller:*/ (callStatus) => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixservice_get_info(
-            uniffiTypePhoenixServiceObjectFactory.clonePointer(this),
-            callStatus
+  public async getInfo(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<NodeInfo> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(
+            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this)
           );
         },
-        /*liftString:*/ FfiConverterString.lift
-      )
-    );
+        /*pollFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_free_rust_buffer,
+        /*liftFunc:*/ FfiConverterTypeNodeInfo.lift.bind(
+          FfiConverterTypeNodeInfo
+        ),
+        /*liftString:*/ FfiConverterString.lift,
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeApiError.lift.bind(
+          FfiConverterTypeApiError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
   }
 
   /**
@@ -1959,32 +2013,32 @@ export class PhoenixService
    */
   uniffiDestroy(): void {
     if ((this as any)[destructorGuardSymbol]) {
-      const pointer = uniffiTypePhoenixServiceObjectFactory.pointer(this);
-      uniffiTypePhoenixServiceObjectFactory.freePointer(pointer);
+      const pointer = uniffiTypePhoenixdNodeObjectFactory.pointer(this);
+      uniffiTypePhoenixdNodeObjectFactory.freePointer(pointer);
       this[destructorGuardSymbol].markDestroyed();
       delete (this as any)[destructorGuardSymbol];
     }
   }
 
-  static instanceOf(obj: any): obj is PhoenixService {
-    return uniffiTypePhoenixServiceObjectFactory.isConcreteType(obj);
+  static instanceOf(obj: any): obj is PhoenixdNode {
+    return uniffiTypePhoenixdNodeObjectFactory.isConcreteType(obj);
   }
 }
 
-const uniffiTypePhoenixServiceObjectFactory: UniffiObjectFactory<PhoenixServiceInterface> =
+const uniffiTypePhoenixdNodeObjectFactory: UniffiObjectFactory<PhoenixdNodeInterface> =
   {
-    create(pointer: UnsafeMutableRawPointer): PhoenixServiceInterface {
-      const instance = Object.create(PhoenixService.prototype);
+    create(pointer: UnsafeMutableRawPointer): PhoenixdNodeInterface {
+      const instance = Object.create(PhoenixdNode.prototype);
       instance[pointerLiteralSymbol] = pointer;
       instance[destructorGuardSymbol] = this.bless(pointer);
-      instance[uniffiTypeNameSymbol] = 'PhoenixService';
+      instance[uniffiTypeNameSymbol] = 'PhoenixdNode';
       return instance;
     },
 
     bless(p: UnsafeMutableRawPointer): UniffiRustArcPtr {
       return rustCall(
         /*caller:*/ (status) =>
-          nativeModule().uniffi_internal_fn_method_phoenixservice_ffi__bless_pointer(
+          nativeModule().uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
             p,
             status
           ),
@@ -1992,18 +2046,18 @@ const uniffiTypePhoenixServiceObjectFactory: UniffiObjectFactory<PhoenixServiceI
       );
     },
 
-    pointer(obj: PhoenixServiceInterface): UnsafeMutableRawPointer {
+    pointer(obj: PhoenixdNodeInterface): UnsafeMutableRawPointer {
       if ((obj as any)[destructorGuardSymbol] === undefined) {
         throw new UniffiInternalError.UnexpectedNullPointer();
       }
       return (obj as any)[pointerLiteralSymbol];
     },
 
-    clonePointer(obj: PhoenixServiceInterface): UnsafeMutableRawPointer {
+    clonePointer(obj: PhoenixdNodeInterface): UnsafeMutableRawPointer {
       const pointer = this.pointer(obj);
       return rustCall(
         /*caller:*/ (callStatus) =>
-          nativeModule().uniffi_lni_uniffi_fn_clone_phoenixservice(
+          nativeModule().uniffi_lni_uniffi_fn_clone_phoenixdnode(
             pointer,
             callStatus
           ),
@@ -2014,7 +2068,7 @@ const uniffiTypePhoenixServiceObjectFactory: UniffiObjectFactory<PhoenixServiceI
     freePointer(pointer: UnsafeMutableRawPointer): void {
       rustCall(
         /*caller:*/ (callStatus) =>
-          nativeModule().uniffi_lni_uniffi_fn_free_phoenixservice(
+          nativeModule().uniffi_lni_uniffi_fn_free_phoenixdnode(
             pointer,
             callStatus
           ),
@@ -2022,16 +2076,16 @@ const uniffiTypePhoenixServiceObjectFactory: UniffiObjectFactory<PhoenixServiceI
       );
     },
 
-    isConcreteType(obj: any): obj is PhoenixServiceInterface {
+    isConcreteType(obj: any): obj is PhoenixdNodeInterface {
       return (
         obj[destructorGuardSymbol] &&
-        obj[uniffiTypeNameSymbol] === 'PhoenixService'
+        obj[uniffiTypeNameSymbol] === 'PhoenixdNode'
       );
     },
   };
-// FfiConverter for PhoenixServiceInterface
-const FfiConverterTypePhoenixService = new FfiConverterObject(
-  uniffiTypePhoenixServiceObjectFactory
+// FfiConverter for PhoenixdNodeInterface
+const FfiConverterTypePhoenixdNode = new FfiConverterObject(
+  uniffiTypePhoenixdNodeObjectFactory
 );
 
 // FfiConverter for Array<PendingBalanceDetails>
@@ -2078,11 +2132,11 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixservice_get_info() !==
-    35181
+    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info() !==
+    26496
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_phoenixservice_get_info'
+      'uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info'
     );
   }
   if (
@@ -2094,11 +2148,11 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
-    nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixservice_new() !==
-    22659
+    nativeModule().uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new() !==
+    62891
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_constructor_phoenixservice_new'
+      'uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new'
     );
   }
 }
@@ -2112,7 +2166,7 @@ export default Object.freeze({
     FfiConverterTypeCloseChannelResponse,
     FfiConverterTypeConnectPeerRequest,
     FfiConverterTypeFetcher,
-    FfiConverterTypeInfoResponse,
+    FfiConverterTypeInvoiceType,
     FfiConverterTypeIp,
     FfiConverterTypeLightningBalanceResponse,
     FfiConverterTypeNodeConnectionInfo,
@@ -2126,7 +2180,8 @@ export default Object.freeze({
     FfiConverterTypePaymentFailedEventProperties,
     FfiConverterTypePeerDetails,
     FfiConverterTypePendingBalanceDetails,
-    FfiConverterTypePhoenixService,
+    FfiConverterTypePhoenixdConfig,
+    FfiConverterTypePhoenixdNode,
     FfiConverterTypeTLVRecord,
     FfiConverterTypeTransaction,
     FfiConverterTypeUpdateChannelRequest,

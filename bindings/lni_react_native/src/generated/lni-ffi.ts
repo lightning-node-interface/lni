@@ -39,23 +39,19 @@ interface NativeModuleInterface {
     uniffi_out_err: UniffiRustCallStatus
   ): ArrayBuffer;
   uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(ptr: bigint): bigint;
-  uniffi_lni_uniffi_fn_clone_phoenixservice(
+  uniffi_lni_uniffi_fn_clone_phoenixdnode(
     ptr: bigint,
     uniffi_out_err: UniffiRustCallStatus
   ): bigint;
-  uniffi_lni_uniffi_fn_free_phoenixservice(
+  uniffi_lni_uniffi_fn_free_phoenixdnode(
     ptr: bigint,
     uniffi_out_err: UniffiRustCallStatus
   ): void;
-  uniffi_lni_uniffi_fn_constructor_phoenixservice_new(
-    address: ArrayBuffer,
-    authorization: ArrayBuffer,
+  uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
+    config: ArrayBuffer,
     uniffi_out_err: UniffiRustCallStatus
   ): bigint;
-  uniffi_lni_uniffi_fn_method_phoenixservice_get_info(
-    ptr: bigint,
-    uniffi_out_err: UniffiRustCallStatus
-  ): ArrayBuffer;
+  uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(ptr: bigint): bigint;
   ffi_lni_uniffi_rust_future_poll_u8(
     handle: bigint,
     callback: UniffiRustFutureContinuationCallback,
@@ -201,15 +197,15 @@ interface NativeModuleInterface {
   ): void;
   uniffi_lni_uniffi_checksum_method_fetcher_get_config(): number;
   uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address(): number;
-  uniffi_lni_uniffi_checksum_method_phoenixservice_get_info(): number;
+  uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(): number;
   uniffi_lni_uniffi_checksum_constructor_fetcher_new(): number;
-  uniffi_lni_uniffi_checksum_constructor_phoenixservice_new(): number;
+  uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(): number;
   ffi_lni_uniffi_uniffi_contract_version(): number;
   uniffi_internal_fn_method_fetcher_ffi__bless_pointer(
     pointer: bigint,
     uniffi_out_err: UniffiRustCallStatus
   ): UniffiRustArcPtr;
-  uniffi_internal_fn_method_phoenixservice_ffi__bless_pointer(
+  uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
     pointer: bigint,
     uniffi_out_err: UniffiRustCallStatus
   ): UniffiRustArcPtr;
