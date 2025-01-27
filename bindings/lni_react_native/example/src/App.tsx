@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode, type Channel } from '../../src';
+import { PhoenixdNode, type Channel, InvoiceType } from '../../src';
 import { PHOENIXD_URL, PHOENIXD_PASSWORD } from '@env';
 
 export default function App() {
@@ -39,6 +39,15 @@ export default function App() {
 
       const info = await node.getInfo();
       setPubKey(info.pubkey);
+
+      const offerResp = await node.makeInvoice(
+        InvoiceType.Bolt12,
+        BigInt(1000),
+        'Test invoice',
+        'string',
+        BigInt(3600)
+      );
+      setOffer(offerResp.invoice);
     } catch (e) {
       console.error('Error', e);
     }
@@ -53,8 +62,11 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text>Config: {config}</Text>
+      <Text />
       <Text>Node PubKey: {pubKey}</Text>
+      <Text />
+      <Text>Offer: {offer}</Text>
+      <Text />
     </View>
   );
 }

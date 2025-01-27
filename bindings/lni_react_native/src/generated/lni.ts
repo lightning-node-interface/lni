@@ -417,56 +417,6 @@ const FfiConverterTypeConnectPeerRequest = (() => {
   return new FFIConverter();
 })();
 
-export type Ip = {
-  origin: string;
-};
-
-/**
- * Generated factory for {@link Ip} record objects.
- */
-export const Ip = (() => {
-  const defaults = () => ({});
-  const create = (() => {
-    return uniffiCreateRecord<Ip, ReturnType<typeof defaults>>(defaults);
-  })();
-  return Object.freeze({
-    /**
-     * Create a frozen instance of {@link Ip}, with defaults specified
-     * in Rust, in the {@link lni} crate.
-     */
-    create,
-
-    /**
-     * Create a frozen instance of {@link Ip}, with defaults specified
-     * in Rust, in the {@link lni} crate.
-     */
-    new: create,
-
-    /**
-     * Defaults specified in the {@link lni} crate.
-     */
-    defaults: () => Object.freeze(defaults()) as Partial<Ip>,
-  });
-})();
-
-const FfiConverterTypeIp = (() => {
-  type TypeName = Ip;
-  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
-    read(from: RustBuffer): TypeName {
-      return {
-        origin: FfiConverterString.read(from),
-      };
-    }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.origin, into);
-    }
-    allocationSize(value: TypeName): number {
-      return FfiConverterString.allocationSize(value.origin);
-    }
-  }
-  return new FFIConverter();
-})();
-
 export type LightningBalanceResponse = {
   totalSpendable: /*i64*/ bigint;
   totalReceivable: /*i64*/ bigint;
@@ -1801,152 +1751,16 @@ const FfiConverterTypeInvoiceType = (() => {
   return new FFIConverter();
 })();
 
-export interface FetcherInterface {
-  getConfig(): string;
-  getIpAddress(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<Ip>;
-}
-
-export class Fetcher extends UniffiAbstractObject implements FetcherInterface {
-  readonly [uniffiTypeNameSymbol] = 'Fetcher';
-  readonly [destructorGuardSymbol]: UniffiRustArcPtr;
-  readonly [pointerLiteralSymbol]: UnsafeMutableRawPointer;
-  constructor(url: string) {
-    super();
-    const pointer = rustCall(
-      /*caller:*/ (callStatus) => {
-        return nativeModule().uniffi_lni_uniffi_fn_constructor_fetcher_new(
-          FfiConverterString.lower(url),
-          callStatus
-        );
-      },
-      /*liftString:*/ FfiConverterString.lift
-    );
-    this[pointerLiteralSymbol] = pointer;
-    this[destructorGuardSymbol] = uniffiTypeFetcherObjectFactory.bless(pointer);
-  }
-
-  public getConfig(): string {
-    return FfiConverterString.lift(
-      rustCall(
-        /*caller:*/ (callStatus) => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_fetcher_get_config(
-            uniffiTypeFetcherObjectFactory.clonePointer(this),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift
-      )
-    );
-  }
-
-  public async getIpAddress(asyncOpts_?: {
-    signal: AbortSignal;
-  }): Promise<Ip> /*throws*/ {
-    const __stack = uniffiIsDebug ? new Error().stack : undefined;
-    try {
-      return await uniffiRustCallAsync(
-        /*rustFutureFunc:*/ () => {
-          return nativeModule().uniffi_lni_uniffi_fn_method_fetcher_get_ip_address(
-            uniffiTypeFetcherObjectFactory.clonePointer(this)
-          );
-        },
-        /*pollFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
-        /*cancelFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
-        /*completeFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
-        /*freeFunc:*/ nativeModule()
-          .ffi_lni_uniffi_rust_future_free_rust_buffer,
-        /*liftFunc:*/ FfiConverterTypeIp.lift.bind(FfiConverterTypeIp),
-        /*liftString:*/ FfiConverterString.lift,
-        /*asyncOpts:*/ asyncOpts_,
-        /*errorHandler:*/ FfiConverterTypeApiError.lift.bind(
-          FfiConverterTypeApiError
-        )
-      );
-    } catch (__error: any) {
-      if (uniffiIsDebug && __error instanceof Error) {
-        __error.stack = __stack;
-      }
-      throw __error;
-    }
-  }
-
-  /**
-   * {@inheritDoc uniffi-bindgen-react-native#UniffiAbstractObject.uniffiDestroy}
-   */
-  uniffiDestroy(): void {
-    if ((this as any)[destructorGuardSymbol]) {
-      const pointer = uniffiTypeFetcherObjectFactory.pointer(this);
-      uniffiTypeFetcherObjectFactory.freePointer(pointer);
-      this[destructorGuardSymbol].markDestroyed();
-      delete (this as any)[destructorGuardSymbol];
-    }
-  }
-
-  static instanceOf(obj: any): obj is Fetcher {
-    return uniffiTypeFetcherObjectFactory.isConcreteType(obj);
-  }
-}
-
-const uniffiTypeFetcherObjectFactory: UniffiObjectFactory<FetcherInterface> = {
-  create(pointer: UnsafeMutableRawPointer): FetcherInterface {
-    const instance = Object.create(Fetcher.prototype);
-    instance[pointerLiteralSymbol] = pointer;
-    instance[destructorGuardSymbol] = this.bless(pointer);
-    instance[uniffiTypeNameSymbol] = 'Fetcher';
-    return instance;
-  },
-
-  bless(p: UnsafeMutableRawPointer): UniffiRustArcPtr {
-    return rustCall(
-      /*caller:*/ (status) =>
-        nativeModule().uniffi_internal_fn_method_fetcher_ffi__bless_pointer(
-          p,
-          status
-        ),
-      /*liftString:*/ FfiConverterString.lift
-    );
-  },
-
-  pointer(obj: FetcherInterface): UnsafeMutableRawPointer {
-    if ((obj as any)[destructorGuardSymbol] === undefined) {
-      throw new UniffiInternalError.UnexpectedNullPointer();
-    }
-    return (obj as any)[pointerLiteralSymbol];
-  },
-
-  clonePointer(obj: FetcherInterface): UnsafeMutableRawPointer {
-    const pointer = this.pointer(obj);
-    return rustCall(
-      /*caller:*/ (callStatus) =>
-        nativeModule().uniffi_lni_uniffi_fn_clone_fetcher(pointer, callStatus),
-      /*liftString:*/ FfiConverterString.lift
-    );
-  },
-
-  freePointer(pointer: UnsafeMutableRawPointer): void {
-    rustCall(
-      /*caller:*/ (callStatus) =>
-        nativeModule().uniffi_lni_uniffi_fn_free_fetcher(pointer, callStatus),
-      /*liftString:*/ FfiConverterString.lift
-    );
-  },
-
-  isConcreteType(obj: any): obj is FetcherInterface {
-    return (
-      obj[destructorGuardSymbol] && obj[uniffiTypeNameSymbol] === 'Fetcher'
-    );
-  },
-};
-// FfiConverter for FetcherInterface
-const FfiConverterTypeFetcher = new FfiConverterObject(
-  uniffiTypeFetcherObjectFactory
-);
-
 export interface PhoenixdNodeInterface {
   getInfo(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<NodeInfo>;
+  makeInvoice(
+    invoiceType: InvoiceType,
+    amount: /*i64*/ bigint,
+    description: string,
+    descriptionHash: string,
+    expiry: /*i64*/ bigint,
+    asyncOpts_?: { signal: AbortSignal }
+  ) /*throws*/ : Promise<Transaction>;
 }
 
 export class PhoenixdNode
@@ -1993,6 +1807,52 @@ export class PhoenixdNode
           .ffi_lni_uniffi_rust_future_free_rust_buffer,
         /*liftFunc:*/ FfiConverterTypeNodeInfo.lift.bind(
           FfiConverterTypeNodeInfo
+        ),
+        /*liftString:*/ FfiConverterString.lift,
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeApiError.lift.bind(
+          FfiConverterTypeApiError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  public async makeInvoice(
+    invoiceType: InvoiceType,
+    amount: /*i64*/ bigint,
+    description: string,
+    descriptionHash: string,
+    expiry: /*i64*/ bigint,
+    asyncOpts_?: { signal: AbortSignal }
+  ): Promise<Transaction> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
+            uniffiTypePhoenixdNodeObjectFactory.clonePointer(this),
+            FfiConverterTypeInvoiceType.lower(invoiceType),
+            FfiConverterInt64.lower(amount),
+            FfiConverterString.lower(description),
+            FfiConverterString.lower(descriptionHash),
+            FfiConverterInt64.lower(expiry)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ffi_lni_uniffi_rust_future_free_rust_buffer,
+        /*liftFunc:*/ FfiConverterTypeTransaction.lift.bind(
+          FfiConverterTypeTransaction
         ),
         /*liftString:*/ FfiConverterString.lift,
         /*asyncOpts:*/ asyncOpts_,
@@ -2116,22 +1976,6 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_fetcher_get_config() !==
-    25138
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_fetcher_get_config'
-    );
-  }
-  if (
-    nativeModule().uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address() !==
-    24561
-  ) {
-    throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_method_fetcher_get_ip_address'
-    );
-  }
-  if (
     nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info() !==
     26496
   ) {
@@ -2140,11 +1984,11 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
-    nativeModule().uniffi_lni_uniffi_checksum_constructor_fetcher_new() !==
-    47350
+    nativeModule().uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice() !==
+    18149
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
-      'uniffi_lni_uniffi_checksum_constructor_fetcher_new'
+      'uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice'
     );
   }
   if (
@@ -2165,9 +2009,7 @@ export default Object.freeze({
     FfiConverterTypeCloseChannelRequest,
     FfiConverterTypeCloseChannelResponse,
     FfiConverterTypeConnectPeerRequest,
-    FfiConverterTypeFetcher,
     FfiConverterTypeInvoiceType,
-    FfiConverterTypeIp,
     FfiConverterTypeLightningBalanceResponse,
     FfiConverterTypeNodeConnectionInfo,
     FfiConverterTypeNodeInfo,
