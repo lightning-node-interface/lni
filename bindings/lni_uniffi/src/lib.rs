@@ -1,10 +1,7 @@
-mod api_client;
-
 use lni::phoenixd::{PhoenixdConfig, PhoenixdNode};
-use lni::phoenixd::api::{PhoenixService, InfoResponse};
+use lni::phoenixd::api::{InfoResponse};
 
-pub use lni::{ApiError, Ip, Result};
-pub use api_client::Fetcher;
+pub use lni::{ApiError, Result};
 pub use lni::phoenixd::*;  
 pub use lni::types::*;
 

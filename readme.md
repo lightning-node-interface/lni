@@ -103,7 +103,7 @@ cat example/src/App.tsx
 yarn start
 ```
 
-`*troubleshooting react-natve`: if you get the error `` then you might need to kill the app and restart. (ios simulator - double tap home button then swipe away app)
+`*troubleshooting react-natve`: if you get an error, then you might need to kill the app and restart. (ios simulator - double tap home button then swipe away app)
 
 nodejs 
 ```

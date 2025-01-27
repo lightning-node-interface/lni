@@ -1,7 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::phoenixd::api::*;
+use crate::{phoenixd::api::*, InvoiceType, Transaction};
 use serde::Deserialize;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -36,9 +36,25 @@ impl PhoenixdNode {
         crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
     }
 
-    // pub async fn get_offer(&self) -> crate::Result<String> {
-    //     get_offer(self.url.clone(), self.password.clone()).await
-    // }
+    pub async fn make_invoice(
+        &self,
+        invoice_type: InvoiceType,
+        amount: i64,
+        description: String,
+        description_hash: String,
+        expiry: i64,
+    ) -> crate::Result<Transaction> {
+        make_invoice(
+            self.url.clone(),
+            self.password.clone(),
+            invoice_type,
+            amount,
+            description,
+            description_hash,
+            expiry,
+        )
+        .await
+    }
 
     // pub async fn create_bolt_11_invoice(&self) -> crate::Result<Bolt11Resp> {
     //     create_bolt_11_invoice(self.url.clone(), self.password.clone()).await
@@ -83,36 +99,31 @@ mod tests {
         }
     }
 
-    // #[tokio::test]
-    // async fn test_get_bolt11() {
-    //     match NODE.create_bolt_11_invoice().await {
-    //         Ok(offer) => {
-    //             println!("offer: {:?}", offer.serialized);
-    //             assert!(!offer.serialized.is_empty(), "Offer should not be empty");
-    //         }
-    //         Err(e) => {
-    //             panic!("Failed to get offer: {:?}", e);
-    //         }
-    //     }
-    // }
-    // #[tokio::test]
-    // async fn test_make_invoice() {
-    //     let amount = 1000;
-    //     let description = Some("Test invoice");
-    //     let description_hash = None;
-    //     let expiry = Some(3600);
+    #[test]
+    async fn test_make_invoice() {
+        let amount = 1000;
+        let description = "Test invoice".to_string();
+        let description_hash = "".to_string();
+        let expiry = 3600;
 
-    //     match NODE
-    //         .make_invoice(amount, description, description_hash, expiry)
-    //         .await
-    //     {
-    //         Ok(invoice) => {
-    //             println!("invoice: {:?}", invoice);
-    //             assert!(!invoice.is_empty(), "Invoice should not be empty");
-    //         }
-    //         Err(e) => {
-    //             panic!("Failed to make invoice: {:?}", e);
-    //         }
-    //     }
-    // }
+        match NODE
+            .make_invoice(
+                InvoiceType::Bolt12,
+                amount,
+                description,
+                description_hash,
+                expiry,
+            )
+            .await
+        {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+    }
+
 }

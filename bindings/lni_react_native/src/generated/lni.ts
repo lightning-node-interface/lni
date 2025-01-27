@@ -132,15 +132,15 @@ export type Channel = {
   id: string;
   remotePubkey: string;
   fundingTxId: string;
-  fundingTxVout: /*u64*/ bigint;
+  fundingTxVout: /*i64*/ bigint;
   active: boolean;
   public_: boolean;
   internalChannel: string;
-  confirmations: /*u64*/ bigint;
-  confirmationsRequired: /*u64*/ bigint;
-  forwardingFeeBaseMsat: /*u64*/ bigint;
-  unspendablePunishmentReserve: /*u64*/ bigint;
-  counterpartyUnspendablePunishmentReserve: /*u64*/ bigint;
+  confirmations: /*i64*/ bigint;
+  confirmationsRequired: /*i64*/ bigint;
+  forwardingFeeBaseMsat: /*i64*/ bigint;
+  unspendablePunishmentReserve: /*i64*/ bigint;
+  counterpartyUnspendablePunishmentReserve: /*i64*/ bigint;
   error: string;
   isOutbound: boolean;
 };
@@ -184,15 +184,15 @@ const FfiConverterTypeChannel = (() => {
         id: FfiConverterString.read(from),
         remotePubkey: FfiConverterString.read(from),
         fundingTxId: FfiConverterString.read(from),
-        fundingTxVout: FfiConverterUInt64.read(from),
+        fundingTxVout: FfiConverterInt64.read(from),
         active: FfiConverterBool.read(from),
         public_: FfiConverterBool.read(from),
         internalChannel: FfiConverterString.read(from),
-        confirmations: FfiConverterUInt64.read(from),
-        confirmationsRequired: FfiConverterUInt64.read(from),
-        forwardingFeeBaseMsat: FfiConverterUInt64.read(from),
-        unspendablePunishmentReserve: FfiConverterUInt64.read(from),
-        counterpartyUnspendablePunishmentReserve: FfiConverterUInt64.read(from),
+        confirmations: FfiConverterInt64.read(from),
+        confirmationsRequired: FfiConverterInt64.read(from),
+        forwardingFeeBaseMsat: FfiConverterInt64.read(from),
+        unspendablePunishmentReserve: FfiConverterInt64.read(from),
+        counterpartyUnspendablePunishmentReserve: FfiConverterInt64.read(from),
         error: FfiConverterString.read(from),
         isOutbound: FfiConverterBool.read(from),
       };
@@ -204,15 +204,15 @@ const FfiConverterTypeChannel = (() => {
       FfiConverterString.write(value.id, into);
       FfiConverterString.write(value.remotePubkey, into);
       FfiConverterString.write(value.fundingTxId, into);
-      FfiConverterUInt64.write(value.fundingTxVout, into);
+      FfiConverterInt64.write(value.fundingTxVout, into);
       FfiConverterBool.write(value.active, into);
       FfiConverterBool.write(value.public_, into);
       FfiConverterString.write(value.internalChannel, into);
-      FfiConverterUInt64.write(value.confirmations, into);
-      FfiConverterUInt64.write(value.confirmationsRequired, into);
-      FfiConverterUInt64.write(value.forwardingFeeBaseMsat, into);
-      FfiConverterUInt64.write(value.unspendablePunishmentReserve, into);
-      FfiConverterUInt64.write(
+      FfiConverterInt64.write(value.confirmations, into);
+      FfiConverterInt64.write(value.confirmationsRequired, into);
+      FfiConverterInt64.write(value.forwardingFeeBaseMsat, into);
+      FfiConverterInt64.write(value.unspendablePunishmentReserve, into);
+      FfiConverterInt64.write(
         value.counterpartyUnspendablePunishmentReserve,
         into
       );
@@ -227,15 +227,15 @@ const FfiConverterTypeChannel = (() => {
         FfiConverterString.allocationSize(value.id) +
         FfiConverterString.allocationSize(value.remotePubkey) +
         FfiConverterString.allocationSize(value.fundingTxId) +
-        FfiConverterUInt64.allocationSize(value.fundingTxVout) +
+        FfiConverterInt64.allocationSize(value.fundingTxVout) +
         FfiConverterBool.allocationSize(value.active) +
         FfiConverterBool.allocationSize(value.public_) +
         FfiConverterString.allocationSize(value.internalChannel) +
-        FfiConverterUInt64.allocationSize(value.confirmations) +
-        FfiConverterUInt64.allocationSize(value.confirmationsRequired) +
-        FfiConverterUInt64.allocationSize(value.forwardingFeeBaseMsat) +
-        FfiConverterUInt64.allocationSize(value.unspendablePunishmentReserve) +
-        FfiConverterUInt64.allocationSize(
+        FfiConverterInt64.allocationSize(value.confirmations) +
+        FfiConverterInt64.allocationSize(value.confirmationsRequired) +
+        FfiConverterInt64.allocationSize(value.forwardingFeeBaseMsat) +
+        FfiConverterInt64.allocationSize(value.unspendablePunishmentReserve) +
+        FfiConverterInt64.allocationSize(
           value.counterpartyUnspendablePunishmentReserve
         ) +
         FfiConverterString.allocationSize(value.error) +
@@ -358,7 +358,7 @@ const FfiConverterTypeCloseChannelResponse = (() => {
 export type ConnectPeerRequest = {
   pubkey: string;
   address: string;
-  port: /*u64*/ bigint;
+  port: /*i64*/ bigint;
 };
 
 /**
@@ -398,19 +398,19 @@ const FfiConverterTypeConnectPeerRequest = (() => {
       return {
         pubkey: FfiConverterString.read(from),
         address: FfiConverterString.read(from),
-        port: FfiConverterUInt64.read(from),
+        port: FfiConverterInt64.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
       FfiConverterString.write(value.pubkey, into);
       FfiConverterString.write(value.address, into);
-      FfiConverterUInt64.write(value.port, into);
+      FfiConverterInt64.write(value.port, into);
     }
     allocationSize(value: TypeName): number {
       return (
         FfiConverterString.allocationSize(value.pubkey) +
         FfiConverterString.allocationSize(value.address) +
-        FfiConverterUInt64.allocationSize(value.port)
+        FfiConverterInt64.allocationSize(value.port)
       );
     }
   }
@@ -610,7 +610,7 @@ export type NodeInfo = {
   color: string;
   pubkey: string;
   network: string;
-  blockHeight: /*u64*/ bigint;
+  blockHeight: /*i64*/ bigint;
   blockHash: string;
 };
 
@@ -651,7 +651,7 @@ const FfiConverterTypeNodeInfo = (() => {
         color: FfiConverterString.read(from),
         pubkey: FfiConverterString.read(from),
         network: FfiConverterString.read(from),
-        blockHeight: FfiConverterUInt64.read(from),
+        blockHeight: FfiConverterInt64.read(from),
         blockHash: FfiConverterString.read(from),
       };
     }
@@ -660,7 +660,7 @@ const FfiConverterTypeNodeInfo = (() => {
       FfiConverterString.write(value.color, into);
       FfiConverterString.write(value.pubkey, into);
       FfiConverterString.write(value.network, into);
-      FfiConverterUInt64.write(value.blockHeight, into);
+      FfiConverterInt64.write(value.blockHeight, into);
       FfiConverterString.write(value.blockHash, into);
     }
     allocationSize(value: TypeName): number {
@@ -669,7 +669,7 @@ const FfiConverterTypeNodeInfo = (() => {
         FfiConverterString.allocationSize(value.color) +
         FfiConverterString.allocationSize(value.pubkey) +
         FfiConverterString.allocationSize(value.network) +
-        FfiConverterUInt64.allocationSize(value.blockHeight) +
+        FfiConverterInt64.allocationSize(value.blockHeight) +
         FfiConverterString.allocationSize(value.blockHash)
       );
     }
@@ -739,7 +739,7 @@ export type OnchainBalanceResponse = {
   spendable: /*i64*/ bigint;
   total: /*i64*/ bigint;
   reserved: /*i64*/ bigint;
-  pendingBalancesFromChannelClosures: /*u64*/ bigint;
+  pendingBalancesFromChannelClosures: /*i64*/ bigint;
   pendingBalancesDetails: Array<PendingBalanceDetails>;
   internalBalances: string;
 };
@@ -784,7 +784,7 @@ const FfiConverterTypeOnchainBalanceResponse = (() => {
         spendable: FfiConverterInt64.read(from),
         total: FfiConverterInt64.read(from),
         reserved: FfiConverterInt64.read(from),
-        pendingBalancesFromChannelClosures: FfiConverterUInt64.read(from),
+        pendingBalancesFromChannelClosures: FfiConverterInt64.read(from),
         pendingBalancesDetails:
           FfiConverterArrayTypePendingBalanceDetails.read(from),
         internalBalances: FfiConverterString.read(from),
@@ -794,7 +794,7 @@ const FfiConverterTypeOnchainBalanceResponse = (() => {
       FfiConverterInt64.write(value.spendable, into);
       FfiConverterInt64.write(value.total, into);
       FfiConverterInt64.write(value.reserved, into);
-      FfiConverterUInt64.write(value.pendingBalancesFromChannelClosures, into);
+      FfiConverterInt64.write(value.pendingBalancesFromChannelClosures, into);
       FfiConverterArrayTypePendingBalanceDetails.write(
         value.pendingBalancesDetails,
         into
@@ -806,7 +806,7 @@ const FfiConverterTypeOnchainBalanceResponse = (() => {
         FfiConverterInt64.allocationSize(value.spendable) +
         FfiConverterInt64.allocationSize(value.total) +
         FfiConverterInt64.allocationSize(value.reserved) +
-        FfiConverterUInt64.allocationSize(
+        FfiConverterInt64.allocationSize(
           value.pendingBalancesFromChannelClosures
         ) +
         FfiConverterArrayTypePendingBalanceDetails.allocationSize(
@@ -935,7 +935,7 @@ const FfiConverterTypeOpenChannelResponse = (() => {
 
 export type PayInvoiceResponse = {
   preimage: string;
-  fee: /*u64*/ bigint;
+  fee: /*i64*/ bigint;
 };
 
 /**
@@ -974,17 +974,17 @@ const FfiConverterTypePayInvoiceResponse = (() => {
     read(from: RustBuffer): TypeName {
       return {
         preimage: FfiConverterString.read(from),
-        fee: FfiConverterUInt64.read(from),
+        fee: FfiConverterInt64.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
       FfiConverterString.write(value.preimage, into);
-      FfiConverterUInt64.write(value.fee, into);
+      FfiConverterInt64.write(value.fee, into);
     }
     allocationSize(value: TypeName): number {
       return (
         FfiConverterString.allocationSize(value.preimage) +
-        FfiConverterUInt64.allocationSize(value.fee)
+        FfiConverterInt64.allocationSize(value.fee)
       );
     }
   }
@@ -992,7 +992,7 @@ const FfiConverterTypePayInvoiceResponse = (() => {
 })();
 
 export type PayKeysendResponse = {
-  fee: /*u64*/ bigint;
+  fee: /*i64*/ bigint;
 };
 
 /**
@@ -1030,14 +1030,14 @@ const FfiConverterTypePayKeysendResponse = (() => {
   class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
     read(from: RustBuffer): TypeName {
       return {
-        fee: FfiConverterUInt64.read(from),
+        fee: FfiConverterInt64.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
-      FfiConverterUInt64.write(value.fee, into);
+      FfiConverterInt64.write(value.fee, into);
     }
     allocationSize(value: TypeName): number {
-      return FfiConverterUInt64.allocationSize(value.fee);
+      return FfiConverterInt64.allocationSize(value.fee);
     }
   }
   return new FFIConverter();
@@ -1172,9 +1172,9 @@ const FfiConverterTypePeerDetails = (() => {
 export type PendingBalanceDetails = {
   channelId: string;
   nodeId: string;
-  amount: /*u64*/ bigint;
+  amount: /*i64*/ bigint;
   fundingTxId: string;
-  fundingTxVout: /*u64*/ bigint;
+  fundingTxVout: /*i64*/ bigint;
 };
 
 /**
@@ -1215,25 +1215,25 @@ const FfiConverterTypePendingBalanceDetails = (() => {
       return {
         channelId: FfiConverterString.read(from),
         nodeId: FfiConverterString.read(from),
-        amount: FfiConverterUInt64.read(from),
+        amount: FfiConverterInt64.read(from),
         fundingTxId: FfiConverterString.read(from),
-        fundingTxVout: FfiConverterUInt64.read(from),
+        fundingTxVout: FfiConverterInt64.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
       FfiConverterString.write(value.channelId, into);
       FfiConverterString.write(value.nodeId, into);
-      FfiConverterUInt64.write(value.amount, into);
+      FfiConverterInt64.write(value.amount, into);
       FfiConverterString.write(value.fundingTxId, into);
-      FfiConverterUInt64.write(value.fundingTxVout, into);
+      FfiConverterInt64.write(value.fundingTxVout, into);
     }
     allocationSize(value: TypeName): number {
       return (
         FfiConverterString.allocationSize(value.channelId) +
         FfiConverterString.allocationSize(value.nodeId) +
-        FfiConverterUInt64.allocationSize(value.amount) +
+        FfiConverterInt64.allocationSize(value.amount) +
         FfiConverterString.allocationSize(value.fundingTxId) +
-        FfiConverterUInt64.allocationSize(value.fundingTxVout)
+        FfiConverterInt64.allocationSize(value.fundingTxVout)
       );
     }
   }
@@ -1299,7 +1299,7 @@ const FfiConverterTypePhoenixdConfig = (() => {
 })();
 
 export type TlvRecord = {
-  type: /*u64*/ bigint;
+  type: /*i64*/ bigint;
   value: string;
 };
 
@@ -1336,17 +1336,17 @@ const FfiConverterTypeTLVRecord = (() => {
   class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
     read(from: RustBuffer): TypeName {
       return {
-        type: FfiConverterUInt64.read(from),
+        type: FfiConverterInt64.read(from),
         value: FfiConverterString.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
-      FfiConverterUInt64.write(value.type, into);
+      FfiConverterInt64.write(value.type, into);
       FfiConverterString.write(value.value, into);
     }
     allocationSize(value: TypeName): number {
       return (
-        FfiConverterUInt64.allocationSize(value.type) +
+        FfiConverterInt64.allocationSize(value.type) +
         FfiConverterString.allocationSize(value.value)
       );
     }
@@ -1451,8 +1451,8 @@ const FfiConverterTypeTransaction = (() => {
 export type UpdateChannelRequest = {
   channelId: string;
   nodeId: string;
-  forwardingFeeBaseMsat: /*u64*/ bigint;
-  maxDustHtlcExposureFromFeeRateMultiplier: /*u64*/ bigint;
+  forwardingFeeBaseMsat: /*i64*/ bigint;
+  maxDustHtlcExposureFromFeeRateMultiplier: /*i64*/ bigint;
 };
 
 /**
@@ -1493,15 +1493,15 @@ const FfiConverterTypeUpdateChannelRequest = (() => {
       return {
         channelId: FfiConverterString.read(from),
         nodeId: FfiConverterString.read(from),
-        forwardingFeeBaseMsat: FfiConverterUInt64.read(from),
-        maxDustHtlcExposureFromFeeRateMultiplier: FfiConverterUInt64.read(from),
+        forwardingFeeBaseMsat: FfiConverterInt64.read(from),
+        maxDustHtlcExposureFromFeeRateMultiplier: FfiConverterInt64.read(from),
       };
     }
     write(value: TypeName, into: RustBuffer): void {
       FfiConverterString.write(value.channelId, into);
       FfiConverterString.write(value.nodeId, into);
-      FfiConverterUInt64.write(value.forwardingFeeBaseMsat, into);
-      FfiConverterUInt64.write(
+      FfiConverterInt64.write(value.forwardingFeeBaseMsat, into);
+      FfiConverterInt64.write(
         value.maxDustHtlcExposureFromFeeRateMultiplier,
         into
       );
@@ -1510,8 +1510,8 @@ const FfiConverterTypeUpdateChannelRequest = (() => {
       return (
         FfiConverterString.allocationSize(value.channelId) +
         FfiConverterString.allocationSize(value.nodeId) +
-        FfiConverterUInt64.allocationSize(value.forwardingFeeBaseMsat) +
-        FfiConverterUInt64.allocationSize(
+        FfiConverterInt64.allocationSize(value.forwardingFeeBaseMsat) +
+        FfiConverterInt64.allocationSize(
           value.maxDustHtlcExposureFromFeeRateMultiplier
         )
       );

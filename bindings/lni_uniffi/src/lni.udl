@@ -7,20 +7,6 @@ interface ApiError {
     Json(string reason);
 };
 
-dictionary Ip {
-    string origin;
-};
-
-interface Fetcher {
-  constructor(string url);
-
-  string get_config();
-
-  [Throws=ApiError, Async]
-  Ip get_ip_address();
-};
-
-
 dictionary PhoenixdConfig {
     string url;
     string password;
@@ -31,12 +17,10 @@ interface PhoenixdNode {
 
     [Throws=ApiError, Async]
     NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction make_invoice(InvoiceType invoice_type, i64 amount, string description, string description_hash, i64 expiry);
 };
-
-
-
-
-
 
 
 dictionary TLVRecord {

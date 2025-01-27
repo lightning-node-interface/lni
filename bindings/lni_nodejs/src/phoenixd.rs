@@ -1,4 +1,3 @@
-use lni::phoenixd::api::PhoenixService;
 use lni::{phoenixd::lib::PhoenixdConfig};
 use napi_derive::{napi};
 use napi::bindgen_prelude::*;

@@ -1,20 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher, PhoenixdNode, type Channel } from '../../src';
+import { PhoenixdNode, type Channel } from '../../src';
 import { PHOENIXD_URL, PHOENIXD_PASSWORD } from '@env';
 
 export default function App() {
-  const fetcher = new Fetcher('http://woot.com');
-  const [ip, setIp] = useState<string>('');
   const [offer, setOffer] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
   const [config, setConfig] = useState<string>('');
 
   const main = async () => {
-    const conf = fetcher.getConfig();
-    setConfig(conf);
-    console.log('Config', conf);
-
     const c: Channel = {
       localBalance: BigInt(100),
       localSpendableBalance: BigInt(100),
@@ -48,13 +42,6 @@ export default function App() {
     } catch (e) {
       console.error('Error', e);
     }
-
-    try {
-      const ipRes = await fetcher.getIpAddress();
-      setIp(ipRes.origin ?? 'none');
-    } catch (e) {
-      console.error('Error', e);
-    }
   };
 
   useEffect(() => {
@@ -67,7 +54,6 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text>Config: {config}</Text>
-      <Text>IP: {ip}</Text>
       <Text>Node PubKey: {pubKey}</Text>
     </View>
   );

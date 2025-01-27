@@ -1,4 +1,3 @@
-use reqwest;
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 #[cfg(feature = "napi_rs")]
@@ -20,30 +19,12 @@ impl From<serde_json::Error> for ApiError {
         }
     }
 }
-
 pub type Result<T> = std::result::Result<T, ApiError>;
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-#[cfg_attr(feature = "napi_rs", napi(object))]
-pub struct Ip {
-    pub origin: String,
-}
-
-pub async fn get_ip_address() -> Result<Ip> {
-    let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
-    let response: reqwest::blocking::Response = client.get("https://httpbin.org/ip").send().unwrap();
-    let resp_text = response.text().unwrap();
-    let ip_address_response: Ip = serde_json::from_str(&resp_text)?;
-    Ok(ip_address_response)
-}
-
 
 pub mod phoenixd {
     pub mod lib;
     pub mod api;
-
     pub use lib::{PhoenixdConfig, PhoenixdNode};
-    pub use api::PhoenixService;
 }
 
 pub mod types;
