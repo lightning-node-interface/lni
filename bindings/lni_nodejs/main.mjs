@@ -1,12 +1,15 @@
 import { PhoenixdNode } from './index.js'
+import dotenv from 'dotenv';
+dotenv.config();
+
  
 const config = {
-    url: 'http://localhost:9740',
-    password: ''
+    url: process.env.PHOENIXD_URL,
+    password: process.env.PHOENIXD_PASSWORD,
 }
 const node = new PhoenixdNode(config)
-const offer = await node.getOffer()
-console.log('Offer:', offer)
+const info = await node.getInfo()
+console.log('Node info:', info)
 
 const configRes = await node.getConfig()
 console.log('Config:', configRes.url)

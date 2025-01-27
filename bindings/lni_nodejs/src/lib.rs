@@ -2,9 +2,9 @@
 
 extern crate napi_derive;
 
-mod api_client;
 mod phoenixd;
 
-pub use lni::{ApiError, Ip, Result};
-pub use api_client::Fetcher;
+pub use lni::{ApiError, Result};
 pub use phoenixd::PhoenixdNode;
+pub use lni::types::*;
+

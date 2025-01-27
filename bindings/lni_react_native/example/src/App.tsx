@@ -1,33 +1,53 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher, PhoenixdNode } from '../../src';
+import { PhoenixdNode, type Channel, InvoiceType } from '../../src';
+import { PHOENIXD_URL, PHOENIXD_PASSWORD } from '@env';
 
 export default function App() {
-  const fetcher = new Fetcher('http://woot.com');
-  const [ip, setIp] = useState<string>('');
   const [offer, setOffer] = useState<string>('');
+  const [pubKey, setPubKey] = useState<string>('');
   const [config, setConfig] = useState<string>('');
 
   const main = async () => {
-    const conf = fetcher.getConfig();
-    setConfig(conf);
-    console.log('Config', conf);
+    const c: Channel = {
+      localBalance: BigInt(100),
+      localSpendableBalance: BigInt(100),
+      remoteBalance: BigInt(100),
+      id: 'string',
+      remotePubkey: 'string',
+      fundingTxId: 'string',
+      fundingTxVout: BigInt(100),
+      active: true,
+      public_: true,
+      internalChannel: 'string',
+      confirmations: BigInt(100),
+      confirmationsRequired: BigInt(100),
+      forwardingFeeBaseMsat: BigInt(100),
+      unspendablePunishmentReserve: BigInt(100),
+      counterpartyUnspendablePunishmentReserve: BigInt(100),
+      error: 'string',
+      isOutbound: true,
+    };
+
+    console.log('Channel', c);
 
     try {
       const node = new PhoenixdNode({
-        url: 'http://localhost:9740',
-        password: '',
+        url: PHOENIXD_URL,
+        password: PHOENIXD_PASSWORD,
       });
 
-      const offer = await node.getOffer();
-      setOffer(offer);
-    } catch (e) {
-      console.error('Error', e);
-    }
+      const info = await node.getInfo();
+      setPubKey(info.pubkey);
 
-    try {
-      const ipRes = await fetcher.getIpAddress();
-      setIp(ipRes.origin ?? 'none');
+      const offerResp = await node.makeInvoice(
+        InvoiceType.Bolt12,
+        BigInt(1000),
+        'Test invoice',
+        'string',
+        BigInt(3600)
+      );
+      setOffer(offerResp.invoice);
     } catch (e) {
       console.error('Error', e);
     }
@@ -42,9 +62,11 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text>Config: {config}</Text>
-      <Text>IP: {ip}</Text>
+      <Text />
+      <Text>Node PubKey: {pubKey}</Text>
+      <Text />
       <Text>Offer: {offer}</Text>
+      <Text />
     </View>
   );
 }

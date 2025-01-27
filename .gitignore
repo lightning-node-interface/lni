@@ -117,3 +117,8 @@ xcuserdata/
 
 **/rust_modules
 **/node_modules
+
+**.env**
+
+bindings/lni_react_native/src/generated/** 
+bindings/lni_react_native/cpp/generated/**

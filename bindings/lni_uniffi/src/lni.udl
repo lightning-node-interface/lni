@@ -1,6 +1,4 @@
-namespace lni {
-    
-};
+namespace lni {};
 
 [Error]
 interface ApiError {
@@ -9,27 +7,165 @@ interface ApiError {
     Json(string reason);
 };
 
-dictionary Ip {
-    string origin;
-};
-
-interface Fetcher {
-  constructor(string url);
-
-  string get_config();
-
-  [Throws=ApiError, Async]
-  Ip get_ip_address();
-};
-
 dictionary PhoenixdConfig {
-  string url;
-  string password;
+    string url;
+    string password;
 };
 
 interface PhoenixdNode {
-  constructor(PhoenixdConfig config);
+    constructor(PhoenixdConfig config);
 
-  [Throws=ApiError, Async]
-  string get_offer();
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction make_invoice(InvoiceType invoice_type, i64 amount, string description, string description_hash, i64 expiry);
+};
+
+
+dictionary TLVRecord {
+    i64 type_;
+    string value;
+};
+
+dictionary NodeInfo {
+    string alias;
+    string color;
+    string pubkey;
+    string network;
+    i64 block_height;
+    string block_hash;
+};
+
+dictionary Transaction {
+    string type_;
+    string invoice;
+    string description;
+    string description_hash;
+    string preimage;
+    string payment_hash;
+    i64 amount;
+    i64 fees_paid;
+    i64 created_at;
+    i64 expires_at;
+    i64 settled_at;
+};
+
+dictionary NodeConnectionInfo {
+    string pubkey;
+    string address;
+    i64 port;
+};
+
+dictionary Channel {
+    i64 local_balance;
+    i64 local_spendable_balance;
+    i64 remote_balance;
+    string id;
+    string remote_pubkey;
+    string funding_tx_id;
+    i64 funding_tx_vout;
+    boolean active;
+    boolean public;
+    string internal_channel;
+    i64 confirmations;
+    i64 confirmations_required;
+    i64 forwarding_fee_base_msat;
+    i64 unspendable_punishment_reserve;
+    i64 counterparty_unspendable_punishment_reserve;
+    string error;
+    boolean is_outbound;
+};
+
+dictionary NodeStatus {
+    boolean is_ready;
+    string internal_node_status;
+};
+
+dictionary ConnectPeerRequest {
+    string pubkey;
+    string address;
+    i64 port;
+};
+
+dictionary OpenChannelRequest {
+    string pubkey;
+    i64 amount_sats;
+    boolean public;
+};
+
+dictionary OpenChannelResponse {
+    string funding_tx_id;
+};
+
+dictionary CloseChannelRequest {
+    string channel_id;
+    string node_id;
+    boolean force;
+};
+
+dictionary UpdateChannelRequest {
+    string channel_id;
+    string node_id;
+    i64 forwarding_fee_base_msat;
+    i64 max_dust_htlc_exposure_from_fee_rate_multiplier;
+};
+
+dictionary CloseChannelResponse {};
+
+dictionary PendingBalanceDetails {
+    string channel_id;
+    string node_id;
+    i64 amount;
+    string funding_tx_id;
+    i64 funding_tx_vout;
+};
+
+dictionary OnchainBalanceResponse {
+    i64 spendable;
+    i64 total;
+    i64 reserved;
+    i64 pending_balances_from_channel_closures;
+    sequence<PendingBalanceDetails> pending_balances_details;
+    string internal_balances;
+};
+
+dictionary PeerDetails {
+    string node_id;
+    string address;
+    boolean is_persisted;
+    boolean is_connected;
+};
+
+dictionary LightningBalanceResponse {
+    i64 total_spendable;
+    i64 total_receivable;
+    i64 next_max_spendable;
+    i64 next_max_receivable;
+    i64 next_max_spendable_mpp;
+    i64 next_max_receivable_mpp;
+};
+
+dictionary PayInvoiceResponse {
+    string preimage;
+    i64 fee;
+};
+
+dictionary PayKeysendResponse {
+    i64 fee;
+};
+
+dictionary BalancesResponse {
+    OnchainBalanceResponse onchain;
+    LightningBalanceResponse lightning;
+};
+
+dictionary PaymentFailedEventProperties {
+    Transaction transaction;
+    string reason;
+};
+
+enum InvoiceType {
+    "Bolt11",
+    "Bolt12",
 };

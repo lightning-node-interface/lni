@@ -19,6 +19,8 @@ reqwest = { version = "0.10", default-features = false, features = ["json", "rus
 tokio = { version = "1", features = ["full"] }
 napi = { version = "2.12.2", default-features = false, features = ["napi4", "tokio_rt", "async"] }
 napi-derive = "2.12.2"
+dotenv = "0.15.0"
+lazy_static = "1.4.0"
 
 
 [build-dependencies]
