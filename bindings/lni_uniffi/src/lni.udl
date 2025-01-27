@@ -1,6 +1,4 @@
-namespace lni {
-    
-};
+namespace lni {};
 
 [Error]
 interface ApiError {
@@ -8,8 +6,6 @@ interface ApiError {
     Api(string reason);
     Json(string reason);
 };
-
-
 
 dictionary Ip {
     string origin;
@@ -25,17 +21,21 @@ interface Fetcher {
 };
 
 
-dictionary InfoResponse {
-    string node_id;
+dictionary PhoenixdConfig {
+    string url;
+    string password;
 };
 
-interface PhoenixService {
-    [Throws=ApiError]
-    constructor(string address, string authorization);
+interface PhoenixdNode {
+    constructor(PhoenixdConfig config);
 
-    [Throws=ApiError]
-    InfoResponse get_info();
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
 };
+
+
+
+
 
 
 
@@ -93,21 +93,16 @@ dictionary Channel {
     boolean is_outbound;
 };
 
-
 dictionary NodeStatus {
     boolean is_ready;
     string internal_node_status;
 };
-
-
 
 dictionary ConnectPeerRequest {
     string pubkey;
     string address;
     u64 port;
 };
-
-
 
 dictionary OpenChannelRequest {
     string pubkey;
@@ -119,14 +114,11 @@ dictionary OpenChannelResponse {
     string funding_tx_id;
 };
 
-
 dictionary CloseChannelRequest {
     string channel_id;
     string node_id;
     boolean force;
 };
-
-
 
 dictionary UpdateChannelRequest {
     string channel_id;
@@ -135,9 +127,7 @@ dictionary UpdateChannelRequest {
     u64 max_dust_htlc_exposure_from_fee_rate_multiplier;
 };
 
-
 dictionary CloseChannelResponse {};
-
 
 dictionary PendingBalanceDetails {
     string channel_id;
@@ -156,14 +146,12 @@ dictionary OnchainBalanceResponse {
     string internal_balances;
 };
 
-
 dictionary PeerDetails {
     string node_id;
     string address;
     boolean is_persisted;
     boolean is_connected;
 };
-
 
 dictionary LightningBalanceResponse {
     i64 total_spendable;
@@ -183,16 +171,17 @@ dictionary PayKeysendResponse {
     u64 fee;
 };
 
-
-
 dictionary BalancesResponse {
     OnchainBalanceResponse onchain;
     LightningBalanceResponse lightning;
 };
 
-
-
 dictionary PaymentFailedEventProperties {
     Transaction transaction;
     string reason;
+};
+
+enum InvoiceType {
+    "Bolt11",
+    "Bolt12",
 };

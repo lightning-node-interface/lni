@@ -32,6 +32,10 @@ impl PhoenixdNode {
         }
     }
 
+    pub async fn get_info(&self) -> crate::Result<crate::NodeInfo> {
+        crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
+    }
+
     // pub async fn get_offer(&self) -> crate::Result<String> {
     //     get_offer(self.url.clone(), self.password.clone()).await
     // }

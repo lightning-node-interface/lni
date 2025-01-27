@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher, PhoenixService } from '../../src';
+import { Fetcher, PhoenixService, type Channel } from '../../src';
 
 export default function App() {
   const fetcher = new Fetcher('http://woot.com');
@@ -12,6 +12,28 @@ export default function App() {
     const conf = fetcher.getConfig();
     setConfig(conf);
     console.log('Config', conf);
+
+    const c: Channel = {
+      localBalance: BigInt(100),
+      localSpendableBalance: BigInt(100),
+      remoteBalance: BigInt(100),
+      id: 'string',
+      remotePubkey: 'string',
+      fundingTxId: 'string',
+      fundingTxVout: BigInt(100),
+      active: true,
+      public_: true,
+      internalChannel: 'string',
+      confirmations: BigInt(100),
+      confirmationsRequired: BigInt(100),
+      forwardingFeeBaseMsat: BigInt(100),
+      unspendablePunishmentReserve: BigInt(100),
+      counterpartyUnspendablePunishmentReserve: BigInt(100),
+      error: 'string',
+      isOutbound: true,
+    };
+
+    console.log('Channel', c);
 
     try {
       const node = new PhoenixService('http://localhost:9740', '');

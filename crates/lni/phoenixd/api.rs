@@ -1,7 +1,49 @@
 use crate::phoenixd::lib::Bolt11Resp;
-use crate::ApiError;
+use crate::{ApiError, NodeInfo};
 
 // https://phoenix.acinq.co/server/api
+#[derive(Debug, Deserialize)]
+pub struct InfoResponse {
+    #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
+    pub node_id: String,
+}
+
+// make_invoice(bolt11, bolt12)
+// lookup_invoice
+// list_transactions
+// list_channels
+// get_balance
+   /// Retrieves node information and prints the raw response for debugging.
+
+// get_info
+pub fn get_info(url: String, password: String) -> crate::Result<NodeInfo> {
+    let url = format!("{}/getinfo", url);
+    let client = Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build().unwrap();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Basic {}", password))
+        .send();
+
+    // Print the raw response body for debugging
+    let response_text = response.unwrap().text().unwrap();
+    println!("Raw response: {}", response_text);
+
+    // Deserialize the response into the InfoResponse struct
+    let info: InfoResponse = serde_json::from_str(&response_text)?;
+
+    let node_info = NodeInfo {
+        alias: "Phoenixd".to_string(),
+        color: "".to_string(),
+        pubkey: info.node_id,
+        network: "bitcoin".to_string(),
+        block_height: 0,
+        block_hash: "".to_string(),
+    };
+    Ok(node_info)
+}
+
 // pub async fn get_offer(url: String, password: String) -> crate::Result<String> {
 //     let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
 //     let req_url = format!("{}/getoffer", url);
@@ -47,11 +89,7 @@ pub struct PhoenixService {
     client: Client,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct InfoResponse {
-    #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
-    pub node_id: String,
-}
+
 
 impl PhoenixService {
     /// Creates a new `PhoenixService` instance.
@@ -74,23 +112,7 @@ impl PhoenixService {
         })
     }
 
-    /// Retrieves node information and prints the raw response for debugging.
-    pub fn get_info(&self) -> crate::Result<InfoResponse> {
-        let url = format!("{}/getinfo", self.address);
-        let response = self
-            .client
-            .get(&url)
-            .header("Authorization", format!("Basic {}", self.authorization))
-            .send();
-
-        // Print the raw response body for debugging
-        let response_text = response.unwrap().text().unwrap();
-        println!("Raw response: {}", response_text);
-
-        // Deserialize the response into the InfoResponse struct
-        let info: InfoResponse = serde_json::from_str(&response_text)?;
-        Ok(info)
-    }
+ 
 }
 
 #[cfg(test)]

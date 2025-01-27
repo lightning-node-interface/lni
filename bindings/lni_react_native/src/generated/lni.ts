@@ -38,7 +38,10 @@ import {
   type UniffiRustArcPtr,
   type UnsafeMutableRawPointer,
   AbstractFfiConverterArrayBuffer,
+  FfiConverterArray,
+  FfiConverterBool,
   FfiConverterInt32,
+  FfiConverterInt64,
   FfiConverterObject,
   FfiConverterUInt64,
   RustBuffer,
@@ -64,6 +67,356 @@ const uniffiIsDebug =
   process?.env?.NODE_ENV !== 'production' ||
   false;
 // Public interface members begin here.
+
+export type BalancesResponse = {
+  onchain: OnchainBalanceResponse;
+  lightning: LightningBalanceResponse;
+};
+
+/**
+ * Generated factory for {@link BalancesResponse} record objects.
+ */
+export const BalancesResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<BalancesResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link BalancesResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link BalancesResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<BalancesResponse>,
+  });
+})();
+
+const FfiConverterTypeBalancesResponse = (() => {
+  type TypeName = BalancesResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        onchain: FfiConverterTypeOnchainBalanceResponse.read(from),
+        lightning: FfiConverterTypeLightningBalanceResponse.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterTypeOnchainBalanceResponse.write(value.onchain, into);
+      FfiConverterTypeLightningBalanceResponse.write(value.lightning, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterTypeOnchainBalanceResponse.allocationSize(value.onchain) +
+        FfiConverterTypeLightningBalanceResponse.allocationSize(value.lightning)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type Channel = {
+  localBalance: /*i64*/ bigint;
+  localSpendableBalance: /*i64*/ bigint;
+  remoteBalance: /*i64*/ bigint;
+  id: string;
+  remotePubkey: string;
+  fundingTxId: string;
+  fundingTxVout: /*u64*/ bigint;
+  active: boolean;
+  public_: boolean;
+  internalChannel: string;
+  confirmations: /*u64*/ bigint;
+  confirmationsRequired: /*u64*/ bigint;
+  forwardingFeeBaseMsat: /*u64*/ bigint;
+  unspendablePunishmentReserve: /*u64*/ bigint;
+  counterpartyUnspendablePunishmentReserve: /*u64*/ bigint;
+  error: string;
+  isOutbound: boolean;
+};
+
+/**
+ * Generated factory for {@link Channel} record objects.
+ */
+export const Channel = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<Channel, ReturnType<typeof defaults>>(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link Channel}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link Channel}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<Channel>,
+  });
+})();
+
+const FfiConverterTypeChannel = (() => {
+  type TypeName = Channel;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        localBalance: FfiConverterInt64.read(from),
+        localSpendableBalance: FfiConverterInt64.read(from),
+        remoteBalance: FfiConverterInt64.read(from),
+        id: FfiConverterString.read(from),
+        remotePubkey: FfiConverterString.read(from),
+        fundingTxId: FfiConverterString.read(from),
+        fundingTxVout: FfiConverterUInt64.read(from),
+        active: FfiConverterBool.read(from),
+        public_: FfiConverterBool.read(from),
+        internalChannel: FfiConverterString.read(from),
+        confirmations: FfiConverterUInt64.read(from),
+        confirmationsRequired: FfiConverterUInt64.read(from),
+        forwardingFeeBaseMsat: FfiConverterUInt64.read(from),
+        unspendablePunishmentReserve: FfiConverterUInt64.read(from),
+        counterpartyUnspendablePunishmentReserve: FfiConverterUInt64.read(from),
+        error: FfiConverterString.read(from),
+        isOutbound: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterInt64.write(value.localBalance, into);
+      FfiConverterInt64.write(value.localSpendableBalance, into);
+      FfiConverterInt64.write(value.remoteBalance, into);
+      FfiConverterString.write(value.id, into);
+      FfiConverterString.write(value.remotePubkey, into);
+      FfiConverterString.write(value.fundingTxId, into);
+      FfiConverterUInt64.write(value.fundingTxVout, into);
+      FfiConverterBool.write(value.active, into);
+      FfiConverterBool.write(value.public_, into);
+      FfiConverterString.write(value.internalChannel, into);
+      FfiConverterUInt64.write(value.confirmations, into);
+      FfiConverterUInt64.write(value.confirmationsRequired, into);
+      FfiConverterUInt64.write(value.forwardingFeeBaseMsat, into);
+      FfiConverterUInt64.write(value.unspendablePunishmentReserve, into);
+      FfiConverterUInt64.write(
+        value.counterpartyUnspendablePunishmentReserve,
+        into
+      );
+      FfiConverterString.write(value.error, into);
+      FfiConverterBool.write(value.isOutbound, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterInt64.allocationSize(value.localBalance) +
+        FfiConverterInt64.allocationSize(value.localSpendableBalance) +
+        FfiConverterInt64.allocationSize(value.remoteBalance) +
+        FfiConverterString.allocationSize(value.id) +
+        FfiConverterString.allocationSize(value.remotePubkey) +
+        FfiConverterString.allocationSize(value.fundingTxId) +
+        FfiConverterUInt64.allocationSize(value.fundingTxVout) +
+        FfiConverterBool.allocationSize(value.active) +
+        FfiConverterBool.allocationSize(value.public_) +
+        FfiConverterString.allocationSize(value.internalChannel) +
+        FfiConverterUInt64.allocationSize(value.confirmations) +
+        FfiConverterUInt64.allocationSize(value.confirmationsRequired) +
+        FfiConverterUInt64.allocationSize(value.forwardingFeeBaseMsat) +
+        FfiConverterUInt64.allocationSize(value.unspendablePunishmentReserve) +
+        FfiConverterUInt64.allocationSize(
+          value.counterpartyUnspendablePunishmentReserve
+        ) +
+        FfiConverterString.allocationSize(value.error) +
+        FfiConverterBool.allocationSize(value.isOutbound)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type CloseChannelRequest = {
+  channelId: string;
+  nodeId: string;
+  force: boolean;
+};
+
+/**
+ * Generated factory for {@link CloseChannelRequest} record objects.
+ */
+export const CloseChannelRequest = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<CloseChannelRequest, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link CloseChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link CloseChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<CloseChannelRequest>,
+  });
+})();
+
+const FfiConverterTypeCloseChannelRequest = (() => {
+  type TypeName = CloseChannelRequest;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        channelId: FfiConverterString.read(from),
+        nodeId: FfiConverterString.read(from),
+        force: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.channelId, into);
+      FfiConverterString.write(value.nodeId, into);
+      FfiConverterBool.write(value.force, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.channelId) +
+        FfiConverterString.allocationSize(value.nodeId) +
+        FfiConverterBool.allocationSize(value.force)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type CloseChannelResponse = {};
+
+/**
+ * Generated factory for {@link CloseChannelResponse} record objects.
+ */
+export const CloseChannelResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      CloseChannelResponse,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link CloseChannelResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link CloseChannelResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<CloseChannelResponse>,
+  });
+})();
+
+const FfiConverterTypeCloseChannelResponse = (() => {
+  type TypeName = CloseChannelResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {};
+    }
+    write(value: TypeName, into: RustBuffer): void {}
+    allocationSize(value: TypeName): number {
+      return 0;
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type ConnectPeerRequest = {
+  pubkey: string;
+  address: string;
+  port: /*u64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link ConnectPeerRequest} record objects.
+ */
+export const ConnectPeerRequest = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<ConnectPeerRequest, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link ConnectPeerRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link ConnectPeerRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<ConnectPeerRequest>,
+  });
+})();
+
+const FfiConverterTypeConnectPeerRequest = (() => {
+  type TypeName = ConnectPeerRequest;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        pubkey: FfiConverterString.read(from),
+        address: FfiConverterString.read(from),
+        port: FfiConverterUInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.pubkey, into);
+      FfiConverterString.write(value.address, into);
+      FfiConverterUInt64.write(value.port, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.pubkey) +
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterUInt64.allocationSize(value.port)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
 
 export type InfoResponse = {
   nodeId: string;
@@ -162,6 +515,1001 @@ const FfiConverterTypeIp = (() => {
     }
     allocationSize(value: TypeName): number {
       return FfiConverterString.allocationSize(value.origin);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type LightningBalanceResponse = {
+  totalSpendable: /*i64*/ bigint;
+  totalReceivable: /*i64*/ bigint;
+  nextMaxSpendable: /*i64*/ bigint;
+  nextMaxReceivable: /*i64*/ bigint;
+  nextMaxSpendableMpp: /*i64*/ bigint;
+  nextMaxReceivableMpp: /*i64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link LightningBalanceResponse} record objects.
+ */
+export const LightningBalanceResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      LightningBalanceResponse,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link LightningBalanceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link LightningBalanceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () =>
+      Object.freeze(defaults()) as Partial<LightningBalanceResponse>,
+  });
+})();
+
+const FfiConverterTypeLightningBalanceResponse = (() => {
+  type TypeName = LightningBalanceResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        totalSpendable: FfiConverterInt64.read(from),
+        totalReceivable: FfiConverterInt64.read(from),
+        nextMaxSpendable: FfiConverterInt64.read(from),
+        nextMaxReceivable: FfiConverterInt64.read(from),
+        nextMaxSpendableMpp: FfiConverterInt64.read(from),
+        nextMaxReceivableMpp: FfiConverterInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterInt64.write(value.totalSpendable, into);
+      FfiConverterInt64.write(value.totalReceivable, into);
+      FfiConverterInt64.write(value.nextMaxSpendable, into);
+      FfiConverterInt64.write(value.nextMaxReceivable, into);
+      FfiConverterInt64.write(value.nextMaxSpendableMpp, into);
+      FfiConverterInt64.write(value.nextMaxReceivableMpp, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterInt64.allocationSize(value.totalSpendable) +
+        FfiConverterInt64.allocationSize(value.totalReceivable) +
+        FfiConverterInt64.allocationSize(value.nextMaxSpendable) +
+        FfiConverterInt64.allocationSize(value.nextMaxReceivable) +
+        FfiConverterInt64.allocationSize(value.nextMaxSpendableMpp) +
+        FfiConverterInt64.allocationSize(value.nextMaxReceivableMpp)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type NodeConnectionInfo = {
+  pubkey: string;
+  address: string;
+  port: /*i64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link NodeConnectionInfo} record objects.
+ */
+export const NodeConnectionInfo = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<NodeConnectionInfo, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link NodeConnectionInfo}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link NodeConnectionInfo}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<NodeConnectionInfo>,
+  });
+})();
+
+const FfiConverterTypeNodeConnectionInfo = (() => {
+  type TypeName = NodeConnectionInfo;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        pubkey: FfiConverterString.read(from),
+        address: FfiConverterString.read(from),
+        port: FfiConverterInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.pubkey, into);
+      FfiConverterString.write(value.address, into);
+      FfiConverterInt64.write(value.port, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.pubkey) +
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterInt64.allocationSize(value.port)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type NodeInfo = {
+  alias: string;
+  color: string;
+  pubkey: string;
+  network: string;
+  blockHeight: /*u64*/ bigint;
+  blockHash: string;
+};
+
+/**
+ * Generated factory for {@link NodeInfo} record objects.
+ */
+export const NodeInfo = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<NodeInfo, ReturnType<typeof defaults>>(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link NodeInfo}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link NodeInfo}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<NodeInfo>,
+  });
+})();
+
+const FfiConverterTypeNodeInfo = (() => {
+  type TypeName = NodeInfo;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        alias: FfiConverterString.read(from),
+        color: FfiConverterString.read(from),
+        pubkey: FfiConverterString.read(from),
+        network: FfiConverterString.read(from),
+        blockHeight: FfiConverterUInt64.read(from),
+        blockHash: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.alias, into);
+      FfiConverterString.write(value.color, into);
+      FfiConverterString.write(value.pubkey, into);
+      FfiConverterString.write(value.network, into);
+      FfiConverterUInt64.write(value.blockHeight, into);
+      FfiConverterString.write(value.blockHash, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.alias) +
+        FfiConverterString.allocationSize(value.color) +
+        FfiConverterString.allocationSize(value.pubkey) +
+        FfiConverterString.allocationSize(value.network) +
+        FfiConverterUInt64.allocationSize(value.blockHeight) +
+        FfiConverterString.allocationSize(value.blockHash)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type NodeStatus = {
+  isReady: boolean;
+  internalNodeStatus: string;
+};
+
+/**
+ * Generated factory for {@link NodeStatus} record objects.
+ */
+export const NodeStatus = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<NodeStatus, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link NodeStatus}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link NodeStatus}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<NodeStatus>,
+  });
+})();
+
+const FfiConverterTypeNodeStatus = (() => {
+  type TypeName = NodeStatus;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        isReady: FfiConverterBool.read(from),
+        internalNodeStatus: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterBool.write(value.isReady, into);
+      FfiConverterString.write(value.internalNodeStatus, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterBool.allocationSize(value.isReady) +
+        FfiConverterString.allocationSize(value.internalNodeStatus)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type OnchainBalanceResponse = {
+  spendable: /*i64*/ bigint;
+  total: /*i64*/ bigint;
+  reserved: /*i64*/ bigint;
+  pendingBalancesFromChannelClosures: /*u64*/ bigint;
+  pendingBalancesDetails: Array<PendingBalanceDetails>;
+  internalBalances: string;
+};
+
+/**
+ * Generated factory for {@link OnchainBalanceResponse} record objects.
+ */
+export const OnchainBalanceResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      OnchainBalanceResponse,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link OnchainBalanceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link OnchainBalanceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () =>
+      Object.freeze(defaults()) as Partial<OnchainBalanceResponse>,
+  });
+})();
+
+const FfiConverterTypeOnchainBalanceResponse = (() => {
+  type TypeName = OnchainBalanceResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        spendable: FfiConverterInt64.read(from),
+        total: FfiConverterInt64.read(from),
+        reserved: FfiConverterInt64.read(from),
+        pendingBalancesFromChannelClosures: FfiConverterUInt64.read(from),
+        pendingBalancesDetails:
+          FfiConverterArrayTypePendingBalanceDetails.read(from),
+        internalBalances: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterInt64.write(value.spendable, into);
+      FfiConverterInt64.write(value.total, into);
+      FfiConverterInt64.write(value.reserved, into);
+      FfiConverterUInt64.write(value.pendingBalancesFromChannelClosures, into);
+      FfiConverterArrayTypePendingBalanceDetails.write(
+        value.pendingBalancesDetails,
+        into
+      );
+      FfiConverterString.write(value.internalBalances, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterInt64.allocationSize(value.spendable) +
+        FfiConverterInt64.allocationSize(value.total) +
+        FfiConverterInt64.allocationSize(value.reserved) +
+        FfiConverterUInt64.allocationSize(
+          value.pendingBalancesFromChannelClosures
+        ) +
+        FfiConverterArrayTypePendingBalanceDetails.allocationSize(
+          value.pendingBalancesDetails
+        ) +
+        FfiConverterString.allocationSize(value.internalBalances)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type OpenChannelRequest = {
+  pubkey: string;
+  amountSats: /*i64*/ bigint;
+  public_: boolean;
+};
+
+/**
+ * Generated factory for {@link OpenChannelRequest} record objects.
+ */
+export const OpenChannelRequest = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<OpenChannelRequest, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link OpenChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link OpenChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<OpenChannelRequest>,
+  });
+})();
+
+const FfiConverterTypeOpenChannelRequest = (() => {
+  type TypeName = OpenChannelRequest;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        pubkey: FfiConverterString.read(from),
+        amountSats: FfiConverterInt64.read(from),
+        public_: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.pubkey, into);
+      FfiConverterInt64.write(value.amountSats, into);
+      FfiConverterBool.write(value.public_, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.pubkey) +
+        FfiConverterInt64.allocationSize(value.amountSats) +
+        FfiConverterBool.allocationSize(value.public_)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type OpenChannelResponse = {
+  fundingTxId: string;
+};
+
+/**
+ * Generated factory for {@link OpenChannelResponse} record objects.
+ */
+export const OpenChannelResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<OpenChannelResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link OpenChannelResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link OpenChannelResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<OpenChannelResponse>,
+  });
+})();
+
+const FfiConverterTypeOpenChannelResponse = (() => {
+  type TypeName = OpenChannelResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        fundingTxId: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.fundingTxId, into);
+    }
+    allocationSize(value: TypeName): number {
+      return FfiConverterString.allocationSize(value.fundingTxId);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PayInvoiceResponse = {
+  preimage: string;
+  fee: /*u64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link PayInvoiceResponse} record objects.
+ */
+export const PayInvoiceResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PayInvoiceResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PayInvoiceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PayInvoiceResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<PayInvoiceResponse>,
+  });
+})();
+
+const FfiConverterTypePayInvoiceResponse = (() => {
+  type TypeName = PayInvoiceResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        preimage: FfiConverterString.read(from),
+        fee: FfiConverterUInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.preimage, into);
+      FfiConverterUInt64.write(value.fee, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.preimage) +
+        FfiConverterUInt64.allocationSize(value.fee)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PayKeysendResponse = {
+  fee: /*u64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link PayKeysendResponse} record objects.
+ */
+export const PayKeysendResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PayKeysendResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PayKeysendResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PayKeysendResponse}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<PayKeysendResponse>,
+  });
+})();
+
+const FfiConverterTypePayKeysendResponse = (() => {
+  type TypeName = PayKeysendResponse;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        fee: FfiConverterUInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterUInt64.write(value.fee, into);
+    }
+    allocationSize(value: TypeName): number {
+      return FfiConverterUInt64.allocationSize(value.fee);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PaymentFailedEventProperties = {
+  transaction: Transaction;
+  reason: string;
+};
+
+/**
+ * Generated factory for {@link PaymentFailedEventProperties} record objects.
+ */
+export const PaymentFailedEventProperties = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      PaymentFailedEventProperties,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PaymentFailedEventProperties}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PaymentFailedEventProperties}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () =>
+      Object.freeze(defaults()) as Partial<PaymentFailedEventProperties>,
+  });
+})();
+
+const FfiConverterTypePaymentFailedEventProperties = (() => {
+  type TypeName = PaymentFailedEventProperties;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        transaction: FfiConverterTypeTransaction.read(from),
+        reason: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterTypeTransaction.write(value.transaction, into);
+      FfiConverterString.write(value.reason, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterTypeTransaction.allocationSize(value.transaction) +
+        FfiConverterString.allocationSize(value.reason)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PeerDetails = {
+  nodeId: string;
+  address: string;
+  isPersisted: boolean;
+  isConnected: boolean;
+};
+
+/**
+ * Generated factory for {@link PeerDetails} record objects.
+ */
+export const PeerDetails = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PeerDetails, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PeerDetails}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PeerDetails}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<PeerDetails>,
+  });
+})();
+
+const FfiConverterTypePeerDetails = (() => {
+  type TypeName = PeerDetails;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        nodeId: FfiConverterString.read(from),
+        address: FfiConverterString.read(from),
+        isPersisted: FfiConverterBool.read(from),
+        isConnected: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.nodeId, into);
+      FfiConverterString.write(value.address, into);
+      FfiConverterBool.write(value.isPersisted, into);
+      FfiConverterBool.write(value.isConnected, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.nodeId) +
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterBool.allocationSize(value.isPersisted) +
+        FfiConverterBool.allocationSize(value.isConnected)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PendingBalanceDetails = {
+  channelId: string;
+  nodeId: string;
+  amount: /*u64*/ bigint;
+  fundingTxId: string;
+  fundingTxVout: /*u64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link PendingBalanceDetails} record objects.
+ */
+export const PendingBalanceDetails = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      PendingBalanceDetails,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link PendingBalanceDetails}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link PendingBalanceDetails}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<PendingBalanceDetails>,
+  });
+})();
+
+const FfiConverterTypePendingBalanceDetails = (() => {
+  type TypeName = PendingBalanceDetails;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        channelId: FfiConverterString.read(from),
+        nodeId: FfiConverterString.read(from),
+        amount: FfiConverterUInt64.read(from),
+        fundingTxId: FfiConverterString.read(from),
+        fundingTxVout: FfiConverterUInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.channelId, into);
+      FfiConverterString.write(value.nodeId, into);
+      FfiConverterUInt64.write(value.amount, into);
+      FfiConverterString.write(value.fundingTxId, into);
+      FfiConverterUInt64.write(value.fundingTxVout, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.channelId) +
+        FfiConverterString.allocationSize(value.nodeId) +
+        FfiConverterUInt64.allocationSize(value.amount) +
+        FfiConverterString.allocationSize(value.fundingTxId) +
+        FfiConverterUInt64.allocationSize(value.fundingTxVout)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type TlvRecord = {
+  type: /*u64*/ bigint;
+  value: string;
+};
+
+/**
+ * Generated factory for {@link TlvRecord} record objects.
+ */
+export const TlvRecord = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<TlvRecord, ReturnType<typeof defaults>>(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link TlvRecord}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link TlvRecord}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<TlvRecord>,
+  });
+})();
+
+const FfiConverterTypeTLVRecord = (() => {
+  type TypeName = TlvRecord;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        type: FfiConverterUInt64.read(from),
+        value: FfiConverterString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterUInt64.write(value.type, into);
+      FfiConverterString.write(value.value, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterUInt64.allocationSize(value.type) +
+        FfiConverterString.allocationSize(value.value)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type Transaction = {
+  type: string;
+  invoice: string;
+  description: string;
+  descriptionHash: string;
+  preimage: string;
+  paymentHash: string;
+  amount: /*i64*/ bigint;
+  feesPaid: /*i64*/ bigint;
+  createdAt: /*i64*/ bigint;
+  expiresAt: /*i64*/ bigint;
+  settledAt: /*i64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link Transaction} record objects.
+ */
+export const Transaction = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<Transaction, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link Transaction}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link Transaction}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<Transaction>,
+  });
+})();
+
+const FfiConverterTypeTransaction = (() => {
+  type TypeName = Transaction;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        type: FfiConverterString.read(from),
+        invoice: FfiConverterString.read(from),
+        description: FfiConverterString.read(from),
+        descriptionHash: FfiConverterString.read(from),
+        preimage: FfiConverterString.read(from),
+        paymentHash: FfiConverterString.read(from),
+        amount: FfiConverterInt64.read(from),
+        feesPaid: FfiConverterInt64.read(from),
+        createdAt: FfiConverterInt64.read(from),
+        expiresAt: FfiConverterInt64.read(from),
+        settledAt: FfiConverterInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.type, into);
+      FfiConverterString.write(value.invoice, into);
+      FfiConverterString.write(value.description, into);
+      FfiConverterString.write(value.descriptionHash, into);
+      FfiConverterString.write(value.preimage, into);
+      FfiConverterString.write(value.paymentHash, into);
+      FfiConverterInt64.write(value.amount, into);
+      FfiConverterInt64.write(value.feesPaid, into);
+      FfiConverterInt64.write(value.createdAt, into);
+      FfiConverterInt64.write(value.expiresAt, into);
+      FfiConverterInt64.write(value.settledAt, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.type) +
+        FfiConverterString.allocationSize(value.invoice) +
+        FfiConverterString.allocationSize(value.description) +
+        FfiConverterString.allocationSize(value.descriptionHash) +
+        FfiConverterString.allocationSize(value.preimage) +
+        FfiConverterString.allocationSize(value.paymentHash) +
+        FfiConverterInt64.allocationSize(value.amount) +
+        FfiConverterInt64.allocationSize(value.feesPaid) +
+        FfiConverterInt64.allocationSize(value.createdAt) +
+        FfiConverterInt64.allocationSize(value.expiresAt) +
+        FfiConverterInt64.allocationSize(value.settledAt)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type UpdateChannelRequest = {
+  channelId: string;
+  nodeId: string;
+  forwardingFeeBaseMsat: /*u64*/ bigint;
+  maxDustHtlcExposureFromFeeRateMultiplier: /*u64*/ bigint;
+};
+
+/**
+ * Generated factory for {@link UpdateChannelRequest} record objects.
+ */
+export const UpdateChannelRequest = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      UpdateChannelRequest,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    /**
+     * Create a frozen instance of {@link UpdateChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    create,
+
+    /**
+     * Create a frozen instance of {@link UpdateChannelRequest}, with defaults specified
+     * in Rust, in the {@link lni} crate.
+     */
+    new: create,
+
+    /**
+     * Defaults specified in the {@link lni} crate.
+     */
+    defaults: () => Object.freeze(defaults()) as Partial<UpdateChannelRequest>,
+  });
+})();
+
+const FfiConverterTypeUpdateChannelRequest = (() => {
+  type TypeName = UpdateChannelRequest;
+  class FFIConverter extends AbstractFfiConverterArrayBuffer<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        channelId: FfiConverterString.read(from),
+        nodeId: FfiConverterString.read(from),
+        forwardingFeeBaseMsat: FfiConverterUInt64.read(from),
+        maxDustHtlcExposureFromFeeRateMultiplier: FfiConverterUInt64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.channelId, into);
+      FfiConverterString.write(value.nodeId, into);
+      FfiConverterUInt64.write(value.forwardingFeeBaseMsat, into);
+      FfiConverterUInt64.write(
+        value.maxDustHtlcExposureFromFeeRateMultiplier,
+        into
+      );
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.channelId) +
+        FfiConverterString.allocationSize(value.nodeId) +
+        FfiConverterUInt64.allocationSize(value.forwardingFeeBaseMsat) +
+        FfiConverterUInt64.allocationSize(
+          value.maxDustHtlcExposureFromFeeRateMultiplier
+        )
+      );
     }
   }
   return new FFIConverter();
@@ -686,6 +2034,11 @@ const FfiConverterTypePhoenixService = new FfiConverterObject(
   uniffiTypePhoenixServiceObjectFactory
 );
 
+// FfiConverter for Array<PendingBalanceDetails>
+const FfiConverterArrayTypePendingBalanceDetails = new FfiConverterArray(
+  FfiConverterTypePendingBalanceDetails
+);
+
 /**
  * This should be called before anything else.
  *
@@ -753,9 +2106,29 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeBalancesResponse,
+    FfiConverterTypeChannel,
+    FfiConverterTypeCloseChannelRequest,
+    FfiConverterTypeCloseChannelResponse,
+    FfiConverterTypeConnectPeerRequest,
     FfiConverterTypeFetcher,
     FfiConverterTypeInfoResponse,
     FfiConverterTypeIp,
+    FfiConverterTypeLightningBalanceResponse,
+    FfiConverterTypeNodeConnectionInfo,
+    FfiConverterTypeNodeInfo,
+    FfiConverterTypeNodeStatus,
+    FfiConverterTypeOnchainBalanceResponse,
+    FfiConverterTypeOpenChannelRequest,
+    FfiConverterTypeOpenChannelResponse,
+    FfiConverterTypePayInvoiceResponse,
+    FfiConverterTypePayKeysendResponse,
+    FfiConverterTypePaymentFailedEventProperties,
+    FfiConverterTypePeerDetails,
+    FfiConverterTypePendingBalanceDetails,
     FfiConverterTypePhoenixService,
+    FfiConverterTypeTLVRecord,
+    FfiConverterTypeTransaction,
+    FfiConverterTypeUpdateChannelRequest,
   },
 });

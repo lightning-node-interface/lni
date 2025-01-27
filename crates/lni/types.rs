@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub enum InvoiceType {
+    Bolt11,
+    Bolt12,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TLVRecord {
     #[serde(rename = "type")]
