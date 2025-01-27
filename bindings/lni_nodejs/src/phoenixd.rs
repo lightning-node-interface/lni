@@ -1,5 +1,6 @@
 use lni::phoenixd::lib::PhoenixdConfig;
 use napi_derive::napi;
+use lni::phoenixd::api::PhoenixService;
 
 #[napi]
 pub struct PhoenixdNode {
@@ -31,11 +32,12 @@ impl PhoenixdNode {
     }
   }
 
-  #[napi]
-  pub async fn get_offer(&self) -> napi::Result<String> {
-    let offer = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(offer.clone())
-  }
+  // #[napi]
+  // pub async fn get_offer(&self) -> napi::Result<String> {
+  //   let offer = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
+  //     .await
+  //     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  //   Ok(offer.clone())
+  // }
 }
+

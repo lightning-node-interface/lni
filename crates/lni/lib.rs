@@ -45,3 +45,6 @@ pub mod phoenixd {
     pub use lib::{PhoenixdConfig, PhoenixdNode};
     pub use api::PhoenixService;
 }
+
+pub mod types;
+pub use types::*;

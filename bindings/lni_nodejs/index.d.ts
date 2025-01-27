@@ -14,6 +14,11 @@ export interface PhoenixdNode {
   url: string
   password: string
 }
+export interface Bolt11Resp {
+  amountSat: number
+  paymentHash: string
+  serialized: string
+}
 export declare class Fetcher {
   constructor()
   getIpAddress(): Promise<Ip>
@@ -23,5 +28,4 @@ export declare class PhoenixdNode {
   getUrl(): string
   getPassword(): string
   getConfig(): PhoenixdConfig
-  getOffer(): Promise<string>
 }

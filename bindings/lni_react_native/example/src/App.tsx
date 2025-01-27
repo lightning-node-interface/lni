@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { Fetcher, PhoenixdNode } from '../../src';
+import { Fetcher, PhoenixService } from '../../src';
 
 export default function App() {
   const fetcher = new Fetcher('http://woot.com');
@@ -14,13 +14,10 @@ export default function App() {
     console.log('Config', conf);
 
     try {
-      const node = new PhoenixdNode({
-        url: 'http://localhost:9740',
-        password: '',
-      });
+      const node = new PhoenixService('http://localhost:9740', '');
 
-      const offer = await node.getOffer();
-      setOffer(offer);
+      const info = await node.getInfo();
+      setOffer(info.nodeId);
     } catch (e) {
       console.error('Error', e);
     }
