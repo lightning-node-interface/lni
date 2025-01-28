@@ -1,5 +1,5 @@
 use crate::{InvoiceType, NodeInfo, Transaction};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::lib::Bolt11Resp;
@@ -11,6 +11,16 @@ pub struct InfoResponse {
     #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
     pub node_id: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Bolt11Req {
+    pub amountSat: i64,
+    pub expirySeconds: i64,
+    pub externalId: Option<String>,
+    pub description: Option<String>,
+    pub webhookUrl: Option<String>,
+}
+
 
 // lookup_invoice
 // list_transactions
@@ -46,23 +56,27 @@ pub async fn make_invoice(
     password: String,
     invoice_type: InvoiceType,
     amount: i64,
-    description: String,
-    description_hash: String,
-    expiry: i64,
+    description: Option<String>,
+    description_hash: Option<String>,
+    expiry: Option<i64>,
 ) -> crate::Result<Transaction> {
     let client = reqwest::blocking::Client::new();
     match invoice_type {
         InvoiceType::Bolt11 => {
             let req_url = format!("{}/createinvoice", url);
 
+            let bolt11_req = Bolt11Req {
+                description: description.clone(),
+                amountSat: amount,
+                expirySeconds: expiry.unwrap_or(3600),
+                externalId: None,
+                webhookUrl: None,
+            };
+
             let response: reqwest::blocking::Response = client
                 .post(&req_url)
                 .basic_auth("", Some(password))
-                .json(&json!({
-                    "amountSat": amount,
-                    "description": description,
-                    "expiry": expiry,
-                }))
+                .form(&bolt11_req)
                 .send()
                 .unwrap();
 
@@ -85,10 +99,10 @@ pub async fn make_invoice(
                 amount: amount,
                 fees_paid: 0,
                 created_at: 0,
-                expires_at: expiry,
+                expires_at: expiry.unwrap_or(3600),
                 settled_at: 0,
-                description: description,
-                description_hash: description_hash,
+                description: description.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
             })
         }
         InvoiceType::Bolt12 => {
@@ -107,10 +121,10 @@ pub async fn make_invoice(
                 amount: amount,
                 fees_paid: 0,
                 created_at: 0,
-                expires_at: expiry,
+                expires_at: expiry.unwrap_or_default(),
                 settled_at: 0,
-                description: description,
-                description_hash: description_hash,
+                description: description.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
             })
         }
     }

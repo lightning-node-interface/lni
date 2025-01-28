@@ -12,6 +12,14 @@ dictionary PhoenixdConfig {
     string password;
 };
 
+dictionary PhoenixdMakeInvoiceParams {
+    InvoiceType invoice_type;
+    i64 amount;
+    string? description; 
+    string? description_hash; 
+    i64? expiry;
+};
+
 interface PhoenixdNode {
     constructor(PhoenixdConfig config);
 
@@ -19,7 +27,7 @@ interface PhoenixdNode {
     NodeInfo get_info();
 
     [Throws=ApiError, Async]
-    Transaction make_invoice(InvoiceType invoice_type, i64 amount, string description, string description_hash, i64 expiry);
+    Transaction make_invoice(PhoenixdMakeInvoiceParams params);
 };
 
 

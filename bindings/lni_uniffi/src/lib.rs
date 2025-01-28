@@ -1,4 +1,4 @@
-use lni::phoenixd::{PhoenixdConfig, PhoenixdNode};
+use lni::phoenixd::{PhoenixdConfig, PhoenixdNode, PhoenixdMakeInvoiceParams};
 use lni::phoenixd::api::{InfoResponse};
 
 pub use lni::{ApiError, Result};

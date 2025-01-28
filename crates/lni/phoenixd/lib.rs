@@ -2,7 +2,7 @@
 use napi_derive::napi;
 
 use crate::{phoenixd::api::*, InvoiceType, Transaction};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct PhoenixdConfig {
@@ -17,11 +17,21 @@ pub struct PhoenixdNode {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Bolt11Resp {
     pub amountSat: i64,
     pub paymentHash: String,
     pub serialized: String,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PhoenixdMakeInvoiceParams {
+    pub invoice_type: InvoiceType,
+    pub amount: i64,
+    pub description: Option<String>,
+    pub description_hash: Option<String>,
+    pub expiry: Option<i64>,
 }
 
 impl PhoenixdNode {
@@ -36,22 +46,15 @@ impl PhoenixdNode {
         crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
     }
 
-    pub async fn make_invoice(
-        &self,
-        invoice_type: InvoiceType,
-        amount: i64,
-        description: String,
-        description_hash: String,
-        expiry: i64,
-    ) -> crate::Result<Transaction> {
+    pub async fn make_invoice(&self, params: PhoenixdMakeInvoiceParams) -> crate::Result<Transaction> {
         make_invoice(
             self.url.clone(),
             self.password.clone(),
-            invoice_type,
-            amount,
-            description,
-            description_hash,
-            expiry,
+            params.invoice_type,
+            params.amount,
+            params.description,
+            params.description_hash,
+            params.expiry,
         )
         .await
     }
@@ -105,17 +108,15 @@ mod tests {
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
         let expiry = 3600;
+        let params = PhoenixdMakeInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount,
+            description: Some(description),
+            description_hash: Some(description_hash),
+            expiry: Some(expiry),
+        };
 
-        match NODE
-            .make_invoice(
-                InvoiceType::Bolt12,
-                amount,
-                description,
-                description_hash,
-                expiry,
-            )
-            .await
-        {
+        match NODE.make_invoice(params).await {
             Ok(txn) => {
                 println!("txn: {:?}", txn);
                 assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
@@ -125,5 +126,4 @@ mod tests {
             }
         }
     }
-
 }

@@ -1,4 +1,4 @@
-import { PhoenixdNode } from './index.js'
+import { PhoenixdNode, InvoiceType } from './index.js'
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -13,3 +13,6 @@ console.log('Node info:', info)
 
 const configRes = await node.getConfig()
 console.log('Config:', configRes.url)
+
+const invoice = await node.makeInvoice({ amount: 1000, description: 'test invoice', invoiceType: InvoiceType.Bolt11 })
+console.log('Invoice:', invoice)

@@ -24,7 +24,7 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 pub mod phoenixd {
     pub mod lib;
     pub mod api;
-    pub use lib::{PhoenixdConfig, PhoenixdNode};
+    pub use lib::{PhoenixdConfig, PhoenixdNode, PhoenixdMakeInvoiceParams};
 }
 
 pub mod types;
