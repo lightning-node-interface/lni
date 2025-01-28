@@ -9,8 +9,6 @@ export default function App() {
   const [config, setConfig] = useState<string>('');
 
   const main = async () => {
-    console.log('Channel', c);
-
     try {
       const node = new PhoenixdNode({
         url: PHOENIXD_URL,
@@ -24,6 +22,8 @@ export default function App() {
         invoiceType: InvoiceType.Bolt12,
         amount: BigInt(1000),
         description: 'Test invoice',
+        descriptionHash: undefined,
+        expiry: undefined,
       });
       setOffer(offerResp.invoice);
     } catch (e) {
