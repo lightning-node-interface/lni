@@ -15,9 +15,9 @@ dictionary PhoenixdConfig {
 dictionary PhoenixdMakeInvoiceParams {
     InvoiceType invoice_type;
     i64 amount;
-    string? description; 
-    string? description_hash; 
-    i64? expiry;
+    string ? description; 
+    string ? description_hash; 
+    i64 ? expiry;
 };
 
 interface PhoenixdNode {

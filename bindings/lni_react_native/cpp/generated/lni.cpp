@@ -108,9 +108,9 @@ void *uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
     RustBuffer config, RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t
 uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(void *ptr);
-/*handle*/ uint64_t uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
-    void *ptr, RustBuffer invoice_type, int64_t amount, RustBuffer description,
-    RustBuffer description_hash, int64_t expiry);
+/*handle*/ uint64_t
+uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(void *ptr,
+                                                      RustBuffer params);
 RustBuffer ffi_lni_uniffi_rustbuffer_alloc(uint64_t size,
                                            RustCallStatus *uniffi_out_err);
 RustBuffer ffi_lni_uniffi_rustbuffer_from_bytes(ForeignBytes bytes,
@@ -1607,7 +1607,7 @@ NativeLni::NativeLni(jsi::Runtime &rt,
           rt,
           jsi::PropNameID::forAscii(
               rt, "uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice"),
-          6,
+          2,
           [this](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this
@@ -2352,11 +2352,7 @@ jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
     size_t count) {
   auto value = uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
       uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]),
-      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]),
-      uniffi_jsi::Bridging<int64_t>::fromJs(rt, callInvoker, args[2]),
-      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[3]),
-      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[4]),
-      uniffi_jsi::Bridging<int64_t>::fromJs(rt, callInvoker, args[5]));
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
                                                          value);
