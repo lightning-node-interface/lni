@@ -20,3 +20,13 @@ console.log('Invoice:', invoice)
 
 const lookupInvoice = await node.lookupInvoice(config.test_hash)
 console.log('lookupInvoice:', lookupInvoice)
+
+const txns = await node.listTransactions({
+    from: 0,
+    until: 0,
+    limit: 10,
+    offset: 0,
+    unpaid: false,
+    invoiceType: 'all',
+})
+console.log('Transactions:', txns)

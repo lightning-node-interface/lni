@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import { PhoenixdNode, InvoiceType } from '../../src';
-import { PHOENIXD_URL, PHOENIXD_PASSWORD } from '@env';
+import {
+  PHOENIXD_URL,
+  PHOENIXD_PASSWORD,
+  PHOENIXD_TEST_PAYMENT_HASH,
+} from '@env';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
-  const [config, setConfig] = useState<string>('');
+  const [invoice, setInvoice] = useState<string | number>('');
 
   const main = async () => {
     try {
@@ -26,6 +30,11 @@ export default function App() {
         expiry: undefined,
       });
       setOffer(offerResp.invoice);
+
+      const lookupInvoice = await node.lookupInvoice(
+        PHOENIXD_TEST_PAYMENT_HASH
+      );
+      setInvoice(Number(lookupInvoice.amount));
     } catch (e) {
       console.error('Error', e);
     }
@@ -44,6 +53,8 @@ export default function App() {
       <Text>Node PubKey: {pubKey}</Text>
       <Text />
       <Text>Offer: {offer}</Text>
+      <Text />
+      <Text>Lookup Invoice Amt: {invoice}</Text>
       <Text />
     </View>
   );

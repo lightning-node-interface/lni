@@ -40,6 +40,9 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -224,6 +227,9 @@ protected:
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice(

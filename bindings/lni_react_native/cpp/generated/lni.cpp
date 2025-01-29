@@ -108,6 +108,8 @@ void *uniffi_lni_uniffi_fn_constructor_phoenixdnode_new(
     RustBuffer config, RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t
 uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(void *ptr);
+/*handle*/ uint64_t uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice(
+    void *ptr, RustBuffer payment_hash);
 /*handle*/ uint64_t
 uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(void *ptr,
                                                       RustBuffer params);
@@ -238,6 +240,7 @@ void ffi_lni_uniffi_rust_future_free_void(
 void ffi_lni_uniffi_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info();
+uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice();
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice();
 uint16_t uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new();
 uint32_t ffi_lni_uniffi_uniffi_contract_version();
@@ -1602,6 +1605,18 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice"),
+          2,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice(
+                    rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2174,6 +2189,19 @@ NativeLni::NativeLni(jsi::Runtime &rt,
                 ->cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(
                     rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt,
+              "uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice(
+                    rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2343,6 +2371,17 @@ jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(
     size_t count) {
   auto value = uniffi_lni_uniffi_fn_method_phoenixdnode_get_info(
       uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value
+NativeLni::cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_fn_method_phoenixdnode_lookup_invoice(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]),
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
                                                          value);
@@ -2947,6 +2986,14 @@ NativeLni::cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
   auto value = uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value
+NativeLni::cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

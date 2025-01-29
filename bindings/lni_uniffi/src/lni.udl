@@ -11,6 +11,9 @@ interface PhoenixdNode {
 
     [Throws=ApiError, Async]
     Transaction lookup_invoice(string payment_hash);
+
+    [Throws=ApiError, Async]
+    sequence<Transaction> list_transactions(ListTransactionsParams params);
 };
 
 
@@ -179,4 +182,13 @@ dictionary PaymentFailedEventProperties {
 enum InvoiceType {
     "Bolt11",
     "Bolt12",
+};
+
+dictionary ListTransactionsParams {
+    i64 from;
+    i64 until;
+    i64 limit;
+    i64 offset;
+    boolean unpaid;
+    string invoice_type;
 };

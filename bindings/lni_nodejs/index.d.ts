@@ -167,4 +167,5 @@ export declare class PhoenixdNode {
   getInfo(): Promise<NodeInfo>
   makeInvoice(params: PhoenixdMakeInvoiceParams): Promise<Transaction>
   lookupInvoice(paymentHash: string): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
 }
