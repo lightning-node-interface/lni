@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { PhoenixdNode, InvoiceType } from '../../src';
+import {
+  PhoenixdNode,
+  InvoiceType,
+  type ListTransactionsParams,
+} from '../../src';
 import {
   PHOENIXD_URL,
   PHOENIXD_PASSWORD,
@@ -11,6 +15,7 @@ export default function App() {
   const [offer, setOffer] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
   const [invoice, setInvoice] = useState<string | number>('');
+  const [txns, setTxns] = useState<any>('');
 
   const main = async () => {
     try {
@@ -35,6 +40,17 @@ export default function App() {
         PHOENIXD_TEST_PAYMENT_HASH
       );
       setInvoice(Number(lookupInvoice.amount));
+
+      let txnParams: ListTransactionsParams = {
+        from: BigInt(0),
+        offset: BigInt(0),
+        limit: BigInt(10),
+        invoiceType: 'all',
+        unpaid: false,
+        until: BigInt(0),
+      };
+      const txns = await node.listTransactions(txnParams);
+      setTxns(JSON.stringify(txns[0], bigIntReplacer));
     } catch (e) {
       console.error('Error', e);
     }
@@ -56,6 +72,8 @@ export default function App() {
       <Text />
       <Text>Lookup Invoice Amt: {invoice}</Text>
       <Text />
+      <Text>First Txn: {txns}</Text>
+      <Text />
     </View>
   );
 }
@@ -67,3 +85,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+function bigIntReplacer(key: any, value: any) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+}
