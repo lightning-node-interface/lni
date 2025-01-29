@@ -19,8 +19,11 @@ pub struct PhoenixdNode {
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bolt11Resp {
-    pub amountSat: i64,
-    pub paymentHash: String,
+    #[serde(rename = "amountSat")]
+    pub amount_sat: i64,
+    #[serde(rename = "paymentHash")]
+    pub payment_hash: String,
+    #[serde(rename = "serialized")]
     pub serialized: String,
 }
 
@@ -32,6 +35,17 @@ pub struct PhoenixdMakeInvoiceParams {
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListTransactionsParams {
+    pub from: i64,
+    pub until: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub unpaid: bool,
+    pub invoice_type: String, // all
 }
 
 impl PhoenixdNode {
@@ -46,7 +60,10 @@ impl PhoenixdNode {
         crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
     }
 
-    pub async fn make_invoice(&self, params: PhoenixdMakeInvoiceParams) -> crate::Result<Transaction> {
+    pub async fn make_invoice(
+        &self,
+        params: PhoenixdMakeInvoiceParams,
+    ) -> crate::Result<Transaction> {
         make_invoice(
             self.url.clone(),
             self.password.clone(),
@@ -59,9 +76,25 @@ impl PhoenixdNode {
         .await
     }
 
-    // pub async fn create_bolt_11_invoice(&self) -> crate::Result<Bolt11Resp> {
-    //     create_bolt_11_invoice(self.url.clone(), self.password.clone()).await
-    // }
+    pub async fn lookup_invoice(&self, payment_hash: String) -> crate::Result<crate::Transaction> {
+        crate::phoenixd::api::lookup_invoice(self.url.clone(), self.password.clone(), payment_hash)
+    }
+
+    pub async fn list_transactions(
+        &self,
+        params: ListTransactionsParams,
+    ) -> crate::Result<Vec<crate::Transaction>> {
+        crate::phoenixd::api::list_transactions(
+            self.url.clone(),
+            self.password.clone(),
+            params.from,
+            params.until,
+            params.limit,
+            params.offset,
+            params.unpaid,
+            params.invoice_type,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -86,6 +119,10 @@ mod tests {
                 url: URL.clone(),
                 password: PASSWORD.clone(),
             })
+        };
+        static ref TEST_PAYMENT_HASH: String = {
+            dotenv().ok();
+            env::var("PHOENIXD_TEST_PAYMENT_HASH").expect("PHOENIXD_TEST_PAYMENT_HASH must be set")
         };
     }
 
@@ -123,6 +160,41 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_list_transactions() {
+        let params = ListTransactionsParams {
+            from: 0,
+            until: 0,
+            limit: 10,
+            offset: 0,
+            unpaid: false,
+            invoice_type: "all".to_string(),
+        };
+        match NODE.list_transactions(params).await {
+            Ok(txns) => {
+                println!("Transactions: {:?}", txns);
+                // You can add more assertions here if desired
+                assert!(true, "Successfully fetched transactions");
+            }
+            Err(e) => {
+                panic!("Failed to list transactions: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_lookup_invoice() {
+        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
+            Ok(txn) => {
+                println!("invoice: {:?}", txn);
+                assert!(txn.amount.gt(&1), "Invoice contain an amount");
+            }
+            Err(e) => {
+                panic!("Failed to lookup invoice: {:?}", e);
             }
         }
     }

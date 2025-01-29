@@ -114,6 +114,13 @@ yarn build
 node main.mjs
 ```
 
+###.env
+```
+PHOENIXD_URL=http://localhost:9740
+PHOENIXD_PASSWORD=YOUR_HTTP_PASSWORD
+PHOENIXD_TEST_PAYMENT_HASH=YOUR_TEST_PAYMENT_HASH
+```
+
 Bindings
 ========
 
