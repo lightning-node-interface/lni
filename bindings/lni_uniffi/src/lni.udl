@@ -1,5 +1,19 @@
 namespace lni {};
 
+interface PhoenixdNode {
+    constructor(PhoenixdConfig config);
+
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction make_invoice(PhoenixdMakeInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    Transaction lookup_invoice(string payment_hash);
+};
+
+
 [Error]
 interface ApiError {
     Http(string reason);
@@ -19,17 +33,6 @@ dictionary PhoenixdMakeInvoiceParams {
     string? description_hash; 
     i64? expiry;
 };
-
-interface PhoenixdNode {
-    constructor(PhoenixdConfig config);
-
-    [Throws=ApiError, Async]
-    NodeInfo get_info();
-
-    [Throws=ApiError, Async]
-    Transaction make_invoice(PhoenixdMakeInvoiceParams params);
-};
-
 
 dictionary TLVRecord {
     i64 type_;

@@ -32,14 +32,6 @@ impl PhoenixdNode {
     }
   }
 
-  // #[napi]
-  // pub async fn get_offer(&self) -> napi::Result<String> {
-  //   let offer = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
-  //     .await
-  //     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-  //   Ok(offer.clone())
-  // }
-
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
     let info = lni::phoenixd::api::get_info(self.inner.url.clone(), self.inner.password.clone())
@@ -60,7 +52,19 @@ impl PhoenixdNode {
       params.description,
       params.description_hash,
       params.expiry,
-    ).await
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txn)
+  }
+
+  #[napi]
+  pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
+    let txn = lni::phoenixd::api::lookup_invoice(
+      self.inner.url.clone(),
+      self.inner.password.clone(),
+      payment_hash,
+    )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }

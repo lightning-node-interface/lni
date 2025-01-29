@@ -23,6 +23,14 @@ export interface PhoenixdMakeInvoiceParams {
   descriptionHash?: string
   expiry?: number
 }
+export interface ListTransactionsParams {
+  from: number
+  until: number
+  limit: number
+  offset: number
+  unpaid: boolean
+  invoiceType: string
+}
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
   Bolt12 = 'Bolt12'
@@ -158,4 +166,5 @@ export declare class PhoenixdNode {
   getConfig(): PhoenixdConfig
   getInfo(): Promise<NodeInfo>
   makeInvoice(params: PhoenixdMakeInvoiceParams): Promise<Transaction>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
 }
