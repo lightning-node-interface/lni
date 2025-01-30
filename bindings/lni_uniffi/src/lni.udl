@@ -16,25 +16,35 @@ interface PhoenixdNode {
     sequence<Transaction> list_transactions(ListTransactionsParams params);
 };
 
-
 interface Db {
     [Throws=DbError]
     constructor(string path);
 
     [Throws=DbError]
-    void create_user(string user_id, string name);
+    void save();
 
     [Throws=DbError]
-    string? get_user(string user_id);
+    void write_payment(Payment payment);
+
+    [Throws=DbError]
+    Payment? lookup_payment(string payment_id);
 };
 
 [Error]
 interface DbError {
-    SqlErr(string reason);
-    ConnectionErr(string reason);
-    QueryErr(string reason);
+    IoErr(string reason);
+    SerializationErr(string reason);
+    DeserializationErr(string reason);
 };
 
+dictionary Payment {
+    string payment_id;
+    string circ_id;
+    i64 round;
+    string relay_fingerprint;
+    i64 updated_at;
+    i64 amount_msat;
+};
 
 [Error]
 interface ApiError {

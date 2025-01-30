@@ -5,7 +5,7 @@ pub use lni::{ApiError, Result};
 pub use lni::phoenixd::*;  
 pub use lni::types::*;
 
-pub use lni::database::{Db, DbError};
+pub use lni::database::{Db, DbError, Payment};
 
 
 uniffi::include_scaffolding!("lni");
