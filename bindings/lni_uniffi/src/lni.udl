@@ -17,6 +17,25 @@ interface PhoenixdNode {
 };
 
 
+interface Db {
+    [Throws=DbError]
+    constructor(string path);
+
+    [Throws=DbError]
+    void create_user(string user_id, string name);
+
+    [Throws=DbError]
+    string? get_user(string user_id);
+};
+
+[Error]
+interface DbError {
+    SqlErr(string reason);
+    ConnectionErr(string reason);
+    QueryErr(string reason);
+};
+
+
 [Error]
 interface ApiError {
     Http(string reason);

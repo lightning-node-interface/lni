@@ -29,3 +29,6 @@ pub mod phoenixd {
 
 pub mod types;
 pub use types::*;
+
+pub mod database;
+pub use database::{Db, DbError};
