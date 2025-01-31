@@ -159,6 +159,14 @@ export interface PaymentFailedEventProperties {
   transaction: Transaction
   reason: string
 }
+export interface Payment {
+  paymentId: string
+  circId: string
+  round: number
+  relayFingerprint: string
+  updatedAt: number
+  amountMsat: number
+}
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
@@ -168,4 +176,10 @@ export declare class PhoenixdNode {
   makeInvoice(params: PhoenixdMakeInvoiceParams): Promise<Transaction>
   lookupInvoice(paymentHash: string): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+}
+export declare class Db {
+  constructor(path: string)
+  save(): void
+  writePayment(payment: Payment): void
+  lookupPayment(paymentId: string): Payment | null
 }

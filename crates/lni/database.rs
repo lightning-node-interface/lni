@@ -3,6 +3,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -14,6 +16,7 @@ pub enum DbError {
     DeserializationErr { reason: String },
 }
 
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Payment {
     pub payment_id: String,

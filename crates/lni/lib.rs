@@ -30,4 +30,4 @@ pub mod types;
 pub use types::*;
 
 pub mod database;
-pub use database::{Db, DbError};
+pub use database::{Db, DbError, Payment};
