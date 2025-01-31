@@ -1,7 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{phoenixd::api::*, InvoiceType, Transaction};
+use crate::{phoenixd::api::*, ApiError, InvoiceType, Transaction};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -56,14 +56,14 @@ impl PhoenixdNode {
         }
     }
 
-    pub async fn get_info(&self) -> crate::Result<crate::NodeInfo> {
+    pub async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
         crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
     }
 
     pub async fn make_invoice(
         &self,
         params: PhoenixdMakeInvoiceParams,
-    ) -> crate::Result<Transaction> {
+    ) -> Result<Transaction, ApiError> {
         make_invoice(
             self.url.clone(),
             self.password.clone(),
@@ -76,14 +76,14 @@ impl PhoenixdNode {
         .await
     }
 
-    pub async fn lookup_invoice(&self, payment_hash: String) -> crate::Result<crate::Transaction> {
+    pub async fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
         crate::phoenixd::api::lookup_invoice(self.url.clone(), self.password.clone(), payment_hash)
     }
 
     pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
-    ) -> crate::Result<Vec<crate::Transaction>> {
+    ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::phoenixd::api::list_transactions(
             self.url.clone(),
             self.password.clone(),

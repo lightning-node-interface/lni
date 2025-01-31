@@ -4,18 +4,21 @@ import {
   PhoenixdNode,
   InvoiceType,
   type ListTransactionsParams,
+  Db,
 } from '../../src';
 import {
   PHOENIXD_URL,
   PHOENIXD_PASSWORD,
   PHOENIXD_TEST_PAYMENT_HASH,
 } from '@env';
+// import RNFS from 'react-native-fs';
 
 export default function App() {
   const [offer, setOffer] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
   const [invoice, setInvoice] = useState<string | number>('');
   const [txns, setTxns] = useState<any>('');
+  const [payment, setPayment] = useState<any>('');
 
   const main = async () => {
     try {
@@ -51,6 +54,21 @@ export default function App() {
       };
       const txns = await node.listTransactions(txnParams);
       setTxns(JSON.stringify(txns[0], bigIntReplacer));
+
+      // const path = `${RNFS.DocumentDirectoryPath}/test.json`;
+      const db = new Db('test.json');
+      db.writePayment({
+        paymentId: '1',
+        circId: '1',
+        round: BigInt(1),
+        relayFingerprint: '1',
+        updatedAt: BigInt(1),
+        amountMsat: BigInt(1),
+      });
+      db.save();
+
+      const paymentRes = db.lookupPayment('1');
+      setPayment(JSON.stringify(paymentRes, bigIntReplacer));
     } catch (e) {
       console.error('Error', e);
     }
@@ -73,6 +91,8 @@ export default function App() {
       <Text>Lookup Invoice Amt: {invoice}</Text>
       <Text />
       <Text>First Txn: {txns}</Text>
+      <Text />
+      <Text>DB: {payment}</Text>
       <Text />
     </View>
   );

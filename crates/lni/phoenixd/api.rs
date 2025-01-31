@@ -1,4 +1,4 @@
-use crate::{InvoiceType, NodeInfo, Transaction};
+use crate::{ApiError, InvoiceType, NodeInfo, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded;
 use super::lib::Bolt11Resp;
@@ -76,7 +76,7 @@ pub struct OutgoingPaymentResponse {
 }
 
 
-pub fn get_info(url: String, password: String) -> crate::Result<NodeInfo> {
+pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
     let url = format!("{}/getinfo", url);
     let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
     let response = client.get(&url).basic_auth("", Some(password)).send();
@@ -104,7 +104,7 @@ pub async fn make_invoice(
     description: Option<String>,
     description_hash: Option<String>,
     expiry: Option<i64>,
-) -> crate::Result<Transaction> {
+) -> Result<Transaction, ApiError> {
     let client = reqwest::blocking::Client::new();
     match invoice_type {
         InvoiceType::Bolt11 => {
@@ -179,7 +179,7 @@ pub fn lookup_invoice(
     url: String,
     password: String,
     payment_hash: String,
-) -> crate::Result<Transaction> {
+) -> Result<Transaction, ApiError> {
     let url = format!("{}/payments/incoming/{}", url, payment_hash);
     let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
     let response = client.get(&url).basic_auth("", Some(password)).send();
@@ -213,7 +213,7 @@ pub fn list_transactions(
     offset: i64,
     unpaid: bool,
     invoice_type: String, // not currently used but included for parity
-) -> crate::Result<Vec<Transaction>> {
+) -> Result<Vec<Transaction>, ApiError> {
     let client = reqwest::blocking::Client::new();
 
     // 1) Build query for incoming transactions

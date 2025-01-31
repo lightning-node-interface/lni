@@ -100,6 +100,17 @@ typedef struct UniffiForeignFutureStructVoid {
 } UniffiForeignFutureStructVoid;
 typedef void (*UniffiForeignFutureCompleteVoid)(
     uint64_t callback_data, UniffiForeignFutureStructVoid result);
+void *uniffi_lni_uniffi_fn_clone_db(void *ptr, RustCallStatus *uniffi_out_err);
+void uniffi_lni_uniffi_fn_free_db(void *ptr, RustCallStatus *uniffi_out_err);
+void *uniffi_lni_uniffi_fn_constructor_db_new(RustBuffer path,
+                                              RustCallStatus *uniffi_out_err);
+RustBuffer
+uniffi_lni_uniffi_fn_method_db_lookup_payment(void *ptr, RustBuffer payment_id,
+                                              RustCallStatus *uniffi_out_err);
+void uniffi_lni_uniffi_fn_method_db_save(void *ptr,
+                                         RustCallStatus *uniffi_out_err);
+void uniffi_lni_uniffi_fn_method_db_write_payment(
+    void *ptr, RustBuffer payment, RustCallStatus *uniffi_out_err);
 void *uniffi_lni_uniffi_fn_clone_phoenixdnode(void *ptr,
                                               RustCallStatus *uniffi_out_err);
 void uniffi_lni_uniffi_fn_free_phoenixdnode(void *ptr,
@@ -242,10 +253,14 @@ void ffi_lni_uniffi_rust_future_free_void(
     /*handle*/ uint64_t handle);
 void ffi_lni_uniffi_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+uint16_t uniffi_lni_uniffi_checksum_method_db_lookup_payment();
+uint16_t uniffi_lni_uniffi_checksum_method_db_save();
+uint16_t uniffi_lni_uniffi_checksum_method_db_write_payment();
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info();
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_list_transactions();
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_lookup_invoice();
 uint16_t uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice();
+uint16_t uniffi_lni_uniffi_checksum_constructor_db_new();
 uint16_t uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new();
 uint32_t ffi_lni_uniffi_uniffi_contract_version();
 }
@@ -1565,6 +1580,63 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_fn_clone_db"] =
+      jsi::Function::createFromHostFunction(
+          rt, jsi::PropNameID::forAscii(rt, "uniffi_lni_uniffi_fn_clone_db"), 1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_clone_db(rt, thisVal, args,
+                                                           count);
+          });
+  props["uniffi_lni_uniffi_fn_free_db"] = jsi::Function::createFromHostFunction(
+      rt, jsi::PropNameID::forAscii(rt, "uniffi_lni_uniffi_fn_free_db"), 1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this->cpp_uniffi_lni_uniffi_fn_free_db(rt, thisVal, args, count);
+      });
+  props["uniffi_lni_uniffi_fn_constructor_db_new"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt,
+                                    "uniffi_lni_uniffi_fn_constructor_db_new"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_constructor_db_new(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_fn_method_db_lookup_payment"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_method_db_lookup_payment"),
+          2,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_method_db_lookup_payment(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_fn_method_db_save"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt, "uniffi_lni_uniffi_fn_method_db_save"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_method_db_save(rt, thisVal,
+                                                                 args, count);
+          });
+  props["uniffi_lni_uniffi_fn_method_db_write_payment"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_fn_method_db_write_payment"),
+          2,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_fn_method_db_write_payment(
+                rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_fn_clone_phoenixdnode"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2193,6 +2265,40 @@ NativeLni::NativeLni(jsi::Runtime &rt,
             return this->cpp_ffi_lni_uniffi_rust_future_complete_void(
                 rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_checksum_method_db_lookup_payment"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_method_db_lookup_payment"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_lni_uniffi_checksum_method_db_lookup_payment(
+                    rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_checksum_method_db_save"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_method_db_save"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_checksum_method_db_save(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_lni_uniffi_checksum_method_db_write_payment"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_method_db_write_payment"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_checksum_method_db_write_payment(
+                rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2243,6 +2349,17 @@ NativeLni::NativeLni(jsi::Runtime &rt,
                 ->cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice(
                     rt, thisVal, args, count);
           });
+  props["uniffi_lni_uniffi_checksum_constructor_db_new"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_lni_uniffi_checksum_constructor_db_new"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_lni_uniffi_checksum_constructor_db_new(
+                rt, thisVal, args, count);
+          });
   props["uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2264,6 +2381,17 @@ NativeLni::NativeLni(jsi::Runtime &rt,
           [this](jsi::Runtime &rt, const jsi::Value &thisVal,
                  const jsi::Value *args, size_t count) -> jsi::Value {
             return this->cpp_ffi_lni_uniffi_uniffi_contract_version(
+                rt, thisVal, args, count);
+          });
+  props["uniffi_internal_fn_method_db_ffi__bless_pointer"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "uniffi_internal_fn_method_db_ffi__bless_pointer"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this->cpp_uniffi_internal_fn_method_db_ffi__bless_pointer(
                 rt, thisVal, args, count);
           });
   props["uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer"] =
@@ -2339,6 +2467,21 @@ jsi::Value NativeLni::cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
     size_t count) {
   return uniffi_jsi::Bridging<std::string>::arraybuffer_to_string(rt, args[0]);
 }
+jsi::Value NativeLni::cpp_uniffi_internal_fn_method_db_ffi__bless_pointer(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto pointer =
+      uniffi_jsi::Bridging<uint64_t>::fromJs(rt, callInvoker, args[0]);
+  auto static destructor = [](uint64_t p) {
+    auto pointer = reinterpret_cast<void *>(static_cast<uintptr_t>(p));
+    RustCallStatus status = {0};
+    uniffi_lni_uniffi_fn_free_db(pointer, &status);
+  };
+  auto ptrObj =
+      std::make_shared<uniffi_jsi::DestructibleObject>(pointer, destructor);
+  auto obj = jsi::Object::createFromHostObject(rt, ptrObj);
+  return jsi::Value(rt, obj);
+}
 jsi::Value
 NativeLni::cpp_uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
@@ -2357,6 +2500,83 @@ NativeLni::cpp_uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(
 }
 
 // Methods calling directly into the uniffi generated C API of the Rust crate.
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_clone_db(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_clone_db(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi_jsi::Bridging<void *>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_free_db(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_lni_uniffi_fn_free_db(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return jsi::Value::undefined();
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_constructor_db_new(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_constructor_db_new(
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[0]),
+      &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi_jsi::Bridging<void *>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_db_lookup_payment(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_lni_uniffi_fn_method_db_lookup_payment(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]),
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]),
+      &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return uniffi::lni::Bridging<RustBuffer>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_db_save(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_lni_uniffi_fn_method_db_save(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]), &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return jsi::Value::undefined();
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_method_db_write_payment(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::lni::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_lni_uniffi_fn_method_db_write_payment(
+      uniffi_jsi::Bridging<void *>::fromJs(rt, callInvoker, args[0]),
+      uniffi::lni::Bridging<RustBuffer>::fromJs(rt, callInvoker, args[1]),
+      &status);
+  uniffi::lni::Bridging<RustCallStatus>::copyIntoJs(rt, callInvoker, status,
+                                                    args[count - 1]);
+
+  return jsi::Value::undefined();
+}
 jsi::Value NativeLni::cpp_uniffi_lni_uniffi_fn_clone_phoenixdnode(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
@@ -3020,6 +3240,27 @@ jsi::Value NativeLni::cpp_ffi_lni_uniffi_rust_future_complete_void(
 
   return jsi::Value::undefined();
 }
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_method_db_lookup_payment(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_db_lookup_payment();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_method_db_save(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_db_save();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_method_db_write_payment(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_method_db_write_payment();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
 jsi::Value
 NativeLni::cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
@@ -3050,6 +3291,13 @@ NativeLni::cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
     size_t count) {
   auto value = uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeLni::cpp_uniffi_lni_uniffi_checksum_constructor_db_new(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  auto value = uniffi_lni_uniffi_checksum_constructor_db_new();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

@@ -36,9 +36,12 @@ impl Db {
         let data = if let Ok(mut file) = File::open(&path) {
             let mut contents = String::new();
             file.read_to_string(&mut contents)
-                .map_err(|e| DbError::IoErr { reason: e.to_string() })?;
-            serde_json::from_str(&contents)
-                .map_err(|e| DbError::DeserializationErr { reason: e.to_string() })?
+                .map_err(|e| DbError::IoErr {
+                    reason: e.to_string(),
+                })?;
+            serde_json::from_str(&contents).map_err(|e| DbError::DeserializationErr {
+                reason: e.to_string(),
+            })?
         } else {
             Vec::new()
         };
@@ -51,16 +54,21 @@ impl Db {
 
     pub fn save(&self) -> Result<(), DbError> {
         let data = self.data.lock().unwrap();
-        let json = serde_json::to_string_pretty(&*data)
-            .map_err(|e| DbError::SerializationErr { reason: e.to_string() })?;
+        let json = serde_json::to_string_pretty(&*data).map_err(|e| DbError::SerializationErr {
+            reason: e.to_string(),
+        })?;
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(&self.path)
-            .map_err(|e| DbError::IoErr { reason: e.to_string() })?;
+            .map_err(|e| DbError::IoErr {
+                reason: e.to_string(),
+            })?;
         file.write_all(json.as_bytes())
-            .map_err(|e| DbError::IoErr { reason: e.to_string() })?;
+            .map_err(|e| DbError::IoErr {
+                reason: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -70,7 +78,7 @@ impl Db {
         drop(data); // Explicitly drop the lock before saving
         self.save()
     }
-
+ 
     pub fn lookup_payment(&self, payment_id: String) -> Result<Option<Payment>, DbError> {
         let data = self.data.lock().unwrap();
         Ok(data

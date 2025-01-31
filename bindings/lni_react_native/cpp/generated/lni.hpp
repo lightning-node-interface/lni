@@ -28,6 +28,27 @@ protected:
   jsi::Value cpp_uniffi_internal_fn_func_ffi__arraybuffer_to_string(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_clone_db(jsi::Runtime &rt,
+                                               const jsi::Value &thisVal,
+                                               const jsi::Value *args,
+                                               size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_free_db(jsi::Runtime &rt,
+                                              const jsi::Value &thisVal,
+                                              const jsi::Value *args,
+                                              size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_constructor_db_new(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_db_lookup_payment(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_db_save(jsi::Runtime &rt,
+                                                     const jsi::Value &thisVal,
+                                                     const jsi::Value *args,
+                                                     size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_db_write_payment(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_fn_clone_phoenixdnode(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -229,6 +250,15 @@ protected:
   jsi::Value cpp_ffi_lni_uniffi_rust_future_complete_void(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_db_lookup_payment(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_db_save(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_db_write_payment(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_get_info(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -242,10 +272,16 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_constructor_db_new(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_constructor_phoenixdnode_new(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_ffi_lni_uniffi_uniffi_contract_version(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_internal_fn_method_db_ffi__bless_pointer(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_internal_fn_method_phoenixdnode_ffi__bless_pointer(

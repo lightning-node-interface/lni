@@ -19,7 +19,6 @@ impl From<serde_json::Error> for ApiError {
         }
     }
 }
-pub type Result<T> = std::result::Result<T, ApiError>;
 
 pub mod phoenixd {
     pub mod lib;
