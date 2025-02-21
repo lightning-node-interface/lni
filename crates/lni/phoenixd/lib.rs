@@ -1,7 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{phoenixd::api::*, ApiError, InvoiceType, Transaction};
+use crate::{phoenixd::api::*, ApiError, InvoiceType, PayInvoiceResponse, Transaction};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -76,7 +76,26 @@ impl PhoenixdNode {
         .await
     }
 
-    pub async fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
+    pub async fn pay_offer(
+        &self,
+        offer: String,
+        amount: i64,
+        payer_note: Option<String>,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::phoenixd::api::pay_offer(
+            self.url.clone(),
+            self.password.clone(),
+            offer,
+            amount,
+            payer_note,
+        )
+        .await
+    }
+
+    pub async fn lookup_invoice(
+        &self,
+        payment_hash: String,
+    ) -> Result<crate::Transaction, ApiError> {
         crate::phoenixd::api::lookup_invoice(self.url.clone(), self.password.clone(), payment_hash)
     }
 
@@ -124,6 +143,10 @@ mod tests {
             dotenv().ok();
             env::var("PHOENIXD_TEST_PAYMENT_HASH").expect("PHOENIXD_TEST_PAYMENT_HASH must be set")
         };
+        static ref TEST_OFFER: String = {
+            dotenv().ok();
+            env::var("TEST_OFFER").expect("TEST_OFFER must be set")
+        };
     }
 
     #[test]
@@ -160,6 +183,22 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_pay_offer() {
+        match NODE
+            .pay_offer(TEST_OFFER.to_string(), 11, Some("payment from lni".to_string()))
+            .await
+        {
+            Ok(resp) => {
+                println!("Pay invoice resp: {:?}", resp);
+                assert!(!resp.preimage.is_empty(), "Preimage should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to pay offer: {:?}", e);
             }
         }
     }

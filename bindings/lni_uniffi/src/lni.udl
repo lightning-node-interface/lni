@@ -14,6 +14,10 @@ interface PhoenixdNode {
 
     [Throws=ApiError, Async]
     sequence<Transaction> list_transactions(ListTransactionsParams params);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_offer(string offer, i64 amount, string? payer_note );
+
 };
 
 interface Db {

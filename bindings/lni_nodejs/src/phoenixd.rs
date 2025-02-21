@@ -70,7 +70,28 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub async fn list_transactions(&self, params: lni::phoenixd::lib::ListTransactionsParams) -> napi::Result<Vec<lni::Transaction>> {
+  pub async fn pay_offer(
+    &self,
+    offer: String,
+    amount: i64,
+    payer_note: Option<String>,
+  ) -> napi::Result<lni::PayInvoiceResponse> {
+    let offer = lni::phoenixd::api::pay_offer(
+      self.inner.url.clone(),
+      self.inner.password.clone(),
+      offer,
+      amount,
+      payer_note,
+    ).await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn list_transactions(
+    &self,
+    params: lni::phoenixd::lib::ListTransactionsParams,
+  ) -> napi::Result<Vec<lni::Transaction>> {
     let txns = lni::phoenixd::api::list_transactions(
       self.inner.url.clone(),
       self.inner.password.clone(),

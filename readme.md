@@ -40,6 +40,7 @@ let cln_rune = cln_node.key();
 ```rust
 lni.create_invoice(amount, expiration, memo, BOLT11 | BOLT12)
 lni.pay_invoice()
+lni.pay_offer(offer)
 lni.fetch_invoice_from_offer('lno***')
 lni.decode_invoice(invoice)
 lni.check_invoice_status(invoice)
@@ -119,6 +120,7 @@ node main.mjs
 PHOENIXD_URL=http://localhost:9740
 PHOENIXD_PASSWORD=YOUR_HTTP_PASSWORD
 PHOENIXD_TEST_PAYMENT_HASH=YOUR_TEST_PAYMENT_HASH
+TEST_OFFER=lno***
 ```
 
 Bindings
@@ -127,7 +129,8 @@ Bindings
 - nodejs 
     - napi_rs
     - https://napi.rs/docs/introduction/simple-package
-    - `cd bindings/lni_nodejs && cargo build`
+    - `cd bindings/lni_nodejs && cargo build && yarn build`
+    - test `node main.mjs`
 
 - react-native 
     - uniffi-bindgen-react-native 

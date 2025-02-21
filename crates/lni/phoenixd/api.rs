@@ -1,7 +1,7 @@
-use crate::{ApiError, InvoiceType, NodeInfo, Transaction};
+use super::lib::Bolt11Resp;
+use crate::{ApiError, InvoiceType, NodeInfo, PayInvoiceResponse, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded;
-use super::lib::Bolt11Resp;
 
 /// https://phoenix.acinq.co/server/api
 
@@ -75,6 +75,17 @@ pub struct OutgoingPaymentResponse {
     pub is_paid: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PayResponse {
+    #[serde(rename = "paymentId")]
+    pub payment_id: String,
+    #[serde(rename = "paymentPreimage")]
+    pub preimage: String,
+    #[serde(rename = "paymentHash")]
+    pub payment_hash: String,
+    #[serde(rename = "routingFeeSat")]
+    pub routing_fee_sat: i64,
+}
 
 pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
     let url = format!("{}/getinfo", url);
@@ -114,8 +125,8 @@ pub async fn make_invoice(
                 description: description.clone(),
                 amount_sat: amount,
                 expiry_seconds: expiry.unwrap_or(3600),
-                external_id: None, // TODO 
-                webhook_url: None, // TODO 
+                external_id: None, // TODO
+                webhook_url: None, // TODO
             };
 
             let response: reqwest::blocking::Response = client
@@ -128,7 +139,7 @@ pub async fn make_invoice(
             println!("Status: {}", response.status());
 
             let invoice_str = response.text().unwrap();
-            let invoice_str = invoice_str.as_str(); 
+            let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
 
             let bolt11_resp: Bolt11Resp =
@@ -175,6 +186,37 @@ pub async fn make_invoice(
     }
 }
 
+pub async fn pay_offer(
+    url: String,
+    password: String,
+    offer: String,
+    amount: i64,
+    payer_note: Option<String>,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = reqwest::blocking::Client::new();
+    let req_url = format!("{}/payoffer", url);
+    let response: reqwest::blocking::Response = client
+        .post(&req_url)
+        .basic_auth("", Some(password))
+        .form(&[
+            ("amountSat", amount.to_string()),
+            ("offer", offer),
+            ("message", payer_note.unwrap_or_default()),
+        ])
+        .send()
+        .unwrap();
+    let response_text = response.text().unwrap();
+    let response_text = response_text.as_str();
+    let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
+        Ok(resp) => resp,
+        Err(e) => return Err(ApiError::Json { reason: e.to_string() }),
+    };
+    Ok(PayInvoiceResponse {
+        preimage: pay_resp.preimage,
+        fee: pay_resp.routing_fee_sat,
+    })
+}
+
 pub fn lookup_invoice(
     url: String,
     password: String,
@@ -202,7 +244,6 @@ pub fn lookup_invoice(
     };
     Ok(txn)
 }
-
 
 pub fn list_transactions(
     url: String,
@@ -263,10 +304,10 @@ pub fn list_transactions(
                 amount: inv.received_sat,
                 fees_paid: inv.fees * 1000,
                 created_at: (inv.created_at / 1000) as i64,
-                expires_at: 0, // TODO 
+                expires_at: 0, // TODO
                 settled_at: settled_at.unwrap_or(0),
                 description: inv.payer_note.unwrap_or_default(), // TODO description or payer_note?
-                description_hash: "".to_string(), // or parse if needed
+                description_hash: "".to_string(),                // or parse if needed
             }
         })
         .collect();
@@ -298,7 +339,8 @@ pub fn list_transactions(
         .send();
     let outgoing_text = outgoing_resp.unwrap().text().unwrap();
     let outgoing_text = outgoing_text.as_str();
-    let outgoing_payments: Vec<OutgoingPaymentResponse> = serde_json::from_str(&outgoing_text).unwrap();
+    let outgoing_payments: Vec<OutgoingPaymentResponse> =
+        serde_json::from_str(&outgoing_text).unwrap();
 
     // Convert outgoing payments into "outgoing" Transaction
     for payment in outgoing_payments {
@@ -309,7 +351,7 @@ pub fn list_transactions(
         };
         transactions.push(Transaction {
             type_: "outgoing".to_string(),
-            invoice: "".to_string(), // TODO 
+            invoice: "".to_string(), // TODO
             preimage: payment.preimage,
             payment_hash: payment.payment_hash,
             amount: payment.sent * 1000,
@@ -317,7 +359,7 @@ pub fn list_transactions(
             created_at: (payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
             settled_at: settled_at.unwrap_or(0),
-            description: "".to_string(),  // not in OutgoingPaymentResponse data
+            description: "".to_string(), // not in OutgoingPaymentResponse data
             description_hash: "".to_string(),
         });
     }
@@ -327,4 +369,3 @@ pub fn list_transactions(
 
     Ok(transactions)
 }
-
