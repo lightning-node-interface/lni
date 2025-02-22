@@ -18,7 +18,7 @@ export interface Bolt11Resp {
 }
 export interface PhoenixdMakeInvoiceParams {
   invoiceType: InvoiceType
-  amount: number
+  amountMsats: number
   description?: string
   descriptionHash?: string
   expiry?: number
@@ -54,7 +54,7 @@ export interface Transaction {
   descriptionHash: string
   preimage: string
   paymentHash: string
-  amount: number
+  amountMsats: number
   feesPaid: number
   createdAt: number
   expiresAt: number
@@ -95,7 +95,7 @@ export interface ConnectPeerRequest {
 }
 export interface OpenChannelRequest {
   pubkey: string
-  amountSats: number
+  amountMsats: number
   public: boolean
 }
 export interface OpenChannelResponse {
@@ -118,7 +118,7 @@ export interface CloseChannelResponse {
 export interface PendingBalanceDetails {
   channelId: string
   nodeId: string
-  amount: number
+  amountMsats: number
   fundingTxId: string
   fundingTxVout: number
 }
@@ -165,7 +165,7 @@ export interface Payment {
   round: number
   relayFingerprint: string
   updatedAt: number
-  amountMsat: number
+  amountMsats: number
 }
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
@@ -175,7 +175,7 @@ export declare class PhoenixdNode {
   getInfo(): Promise<NodeInfo>
   makeInvoice(params: PhoenixdMakeInvoiceParams): Promise<Transaction>
   lookupInvoice(paymentHash: string): Promise<Transaction>
-  payOffer(offer: string, amount: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
 }
 export declare class Db {

@@ -16,7 +16,7 @@ interface PhoenixdNode {
     sequence<Transaction> list_transactions(ListTransactionsParams params);
 
     [Throws=ApiError, Async]
-    PayInvoiceResponse pay_offer(string offer, i64 amount, string? payer_note );
+    PayInvoiceResponse pay_offer(string offer, i64 amount_msats, string? payer_note );
 
 };
 
@@ -47,7 +47,7 @@ dictionary Payment {
     i64 round;
     string relay_fingerprint;
     i64 updated_at;
-    i64 amount_msat;
+    i64 amount_msats;
 };
 
 [Error]
@@ -64,7 +64,7 @@ dictionary PhoenixdConfig {
 
 dictionary PhoenixdMakeInvoiceParams {
     InvoiceType invoice_type;
-    i64 amount;
+    i64 amount_msats;
     string? description; 
     string? description_hash; 
     i64? expiry;
@@ -91,7 +91,7 @@ dictionary Transaction {
     string description_hash;
     string preimage;
     string payment_hash;
-    i64 amount;
+    i64 amount_msats;
     i64 fees_paid;
     i64 created_at;
     i64 expires_at;
@@ -137,7 +137,7 @@ dictionary ConnectPeerRequest {
 
 dictionary OpenChannelRequest {
     string pubkey;
-    i64 amount_sats;
+    i64 amount_msats;
     boolean public;
 };
 
@@ -163,7 +163,7 @@ dictionary CloseChannelResponse {};
 dictionary PendingBalanceDetails {
     string channel_id;
     string node_id;
-    i64 amount;
+    i64 amount_msats;
     string funding_tx_id;
     i64 funding_tx_vout;
 };

@@ -48,7 +48,7 @@ impl PhoenixdNode {
       self.inner.url.clone(),
       self.inner.password.clone(),
       params.invoice_type,
-      params.amount,
+      params.amount_msats,
       params.description,
       params.description_hash,
       params.expiry,
@@ -73,14 +73,14 @@ impl PhoenixdNode {
   pub async fn pay_offer(
     &self,
     offer: String,
-    amount: i64,
+    amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
     let offer = lni::phoenixd::api::pay_offer(
       self.inner.url.clone(),
       self.inner.password.clone(),
       offer,
-      amount,
+      amount_msats,
       payer_note,
     ).await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;

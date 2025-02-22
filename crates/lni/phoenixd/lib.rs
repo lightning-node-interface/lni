@@ -31,7 +31,7 @@ pub struct Bolt11Resp {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PhoenixdMakeInvoiceParams {
     pub invoice_type: InvoiceType,
-    pub amount: i64,
+    pub amount_msats: i64,
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
@@ -68,7 +68,7 @@ impl PhoenixdNode {
             self.url.clone(),
             self.password.clone(),
             params.invoice_type,
-            params.amount,
+            params.amount_msats,
             params.description,
             params.description_hash,
             params.expiry,
@@ -79,14 +79,14 @@ impl PhoenixdNode {
     pub async fn pay_offer(
         &self,
         offer: String,
-        amount: i64,
+        amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
         crate::phoenixd::api::pay_offer(
             self.url.clone(),
             self.password.clone(),
             offer,
-            amount,
+            amount_msats,
             payer_note,
         )
         .await
@@ -164,13 +164,13 @@ mod tests {
 
     #[test]
     async fn test_make_invoice() {
-        let amount = 1000;
+        let amount_msats = 1000;
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
         let expiry = 3600;
         let params = PhoenixdMakeInvoiceParams {
             invoice_type: InvoiceType::Bolt11,
-            amount,
+            amount_msats,
             description: Some(description),
             description_hash: Some(description_hash),
             expiry: Some(expiry),
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     async fn test_pay_offer() {
         match NODE
-            .pay_offer(TEST_OFFER.to_string(), 11, Some("payment from lni".to_string()))
+            .pay_offer(TEST_OFFER.to_string(), 2000, Some("payment from lni".to_string()))
             .await
         {
             Ok(resp) => {
@@ -230,7 +230,7 @@ mod tests {
         match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
             Ok(txn) => {
                 println!("invoice: {:?}", txn);
-                assert!(txn.amount.gt(&1), "Invoice contain an amount");
+                assert!(txn.amount_msats.gt(&1), "Invoice contain an amount");
             }
             Err(e) => {
                 panic!("Failed to lookup invoice: {:?}", e);

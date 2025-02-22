@@ -24,7 +24,7 @@ pub struct Payment {
     pub round: i64,
     pub relay_fingerprint: String,
     pub updated_at: i64,
-    pub amount_msat: i64,
+    pub amount_msats: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,7 +103,7 @@ mod tests {
             round: 1,
             relay_fingerprint: "1".to_string(),
             updated_at: 1,
-            amount_msat: 1,
+            amount_msats: 1,
         };
 
         let db = Db::new("test.json".to_string()).unwrap();

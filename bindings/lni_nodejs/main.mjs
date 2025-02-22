@@ -15,7 +15,7 @@ const configRes = await node.getConfig();
 console.log("Config:", configRes.url);
 
 const invoice = await node.makeInvoice({
-  amount: 1000,
+  amountMsats: 1000,
   description: "test invoice",
   invoiceType: InvoiceType.Bolt11,
 });
@@ -24,7 +24,7 @@ console.log("Invoice:", invoice);
 const lookupInvoice = await node.lookupInvoice(process.env.PHOENIXD_TEST_PAYMENT_HASH);
 console.log("lookupInvoice:", lookupInvoice);
 
-const payOffer = await node.payOffer(process.env.TEST_OFFER, 22, 'payment from lni nodejs');
+const payOffer = await node.payOffer(process.env.TEST_OFFER, 3000, 'payment from lni nodejs');
 console.log("payOffer:", payOffer);
 
 const txns = await node.listTransactions({
@@ -37,12 +37,13 @@ const txns = await node.listTransactions({
 });
 console.log("Transactions:", txns);
 
-const db = new Db("test.json");
-db.writePayment({
-  paymentId: "1",
-  circId: "1",
-  round: 1,
-  relayFingerprint: "1",
-  updatedAt: 1,
-  amountMsat: 1,
-});
+// const db = new Db("test.json");
+// db.writePayment({
+//   paymentId: "1",
+//   circId: "1",
+//   round: 1,
+//   relayFingerprint: "1",
+//   updatedAt: 1,
+//   amountMsats: 1,
+//   amount_msats: 1000,
+// });

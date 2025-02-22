@@ -38,7 +38,7 @@ pub struct Transaction {
     pub description_hash: String,
     pub preimage: String,
     pub payment_hash: String,
-    pub amount: i64,
+    pub amount_msats: i64,
     pub fees_paid: i64,
     pub created_at: i64,
     pub expires_at: i64,
@@ -95,7 +95,7 @@ pub struct ConnectPeerRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenChannelRequest {
     pub pubkey: String,
-    pub amount_sats: i64,
+    pub amount_msats: i64,
     pub public: bool,
 }
 
@@ -131,7 +131,7 @@ pub struct CloseChannelResponse {}
 pub struct PendingBalanceDetails {
     pub channel_id: String,
     pub node_id: String,
-    pub amount: i64,
+    pub amount_msats: i64,
     pub funding_tx_id: String,
     pub funding_tx_vout: i64,
 }

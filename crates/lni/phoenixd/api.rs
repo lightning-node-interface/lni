@@ -58,7 +58,7 @@ pub struct InvoiceResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingPaymentResponse {
     #[serde(rename = "paymentId")]
-    pub payment_id: String,
+    pub payment_id: Option<String>,
     #[serde(rename = "preimage")]
     pub preimage: String,
     #[serde(rename = "paymentHash")]
@@ -78,7 +78,7 @@ pub struct OutgoingPaymentResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayResponse {
     #[serde(rename = "paymentId")]
-    pub payment_id: String,
+    pub payment_id: Option<String>,
     #[serde(rename = "paymentPreimage")]
     pub preimage: String,
     #[serde(rename = "paymentHash")]
@@ -111,7 +111,7 @@ pub async fn make_invoice(
     url: String,
     password: String,
     invoice_type: InvoiceType,
-    amount: i64,
+    amount_msats: i64,
     description: Option<String>,
     description_hash: Option<String>,
     expiry: Option<i64>,
@@ -123,7 +123,7 @@ pub async fn make_invoice(
 
             let bolt11_req = Bolt11Req {
                 description: description.clone(),
-                amount_sat: amount,
+                amount_sat: amount_msats / 1000,
                 expiry_seconds: expiry.unwrap_or(3600),
                 external_id: None, // TODO
                 webhook_url: None, // TODO
@@ -152,7 +152,7 @@ pub async fn make_invoice(
                 invoice: bolt11_resp.serialized,
                 preimage: "".to_string(),
                 payment_hash: bolt11_resp.payment_hash,
-                amount: amount,
+                amount_msats,
                 fees_paid: 0,
                 created_at: 0,
                 expires_at: expiry.unwrap_or(3600),
@@ -174,7 +174,7 @@ pub async fn make_invoice(
                 invoice: offer_str,
                 preimage: "".to_string(),
                 payment_hash: "".to_string(),
-                amount: amount,
+                amount_msats,
                 fees_paid: 0,
                 created_at: 0,
                 expires_at: expiry.unwrap_or_default(),
@@ -190,7 +190,7 @@ pub async fn pay_offer(
     url: String,
     password: String,
     offer: String,
-    amount: i64,
+    amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
     let client = reqwest::blocking::Client::new();
@@ -199,7 +199,7 @@ pub async fn pay_offer(
         .post(&req_url)
         .basic_auth("", Some(password))
         .form(&[
-            ("amountSat", amount.to_string()),
+            ("amountSat", (amount_msats / 1000).to_string()),
             ("offer", offer),
             ("message", payer_note.unwrap_or_default()),
         ])
@@ -209,7 +209,7 @@ pub async fn pay_offer(
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
-        Err(e) => return Err(ApiError::Json { reason: e.to_string() }),
+        Err(e) => return Err(ApiError::Json { reason: response_text.to_string() }),
     };
     Ok(PayInvoiceResponse {
         preimage: pay_resp.preimage,
@@ -234,7 +234,7 @@ pub fn lookup_invoice(
         invoice: inv.invoice.unwrap_or_default(),
         preimage: inv.preimage,
         payment_hash: inv.payment_hash,
-        amount: inv.received_sat * 1000,
+        amount_msats: inv.received_sat * 1000,
         fees_paid: inv.fees * 1000,
         created_at: inv.created_at,
         expires_at: 0, // TODO
@@ -301,7 +301,7 @@ pub fn list_transactions(
                 invoice: "".to_string(),
                 preimage: inv.preimage,
                 payment_hash: inv.payment_hash,
-                amount: inv.received_sat,
+                amount_msats: inv.received_sat * 1000,
                 fees_paid: inv.fees * 1000,
                 created_at: (inv.created_at / 1000) as i64,
                 expires_at: 0, // TODO
@@ -354,7 +354,7 @@ pub fn list_transactions(
             invoice: "".to_string(), // TODO
             preimage: payment.preimage,
             payment_hash: payment.payment_hash,
-            amount: payment.sent * 1000,
+            amount_msats: payment.sent * 1000,
             fees_paid: payment.fees * 1000,
             created_at: (payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
