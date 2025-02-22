@@ -10,6 +10,7 @@ import {
   PHOENIXD_URL,
   PHOENIXD_PASSWORD,
   PHOENIXD_TEST_PAYMENT_HASH,
+  TEST_OFFER,
 } from '@env';
 // import RNFS from 'react-native-fs';
 
@@ -32,7 +33,7 @@ export default function App() {
 
       const offerResp = await node.makeInvoice({
         invoiceType: InvoiceType.Bolt12,
-        amount: BigInt(1000),
+        amountMsats: BigInt(1000),
         description: 'Test invoice',
         descriptionHash: undefined,
         expiry: undefined,
@@ -42,7 +43,7 @@ export default function App() {
       const lookupInvoice = await node.lookupInvoice(
         PHOENIXD_TEST_PAYMENT_HASH
       );
-      setInvoice(Number(lookupInvoice.amount));
+      setInvoice(Number(lookupInvoice.amountMsats));
 
       let txnParams: ListTransactionsParams = {
         from: BigInt(0),
@@ -56,19 +57,27 @@ export default function App() {
       setTxns(JSON.stringify(txns[0], bigIntReplacer));
 
       // const path = `${RNFS.DocumentDirectoryPath}/test.json`;
-      const db = new Db('test.json');
-      db.writePayment({
-        paymentId: '1',
-        circId: '1',
-        round: BigInt(1),
-        relayFingerprint: '1',
-        updatedAt: BigInt(1),
-        amountMsat: BigInt(1),
-      });
-      db.save();
+      // const db = new Db('test.json');
+      // db.writePayment({
+      //   paymentId: '1',
+      //   circId: '1',
+      //   round: BigInt(1),
+      //   relayFingerprint: '1',
+      //   updatedAt: BigInt(1),
+      //   amountMsats: BigInt(1),
+      // });
+      // db.save();
 
-      const paymentRes = db.lookupPayment('1');
-      setPayment(JSON.stringify(paymentRes, bigIntReplacer));
+      // const paymentRes = db.lookupPayment('1');
+      // setPayment(JSON.stringify(paymentRes, bigIntReplacer));
+
+      const paymentResp = await node.payOffer(
+        TEST_OFFER,
+        BigInt(3000),
+        'payment from react-native'
+      );
+      console.log('Pay offer resposne', paymentResp);
+      setPayment(JSON.stringify(paymentResp, bigIntReplacer));
     } catch (e) {
       console.error('Error', e);
     }

@@ -70,6 +70,9 @@ protected:
   jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_make_invoice(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_fn_method_phoenixdnode_pay_offer(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_ffi_lni_uniffi_rust_future_poll_u8(jsi::Runtime &rt,
                                                     const jsi::Value &thisVal,
                                                     const jsi::Value *args,
@@ -270,6 +273,9 @@ protected:
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_make_invoice(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_lni_uniffi_checksum_method_phoenixdnode_pay_offer(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_lni_uniffi_checksum_constructor_db_new(
