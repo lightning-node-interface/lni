@@ -59,6 +59,8 @@ export interface Transaction {
   createdAt: number
   expiresAt: number
   settledAt: number
+  payerNote?: string
+  externalId?: string
 }
 export interface NodeConnectionInfo {
   pubkey: string
@@ -145,6 +147,7 @@ export interface LightningBalanceResponse {
   nextMaxReceivableMpp: number
 }
 export interface PayInvoiceResponse {
+  paymentHash: string
   preimage: string
   fee: number
 }

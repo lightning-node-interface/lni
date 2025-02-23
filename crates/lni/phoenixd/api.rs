@@ -45,14 +45,16 @@ pub struct InvoiceResponse {
     pub created_at: i64,
     #[serde(rename = "isPaid")]
     pub is_paid: bool,
-    #[serde(rename = "payerNote")]
-    pub payer_note: Option<String>,
     #[serde(rename = "payerKey")]
     pub payer_key: Option<String>,
     #[serde(rename = "invoice")]
     pub invoice: Option<String>,
     #[serde(rename = "description")]
     pub description: Option<String>,
+    #[serde(rename = "payerNote")]
+    pub payer_note: Option<String>, // used in bolt12
+    #[serde(rename = "externalId")]
+    pub external_id: Option<String>, // used in bolt11
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -73,6 +75,10 @@ pub struct OutgoingPaymentResponse {
     pub completed_at: i64,
     #[serde(rename = "isPaid")]
     pub is_paid: bool,
+    #[serde(rename = "payerNote")]
+    pub payer_note: Option<String>, // used in bolt12
+    #[serde(rename = "externalId")]
+    pub external_id: Option<String>, // used in bolt11
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -159,6 +165,8 @@ pub async fn make_invoice(
                 settled_at: 0,
                 description: description.unwrap_or_default(),
                 description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some("".to_string()),
             })
         }
         InvoiceType::Bolt12 => {
@@ -181,6 +189,8 @@ pub async fn make_invoice(
                 settled_at: 0,
                 description: description.unwrap_or_default(),
                 description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some("".to_string()),
             })
         }
     }
@@ -212,6 +222,7 @@ pub async fn pay_offer(
         Err(e) => return Err(ApiError::Json { reason: response_text.to_string() }),
     };
     Ok(PayInvoiceResponse {
+        payment_hash: pay_resp.payment_hash,
         preimage: pay_resp.preimage,
         fee: pay_resp.routing_fee_sat,
     })
@@ -241,6 +252,8 @@ pub fn lookup_invoice(
         settled_at: 0, // TODO
         description: inv.description.unwrap_or_default(),
         description_hash: "".to_string(), // TODO
+        payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
+        external_id: Some(inv.external_id.unwrap_or("".to_string())),
     };
     Ok(txn)
 }
@@ -306,8 +319,10 @@ pub fn list_transactions(
                 created_at: (inv.created_at / 1000) as i64,
                 expires_at: 0, // TODO
                 settled_at: settled_at.unwrap_or(0),
-                description: inv.payer_note.unwrap_or_default(), // TODO description or payer_note?
-                description_hash: "".to_string(),                // or parse if needed
+                description:  "".to_string(),
+                description_hash: "".to_string(),
+                payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
+                external_id: Some(inv.external_id.unwrap_or("".to_string())),
             }
         })
         .collect();
@@ -359,8 +374,10 @@ pub fn list_transactions(
             created_at: (payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
             settled_at: settled_at.unwrap_or(0),
-            description: "".to_string(), // not in OutgoingPaymentResponse data
+            description: "".to_string(), 
             description_hash: "".to_string(),
+            payer_note: Some(payment.payer_note.unwrap_or("".to_string())),
+            external_id: Some(payment.external_id.unwrap_or("".to_string())),
         });
     }
 

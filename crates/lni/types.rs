@@ -43,6 +43,8 @@ pub struct Transaction {
     pub created_at: i64,
     pub expires_at: i64,
     pub settled_at: i64,
+    pub payer_note: Option<String>, // used in bolt12 (on phoenixd)
+    pub external_id: Option<String>, // used in bolt11 (on phoenixd)
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -170,6 +172,7 @@ pub struct LightningBalanceResponse {
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayInvoiceResponse {
+    pub payment_hash: String,
     pub preimage: String,
     pub fee: i64,
 }

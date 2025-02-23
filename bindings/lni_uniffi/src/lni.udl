@@ -96,6 +96,8 @@ dictionary Transaction {
     i64 created_at;
     i64 expires_at;
     i64 settled_at;
+    string? payer_note;
+    string? external_id;
 };
 
 dictionary NodeConnectionInfo {
@@ -194,6 +196,7 @@ dictionary LightningBalanceResponse {
 };
 
 dictionary PayInvoiceResponse {
+    string payment_hash;
     string preimage;
     i64 fee;
 };
