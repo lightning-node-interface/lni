@@ -26,6 +26,12 @@ pub mod phoenixd {
     pub use lib::{PhoenixdConfig, PhoenixdNode, PhoenixdMakeInvoiceParams, ListTransactionsParams};
 }
 
+pub mod cln {
+    pub mod lib;
+    pub mod api;
+    pub mod types;
+}
+
 pub mod types;
 pub use types::*;
 

@@ -115,12 +115,15 @@ yarn build
 node main.mjs
 ```
 
-###.env
+### .env
 ```
 PHOENIXD_URL=http://localhost:9740
 PHOENIXD_PASSWORD=YOUR_HTTP_PASSWORD
 PHOENIXD_TEST_PAYMENT_HASH=YOUR_TEST_PAYMENT_HASH
 TEST_OFFER=lno***
+
+CLN_URL=http://localhost:3010
+CLN_RUNE=YOUR_RUNE
 ```
 
 Bindings
@@ -129,8 +132,22 @@ Bindings
 - nodejs 
     - napi_rs
     - https://napi.rs/docs/introduction/simple-package
-    - `cd bindings/lni_nodejs && cargo build && yarn build`
+    - `cd bindings/lni_nodejs && cargo build --release && yarn build`
     - test `node main.mjs`
+
+- nodejs - native modules (electron, vercel etc..)
+    - if you want to use the native node module (maybe for an electron app) you can reference the file `bindings/lni_nodejs/lni_js.${platform}-${arch}.node`. It would look something like in your project:
+        ```typescript
+        const path = require("path");
+        const os = require("os");
+        const platform = os.platform();
+        const arch = os.arch();
+        const nativeModulePath = path.join(
+        __dirname,
+        `../../code/lni/bindings/lni_nodejs/lni_js.${platform}-${arch}.node`
+        );
+        const { PhoenixdNode } = require(nativeModulePath);
+        ```
 
 - react-native 
     - uniffi-bindgen-react-native 
@@ -205,3 +222,4 @@ To Research
 - [X] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
 - [ ] wasm
+- [ ] Facade REST API? - Use the same api as phoenixd https://phoenix.acinq.co/server/api as a facade in front of any lightning node implementation. 
