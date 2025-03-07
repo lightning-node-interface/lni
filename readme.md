@@ -199,6 +199,57 @@ Project Structure
 This project structure was inpired by this https://github.com/ianthetechie/uniffi-starter/ with the intention of 
 automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 
+LNI Sequence Diagram
+==================
+```mermaid
+sequenceDiagram
+    participant App as Application (JS/Swift/Kotlin)
+    participant Binding as Language Binding (Node.js/React Native/UniFfi)
+    participant LNI as LNI Core (Rust)
+    participant Node as Lightning Node Implementation (CLN/LND/Phoenixd)
+    participant LN as Lightning Node (REST/gRPC API)
+
+    App->>Binding: Create config (URL, authentication)
+    Binding->>LNI: Initialize node with config
+    LNI->>LNI: Create node object (PhoenixdNode, ClnNode, etc.)
+    
+    Note over App,LN: Example: Get Node Info
+    
+    App->>Binding: node.getInfo()
+    Binding->>LNI: get_info()
+    LNI->>Node: api::get_info(url, auth)
+    Node->>LN: HTTP/REST request to /v1/getinfo
+    LN-->>Node: Response (JSON)
+    Node->>Node: Parse response
+    Node-->>LNI: NodeInfo object
+    LNI-->>Binding: NodeInfo struct
+    Binding-->>App: NodeInfo object
+
+    Note over App,LN: Example: Create Invoice
+    
+    App->>Binding: node.makeInvoice(params)
+    Binding->>LNI: make_invoice(params)
+    LNI->>Node: api::make_invoice(url, auth, params)
+    Node->>LN: HTTP/REST request to create invoice
+    LN-->>Node: Response with invoice data
+    Node->>Node: Parse response
+    Node-->>LNI: Transaction object
+    LNI-->>Binding: Transaction struct
+    Binding-->>App: Transaction object
+
+    Note over App,LN: Example: Pay Invoice/Offer
+    
+    App->>Binding: node.payOffer(offer, amount, note)
+    Binding->>LNI: pay_offer(offer, amount, note)
+    LNI->>Node: api::pay_offer(url, auth, offer, amount, note)
+    Node->>LN: HTTP/REST request to pay
+    LN-->>Node: Payment response
+    Node->>Node: Parse response
+    Node-->>LNI: PayInvoiceResponse object
+    LNI-->>Binding: PayInvoiceResponse struct
+    Binding-->>App: PayInvoiceResponse object
+```
+
 Todo
 ====
 - [X] make interface
