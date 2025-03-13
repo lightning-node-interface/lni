@@ -64,9 +64,9 @@ mod tests {
             dotenv().ok();
             env::var("CLN_RUNE").expect("CLN_RUNE must be set")
         };
-        static ref TEST_PHOENIX_OFFER: String = {
+        static ref TEST_CLN2_OFFER: String = {
             dotenv().ok();
-            env::var("TEST_PHOENIX_OFFER").expect("TEST_PHOENIX_OFFER must be set")
+            env::var("TEST_CLN2_OFFER").expect("TEST_CLN2_OFFER must be set")
         };
         static ref NODE: ClnNode = {
             ClnNode::new(ClnConfig {
@@ -93,8 +93,8 @@ mod tests {
     async fn test_pay_offer() {
         match NODE
             .pay_offer(
-                TEST_PHOENIX_OFFER.to_string(),
-                2000,
+                TEST_CLN2_OFFER.to_string(),
+                3000,
                 Some("from LNI test".to_string()),
             )
             .await
@@ -102,7 +102,7 @@ mod tests {
             Ok(pay_resp) => {
                 println!("pay_resp: {:?}", pay_resp);
                 assert!(
-                    pay_resp.payment_hash.is_empty(),
+                    !pay_resp.payment_hash.is_empty(),
                     "Payment hash should not be empty"
                 );
             }

@@ -9,7 +9,11 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", url);
     println!("Constructed URL: {} rune {}", req_url, rune);
     let client = clnrest_client(rune);
-    let response = client.post(&req_url).send().unwrap();
+    let response = client
+        .post(&req_url)
+        .header("Content-Type", "application/json")
+        .send()
+        .unwrap();
     let response_text = response.text().unwrap();
     println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
@@ -36,10 +40,12 @@ pub async fn pay_offer(
     let client = clnrest_client(rune);
     let response: reqwest::blocking::Response = client
         .post(&fetch_invoice_url)
+        .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "offer": offer,
             "amount_msat": amount_msats,
             "payer_note": payer_note,
+            "timeout": 60,
         }))
         .send()
         .unwrap();
@@ -67,7 +73,12 @@ pub async fn pay_offer(
     let pay_url = format!("{}/v1/pay", url);
     let pay_response: reqwest::blocking::Response = client
         .post(&pay_url)
-        .json(&serde_json::json!({"bolt11": fetch_invoice_resp.invoice}))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "bolt11": fetch_invoice_resp.invoice.to_string(),
+            "maxfeepercent": 1, // TODO read from config
+            "retry_for": 60,
+        }))
         .send()
         .unwrap();
     let pay_response_text = pay_response.text().unwrap();

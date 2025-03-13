@@ -20,7 +20,7 @@ pub struct FetchInvoiceResponse {
 pub struct PayResponse {
     pub destination: String,
     pub payment_hash: String,
-    pub created_at: i64,
+    pub created_at: f64,
     pub parts: i32,
     pub amount_msat: i64,
     pub amount_sent_msat: i64,
