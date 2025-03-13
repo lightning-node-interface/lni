@@ -10,7 +10,7 @@ import {
   PHOENIXD_URL,
   PHOENIXD_PASSWORD,
   PHOENIXD_TEST_PAYMENT_HASH,
-  TEST_OFFER,
+  TEST_RECEIVER_OFFER,
 } from '@env';
 // import RNFS from 'react-native-fs';
 
@@ -72,7 +72,7 @@ export default function App() {
       // setPayment(JSON.stringify(paymentRes, bigIntReplacer));
 
       const paymentResp = await node.payOffer(
-        TEST_OFFER,
+        TEST_RECEIVER_OFFER,
         BigInt(3000),
         'payment from react-native'
       );

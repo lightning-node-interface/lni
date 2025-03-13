@@ -143,9 +143,9 @@ mod tests {
             dotenv().ok();
             env::var("PHOENIXD_TEST_PAYMENT_HASH").expect("PHOENIXD_TEST_PAYMENT_HASH must be set")
         };
-        static ref TEST_OFFER: String = {
+        static ref TEST_RECEIVER_OFFER: String = {
             dotenv().ok();
-            env::var("TEST_OFFER").expect("TEST_OFFER must be set")
+            env::var("TEST_RECEIVER_OFFER").expect("TEST_RECEIVER_OFFER must be set")
         };
     }
 
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     async fn test_pay_offer() {
         match NODE
-            .pay_offer(TEST_OFFER.to_string(), 2000, Some("payment from lni".to_string()))
+            .pay_offer(TEST_RECEIVER_OFFER.to_string(), 2000, Some("payment from lni".to_string()))
             .await
         {
             Ok(resp) => {

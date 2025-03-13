@@ -64,9 +64,9 @@ mod tests {
             dotenv().ok();
             env::var("CLN_RUNE").expect("CLN_RUNE must be set")
         };
-        static ref TEST_CLN2_OFFER: String = {
+        static ref PHOENIX_MOBILE_OFFER: String = {
             dotenv().ok();
-            env::var("TEST_CLN2_OFFER").expect("TEST_CLN2_OFFER must be set")
+            env::var("PHOENIX_MOBILE_OFFER").expect("PHOENIX_MOBILE_OFFER must be set")
         };
         static ref NODE: ClnNode = {
             ClnNode::new(ClnConfig {
@@ -93,7 +93,7 @@ mod tests {
     async fn test_pay_offer() {
         match NODE
             .pay_offer(
-                TEST_CLN2_OFFER.to_string(),
+                PHOENIX_MOBILE_OFFER.to_string(),
                 3000,
                 Some("from LNI test".to_string()),
             )

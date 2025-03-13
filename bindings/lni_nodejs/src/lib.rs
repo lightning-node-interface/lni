@@ -2,12 +2,12 @@
 
 extern crate napi_derive;
 
-mod phoenixd;
-
 pub use lni::ApiError;
-pub use phoenixd::PhoenixdNode;
 pub use lni::types::*;
-pub use lni::types::{Transaction};
+pub use lni::types::{Transaction, InvoiceType};
 
-mod database;
-pub use database::Db;
+mod phoenixd;
+pub use phoenixd::PhoenixdNode;
+
+mod cln;
+pub use cln::ClnNode;

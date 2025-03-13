@@ -120,7 +120,7 @@ node main.mjs
 PHOENIXD_URL=http://localhost:9740
 PHOENIXD_PASSWORD=YOUR_HTTP_PASSWORD
 PHOENIXD_TEST_PAYMENT_HASH=YOUR_TEST_PAYMENT_HASH
-TEST_OFFER=lno***
+TEST_RECEIVER_OFFER=lno***
 
 CLN_URL=http://localhost:3010
 CLN_RUNE=YOUR_RUNE
@@ -132,7 +132,7 @@ Bindings
 - nodejs 
     - napi_rs
     - https://napi.rs/docs/introduction/simple-package
-    - `cd bindings/lni_nodejs && cargo build --release && yarn build`
+    - `cd bindings/lni_nodejs && cargo clean && cargo build --release && yarn && yarn build`
     - test `node main.mjs`
 
 - nodejs - native modules (electron, vercel etc..)

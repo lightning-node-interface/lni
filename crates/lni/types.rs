@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
