@@ -27,3 +27,37 @@ pub struct PayResponse {
     pub payment_preimage: String,
     pub status: String,
 }
+
+
+#[derive(Debug, Deserialize)]
+pub struct PaidOutpoint {
+    pub txid: String,
+    pub outnum: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Invoice {
+    pub label: String,
+    pub bolt11: Option<String>,
+    pub bolt12: Option<String>,
+    pub payment_hash: String,
+    pub status: String, // "paid" "unpaid" "expired"
+    pub pay_index: Option<i32>,
+    pub amount_received_msat: Option<i64>,
+    pub paid_at: Option<i64>,
+    pub payment_preimage: Option<String>,
+    pub description: Option<String>,
+    pub expires_at: i64,
+    pub created_index: i32,
+    pub updated_index: Option<i32>,
+    pub amount_msat: Option<i64>,
+    pub local_offer_id: Option<String>,
+    pub invreq_payer_note: Option<String>,
+    pub paid_outpoint: Option<PaidOutpoint>,
+
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InvoicesResponse {
+    pub invoices: Vec<Invoice>,
+}

@@ -37,10 +37,6 @@ async function phoenixd() {
   const txns = await node.listTransactions({
     from: 0,
     until: 0,
-    limit: 10,
-    offset: 0,
-    unpaid: false,
-    invoiceType: "all",
   });
   console.log("Transactions:", txns);
 }
@@ -54,20 +50,20 @@ async function cln() {
   const info = await node.getInfo();
   console.log("Node info:", info);
 
-  // const configRes = await node.getConfig();
-  // console.log("Config:", configRes.url);
+  const configRes = await node.getConfig();
+  console.log("Config:", configRes.url);
 
-  // const invoice = await node.makeInvoice({
-  //   amountMsats: 1000,
-  //   description: "test invoice",
-  //   invoiceType: InvoiceType.Bolt11,
-  // });
-  // console.log("Invoice:", invoice);
+  const invoice = await node.makeInvoice({
+    amountMsats: 1000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt11,
+  });
+  console.log("Invoice:", invoice);
 
-  // const lookupInvoice = await node.lookupInvoice(
-  //   process.env.PHOENIXD_TEST_PAYMENT_HASH
-  // );
-  // console.log("lookupInvoice:", lookupInvoice);
+  const lookupInvoice = await node.lookupInvoice(
+    process.env.CLN_TEST_PAYMENT_HASH
+  );
+  console.log("lookupInvoice:", lookupInvoice);
 
   const payOffer = await node.payOffer(
     process.env.TEST_RECEIVER_OFFER,
@@ -76,19 +72,15 @@ async function cln() {
   );
   console.log("payOffer:", payOffer);
 
-  // const txns = await node.listTransactions({
-  //   from: 0,
-  //   until: 0,
-  //   limit: 10,
-  //   offset: 0,
-  //   unpaid: false,
-  //   invoiceType: "all",
-  // });
-  // console.log("Transactions:", txns);
+  const txns = await node.listTransactions({
+    from: 0,
+    limit: 10,
+  });
+  console.log("Transactions:", txns);
 }
 
 async function main() {
-  // phoenixd();
+  phoenixd();
   cln();
 }
 

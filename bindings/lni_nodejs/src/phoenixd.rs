@@ -90,17 +90,14 @@ impl PhoenixdNode {
   #[napi]
   pub async fn list_transactions(
     &self,
-    params: lni::phoenixd::lib::ListTransactionsParams,
+    params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
     let txns = lni::phoenixd::api::list_transactions(
       self.inner.url.clone(),
       self.inner.password.clone(),
       params.from,
-      params.until,
       params.limit,
-      params.offset,
-      params.unpaid,
-      params.invoice_type,
+      None,
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)

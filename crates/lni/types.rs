@@ -199,3 +199,11 @@ pub struct PaymentFailedEventProperties {
 }
 
 pub const DEFAULT_INVOICE_EXPIRY: i64 = 86400;
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListTransactionsParams {
+    pub from: i64,
+    pub limit: i64,
+    pub payment_hash: Option<String>,
+}

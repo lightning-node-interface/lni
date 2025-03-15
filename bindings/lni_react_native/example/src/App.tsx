@@ -47,11 +47,8 @@ export default function App() {
 
       let txnParams: ListTransactionsParams = {
         from: BigInt(0),
-        offset: BigInt(0),
         limit: BigInt(10),
-        invoiceType: 'all',
-        unpaid: false,
-        until: BigInt(0),
+        payment_hash: null,
       };
       const txns = await node.listTransactions(txnParams);
       setTxns(JSON.stringify(txns[0], bigIntReplacer));

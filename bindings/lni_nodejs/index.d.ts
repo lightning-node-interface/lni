@@ -20,5 +20,7 @@ export declare class ClnNode {
   getRune(): string
   getConfig(): ClnConfig
   getInfo(): Promise<NodeInfo>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
 }

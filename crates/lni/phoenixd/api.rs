@@ -1,97 +1,13 @@
 use super::lib::Bolt11Resp;
 use crate::{ApiError, InvoiceType, NodeInfo, PayInvoiceResponse, Transaction};
-use serde::{Deserialize, Serialize};
 use serde_urlencoded;
-
-/// https://phoenix.acinq.co/server/api
+use super::types::{Bolt11Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse}; 
 
 // TODO
 // list_channels
 // get_balance
 
-#[derive(Debug, Deserialize)]
-pub struct InfoResponse {
-    #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
-    pub node_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Bolt11Req {
-    #[serde(rename = "amountSat")]
-    pub amount_sat: i64,
-    #[serde(rename = "expirySeconds")]
-    pub expiry_seconds: i64,
-    #[serde(rename = "externalId")]
-    pub external_id: Option<String>,
-    #[serde(rename = "description")]
-    pub description: Option<String>,
-    #[serde(rename = "webhookUrl")]
-    pub webhook_url: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InvoiceResponse {
-    #[serde(rename = "preimage")]
-    pub preimage: String,
-    #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
-    #[serde(rename = "receivedSat")]
-    pub received_sat: i64,
-    #[serde(rename = "fees")]
-    pub fees: i64,
-    #[serde(rename = "completedAt")]
-    pub completed_at: i64,
-    #[serde(rename = "createdAt")]
-    pub created_at: i64,
-    #[serde(rename = "isPaid")]
-    pub is_paid: bool,
-    #[serde(rename = "payerKey")]
-    pub payer_key: Option<String>,
-    #[serde(rename = "invoice")]
-    pub invoice: Option<String>,
-    #[serde(rename = "description")]
-    pub description: Option<String>,
-    #[serde(rename = "payerNote")]
-    pub payer_note: Option<String>, // used in bolt12
-    #[serde(rename = "externalId")]
-    pub external_id: Option<String>, // used in bolt11
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OutgoingPaymentResponse {
-    #[serde(rename = "paymentId")]
-    pub payment_id: Option<String>,
-    #[serde(rename = "preimage")]
-    pub preimage: String,
-    #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
-    #[serde(rename = "sent")]
-    pub sent: i64,
-    #[serde(rename = "fees")]
-    pub fees: i64,
-    #[serde(rename = "createdAt")]
-    pub created_at: i64,
-    #[serde(rename = "completedAt")]
-    pub completed_at: i64,
-    #[serde(rename = "isPaid")]
-    pub is_paid: bool,
-    #[serde(rename = "payerNote")]
-    pub payer_note: Option<String>, // used in bolt12
-    #[serde(rename = "externalId")]
-    pub external_id: Option<String>, // used in bolt11
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PayResponse {
-    #[serde(rename = "paymentId")]
-    pub payment_id: Option<String>,
-    #[serde(rename = "paymentPreimage")]
-    pub preimage: String,
-    #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
-    #[serde(rename = "routingFeeSat")]
-    pub routing_fee_sat: i64,
-}
+// https://phoenix.acinq.co/server/api
 
 pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
     let url = format!("{}/getinfo", url);
@@ -262,11 +178,13 @@ pub fn list_transactions(
     url: String,
     password: String,
     from: i64,
-    until: i64,
+    // until: i64,
     limit: i64,
-    offset: i64,
-    unpaid: bool,
-    invoice_type: String, // not currently used but included for parity
+    payment_hash: Option<String>,
+    // offset: i64,
+    // unpaid: bool,
+    // invoice_type: Option<String>, // not currently used but included for parity
+    // search_term: Option<String>,  // not currently used but included for parity
 ) -> Result<Vec<Transaction>, ApiError> {
     let client = reqwest::blocking::Client::new();
 
@@ -275,16 +193,16 @@ pub fn list_transactions(
     if from != 0 {
         incoming_params.push(("from", (from * 1000).to_string()));
     }
-    if until != 0 {
-        incoming_params.push(("to", (until * 1000).to_string()));
-    }
     if limit != 0 {
         incoming_params.push(("limit", limit.to_string()));
     }
-    if offset != 0 {
-        incoming_params.push(("offset", offset.to_string()));
-    }
-    incoming_params.push(("all", unpaid.to_string()));
+    // if until != 0 {
+    //     incoming_params.push(("to", (until * 1000).to_string()));
+    // }
+    // if offset != 0 {
+    //     incoming_params.push(("offset", offset.to_string()));
+    // }
+    incoming_params.push(("all", "false".to_string()));
 
     // Build the final incoming URL with query
     let incoming_query = serde_urlencoded::to_string(&incoming_params).unwrap();
@@ -332,16 +250,16 @@ pub fn list_transactions(
     if from != 0 {
         outgoing_params.push(("from", (from * 1000).to_string()));
     }
-    if until != 0 {
-        outgoing_params.push(("to", (until * 1000).to_string()));
-    }
     if limit != 0 {
         outgoing_params.push(("limit", limit.to_string()));
     }
-    if offset != 0 {
-        outgoing_params.push(("offset", offset.to_string()));
-    }
-    outgoing_params.push(("all", unpaid.to_string()));
+    // if until != 0 {
+    //     outgoing_params.push(("to", (until * 1000).to_string()));
+    // }
+    // if offset != 0 {
+    //     outgoing_params.push(("offset", offset.to_string()));
+    // }
+    // outgoing_params.push(("all", unpaid.to_string()));
 
     // Build the final outgoing URL with query
     let outgoing_query = serde_urlencoded::to_string(&outgoing_params).unwrap();

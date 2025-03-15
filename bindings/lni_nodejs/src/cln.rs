@@ -58,16 +58,18 @@ impl ClnNode {
   //   Ok(txn)
   // }
 
-  // #[napi]
-  // pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-  //   let txn = lni::phoenixd::api::lookup_invoice(
-  //     self.inner.url.clone(),
-  //     self.inner.password.clone(),
-  //     payment_hash,
-  //   )
-  //   .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-  //   Ok(txn)
-  // }
+  #[napi]
+  pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
+    let txn = lni::cln::api::lookup_invoice(
+      self.inner.url.clone(),
+      self.inner.rune.clone(),
+      Some(payment_hash),
+      None,
+      None,
+    )
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txn.into_iter().next().ok_or_else(|| napi::Error::from_reason("No transaction found"))?)
+  }
 
   #[napi]
   pub async fn pay_offer(
@@ -87,24 +89,20 @@ impl ClnNode {
     Ok(offer)
   }
 
-  // #[napi]
-  // pub async fn list_transactions(
-  //   &self,
-  //   params: lni::phoenixd::lib::ListTransactionsParams,
-  // ) -> napi::Result<Vec<lni::Transaction>> {
-  //   let txns = lni::phoenixd::api::list_transactions(
-  //     self.inner.url.clone(),
-  //     self.inner.password.clone(),
-  //     params.from,
-  //     params.until,
-  //     params.limit,
-  //     params.offset,
-  //     params.unpaid,
-  //     params.invoice_type,
-  //   )
-  //   .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-  //   Ok(txns)
-  // }
+  #[napi]
+  pub async fn list_transactions(
+    &self,
+    params: lni::types::ListTransactionsParams,
+  ) -> napi::Result<Vec<lni::Transaction>> {
+    let txns = lni::cln::api::list_transactions(
+      self.inner.url.clone(),
+      self.inner.rune.clone(),
+      params.from,
+      params.limit,
+    )
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txns)
+  }
 }
 
 // #[cfg(test)]

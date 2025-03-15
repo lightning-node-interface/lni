@@ -1,7 +1,10 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{phoenixd::api::*, ApiError, InvoiceType, PayInvoiceResponse, Transaction};
+use crate::{
+    phoenixd::api::*, ApiError, InvoiceType, ListTransactionsParams, PayInvoiceResponse,
+    Transaction,
+};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -35,17 +38,6 @@ pub struct PhoenixdMakeInvoiceParams {
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
-}
-
-#[cfg_attr(feature = "napi_rs", napi(object))]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ListTransactionsParams {
-    pub from: i64,
-    pub until: i64,
-    pub limit: i64,
-    pub offset: i64,
-    pub unpaid: bool,
-    pub invoice_type: String, // all
 }
 
 impl PhoenixdNode {
@@ -107,11 +99,8 @@ impl PhoenixdNode {
             self.url.clone(),
             self.password.clone(),
             params.from,
-            params.until,
             params.limit,
-            params.offset,
-            params.unpaid,
-            params.invoice_type,
+            None,
         )
     }
 }
@@ -190,7 +179,11 @@ mod tests {
     #[test]
     async fn test_pay_offer() {
         match NODE
-            .pay_offer(TEST_RECEIVER_OFFER.to_string(), 2000, Some("payment from lni".to_string()))
+            .pay_offer(
+                TEST_RECEIVER_OFFER.to_string(),
+                2000,
+                Some("payment from lni".to_string()),
+            )
             .await
         {
             Ok(resp) => {
@@ -207,11 +200,8 @@ mod tests {
     async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
-            until: 0,
             limit: 10,
-            offset: 0,
-            unpaid: false,
-            invoice_type: "all".to_string(),
+            payment_hash: None,
         };
         match NODE.list_transactions(params).await {
             Ok(txns) => {

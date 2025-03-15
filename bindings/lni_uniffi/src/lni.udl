@@ -222,9 +222,6 @@ enum InvoiceType {
 
 dictionary ListTransactionsParams {
     i64 from;
-    i64 until;
     i64 limit;
-    i64 offset;
-    boolean unpaid;
-    string invoice_type;
+    string? payment_hash;
 };
