@@ -106,6 +106,7 @@ yarn start
 
 `*troubleshooting react-natve`: 
 - if you get an error like `uniffiEnsureInitialized`, then you might need to kill the app and restart. (ios simulator - double tap home button then swipe away app)
+- try updating the pods for ios `cd example/ios && pod install --repo-update && cd ../`
 - for ios open the xcode app - lni/bindings/lni_react_native/example/ios/LniExample.xcworkspace
     - Then click the project in the left "LniExample" to select for the context menu
     - In the top click "Product -> Clean build folder" and then build and run

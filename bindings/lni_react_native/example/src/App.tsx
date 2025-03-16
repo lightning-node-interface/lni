@@ -4,7 +4,7 @@ import {
   PhoenixdNode,
   InvoiceType,
   type ListTransactionsParams,
-} from '../../src';
+} from 'react-native-lni';
 import {
   PHOENIXD_URL,
   PHOENIXD_PASSWORD,
@@ -32,8 +32,8 @@ export default function App() {
         password: PHOENIXD_PASSWORD,
       });
 
-      //const info = await node.getInfo();
-      // setPubKey(info.pubkey);
+      const info = await node.getInfo();
+      setPubKey(info.pubkey);
 
       const offerResp = await node.makeInvoice({
         invoiceType: InvoiceType.Bolt12,
