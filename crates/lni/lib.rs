@@ -31,6 +31,7 @@ pub mod cln {
     pub mod lib;
     pub mod api;
     pub mod types;
+    pub use lib::{ClnConfig, ClnNode};
 }
 
 pub mod types;

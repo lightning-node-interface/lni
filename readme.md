@@ -104,7 +104,12 @@ cat example/src/App.tsx
 yarn start
 ```
 
-`*troubleshooting react-natve`: if you get an error like `uniffiEnsureInitialized`, then you might need to kill the app and restart. (ios simulator - double tap home button then swipe away app)
+`*troubleshooting react-natve`: 
+- if you get an error like `uniffiEnsureInitialized`, then you might need to kill the app and restart. (ios simulator - double tap home button then swipe away app)
+- for ios open the xcode app - lni/bindings/lni_react_native/example/ios/LniExample.xcworkspace
+    - Then click the project in the left "LniExample" to select for the context menu
+    - In the top click "Product -> Clean build folder" and then build and run
+- Lastly uninstalling the app from the mobile device
 
 nodejs 
 ```
@@ -188,7 +193,7 @@ pub struct PhoenixdNode {
 
 Tor
 ===
-Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy.
+Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy. (TODO WIP)
 
 
 Inspiration
@@ -260,15 +265,16 @@ Todo
 - [X] uniffi bindings for Android and IOS
 - [X] react-native - uniffi-bindgen-react-native
 - [X] async promise architecture for bindings
+- [ ] Tor Socks5 fetch
 - [ ] implement lightning nodes
-    - [ ] phoenixd
-    - [ ] cln
-    - [ ] lndk
-    - [ ] ldknode
+    - [X] phoenixd
+    - [X] cln
     - [ ] lnd
+    - [ ] lndk
+    - [ ] ldk_node
     - [ ] eclair
-    - [ ] Strike? (BOLT 12 support, BOLT 11 blinded path support?)
-    - [ ] NWC? (AlbyHub - blinded path support?)
+    - [ ] strike?? (BOLT 12 support, BOLT 11 blinded path support?)
+    - [ ] nwc?? (AlbyHub - blinded path support?)
 
 
 To Research

@@ -4,7 +4,6 @@ import {
   PhoenixdNode,
   InvoiceType,
   type ListTransactionsParams,
-  Db,
 } from '../../src';
 import {
   PHOENIXD_URL,
@@ -22,14 +21,19 @@ export default function App() {
   const [payment, setPayment] = useState<any>('');
 
   const main = async () => {
+    phoenixd();
+    cln();
+  };
+
+  async function phoenixd() {
     try {
       const node = new PhoenixdNode({
         url: PHOENIXD_URL,
         password: PHOENIXD_PASSWORD,
       });
 
-      const info = await node.getInfo();
-      setPubKey(info.pubkey);
+      //const info = await node.getInfo();
+      // setPubKey(info.pubkey);
 
       const offerResp = await node.makeInvoice({
         invoiceType: InvoiceType.Bolt12,
@@ -48,25 +52,10 @@ export default function App() {
       let txnParams: ListTransactionsParams = {
         from: BigInt(0),
         limit: BigInt(10),
-        payment_hash: null,
+        paymentHash: undefined, // TODO figure out how to exclude this instead of passing in undefined
       };
       const txns = await node.listTransactions(txnParams);
       setTxns(JSON.stringify(txns[0], bigIntReplacer));
-
-      // const path = `${RNFS.DocumentDirectoryPath}/test.json`;
-      // const db = new Db('test.json');
-      // db.writePayment({
-      //   paymentId: '1',
-      //   circId: '1',
-      //   round: BigInt(1),
-      //   relayFingerprint: '1',
-      //   updatedAt: BigInt(1),
-      //   amountMsats: BigInt(1),
-      // });
-      // db.save();
-
-      // const paymentRes = db.lookupPayment('1');
-      // setPayment(JSON.stringify(paymentRes, bigIntReplacer));
 
       const paymentResp = await node.payOffer(
         TEST_RECEIVER_OFFER,
@@ -78,7 +67,8 @@ export default function App() {
     } catch (e) {
       console.error('Error', e);
     }
-  };
+  }
+  function cln() {}
 
   useEffect(() => {
     setTimeout(() => {

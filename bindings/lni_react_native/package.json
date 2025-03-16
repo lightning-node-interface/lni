@@ -38,7 +38,7 @@
   ],
   "scripts": {
     "start": "yarn example start",
-    "ubrn:ios": "ubrn build ios     --config ubrn.config.yaml --and-generate && (cd example/ios && pod install)",
+    "ubrn:ios": "ubrn build ios --config ubrn.config.yaml --and-generate && (cd example/ios && pod install)",
     "ubrn:android": "ubrn build android --config ubrn.config.yaml --and-generate",
     "ubrn:checkout": "ubrn checkout      --config ubrn.config.yaml",
     "ubrn:clean": "rm -Rf cpp/ android/src/main/java ios/ src/Native* src/generated/ src/index.ts*",
@@ -206,6 +206,6 @@
     "version": "0.45.5"
   },
   "dependencies": {
-    "uniffi-bindgen-react-native": "^0.28.3-1"
+    "uniffi-bindgen-react-native": "^0.28.3-3"
   }
 }
