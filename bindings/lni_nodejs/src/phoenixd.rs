@@ -1,4 +1,4 @@
-use lni::{phoenixd::lib::PhoenixdConfig, phoenixd::lib::PhoenixdMakeInvoiceParams};
+use lni::{phoenixd::lib::PhoenixdConfig, CreateInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -40,11 +40,11 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub async fn make_invoice(
+  pub async fn create_invoice(
     &self,
-    params: PhoenixdMakeInvoiceParams,
+    params: CreateInvoiceParams,
   ) -> napi::Result<lni::Transaction> {
-    let txn = lni::phoenixd::api::make_invoice(
+    let txn = lni::phoenixd::api::create_invoice(
       self.inner.url.clone(),
       self.inner.password.clone(),
       params.invoice_type,

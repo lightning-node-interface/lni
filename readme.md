@@ -236,9 +236,9 @@ sequenceDiagram
 
     Note over App,LN: Example: Create Invoice
     
-    App->>Binding: node.makeInvoice(params)
-    Binding->>LNI: make_invoice(params)
-    LNI->>Node: api::make_invoice(url, auth, params)
+    App->>Binding: node.createInvoice(params)
+    Binding->>LNI: create_invoice(params)
+    LNI->>Node: api::create_invoice(url, auth, params)
     Node->>LN: HTTP/REST request to create invoice
     LN-->>Node: Response with invoice data
     Node->>Node: Parse response

@@ -35,7 +35,7 @@ export default function App() {
       const info = await node.getInfo();
       setPubKey(info.pubkey);
 
-      const offerResp = await node.makeInvoice({
+      const offerResp = await node.createInvoice({
         invoiceType: InvoiceType.Bolt12,
         amountMsats: BigInt(1000),
         description: 'Test invoice',

@@ -1,6 +1,8 @@
-use super::types::{FetchInvoiceResponse, InfoResponse, InvoicesResponse, PayResponse};
+use super::types::{
+    Bolt11Resp, Bolt12Resp, FetchInvoiceResponse, InfoResponse, InvoicesResponse, PayResponse,
+};
 use crate::types::NodeInfo;
-use crate::{ApiError, PayInvoiceResponse, Transaction};
+use crate::{ApiError, InvoiceType, PayInvoiceResponse, Transaction};
 use reqwest::header;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
@@ -27,6 +29,107 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
         block_hash: "".to_string(),
     };
     Ok(node_info)
+}
+
+// invoice - amount_msat label description expiry fallbacks preimage exposeprivatechannels cltv
+
+pub async fn create_invoice(
+    url: String,
+    rune: String,
+    invoice_type: InvoiceType,
+    amount_msats: Option<i64>,
+    description: Option<String>,
+    description_hash: Option<String>,
+    expiry: Option<i64>,
+) -> Result<Transaction, ApiError> {
+    let client = clnrest_client(rune);
+    match invoice_type {
+        InvoiceType::Bolt11 => {
+            let description_clone = description.clone();
+            let req_url = format!("{}/v1/invoice", url);
+            let response: reqwest::blocking::Response = client
+                .post(&req_url)
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "description": description,
+                    "amount_msat": amount_msats,
+                    "expiry": expiry,
+                    "label": format!("lni.{}", rand::random::<u32>()),
+                }))
+                .send()
+                .unwrap();
+
+            println!("Status: {}", response.status());
+
+            let invoice_str = response.text().unwrap();
+            let invoice_str = invoice_str.as_str();
+            println!("Bolt11 {}", &invoice_str.to_string());
+
+            let bolt11_resp: Bolt11Resp =
+                serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
+                    reason: e.to_string(),
+                })?;
+
+            Ok(Transaction {
+                type_: "incoming".to_string(),
+                invoice: bolt11_resp.bolt11,
+                preimage: "".to_string(),
+                payment_hash: bolt11_resp.payment_hash,
+                amount_msats: amount_msats.unwrap_or(0),
+                fees_paid: 0,
+                created_at: 0,
+                expires_at: expiry.unwrap_or(3600),
+                settled_at: 0,
+                description: description_clone.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some("".to_string()),
+            })
+        }
+        InvoiceType::Bolt12 => {
+            let req_url = format!("{}/v1/offer", url);
+            let mut params: Vec<(&str, Option<String>)> = vec![];
+            if let Some(amount_msats) = amount_msats {
+                params.push(("amount", Some(format!("{}msat", amount_msats))))
+            } else {
+                params.push(("amount", Some("any".to_string())))
+            }
+            let description_clone = description.clone();
+            if let Some(description) = description_clone {
+                params.push(("description", Some(description)))
+            }
+            let response: reqwest::blocking::Response = client
+                .post(&req_url)
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!(params
+                    .into_iter()
+                    .filter_map(|(k, v)| v.map(|v| (k, v)))
+                    .collect::<serde_json::Value>()))
+                .send()
+                .unwrap();
+            let offer_str = response.text().unwrap();
+            let offer_str = offer_str.as_str();
+            let bolt12resp: Bolt12Resp =
+                serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
+                    reason: e.to_string(),
+                })?;
+            Ok(Transaction {
+                type_: "incoming".to_string(),
+                invoice: bolt12resp.bolt12,
+                preimage: "".to_string(),
+                payment_hash: "".to_string(),
+                amount_msats: amount_msats.unwrap_or(0),
+                fees_paid: 0,
+                created_at: 0,
+                expires_at: expiry.unwrap_or_default(),
+                settled_at: 0,
+                description: description.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some(bolt12resp.offer_id.unwrap_or_default()),
+            })
+        }
+    }
 }
 
 pub async fn pay_offer(
@@ -128,7 +231,10 @@ pub fn lookup_invoice(
         .post(&list_invoices_url)
         .header("Content-Type", "application/json")
         //.json(&serde_json::json!(params))
-        .json(&serde_json::json!(params.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))).collect::<serde_json::Value>()))
+        .json(&serde_json::json!(params
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect::<serde_json::Value>()))
         .send()
         .unwrap();
     let response_text = response.text().unwrap();

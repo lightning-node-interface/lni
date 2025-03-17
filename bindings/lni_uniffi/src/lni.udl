@@ -7,7 +7,7 @@ interface PhoenixdNode {
     NodeInfo get_info();
 
     [Throws=ApiError, Async]
-    Transaction make_invoice(PhoenixdMakeInvoiceParams params);
+    Transaction create_invoice(CreateInvoiceParams params);
 
     [Throws=ApiError, Async]
     Transaction lookup_invoice(string payment_hash);
@@ -62,9 +62,9 @@ dictionary PhoenixdConfig {
     string password;
 };
 
-dictionary PhoenixdMakeInvoiceParams {
+dictionary CreateInvoiceParams {
     InvoiceType invoice_type;
-    i64 amount_msats;
+    i64? amount_msats;
     string? description; 
     string? description_hash; 
     i64? expiry;

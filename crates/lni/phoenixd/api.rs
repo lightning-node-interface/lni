@@ -1,4 +1,4 @@
-use super::lib::Bolt11Resp;
+use crate::phoenixd::types::Bolt11Resp;
 use crate::{ApiError, InvoiceType, NodeInfo, PayInvoiceResponse, Transaction};
 use serde_urlencoded;
 use super::types::{Bolt11Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse}; 
@@ -29,11 +29,11 @@ pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-pub async fn make_invoice(
+pub async fn create_invoice(
     url: String,
     password: String,
     invoice_type: InvoiceType,
-    amount_msats: i64,
+    amount_msats: Option<i64>,
     description: Option<String>,
     description_hash: Option<String>,
     expiry: Option<i64>,
@@ -45,7 +45,7 @@ pub async fn make_invoice(
 
             let bolt11_req = Bolt11Req {
                 description: description.clone(),
-                amount_sat: amount_msats / 1000,
+                amount_sat: amount_msats.unwrap_or_default() / 1000,
                 expiry_seconds: expiry.unwrap_or(3600),
                 external_id: None, // TODO
                 webhook_url: None, // TODO
@@ -74,7 +74,7 @@ pub async fn make_invoice(
                 invoice: bolt11_resp.serialized,
                 preimage: "".to_string(),
                 payment_hash: bolt11_resp.payment_hash,
-                amount_msats,
+                amount_msats: amount_msats.unwrap_or(0),
                 fees_paid: 0,
                 created_at: 0,
                 expires_at: expiry.unwrap_or(3600),
@@ -98,7 +98,7 @@ pub async fn make_invoice(
                 invoice: offer_str,
                 preimage: "".to_string(),
                 payment_hash: "".to_string(),
-                amount_msats,
+                amount_msats: amount_msats.unwrap_or(0),
                 fees_paid: 0,
                 created_at: 0,
                 expires_at: expiry.unwrap_or_default(),

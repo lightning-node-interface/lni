@@ -1,4 +1,8 @@
 use serde::{Deserialize, Serialize};
+use crate::InvoiceType;
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
+
 
 #[derive(Debug, Deserialize)]
 pub struct InfoResponse {
@@ -82,4 +86,16 @@ pub struct PayResponse {
     pub payment_hash: String,
     #[serde(rename = "routingFeeSat")]
     pub routing_fee_sat: i64,
+}
+
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Bolt11Resp {
+    #[serde(rename = "amountSat")]
+    pub amount_sat: i64,
+    #[serde(rename = "paymentHash")]
+    pub payment_hash: String,
+    #[serde(rename = "serialized")]
+    pub serialized: String,
 }

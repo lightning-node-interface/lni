@@ -2,10 +2,11 @@
 use napi_derive::napi;
 
 use crate::{
-    phoenixd::api::*, ApiError, InvoiceType, ListTransactionsParams, PayInvoiceResponse,
+    phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceResponse,
     Transaction,
 };
-use serde::{Deserialize, Serialize};
+
+use crate::CreateInvoiceParams;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct PhoenixdConfig {
@@ -17,27 +18,6 @@ pub struct PhoenixdConfig {
 pub struct PhoenixdNode {
     pub url: String,
     pub password: String,
-}
-
-#[cfg_attr(feature = "napi_rs", napi(object))]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Bolt11Resp {
-    #[serde(rename = "amountSat")]
-    pub amount_sat: i64,
-    #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
-    #[serde(rename = "serialized")]
-    pub serialized: String,
-}
-
-#[cfg_attr(feature = "napi_rs", napi(object))]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PhoenixdMakeInvoiceParams {
-    pub invoice_type: InvoiceType,
-    pub amount_msats: i64,
-    pub description: Option<String>,
-    pub description_hash: Option<String>,
-    pub expiry: Option<i64>,
 }
 
 impl PhoenixdNode {
@@ -52,15 +32,15 @@ impl PhoenixdNode {
         crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
     }
 
-    pub async fn make_invoice(
+    pub async fn create_invoice(
         &self,
-        params: PhoenixdMakeInvoiceParams,
+        params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
-        make_invoice(
+        create_invoice(
             self.url.clone(),
             self.password.clone(),
             params.invoice_type,
-            params.amount_msats,
+            Some(params.amount_msats.unwrap_or_default()),
             params.description,
             params.description_hash,
             params.expiry,
@@ -107,6 +87,8 @@ impl PhoenixdNode {
 
 #[cfg(test)]
 mod tests {
+    use crate::InvoiceType;
+
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
@@ -152,20 +134,38 @@ mod tests {
     }
 
     #[test]
-    async fn test_make_invoice() {
+    async fn test_create_invoice() {
         let amount_msats = 1000;
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
         let expiry = 3600;
-        let params = PhoenixdMakeInvoiceParams {
+        let params = CreateInvoiceParams {
             invoice_type: InvoiceType::Bolt11,
-            amount_msats,
+            amount_msats: Some(amount_msats),
             description: Some(description),
             description_hash: Some(description_hash),
             expiry: Some(expiry),
         };
 
-        match NODE.make_invoice(params).await {
+        match NODE.create_invoice(params).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+
+        let bolt12_params = CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt12,
+            amount_msats: None, // must be None since the offer is already generated 
+            description: None, // must be None since the offer is already generated 
+            description_hash: None,
+            expiry: Some(expiry),
+        };
+
+        match NODE.create_invoice(bolt12_params).await {
             Ok(txn) => {
                 println!("txn: {:?}", txn);
                 assert!(!txn.invoice.is_empty(), "Invoice should not be empty");

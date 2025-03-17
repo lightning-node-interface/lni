@@ -207,3 +207,14 @@ pub struct ListTransactionsParams {
     pub limit: i64,
     pub payment_hash: Option<String>,
 }
+
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateInvoiceParams {
+    pub invoice_type: InvoiceType,
+    pub amount_msats: Option<i64>,
+    pub description: Option<String>,
+    pub description_hash: Option<String>,
+    pub expiry: Option<i64>,
+}

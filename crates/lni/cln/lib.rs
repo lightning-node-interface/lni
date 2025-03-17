@@ -1,7 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{ApiError, ListTransactionsParams, PayInvoiceResponse};
+use crate::{ApiError, CreateInvoiceParams, ListTransactionsParams, PayInvoiceResponse, Transaction};
 use crate::types::NodeInfo;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -26,6 +26,22 @@ impl ClnNode {
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::cln::api::get_info(self.url.clone(), self.rune.clone())
+    }
+
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
+        crate::cln::api::create_invoice(
+            self.url.clone(),
+            self.rune.clone(),
+            params.invoice_type,
+            params.amount_msats,
+            params.description,
+            params.description_hash,
+            params.expiry,
+        )
+        .await
     }
 
     pub async fn pay_offer(
@@ -77,6 +93,8 @@ impl ClnNode {
 
 #[cfg(test)]
 mod tests {
+    use crate::InvoiceType;
+
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
@@ -117,6 +135,50 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to get offer: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_create_invoice() {
+        let amount_msats = 3000;
+        let description = "Test invoice".to_string();
+        let description_hash = "".to_string();
+        let expiry = 3600;
+        let params = CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(amount_msats),
+            description: Some(description.clone()),
+            description_hash: Some(description_hash.clone()),
+            expiry: Some(expiry),
+        };
+
+        match NODE.create_invoice(params).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+
+        let params_bolt12 = CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt12,
+            amount_msats: None,
+            // amount_msats: Some(amount_msats),
+            description: None,
+            // description: Some(description.clone()),
+            description_hash: None,
+            expiry: None,
+        };
+        match NODE.create_invoice(params_bolt12).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to make invoice: {:?}", e);
             }
         }
     }

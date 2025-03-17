@@ -61,3 +61,23 @@ pub struct Invoice {
 pub struct InvoicesResponse {
     pub invoices: Vec<Invoice>,
 }
+
+
+#[derive(Debug, Deserialize)]
+pub struct Bolt11Resp {
+    pub payment_hash: String,
+    pub expires_at: f64,
+    pub bolt11: String,
+    pub payment_secret: String,
+    pub created_index: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Bolt12Resp {
+    pub offer_id: Option<String>,
+    pub bolt12: String,
+    pub active: bool,
+    pub single_use: bool,
+    pub used: bool,
+    pub created: bool,
+}

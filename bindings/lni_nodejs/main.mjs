@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode } from "./index.js";
+import { PhoenixdNode, ClnNode, InvoiceType } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -15,10 +15,10 @@ async function phoenixd() {
   const configRes = await node.getConfig();
   console.log("Config:", configRes.url);
 
-  const invoice = await node.makeInvoice({
+  const invoice = await node.createInvoice({
     amountMsats: 1000,
     description: "test invoice",
-    invoiceType: "Bolt11",
+    invoiceType: InvoiceType.Bolt11,
   });
   console.log("Invoice:", invoice);
 
@@ -36,7 +36,7 @@ async function phoenixd() {
 
   const txns = await node.listTransactions({
     from: 0,
-    until: 0,
+    limit: 10,
   });
   console.log("Transactions:", txns);
 }
@@ -53,12 +53,19 @@ async function cln() {
   const configRes = await node.getConfig();
   console.log("Config:", configRes.url);
 
-  const invoice = await node.makeInvoice({
+  const invoice = await node.createInvoice({
     amountMsats: 1000,
     description: "test invoice",
     invoiceType: InvoiceType.Bolt11,
   });
   console.log("Invoice:", invoice);
+
+  const bolt12Invoice = await node.createInvoice({
+    amountMsats: 3000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt12,
+  });
+  console.log("bolt12Invoice:", bolt12Invoice);
 
   const lookupInvoice = await node.lookupInvoice(
     process.env.CLN_TEST_PAYMENT_HASH

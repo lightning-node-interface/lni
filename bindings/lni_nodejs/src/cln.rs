@@ -1,4 +1,4 @@
-use lni::{cln::lib::ClnConfig};
+use lni::{cln::lib::ClnConfig, CreateInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -39,24 +39,24 @@ impl ClnNode {
     Ok(info)
   }
 
-  // #[napi]
-  // pub async fn make_invoice(
-  //   &self,
-  //   params: PhoenixdMakeInvoiceParams,
-  // ) -> napi::Result<lni::Transaction> {
-  //   let txn = lni::phoenixd::api::make_invoice(
-  //     self.inner.url.clone(),
-  //     self.inner.password.clone(),
-  //     params.invoice_type,
-  //     params.amount_msats,
-  //     params.description,
-  //     params.description_hash,
-  //     params.expiry,
-  //   )
-  //   .await
-  //   .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-  //   Ok(txn)
-  // }
+  #[napi]
+  pub async fn create_invoice(
+    &self,
+    params: CreateInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let txn = lni::cln::api::create_invoice(
+      self.inner.url.clone(),
+      self.inner.rune.clone(),
+      params.invoice_type,
+      params.amount_msats,
+      params.description,
+      params.description_hash,
+      params.expiry,
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txn)
+  }
 
   #[napi]
   pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
