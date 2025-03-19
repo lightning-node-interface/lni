@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
+use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub struct Transaction {
     pub created_at: i64,
     pub expires_at: i64,
     pub settled_at: i64,
-    pub payer_note: Option<String>, // used in bolt12 (on phoenixd)
+    pub payer_note: Option<String>,  // used in bolt12 (on phoenixd)
     pub external_id: Option<String>, // used in bolt11 (on phoenixd)
 }
 
@@ -208,13 +208,25 @@ pub struct ListTransactionsParams {
     pub payment_hash: Option<String>,
 }
 
-
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateInvoiceParams {
     pub invoice_type: InvoiceType,
     pub amount_msats: Option<i64>,
+    pub offer: Option<String>,
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
+}
+
+// Pay Code aka BOLT12 Offer
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayCode {
+    pub offer_id: String,
+    pub bolt12: String,
+    pub label: Option<String>,
+    pub active: Option<bool>,
+    pub single_use: Option<bool>,
+    pub used: Option<bool>,
 }

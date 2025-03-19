@@ -1,7 +1,9 @@
+use super::types::{
+    Bolt11Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
+};
 use crate::phoenixd::types::Bolt11Resp;
-use crate::{ApiError, InvoiceType, NodeInfo, PayInvoiceResponse, Transaction};
+use crate::{ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceResponse, Transaction};
 use serde_urlencoded;
-use super::types::{Bolt11Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse}; 
 
 // TODO
 // list_channels
@@ -86,30 +88,39 @@ pub async fn create_invoice(
             })
         }
         InvoiceType::Bolt12 => {
-            let req_url = format!("{}/getoffer", url);
-            let response: reqwest::blocking::Response = client
-                .get(&req_url)
-                .basic_auth("", Some(password))
-                .send()
-                .unwrap();
-            let offer_str = response.text().unwrap();
-            Ok(Transaction {
-                type_: "incoming".to_string(),
-                invoice: offer_str,
-                preimage: "".to_string(),
-                payment_hash: "".to_string(),
-                amount_msats: amount_msats.unwrap_or(0),
-                fees_paid: 0,
-                created_at: 0,
-                expires_at: expiry.unwrap_or_default(),
-                settled_at: 0,
-                description: description.unwrap_or_default(),
-                description_hash: description_hash.unwrap_or_default(),
-                payer_note: Some("".to_string()),
-                external_id: Some("".to_string()),
-            })
+            return Err(ApiError::Json {
+                reason: "phoenixd does not support bolt12 invoices".to_string(),
+            });
         }
     }
+}
+
+// TODO decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
+// Not supported by Phoenixd api so maybe we can use ldk to decode the bolt12 offer?
+pub async fn decode(str: String) -> Result<String, ApiError> {
+    Ok(str)
+}
+
+// TODO On Phoenixd there is not currenly a way to create a new BOLT 12 offer
+
+// Get latest BOLT12 offer
+pub async fn get_offer(url: String, password: String) -> Result<PayCode, ApiError> {
+    let req_url = format!("{}/getoffer", url);
+    let client = reqwest::blocking::Client::new();
+    let response: reqwest::blocking::Response = client
+        .get(&req_url)
+        .basic_auth("", Some(password))
+        .send()
+        .unwrap();
+    let offer_str = response.text().unwrap();
+    Ok(PayCode {
+        offer_id: "".to_string(),
+        bolt12: offer_str.to_string(),
+        label: None,
+        active: None,
+        single_use: None,
+        used: None,
+    })
 }
 
 pub async fn pay_offer(
@@ -135,7 +146,11 @@ pub async fn pay_offer(
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
-        Err(e) => return Err(ApiError::Json { reason: response_text.to_string() }),
+        Err(e) => {
+            return Err(ApiError::Json {
+                reason: response_text.to_string(),
+            })
+        }
     };
     Ok(PayInvoiceResponse {
         payment_hash: pay_resp.payment_hash,
@@ -143,6 +158,9 @@ pub async fn pay_offer(
         fee: pay_resp.routing_fee_sat,
     })
 }
+
+// TODO implement list_offers, currently just one 
+pub async fn list_offers() {}
 
 pub fn lookup_invoice(
     url: String,
@@ -237,7 +255,7 @@ pub fn list_transactions(
                 created_at: (inv.created_at / 1000) as i64,
                 expires_at: 0, // TODO
                 settled_at: settled_at.unwrap_or(0),
-                description:  "".to_string(),
+                description: "".to_string(),
                 description_hash: "".to_string(),
                 payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
                 external_id: Some(inv.external_id.unwrap_or("".to_string())),
@@ -292,7 +310,7 @@ pub fn list_transactions(
             created_at: (payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
             settled_at: settled_at.unwrap_or(0),
-            description: "".to_string(), 
+            description: "".to_string(),
             description_hash: "".to_string(),
             payer_note: Some(payment.payer_note.unwrap_or("".to_string())),
             external_id: Some(payment.external_id.unwrap_or("".to_string())),

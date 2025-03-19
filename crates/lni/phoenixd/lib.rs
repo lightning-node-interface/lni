@@ -1,12 +1,9 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{
-    phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceResponse,
-    Transaction,
-};
+use crate::{phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceResponse, Transaction};
 
-use crate::CreateInvoiceParams;
+use crate::{CreateInvoiceParams, PayCode};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct PhoenixdConfig {
@@ -46,6 +43,10 @@ impl PhoenixdNode {
             params.expiry,
         )
         .await
+    }
+
+    pub async fn get_offer(&self) -> Result<PayCode, ApiError> {
+        crate::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await
     }
 
     pub async fn pay_offer(
@@ -142,6 +143,7 @@ mod tests {
         let params = CreateInvoiceParams {
             invoice_type: InvoiceType::Bolt11,
             amount_msats: Some(amount_msats),
+            offer: None,
             description: Some(description),
             description_hash: Some(description_hash),
             expiry: Some(expiry),
@@ -156,22 +158,17 @@ mod tests {
                 panic!("Failed to make invoice: {:?}", e);
             }
         }
+    }
 
-        let bolt12_params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt12,
-            amount_msats: None, // must be None since the offer is already generated 
-            description: None, // must be None since the offer is already generated 
-            description_hash: None,
-            expiry: Some(expiry),
-        };
-
-        match NODE.create_invoice(bolt12_params).await {
-            Ok(txn) => {
-                println!("txn: {:?}", txn);
-                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+    #[test]
+    async fn test_get_offer() {
+        match NODE.get_offer().await {
+            Ok(resp) => {
+                println!("Get Offer resp: {:?}", resp);
+                assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
             }
             Err(e) => {
-                panic!("Failed to make invoice: {:?}", e);
+                panic!("Failed to get offer: {:?}", e);
             }
         }
     }

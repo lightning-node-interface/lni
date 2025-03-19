@@ -39,6 +39,9 @@ async function phoenixd() {
     limit: 10,
   });
   console.log("Transactions:", txns);
+
+  const offer = await node.getOffer();
+  console.log("Get Offer:", offer);
 }
 
 async function cln() {
@@ -50,8 +53,8 @@ async function cln() {
   const info = await node.getInfo();
   console.log("Node info:", info);
 
-  const configRes = await node.getConfig();
-  console.log("Config:", configRes.url);
+  // const configRes = await node.getConfig();
+  // console.log("Config:", configRes.url);
 
   const invoice = await node.createInvoice({
     amountMsats: 1000,
@@ -60,24 +63,28 @@ async function cln() {
   });
   console.log("Invoice:", invoice);
 
-  const bolt12Invoice = await node.createInvoice({
+  const bolt11Invoice = await node.createInvoice({
     amountMsats: 3000,
     description: "test invoice",
-    invoiceType: InvoiceType.Bolt12,
+    invoiceType: InvoiceType.Bolt11,
   });
-  console.log("bolt12Invoice:", bolt12Invoice);
+  console.log("CLN bolt11 Invoice:", bolt11Invoice);
+
+  const offer = await node.getOffer();
+  console.log("CLN Bolt12 Offer:", offer);
 
   const lookupInvoice = await node.lookupInvoice(
     process.env.CLN_TEST_PAYMENT_HASH
   );
   console.log("lookupInvoice:", lookupInvoice);
 
-  const payOffer = await node.payOffer(
-    process.env.TEST_RECEIVER_OFFER,
-    3000,
-    "payment from lni nodejs"
-  );
-  console.log("payOffer:", payOffer);
+  // TODO not working (cln <=> phoneixd issue?)
+  // const payOffer = await node.payOffer(
+  //   process.env.TEST_RECEIVER_OFFER,
+  //   3000,
+  //   "payment from lni nodejs"
+  // );
+  // console.log("payOffer:", payOffer);
 
   const txns = await node.listTransactions({
     from: 0,

@@ -1,8 +1,10 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{ApiError, CreateInvoiceParams, ListTransactionsParams, PayInvoiceResponse, Transaction};
 use crate::types::NodeInfo;
+use crate::{
+    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceResponse, Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct ClnConfig {
@@ -37,11 +39,20 @@ impl ClnNode {
             self.rune.clone(),
             params.invoice_type,
             params.amount_msats,
+            params.offer.clone(),
             params.description,
             params.description_hash,
             params.expiry,
         )
         .await
+    }
+
+    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::cln::api::get_offer(self.url.clone(), self.rune.clone(), search).await
+    }
+
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::cln::api::list_offers(self.url.clone(), self.rune.clone(), search).await
     }
 
     pub async fn pay_offer(
@@ -88,6 +99,10 @@ impl ClnNode {
             Some(params.from),
             Some(params.limit),
         )
+    }
+
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::cln::api::decode(self.url.clone(), self.rune.clone(), str).await
     }
 }
 
@@ -145,40 +160,101 @@ mod tests {
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
         let expiry = 3600;
-        let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            description_hash: Some(description_hash.clone()),
-            expiry: Some(expiry),
-        };
 
-        match NODE.create_invoice(params).await {
+        // BOLT11
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: Some(amount_msats),
+                offer: None,
+                description: Some(description.clone()),
+                description_hash: Some(description_hash.clone()),
+                expiry: Some(expiry),
+            })
+            .await
+        {
             Ok(txn) => {
-                println!("txn: {:?}", txn);
-                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+                println!("BOLT11 create_invoice: {:?}", txn);
+                assert!(
+                    !txn.invoice.is_empty(),
+                    "BOLT11 create_invoice Invoice should not be empty"
+                );
             }
             Err(e) => {
-                panic!("Failed to make invoice: {:?}", e);
+                panic!("BOLT11 create_invoice Failed to make invoice: {:?}", e);
             }
         }
 
-        let params_bolt12 = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt12,
-            amount_msats: None,
-            // amount_msats: Some(amount_msats),
-            description: None,
-            // description: Some(description.clone()),
-            description_hash: None,
-            expiry: None,
-        };
-        match NODE.create_invoice(params_bolt12).await {
+        // BOLT11 - Zero amount
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: None,
+                offer: None,
+                description: None,
+                description_hash: None,
+                expiry: Some(expiry),
+            })
+            .await
+        {
             Ok(txn) => {
-                println!("txn: {:?}", txn);
-                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+                println!("BOLT11 - Zero amount: {:?}", txn);
+                assert!(
+                    !txn.invoice.is_empty(),
+                    "BOLT11 - Zero amount Invoice should not be empty"
+                );
             }
             Err(e) => {
-                panic!("Failed to make invoice: {:?}", e);
+                panic!("BOLT11 - Zero amount Failed to make invoice: {:?}", e);
+            }
+        }
+
+        // BOLT12
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt12,
+                amount_msats: Some(amount_msats),
+                offer: Some(PHOENIX_MOBILE_OFFER.to_string()),
+                description: Some(description.clone()),
+                description_hash: None,
+                expiry: Some(expiry),
+            })
+            .await
+        {
+            Ok(txn) => {
+                println!("BOLT12 create_invoice from offer: {:?}", txn);
+                assert!(
+                    !txn.invoice.is_empty(),
+                    "BOLT12 Invoice should not be empty"
+                );
+            }
+            Err(e) => {
+                panic!(
+                    "BOLT12 create_invoice from offer Failed to make invoice: {:?}",
+                    e
+                );
+            }
+        }
+
+        // TODO test zero amount offers (i.e the amount is embedded in the offer)
+    }
+
+    #[test]
+    async fn test_list_offers() {
+        match NODE.get_offer(None).await {
+            Ok(resp) => {
+                println!("Get offer: {:?}", resp);
+            }
+            Err(e) => {
+                panic!("Failed to get offer: {:?}", e);
+            }
+        }
+        match NODE.list_offers(None).await {
+            Ok(resp) => {
+                println!("List offers: {:?}", resp);
+            }
+            Err(e) => {
+                panic!("Failed to list offer: {:?}", e);
             }
         }
     }
@@ -239,6 +315,18 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to lookup transactions: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_decode() {
+        match NODE.decode(PHOENIX_MOBILE_OFFER.to_string()).await {
+            Ok(txns) => {
+                println!("decode: {:?}", txns);
+            }
+            Err(e) => {
+                panic!("Failed to decode: {:?}", e);
             }
         }
     }

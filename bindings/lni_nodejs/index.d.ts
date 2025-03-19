@@ -163,9 +163,18 @@ export interface ListTransactionsParams {
 export interface CreateInvoiceParams {
   invoiceType: InvoiceType
   amountMsats?: number
+  offer?: string
   description?: string
   descriptionHash?: string
   expiry?: number
+}
+export interface PayCode {
+  offerId: string
+  bolt12: string
+  label?: string
+  active?: boolean
+  singleUse?: boolean
+  used?: boolean
 }
 export interface Payment {
   paymentId: string
@@ -182,6 +191,7 @@ export declare class PhoenixdNode {
   getConfig(): PhoenixdConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  getOffer(): Promise<PayCode>
   lookupInvoice(paymentHash: string): Promise<Transaction>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
@@ -193,7 +203,10 @@ export declare class ClnNode {
   getConfig(): ClnConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
-  lookupInvoice(paymentHash: string): Promise<Transaction>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
 }

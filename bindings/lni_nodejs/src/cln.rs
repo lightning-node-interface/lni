@@ -1,7 +1,6 @@
 use lni::{cln::lib::ClnConfig, CreateInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-
 #[napi]
 pub struct ClnNode {
   inner: ClnConfig,
@@ -49,6 +48,7 @@ impl ClnNode {
       self.inner.rune.clone(),
       params.invoice_type,
       params.amount_msats,
+      params.offer,
       params.description,
       params.description_hash,
       params.expiry,
@@ -59,16 +59,20 @@ impl ClnNode {
   }
 
   #[napi]
-  pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::cln::api::lookup_invoice(
-      self.inner.url.clone(),
-      self.inner.rune.clone(),
-      Some(payment_hash),
-      None,
-      None,
-    )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(txn.into_iter().next().ok_or_else(|| napi::Error::from_reason("No transaction found"))?)
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
+    let offer = lni::cln::api::get_offer(self.inner.url.clone(), self.inner.rune.clone(), search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+    let offers =
+      lni::cln::api::list_offers(self.inner.url.clone(), self.inner.rune.clone(), search)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offers)
   }
 
   #[napi]
@@ -84,9 +88,28 @@ impl ClnNode {
       offer,
       amount_msats,
       payer_note,
-    ).await
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
+  }
+
+  #[napi]
+  pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
+    let txn = lni::cln::api::lookup_invoice(
+      self.inner.url.clone(),
+      self.inner.rune.clone(),
+      Some(payment_hash),
+      None,
+      None,
+    )
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(
+      txn
+        .into_iter()
+        .next()
+        .ok_or_else(|| napi::Error::from_reason("No transaction found"))?,
+    )
   }
 
   #[napi]
@@ -102,6 +125,14 @@ impl ClnNode {
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
+  }
+
+  #[napi]
+  pub async fn decode(&self, str: String) -> Result<String> {
+    let decoded = lni::cln::api::decode(self.inner.url.clone(), self.inner.rune.clone(), str)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
   }
 }
 

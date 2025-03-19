@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::PayCode;
+
 #[derive(Debug, Deserialize)]
 pub struct InfoResponse {
     // #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
@@ -80,4 +82,9 @@ pub struct Bolt12Resp {
     pub single_use: bool,
     pub used: bool,
     pub created: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListOffersResponse {
+    pub offers: Vec<PayCode>,
 }

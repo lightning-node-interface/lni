@@ -1,8 +1,9 @@
 use super::types::{
-    Bolt11Resp, Bolt12Resp, FetchInvoiceResponse, InfoResponse, InvoicesResponse, PayResponse,
+    Bolt11Resp, Bolt12Resp, FetchInvoiceResponse, InfoResponse, InvoicesResponse,
+    ListOffersResponse, PayResponse,
 };
 use crate::types::NodeInfo;
-use crate::{ApiError, InvoiceType, PayInvoiceResponse, Transaction};
+use crate::{ApiError, InvoiceType, PayCode, PayInvoiceResponse, Transaction};
 use reqwest::header;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
@@ -10,7 +11,7 @@ use reqwest::header;
 pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", url);
     println!("Constructed URL: {} rune {}", req_url, rune);
-    let client = clnrest_client(rune);
+    let client = clnrest_client(rune.clone());
     let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
@@ -32,39 +33,46 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
 }
 
 // invoice - amount_msat label description expiry fallbacks preimage exposeprivatechannels cltv
-
 pub async fn create_invoice(
     url: String,
     rune: String,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
-    description: Option<String>,
+    offer: Option<String>,
+    description: Option<String>, // public memo for bolt11, private? payer_note for bolt12
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = clnrest_client(rune);
+    let client = clnrest_client(rune.clone());
+    let amount_msat_str: String = amount_msats.map_or("any".to_string(), |amt| amt.to_string());
+    let mut params: Vec<(&str, Option<String>)> = vec![];
+    params.push((
+        "description",
+        Some(description.clone().unwrap_or("".to_string())),
+    ));
+    params.push(("amount_msat", Some(amount_msat_str.clone())));
+    params.push(("expiry", expiry.map(|e| e.to_string())));
+    params.push((
+        "label",
+        Some(format!("lni.{}", rand::random::<u32>()).into()),
+    ));
     match invoice_type {
         InvoiceType::Bolt11 => {
-            let description_clone = description.clone();
             let req_url = format!("{}/v1/invoice", url);
             let response: reqwest::blocking::Response = client
                 .post(&req_url)
                 .header("Content-Type", "application/json")
-                .json(&serde_json::json!({
-                    "description": description,
-                    "amount_msat": amount_msats,
-                    "expiry": expiry,
-                    "label": format!("lni.{}", rand::random::<u32>()),
-                }))
+                .json(&serde_json::json!(params
+                    .into_iter()
+                    .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
+                    .collect::<serde_json::Value>()))
                 .send()
                 .unwrap();
 
             println!("Status: {}", response.status());
-
             let invoice_str = response.text().unwrap();
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
-
             let bolt11_resp: Bolt11Resp =
                 serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
                     reason: e.to_string(),
@@ -80,42 +88,30 @@ pub async fn create_invoice(
                 created_at: 0,
                 expires_at: expiry.unwrap_or(3600),
                 settled_at: 0,
-                description: description_clone.unwrap_or_default(),
+                description: description.clone().unwrap_or_default(),
                 description_hash: description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some("".to_string()),
             })
         }
         InvoiceType::Bolt12 => {
-            let req_url = format!("{}/v1/offer", url);
-            let mut params: Vec<(&str, Option<String>)> = vec![];
-            if let Some(amount_msats) = amount_msats {
-                params.push(("amount", Some(format!("{}msat", amount_msats))))
-            } else {
-                params.push(("amount", Some("any".to_string())))
+            if offer.is_none() {
+                return Err(ApiError::Json {
+                    reason: "Offer cannot be empty".to_string(),
+                });
             }
-            let description_clone = description.clone();
-            if let Some(description) = description_clone {
-                params.push(("description", Some(description)))
-            }
-            let response: reqwest::blocking::Response = client
-                .post(&req_url)
-                .header("Content-Type", "application/json")
-                .json(&serde_json::json!(params
-                    .into_iter()
-                    .filter_map(|(k, v)| v.map(|v| (k, v)))
-                    .collect::<serde_json::Value>()))
-                .send()
-                .unwrap();
-            let offer_str = response.text().unwrap();
-            let offer_str = offer_str.as_str();
-            let bolt12resp: Bolt12Resp =
-                serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
-                    reason: e.to_string(),
-                })?;
+            let fetch_invoice_resp = fetch_invoice_from_offer(
+                url.clone(),
+                rune.clone(),
+                offer.clone().unwrap(),
+                amount_msats.unwrap_or(0), // TODO make this optional if the lno already has amount in it
+                Some(description.clone().unwrap_or_default()),
+            )
+            .await
+            .unwrap();
             Ok(Transaction {
                 type_: "incoming".to_string(),
-                invoice: bolt12resp.bolt12,
+                invoice: fetch_invoice_resp.invoice,
                 preimage: "".to_string(),
                 payment_hash: "".to_string(),
                 amount_msats: amount_msats.unwrap_or(0),
@@ -123,22 +119,139 @@ pub async fn create_invoice(
                 created_at: 0,
                 expires_at: expiry.unwrap_or_default(),
                 settled_at: 0,
-                description: description.unwrap_or_default(),
+                description: description.clone().unwrap_or_default(),
                 description_hash: description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
-                external_id: Some(bolt12resp.offer_id.unwrap_or_default()),
+                external_id: Some("".to_string()),
             })
         }
     }
 }
 
-pub async fn pay_offer(
+// decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
+pub async fn decode(url: String, rune: String, str: String) -> Result<String, ApiError> {
+    let client = clnrest_client(rune);
+    let req_url = format!("{}/v1/decode", url);
+    let response: reqwest::blocking::Response = client
+        .post(&req_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "string": str,
+        }))
+        .send()
+        .unwrap();
+    // TODO parse JSON response
+    let decoded = response.text().unwrap();
+    Ok(decoded)
+}
+
+// get the one with the offer_id or label or get the first offer in the list or
+pub async fn get_offer(
+    url: String,
+    rune: String,
+    search: Option<String>,
+) -> Result<PayCode, ApiError> {
+    let offers = list_offers(url.clone(), rune.clone(), search.clone()).await?;
+    if offers.is_empty() {
+        return Ok(PayCode {
+            offer_id: "".to_string(),
+            bolt12: "".to_string(),
+            label: None,
+            active: None,
+            single_use: None,
+            used: None,
+        });
+    }
+    Ok(offers.first().unwrap().clone())
+}
+
+pub async fn list_offers(
+    url: String,
+    rune: String,
+    search: Option<String>,
+) -> Result<Vec<PayCode>, ApiError> {
+    let client = clnrest_client(rune);
+    let req_url = format!("{}/v1/listoffers", url);
+    let mut params = vec![];
+    if let Some(search) = search {
+        params.push(("offer_id", Some(search)))
+    }
+    let response: reqwest::blocking::Response = client
+        .post(&req_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!(params
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect::<serde_json::Value>()))
+        .send()
+        .unwrap();
+    let offers = response.text().unwrap();
+    let offers_str = offers.as_str();
+    let offers_list: ListOffersResponse =
+        serde_json::from_str(&offers_str).map_err(|e| crate::ApiError::Json {
+            reason: e.to_string(),
+        })?;
+    Ok(offers_list.offers)
+}
+
+pub async fn create_offer(
+    url: String,
+    rune: String,
+    amount_msats: Option<i64>,
+    description: Option<String>,
+    expiry: Option<i64>,
+) -> Result<Transaction, ApiError> {
+    let client = clnrest_client(rune);
+    let req_url = format!("{}/v1/offer", url);
+    let mut params: Vec<(&str, Option<String>)> = vec![];
+    if let Some(amount_msats) = amount_msats {
+        params.push(("amount", Some(format!("{}msat", amount_msats))))
+    } else {
+        params.push(("amount", Some("any".to_string())))
+    }
+    let description_clone = description.clone();
+    if let Some(description) = description_clone {
+        params.push(("description", Some(description)))
+    }
+    let response: reqwest::blocking::Response = client
+        .post(&req_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!(params
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect::<serde_json::Value>()))
+        .send()
+        .unwrap();
+    let offer_str = response.text().unwrap();
+    let offer_str = offer_str.as_str();
+    let bolt12resp: Bolt12Resp =
+        serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
+            reason: e.to_string(),
+        })?;
+    Ok(Transaction {
+        type_: "incoming".to_string(),
+        invoice: bolt12resp.bolt12,
+        preimage: "".to_string(),
+        payment_hash: "".to_string(),
+        amount_msats: amount_msats.unwrap_or(0),
+        fees_paid: 0,
+        created_at: 0,
+        expires_at: expiry.unwrap_or_default(),
+        settled_at: 0,
+        description: description.unwrap_or_default(),
+        description_hash: "".to_string(),
+        payer_note: Some("".to_string()),
+        external_id: Some(bolt12resp.offer_id.unwrap_or_default()),
+    })
+}
+
+pub async fn fetch_invoice_from_offer(
     url: String,
     rune: String,
     offer: String,
-    amount_msats: i64,
+    amount_msats: i64, // TODO make optional if the lno already has amount in it
     payer_note: Option<String>,
-) -> Result<PayInvoiceResponse, ApiError> {
+) -> Result<FetchInvoiceResponse, ApiError> {
     let fetch_invoice_url = format!("{}/v1/fetchinvoice", url);
     let client = clnrest_client(rune);
     let response: reqwest::blocking::Response = client
@@ -165,7 +278,26 @@ pub async fn pay_offer(
             })
         }
     };
+    Ok(fetch_invoice_resp)
+}
 
+pub async fn pay_offer(
+    url: String,
+    rune: String,
+    offer: String,
+    amount_msats: i64,
+    payer_note: Option<String>,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = clnrest_client(rune.clone());
+    let fetch_invoice_resp = fetch_invoice_from_offer(
+        url.clone(),
+        rune.clone(),
+        offer.clone(),
+        amount_msats,
+        payer_note.clone(),
+    )
+    .await
+    .unwrap();
     if (fetch_invoice_resp.invoice.is_empty()) {
         return Err(ApiError::Json {
             reason: "Missing BOLT 12 invoice".to_string(),

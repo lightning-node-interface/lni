@@ -59,6 +59,14 @@ impl PhoenixdNode {
   }
 
   #[napi]
+  pub async fn get_offer(&self) -> Result<lni::PayCode> {
+    let paycode = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(paycode)
+  }
+
+  #[napi]
   pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::lookup_invoice(
       self.inner.url.clone(),
@@ -82,7 +90,8 @@ impl PhoenixdNode {
       offer,
       amount_msats,
       payer_note,
-    ).await
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
