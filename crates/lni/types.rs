@@ -218,6 +218,18 @@ pub struct CreateInvoiceParams {
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
 }
+impl Default for CreateInvoiceParams {
+    fn default() -> Self {
+        Self {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: None,
+            offer: None,
+            description: None,
+            description_hash: None,
+            expiry: None,
+        }
+    }
+}
 
 // Pay Code aka BOLT12 Offer
 #[cfg_attr(feature = "napi_rs", napi(object))]

@@ -166,10 +166,10 @@ mod tests {
             .create_invoice(CreateInvoiceParams {
                 invoice_type: InvoiceType::Bolt11,
                 amount_msats: Some(amount_msats),
-                offer: None,
                 description: Some(description.clone()),
                 description_hash: Some(description_hash.clone()),
                 expiry: Some(expiry),
+                ..Default::default()
             })
             .await
         {
@@ -189,11 +189,8 @@ mod tests {
         match NODE
             .create_invoice(CreateInvoiceParams {
                 invoice_type: InvoiceType::Bolt11,
-                amount_msats: None,
-                offer: None,
-                description: None,
-                description_hash: None,
                 expiry: Some(expiry),
+                ..Default::default()
             })
             .await
         {
