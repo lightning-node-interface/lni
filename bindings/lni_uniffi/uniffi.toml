@@ -1,5 +1,2 @@
-[bindings]
-language = "typescript"
-
-[typescript.custom_types]
+[bindings.typescript.custom_types]
 Option = "?"
