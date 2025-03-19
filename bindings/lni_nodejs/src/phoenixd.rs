@@ -1,4 +1,4 @@
-use lni::{phoenixd::lib::PhoenixdConfig, phoenixd::lib::PhoenixdMakeInvoiceParams};
+use lni::{phoenixd::lib::PhoenixdConfig, CreateInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -40,11 +40,11 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub async fn make_invoice(
+  pub async fn create_invoice(
     &self,
-    params: PhoenixdMakeInvoiceParams,
+    params: CreateInvoiceParams,
   ) -> napi::Result<lni::Transaction> {
-    let txn = lni::phoenixd::api::make_invoice(
+    let txn = lni::phoenixd::api::create_invoice(
       self.inner.url.clone(),
       self.inner.password.clone(),
       params.invoice_type,
@@ -56,6 +56,14 @@ impl PhoenixdNode {
     .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
+  }
+
+  #[napi]
+  pub async fn get_offer(&self) -> Result<lni::PayCode> {
+    let paycode = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(paycode)
   }
 
   #[napi]
@@ -82,7 +90,8 @@ impl PhoenixdNode {
       offer,
       amount_msats,
       payer_note,
-    ).await
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
@@ -90,17 +99,14 @@ impl PhoenixdNode {
   #[napi]
   pub async fn list_transactions(
     &self,
-    params: lni::phoenixd::lib::ListTransactionsParams,
+    params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
     let txns = lni::phoenixd::api::list_transactions(
       self.inner.url.clone(),
       self.inner.password.clone(),
       params.from,
-      params.until,
       params.limit,
-      params.offset,
-      params.unpaid,
-      params.invoice_type,
+      None,
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)

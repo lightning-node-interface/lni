@@ -16,20 +16,13 @@ export interface Bolt11Resp {
   paymentHash: string
   serialized: string
 }
-export interface PhoenixdMakeInvoiceParams {
-  invoiceType: InvoiceType
-  amountMsats: number
-  description?: string
-  descriptionHash?: string
-  expiry?: number
+export interface ClnConfig {
+  url: string
+  rune: string
 }
-export interface ListTransactionsParams {
-  from: number
-  until: number
-  limit: number
-  offset: number
-  unpaid: boolean
-  invoiceType: string
+export interface ClnNode {
+  url: string
+  rune: string
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
@@ -59,6 +52,8 @@ export interface Transaction {
   createdAt: number
   expiresAt: number
   settledAt: number
+  payerNote?: string
+  externalId?: string
 }
 export interface NodeConnectionInfo {
   pubkey: string
@@ -145,6 +140,7 @@ export interface LightningBalanceResponse {
   nextMaxReceivableMpp: number
 }
 export interface PayInvoiceResponse {
+  paymentHash: string
   preimage: string
   fee: number
 }
@@ -158,6 +154,27 @@ export interface BalancesResponse {
 export interface PaymentFailedEventProperties {
   transaction: Transaction
   reason: string
+}
+export interface ListTransactionsParams {
+  from: number
+  limit: number
+  paymentHash?: string
+}
+export interface CreateInvoiceParams {
+  invoiceType: InvoiceType
+  amountMsats?: number
+  offer?: string
+  description?: string
+  descriptionHash?: string
+  expiry?: number
+}
+export interface PayCode {
+  offerId: string
+  bolt12: string
+  label?: string
+  active?: boolean
+  singleUse?: boolean
+  used?: boolean
 }
 export interface Payment {
   paymentId: string
@@ -173,14 +190,23 @@ export declare class PhoenixdNode {
   getPassword(): string
   getConfig(): PhoenixdConfig
   getInfo(): Promise<NodeInfo>
-  makeInvoice(params: PhoenixdMakeInvoiceParams): Promise<Transaction>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  getOffer(): Promise<PayCode>
   lookupInvoice(paymentHash: string): Promise<Transaction>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
 }
-export declare class Db {
-  constructor(path: string)
-  save(): void
-  writePayment(payment: Payment): void
-  lookupPayment(paymentId: string): Payment | null
+export declare class ClnNode {
+  constructor(config: ClnConfig)
+  getUrl(): string
+  getRune(): string
+  getConfig(): ClnConfig
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
 }

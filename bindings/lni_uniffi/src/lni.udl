@@ -1,5 +1,10 @@
 namespace lni {};
 
+dictionary PhoenixdConfig {
+    string url;
+    string password;
+};
+
 interface PhoenixdNode {
     constructor(PhoenixdConfig config);
 
@@ -7,7 +12,10 @@ interface PhoenixdNode {
     NodeInfo get_info();
 
     [Throws=ApiError, Async]
-    Transaction make_invoice(PhoenixdMakeInvoiceParams params);
+    Transaction create_invoice(CreateInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayCode get_offer();
 
     [Throws=ApiError, Async]
     Transaction lookup_invoice(string payment_hash);
@@ -17,6 +25,40 @@ interface PhoenixdNode {
 
     [Throws=ApiError, Async]
     PayInvoiceResponse pay_offer(string offer, i64 amount_msats, string? payer_note );
+
+};
+
+dictionary ClnConfig {
+    string url;
+    string rune;
+};
+
+interface ClnNode {
+    constructor(ClnConfig config);
+
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction create_invoice(CreateInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayCode get_offer(string? search);
+
+    [Throws=ApiError, Async]
+    sequence<PayCode> list_offers(string? search);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_offer(string offer, i64 amount_msats, string? payer_note );
+
+    [Throws=ApiError, Async]
+    Transaction lookup_invoice(string payment_hash);
+
+    [Throws=ApiError, Async]
+    sequence<Transaction> list_transactions(ListTransactionsParams params);
+
+    [Throws=ApiError, Async]
+    string decode(string str);
 
 };
 
@@ -57,14 +99,10 @@ interface ApiError {
     Json(string reason);
 };
 
-dictionary PhoenixdConfig {
-    string url;
-    string password;
-};
-
-dictionary PhoenixdMakeInvoiceParams {
+dictionary CreateInvoiceParams {
     InvoiceType invoice_type;
-    i64 amount_msats;
+    i64? amount_msats;
+    string? offer;
     string? description; 
     string? description_hash; 
     i64? expiry;
@@ -96,6 +134,8 @@ dictionary Transaction {
     i64 created_at;
     i64 expires_at;
     i64 settled_at;
+    string? payer_note;
+    string? external_id;
 };
 
 dictionary NodeConnectionInfo {
@@ -194,6 +234,7 @@ dictionary LightningBalanceResponse {
 };
 
 dictionary PayInvoiceResponse {
+    string payment_hash;
     string preimage;
     i64 fee;
 };
@@ -219,9 +260,15 @@ enum InvoiceType {
 
 dictionary ListTransactionsParams {
     i64 from;
-    i64 until;
     i64 limit;
-    i64 offset;
-    boolean unpaid;
-    string invoice_type;
+    string? payment_hash;
+};
+
+dictionary PayCode {
+    string offer_id;
+    string bolt12;
+    string? label;
+    boolean? active;
+    boolean? single_use;
+    boolean? used;
 };

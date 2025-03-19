@@ -25,6 +25,7 @@ dotenv = "0.15.0"
 lazy_static = "1.4.0"
 base64 = "0.13"
 serde_urlencoded = "0.7"
+rand = "0.8"
 
 [dev-dependencies]
 async-attributes = "1.1.1"

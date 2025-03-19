@@ -23,7 +23,15 @@ impl From<serde_json::Error> for ApiError {
 pub mod phoenixd {
     pub mod lib;
     pub mod api;
-    pub use lib::{PhoenixdConfig, PhoenixdNode, PhoenixdMakeInvoiceParams, ListTransactionsParams};
+    pub mod types;
+    pub use lib::{PhoenixdConfig, PhoenixdNode};
+}
+
+pub mod cln {
+    pub mod lib;
+    pub mod api;
+    pub mod types;
+    pub use lib::{ClnConfig, ClnNode};
 }
 
 pub mod types;
