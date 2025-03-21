@@ -62,6 +62,40 @@ interface ClnNode {
 
 };
 
+dictionary LndConfig {
+    string url;
+    string macaroon;
+};
+
+interface LndNode {
+    constructor(LndConfig config);
+
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction create_invoice(CreateInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayCode get_offer(string? search);
+
+    [Throws=ApiError, Async]
+    sequence<PayCode> list_offers(string? search);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_offer(string offer, i64 amount_msats, string? payer_note );
+
+    [Throws=ApiError, Async]
+    Transaction lookup_invoice(string payment_hash);
+
+    [Throws=ApiError, Async]
+    sequence<Transaction> list_transactions(ListTransactionsParams params);
+
+    [Throws=ApiError, Async]
+    string decode(string str);
+
+};
+
 interface Db {
     [Throws=DbError]
     constructor(string path);
