@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, InvoiceType } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, InvoiceType } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -53,9 +53,6 @@ async function cln() {
   const info = await node.getInfo();
   console.log("Node info:", info);
 
-  // const configRes = await node.getConfig();
-  // console.log("Config:", configRes.url);
-
   const invoice = await node.createInvoice({
     amountMsats: 1000,
     description: "test invoice",
@@ -93,9 +90,46 @@ async function cln() {
   console.log("Transactions:", txns);
 }
 
+async function lnd() {
+  const config = {
+    url: process.env.LND_URL,
+    macaroon: process.env.LND_MACAROON,
+  };
+  const node = new LndNode(config);
+  const info = await node.getInfo();
+  console.log("Node info:", info);
+
+  const invoice = await node.createInvoice({
+    amountMsats: 1000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt11,
+  });
+  console.log("LND Invoice:", invoice);
+
+  const bolt11Invoice = await node.createInvoice({
+    amountMsats: 3000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt11,
+  });
+  console.log("LND bolt11 Invoice:", bolt11Invoice);
+
+
+  const lookupInvoice = await node.lookupInvoice(
+    process.env.LND_TEST_PAYMENT_HASH
+  );
+  console.log("lookupInvoice:", lookupInvoice);
+
+  const txns = await node.listTransactions({
+    from: 0,
+    limit: 10,
+  });
+  console.log("LND Transactions:", txns);
+}
+
 async function main() {
   phoenixd();
   cln();
+  lnd();
 }
 
 main();

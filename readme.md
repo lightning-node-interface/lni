@@ -266,11 +266,11 @@ Todo
 - [X] uniffi bindings for Android and IOS
 - [X] react-native - uniffi-bindgen-react-native
 - [X] async promise architecture for bindings
-- [ ] Tor Socks5 fetch
+- [ ] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
 - [ ] implement lightning nodes
     - [X] phoenixd
     - [X] cln
-    - [ ] lnd
+    - [X] lnd
     - [ ] lndk
     - [ ] ldk_node
     - [ ] eclair

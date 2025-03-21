@@ -104,12 +104,7 @@ impl ClnNode {
       None,
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(
-      txn
-        .into_iter()
-        .next()
-        .ok_or_else(|| napi::Error::from_reason("No transaction found"))?,
-    )
+    Ok(txn)
   }
 
   #[napi]

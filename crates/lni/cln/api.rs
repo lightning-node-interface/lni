@@ -334,8 +334,21 @@ pub async fn pay_offer(
     })
 }
 
-// label, invstring, payment_hash, offer_id, index, start, limit
 pub fn lookup_invoice(
+    url: String,
+    rune: String,
+    payment_hash: Option<String>,
+    from: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Transaction, ApiError> {
+    match lookup_invoices(url, rune, payment_hash, from, limit) {
+        Ok(transactions) => Ok(transactions.first().unwrap().clone()),
+        Err(e) => Err(e),
+    }
+}
+
+// label, invstring, payment_hash, offer_id, index, start, limit
+fn lookup_invoices(
     url: String,
     rune: String,
     payment_hash: Option<String>,
@@ -408,7 +421,7 @@ pub fn list_transactions(
     from: i64,
     limit: i64,
 ) -> Result<Vec<Transaction>, ApiError> {
-    match lookup_invoice(url, rune, None, Some(from), Some(limit)) {
+    match lookup_invoices(url, rune, None, Some(from), Some(limit)) {
         Ok(transactions) => Ok(transactions),
         Err(e) => Err(e),
     }

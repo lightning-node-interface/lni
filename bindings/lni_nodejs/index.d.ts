@@ -24,6 +24,14 @@ export interface ClnNode {
   url: string
   rune: string
 }
+export interface LndConfig {
+  url: string
+  macaroon: string
+}
+export interface LndNode {
+  url: string
+  macaroon: string
+}
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
   Bolt12 = 'Bolt12'
@@ -167,6 +175,11 @@ export interface CreateInvoiceParams {
   description?: string
   descriptionHash?: string
   expiry?: number
+  rPreimage?: string
+  isBlinded?: boolean
+  isKeysend?: boolean
+  isAmp?: boolean
+  isPrivate?: boolean
 }
 export interface PayCode {
   offerId: string
@@ -201,6 +214,20 @@ export declare class ClnNode {
   getUrl(): string
   getRune(): string
   getConfig(): ClnConfig
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
+}
+export declare class LndNode {
+  constructor(config: LndConfig)
+  getUrl(): string
+  getMacaroon(): string
+  getConfig(): LndConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   getOffer(search?: string | undefined | null): Promise<PayCode>

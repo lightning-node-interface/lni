@@ -310,8 +310,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { InvoiceType, PhoenixdNode, ClnNode } = nativeBinding
+const { InvoiceType, PhoenixdNode, ClnNode, LndNode } = nativeBinding
 
 module.exports.InvoiceType = InvoiceType
 module.exports.PhoenixdNode = PhoenixdNode
 module.exports.ClnNode = ClnNode
+module.exports.LndNode = LndNode

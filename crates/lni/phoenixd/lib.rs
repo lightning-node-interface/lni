@@ -147,6 +147,7 @@ mod tests {
             description: Some(description),
             description_hash: Some(description_hash),
             expiry: Some(expiry),
+            ..Default::default()
         };
 
         match NODE.create_invoice(params).await {

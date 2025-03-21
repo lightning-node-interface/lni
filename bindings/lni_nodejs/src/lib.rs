@@ -11,3 +11,6 @@ pub use phoenixd::PhoenixdNode;
 
 mod cln;
 pub use cln::ClnNode;
+
+mod lnd;
+pub use lnd::LndNode;
