@@ -34,8 +34,18 @@ pub mod cln {
     pub use lib::{ClnConfig, ClnNode};
 }
 
+pub mod lnd {
+    pub mod lib;
+    pub mod api;
+    pub mod types;
+    pub use lib::{LndConfig, LndNode};
+}
+
 pub mod types;
 pub use types::*;
+
+pub mod utils;
+pub use utils::*;
 
 pub mod database;
 pub use database::{Db, DbError, Payment};

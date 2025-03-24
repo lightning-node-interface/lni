@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, InvoiceType } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, InvoiceType } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -42,6 +42,11 @@ async function phoenixd() {
 
   const offer = await node.getOffer();
   console.log("Get Offer:", offer);
+
+  // const pay_invoice_resp = await node.payInvoice({
+  //   invoice: ""
+  // })
+  // console.log("pay_invoice_resp:", pay_invoice_resp);
 }
 
 async function cln() {
@@ -52,9 +57,6 @@ async function cln() {
   const node = new ClnNode(config);
   const info = await node.getInfo();
   console.log("Node info:", info);
-
-  // const configRes = await node.getConfig();
-  // console.log("Config:", configRes.url);
 
   const invoice = await node.createInvoice({
     amountMsats: 1000,
@@ -93,9 +95,56 @@ async function cln() {
   console.log("Transactions:", txns);
 }
 
+async function lnd() {
+  const config = {
+    url: process.env.LND_URL,
+    macaroon: process.env.LND_MACAROON,
+  };
+  const node = new LndNode(config);
+  const info = await node.getInfo();
+  console.log("Node info:", info);
+
+  const invoice = await node.createInvoice({
+    amountMsats: 1000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt11,
+  });
+  console.log("LND Invoice:", invoice);
+
+  const bolt11Invoice = await node.createInvoice({
+    amountMsats: 3000,
+    description: "test invoice",
+    invoiceType: InvoiceType.Bolt11,
+  });
+  console.log("LND bolt11 Invoice:", bolt11Invoice);
+
+
+  const lookupInvoice = await node.lookupInvoice(
+    process.env.LND_TEST_PAYMENT_HASH
+  );
+  console.log("lookupInvoice:", lookupInvoice);
+
+  const txns = await node.listTransactions({
+    from: 0,
+    limit: 10,
+  });
+  console.log("LND Transactions:", txns);
+}
+
+async function test() {
+  const config = {
+    url: process.env.PHOENIXD_URL,
+    password: process.env.PHOENIXD_PASSWORD,
+    test_hash: process.env.PHOENIXD_TEST_PAYMENT_HASH,
+  };
+  const node = new PhoenixdNode(config);
+}
+
 async function main() {
-  phoenixd();
-  cln();
+  // phoenixd();
+  // cln();
+  // lnd();
+  test();
 }
 
 main();

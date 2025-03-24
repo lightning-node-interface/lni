@@ -15,6 +15,9 @@ interface PhoenixdNode {
     Transaction create_invoice(CreateInvoiceParams params);
 
     [Throws=ApiError, Async]
+    PayInvoiceResponse pay_invoice(PayInvoiceParams params);
+
+    [Throws=ApiError, Async]
     PayCode get_offer();
 
     [Throws=ApiError, Async]
@@ -41,6 +44,46 @@ interface ClnNode {
 
     [Throws=ApiError, Async]
     Transaction create_invoice(CreateInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_invoice(PayInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayCode get_offer(string? search);
+
+    [Throws=ApiError, Async]
+    sequence<PayCode> list_offers(string? search);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_offer(string offer, i64 amount_msats, string? payer_note );
+
+    [Throws=ApiError, Async]
+    Transaction lookup_invoice(string payment_hash);
+
+    [Throws=ApiError, Async]
+    sequence<Transaction> list_transactions(ListTransactionsParams params);
+
+    [Throws=ApiError, Async]
+    string decode(string str);
+
+};
+
+dictionary LndConfig {
+    string url;
+    string macaroon;
+};
+
+interface LndNode {
+    constructor(LndConfig config);
+
+    [Throws=ApiError, Async]
+    NodeInfo get_info();
+
+    [Throws=ApiError, Async]
+    Transaction create_invoice(CreateInvoiceParams params);
+
+    [Throws=ApiError, Async]
+    PayInvoiceResponse pay_invoice(PayInvoiceParams params);
 
     [Throws=ApiError, Async]
     PayCode get_offer(string? search);
@@ -106,6 +149,11 @@ dictionary CreateInvoiceParams {
     string? description; 
     string? description_hash; 
     i64? expiry;
+    string? r_preimage;
+    boolean? is_blinded;
+    boolean? is_keysend;
+    boolean? is_amp;
+    boolean? is_private;
 };
 
 dictionary TLVRecord {
@@ -236,7 +284,7 @@ dictionary LightningBalanceResponse {
 dictionary PayInvoiceResponse {
     string payment_hash;
     string preimage;
-    i64 fee;
+    i64 fee_msats;
 };
 
 dictionary PayKeysendResponse {
@@ -271,4 +319,17 @@ dictionary PayCode {
     boolean? active;
     boolean? single_use;
     boolean? used;
+};
+
+dictionary PayInvoiceParams {
+    string invoice;
+    i64? fee_limit_msat;
+    f64? fee_limit_percentage;
+    i64? timeout_seconds;
+    i64? amount_msats;
+    i64? max_parts;
+    string? first_hop_pubkey;
+    string? last_hop_pubkey;
+    boolean? allow_self_payment;
+    boolean? is_amp;
 };

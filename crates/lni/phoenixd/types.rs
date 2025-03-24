@@ -99,3 +99,20 @@ pub struct Bolt11Resp {
     #[serde(rename = "serialized")]
     pub serialized: String,
 }
+
+
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PhoenixPayInvoiceResp {
+    #[serde(rename = "recipientAmountSat")]
+    pub amount_sat: i64,
+    #[serde(rename = "routingFeeSat")]
+    pub routing_fee_sat: i64,
+    #[serde(rename = "paymentId")]
+    pub payment_id: String,
+    #[serde(rename = "paymentHash")]
+    pub payment_hash: String,
+    #[serde(rename = "paymentPreimage")]
+    pub preimage: String,
+}

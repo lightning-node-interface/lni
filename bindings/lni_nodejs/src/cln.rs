@@ -1,4 +1,4 @@
-use lni::{cln::lib::ClnConfig, CreateInvoiceParams};
+use lni::{cln::lib::ClnConfig, CreateInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -59,6 +59,18 @@ impl ClnNode {
   }
 
   #[napi]
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice =
+      lni::cln::api::pay_invoice(self.inner.url.clone(), self.inner.rune.clone(), params)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(invoice)
+  }
+
+  #[napi]
   pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
     let offer = lni::cln::api::get_offer(self.inner.url.clone(), self.inner.rune.clone(), search)
       .await
@@ -104,12 +116,7 @@ impl ClnNode {
       None,
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(
-      txn
-        .into_iter()
-        .next()
-        .ok_or_else(|| napi::Error::from_reason("No transaction found"))?,
-    )
+    Ok(txn)
   }
 
   #[napi]

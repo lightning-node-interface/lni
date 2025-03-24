@@ -29,7 +29,7 @@ pub struct NodeInfo {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transaction {
     pub type_: String,
     pub invoice: String,
@@ -173,7 +173,7 @@ pub struct LightningBalanceResponse {
 pub struct PayInvoiceResponse {
     pub payment_hash: String,
     pub preimage: String,
-    pub fee: i64,
+    pub fee_msats: i64,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -217,6 +217,12 @@ pub struct CreateInvoiceParams {
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub expiry: Option<i64>,
+    pub r_preimage: Option<String>,
+    pub is_blinded: Option<bool>,
+    pub is_keysend: Option<bool>,
+    pub is_amp: Option<bool>,
+    pub is_private: Option<bool>,
+    // pub route_hints: Option<Vec<HopHint>>, TODO
 }
 impl Default for CreateInvoiceParams {
     fn default() -> Self {
@@ -227,6 +233,11 @@ impl Default for CreateInvoiceParams {
             description: None,
             description_hash: None,
             expiry: None,
+            r_preimage: None,
+            is_blinded: Some(false),
+            is_keysend: Some(false),
+            is_amp: Some(false),
+            is_private: Some(false),
         }
     }
 }
@@ -241,4 +252,37 @@ pub struct PayCode {
     pub active: Option<bool>,
     pub single_use: Option<bool>,
     pub used: Option<bool>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PayInvoiceParams {
+    pub invoice: String,
+    pub fee_limit_msat: Option<i64>, // mutually exclusive with fee_limit_percentage (only set one or the other) 
+    pub fee_limit_percentage: Option<f64>, // mutually exclusive with fee_limit_msat
+    pub timeout_seconds: Option<i64>,
+    pub amount_msats: Option<i64>, // used the specify the amount for zero amount invoices
+
+    pub max_parts: Option<i64>, // The maximum number of partial payments that may be use to complete the full amount.
+    pub first_hop_pubkey: Option<String>,
+    pub last_hop_pubkey: Option<String>,
+    pub allow_self_payment: Option<bool>, // circular payments
+    pub is_amp: Option<bool>,             // enable atomic multipath payments
+}
+impl Default for PayInvoiceParams {
+    fn default() -> Self {
+        Self {
+            invoice: "".to_string(),
+            fee_limit_msat: None,
+            fee_limit_percentage: None, // 0.2% is a sensible default
+            timeout_seconds: Some(60),   // default to 60 seconds timeout
+            amount_msats: None,
+
+            max_parts: None,
+            first_hop_pubkey: None,
+            last_hop_pubkey: None,
+            allow_self_payment: None, // allow self (circurlar) payments
+            is_amp: None,
+        }
+    }
 }

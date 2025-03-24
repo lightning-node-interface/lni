@@ -16,6 +16,13 @@ export interface Bolt11Resp {
   paymentHash: string
   serialized: string
 }
+export interface PhoenixPayInvoiceResp {
+  amountSat: number
+  routingFeeSat: number
+  paymentId: string
+  paymentHash: string
+  preimage: string
+}
 export interface ClnConfig {
   url: string
   rune: string
@@ -23,6 +30,14 @@ export interface ClnConfig {
 export interface ClnNode {
   url: string
   rune: string
+}
+export interface LndConfig {
+  url: string
+  macaroon: string
+}
+export interface LndNode {
+  url: string
+  macaroon: string
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
@@ -142,7 +157,7 @@ export interface LightningBalanceResponse {
 export interface PayInvoiceResponse {
   paymentHash: string
   preimage: string
-  fee: number
+  feeMsats: number
 }
 export interface PayKeysendResponse {
   fee: number
@@ -167,6 +182,11 @@ export interface CreateInvoiceParams {
   description?: string
   descriptionHash?: string
   expiry?: number
+  rPreimage?: string
+  isBlinded?: boolean
+  isKeysend?: boolean
+  isAmp?: boolean
+  isPrivate?: boolean
 }
 export interface PayCode {
   offerId: string
@@ -175,6 +195,18 @@ export interface PayCode {
   active?: boolean
   singleUse?: boolean
   used?: boolean
+}
+export interface PayInvoiceParams {
+  invoice: string
+  feeLimitMsat?: number
+  feeLimitPercentage?: number
+  timeoutSeconds?: number
+  amountMsats?: number
+  maxParts?: number
+  firstHopPubkey?: string
+  lastHopPubkey?: string
+  allowSelfPayment?: boolean
+  isAmp?: boolean
 }
 export interface Payment {
   paymentId: string
@@ -191,6 +223,7 @@ export declare class PhoenixdNode {
   getConfig(): PhoenixdConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   getOffer(): Promise<PayCode>
   lookupInvoice(paymentHash: string): Promise<Transaction>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
@@ -203,6 +236,22 @@ export declare class ClnNode {
   getConfig(): ClnConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(paymentHash: string): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
+}
+export declare class LndNode {
+  constructor(config: LndConfig)
+  getUrl(): string
+  getMacaroon(): string
+  getConfig(): LndConfig
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   getOffer(search?: string | undefined | null): Promise<PayCode>
   listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>

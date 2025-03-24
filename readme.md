@@ -266,16 +266,17 @@ Todo
 - [X] uniffi bindings for Android and IOS
 - [X] react-native - uniffi-bindgen-react-native
 - [X] async promise architecture for bindings
-- [ ] Tor Socks5 fetch
+- [ ] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
 - [ ] implement lightning nodes
     - [X] phoenixd
     - [X] cln
-    - [ ] lnd
+    - [X] lnd
     - [ ] lndk
     - [ ] ldk_node
     - [ ] eclair
     - [ ] strike?? (BOLT 12 support, BOLT 11 blinded path support?)
-    - [ ] nwc?? (AlbyHub - blinded path support?)
+    - [ ] nwc?? (AlbyHub - blinded path support?) https://github.com/rust-nostr/nostr/blob/master/crates/nwc/examples/nwc.rs
+    - [ ] LNURL?
 
 
 To Research
