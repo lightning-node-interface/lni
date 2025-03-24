@@ -1,7 +1,6 @@
 use lightning_invoice::Bolt11Invoice;
 use std::error::Error;
 use std::str::FromStr;
-use regex::Regex;
 
 pub fn calculate_fee_msats(
     bolt11: &str,
@@ -9,7 +8,8 @@ pub fn calculate_fee_msats(
     amount_msats: Option<u64>,
 ) -> Result<u64, Box<dyn Error>> {
     // Decode the BOLT11 invoice
-    let invoice = Bolt11Invoice::from_str(bolt11).unwrap();
+    let invoice = Bolt11Invoice::from_str(bolt11)
+        .map_err(|e| format!("Failed to parse BOLT11 invoice: {}", e))?;
 
     println!("invoice: {:?}", invoice);
 

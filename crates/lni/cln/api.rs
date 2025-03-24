@@ -427,7 +427,15 @@ pub fn lookup_invoice(
     limit: Option<i64>,
 ) -> Result<Transaction, ApiError> {
     match lookup_invoices(url, rune, payment_hash, from, limit) {
-        Ok(transactions) => Ok(transactions.first().unwrap().clone()),
+        Ok(transactions) => {
+            if let Some(tx) = transactions.first() {
+                Ok(tx.clone())
+            } else {
+                Err(ApiError::Api {
+                    reason: "No matching invoice found".to_string(),
+                })
+            }
+        }
         Err(e) => Err(e),
     }
 }

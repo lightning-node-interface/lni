@@ -119,8 +119,12 @@ pub async fn pay_invoice(
         .send()
         .unwrap();
     println!("Status: {}", response.status());
+    let response_text = response.text().unwrap();
     let pay_invoice_resp: PhoenixPayInvoiceResp =
-        serde_json::from_str(&response.text().unwrap()).unwrap();
+        serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
+            reason: format!("Failed to parse pay_invoice response: {}", e),
+        })?;
+
     Ok(PayInvoiceResponse {
         payment_hash: pay_invoice_resp.payment_hash,
         preimage: pay_invoice_resp.preimage,
