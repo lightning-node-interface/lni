@@ -276,6 +276,7 @@ Todo
     - [ ] eclair
     - [ ] strike?? (BOLT 12 support, BOLT 11 blinded path support?)
     - [ ] nwc?? (AlbyHub - blinded path support?) https://github.com/rust-nostr/nostr/blob/master/crates/nwc/examples/nwc.rs
+    - [ ] LNURL?
 
 
 To Research

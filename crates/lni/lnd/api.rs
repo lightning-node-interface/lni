@@ -1,9 +1,12 @@
 use super::types::{
     Bolt11Resp, FetchInvoiceResponse, GetInfoResponse, ListInvoiceResponse,
-    ListInvoiceResponseWrapper,
+    ListInvoiceResponseWrapper, LndPayInvoiceResponseWrapper,
 };
 use crate::types::NodeInfo;
-use crate::{ApiError, CreateInvoiceParams, InvoiceType, PayCode, PayInvoiceResponse, Transaction};
+use crate::{
+    calculate_fee_msats, ApiError, CreateInvoiceParams, InvoiceType, PayCode, PayInvoiceParams,
+    PayInvoiceResponse, Transaction,
+};
 use reqwest::header;
 
 // Docs
@@ -104,6 +107,126 @@ pub async fn create_invoice(
             });
         }
     }
+}
+
+pub async fn pay_invoice(
+    url: String,
+    macaroon: String,
+    invoice_params: PayInvoiceParams,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = client(macaroon.clone());
+    let mut params: Vec<(&str, Option<serde_json::Value>)> = vec![];
+    params.push((
+        "payment_request",
+        Some(serde_json::Value::String(
+            (invoice_params.invoice.to_string()),
+        )),
+    ));
+    invoice_params.amount_msats.map(|amt| {
+        params.push((
+            "amt_msat",
+            Some(serde_json::Value::String((amt.to_string()))),
+        ))
+    });
+    invoice_params.allow_self_payment.map(|allow| {
+        params.push(("allow_self_payment", Some(serde_json::Value::Bool(allow))));
+    });
+
+    // calculate fee limit
+    if invoice_params.fee_limit_msat.is_some() && invoice_params.fee_limit_percentage.is_some() {
+        return Err(ApiError::Json {
+            reason: "Cannot set both fee_limit_msat and fee_limit_percentage".to_string(),
+        });
+    }
+    invoice_params.fee_limit_msat.map(|amt| {
+        params.push((
+            "fee_limit_msat",
+            Some(serde_json::Value::String(amt.to_string())),
+        ));
+    });
+    invoice_params.fee_limit_percentage.map(|fee_percentage| {
+        let fee_msats = calculate_fee_msats(
+            invoice_params.invoice.as_str(),
+            fee_percentage,
+            invoice_params.amount_msats.map(|v| v as u64),
+        )
+        .unwrap();
+        params.push((
+            "fee_limit_msat",
+            Some(serde_json::Value::String(fee_msats.to_string())),
+        ));
+    });
+
+    invoice_params.first_hop_pubkey.map(|pubkey| {
+        params.push((
+            "first_hop_pubkey",
+            Some(serde_json::Value::String(pubkey.to_string())),
+        ))
+    });
+    invoice_params
+        .is_amp
+        .map(|is_amp| params.push(("is_amp", Some(serde_json::Value::Bool(is_amp)))));
+    invoice_params.last_hop_pubkey.map(|pubkey| {
+        params.push((
+            "last_hop_pubkey",
+            Some(serde_json::Value::String(pubkey.to_string())),
+        ))
+    });
+    invoice_params.max_parts.map(|parts| {
+        params.push((
+            "max_parts",
+            Some(serde_json::Value::String(parts.to_string())),
+        ))
+    });
+    invoice_params.timeout_seconds.map(|timeout| {
+        params.push((
+            "timeout_seconds",
+            Some(serde_json::Value::String(timeout.to_string())),
+        ))
+    });
+
+    let params_json: serde_json::Value = params
+        .into_iter()
+        .filter_map(|(k, v)| v.map(|v| (k.to_string(), v)))
+        .collect::<serde_json::Map<String, _>>()
+        .into();
+
+    println!("PayInvoice params: {:?}", &params_json);
+
+    let req_url = format!("{}/v2/router/send", url);
+    let response: reqwest::blocking::Response =
+        client.post(&req_url).json(&params_json).send().unwrap();
+
+    println!("Status: {}", response.status());
+    let invoice_str = response.text().unwrap();
+
+    // * LND returns a stream of JSON objects, one per line, so we need to parse each line and grab the JSON string and then parse
+    let invoice_lines: Vec<&str> = invoice_str.split('\n').collect();
+    let pay_invoice_resp: LndPayInvoiceResponseWrapper = invoice_lines
+        .iter()
+        .filter_map(|line| {
+            let resp: Result<LndPayInvoiceResponseWrapper, _> = serde_json::from_str(line);
+            match resp {
+                Ok(r) if r.result.status == "SUCCEEDED" => Some(r),
+                _ => None,
+            }
+        })
+        .next()
+        .ok_or_else(|| crate::ApiError::Json {
+            reason: "No successful payment found".to_string(),
+        })?;
+
+    println!("PayInvoice response final: {:?}", &pay_invoice_resp);
+
+    Ok(PayInvoiceResponse {
+        payment_hash: pay_invoice_resp.result.payment_hash,
+        preimage: pay_invoice_resp.result.payment_preimage,
+        fee_msats: pay_invoice_resp
+            .result
+            .fee_msat
+            .parse::<i64>()
+            .unwrap_or_default(),
+    })
 }
 
 // decode - bolt11 invoice (lnbc) TODO decode: bolt12 invoice (lni) or bolt12 offer (lno)

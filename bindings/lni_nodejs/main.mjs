@@ -42,6 +42,11 @@ async function phoenixd() {
 
   const offer = await node.getOffer();
   console.log("Get Offer:", offer);
+
+  // const pay_invoice_resp = await node.payInvoice({
+  //   invoice: ""
+  // })
+  // console.log("pay_invoice_resp:", pay_invoice_resp);
 }
 
 async function cln() {
@@ -126,10 +131,20 @@ async function lnd() {
   console.log("LND Transactions:", txns);
 }
 
+async function test() {
+  const config = {
+    url: process.env.PHOENIXD_URL,
+    password: process.env.PHOENIXD_PASSWORD,
+    test_hash: process.env.PHOENIXD_TEST_PAYMENT_HASH,
+  };
+  const node = new PhoenixdNode(config);
+}
+
 async function main() {
-  phoenixd();
-  cln();
-  lnd();
+  // phoenixd();
+  // cln();
+  // lnd();
+  test();
 }
 
 main();

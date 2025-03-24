@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use crate::PayCode;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Chain {
@@ -145,4 +145,78 @@ pub struct ListInvoiceResponse {
     pub amp_invoice_state: Option<serde_json::Value>,
     pub is_blinded: Option<bool>,
     pub blinded_path_config: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LndPayInvoiceResponse {
+    pub payment_hash: String,
+    pub value: String,
+    pub creation_date: String,
+    pub fee: String,
+    pub payment_preimage: String,
+    pub value_sat: String,
+    pub value_msat: String,
+    pub payment_request: String,
+    pub status: String,
+    pub fee_sat: String,
+    pub fee_msat: String,
+    pub creation_time_ns: String,
+    pub htlcs: Option<Vec<Htlc>>,
+    pub payment_index: String,
+    pub failure_reason: String,
+    pub first_hop_custom_records: Option<serde_json::Value>,
+}
+#[derive(Debug, Deserialize)]
+pub struct LndPayInvoiceResponseWrapper {
+    pub result: LndPayInvoiceResponse,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct Hop {
+    pub chan_id: String,
+    pub chan_capacity: String,
+    pub amt_to_forward: String,
+    pub fee: String,
+    pub expiry: i64,
+    pub amt_to_forward_msat: String,
+    pub fee_msat: String,
+    pub pub_key: String,
+    pub tlv_payload: bool,
+    pub mpp_record: Option<MppRecord>,
+    pub amp_record: Option<serde_json::Value>,
+    pub custom_records: serde_json::Value,
+    pub metadata: String,
+    pub blinding_point: String,
+    pub encrypted_data: String,
+    pub total_amt_msat: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MppRecord {
+    pub payment_addr: String,
+    pub total_amt_msat: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Route {
+    pub total_time_lock: i64,
+    pub total_fees: String,
+    pub total_amt: String,
+    pub hops: Vec<Hop>,
+    pub total_fees_msat: String,
+    pub total_amt_msat: String,
+    pub first_hop_amount_msat: String,
+    pub custom_channel_data: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Htlc {
+    pub attempt_id: String,
+    pub status: String,
+    pub route: Route,
+    pub attempt_time_ns: String,
+    pub resolve_time_ns: String,
+    pub failure: Option<serde_json::Value>,
+    pub preimage: String,
 }

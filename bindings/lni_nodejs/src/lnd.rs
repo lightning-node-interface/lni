@@ -1,4 +1,4 @@
-use lni::{lnd::lib::LndConfig, CreateInvoiceParams};
+use lni::{lnd::lib::LndConfig, CreateInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -43,22 +43,31 @@ impl LndNode {
     &self,
     params: CreateInvoiceParams,
   ) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::create_invoice(
-      self.inner.url.clone(),
-      self.inner.macaroon.clone(),
-      params
-
-    )
-    .await
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txn =
+      lni::lnd::api::create_invoice(self.inner.url.clone(), self.inner.macaroon.clone(), params)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice =
+      lni::lnd::api::pay_invoice(self.inner.url.clone(), self.inner.macaroon.clone(), params)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(invoice)
+  }
+
+  #[napi]
   pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
-    let offer = lni::lnd::api::get_offer(self.inner.url.clone(), self.inner.macaroon.clone(), search)
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer =
+      lni::lnd::api::get_offer(self.inner.url.clone(), self.inner.macaroon.clone(), search)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 

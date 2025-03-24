@@ -3,7 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceParams,
+    PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -45,6 +46,13 @@ impl ClnNode {
             params.expiry,
         )
         .await
+    }
+
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::cln::api::pay_invoice(self.url.clone(), self.rune.clone(), params).await
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
@@ -232,6 +240,28 @@ mod tests {
         // TODO test zero amount offers (i.e the amount is embedded in the offer)
     }
 
+    #[test]
+    async fn test_pay_invoice() {
+        match NODE
+            .pay_invoice(PayInvoiceParams {
+                invoice: "".to_string(),    // TODO remote grab a invoice maybe from LNURL
+                fee_limit_msat: Some(5000), // 5 sats fee limit
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(invoice_resp) => {
+                println!("Pay invoice resp: {:?}", invoice_resp);
+                assert!(
+                    !invoice_resp.payment_hash.is_empty(),
+                    "Payment Hash should not be empty"
+                );
+            }
+            Err(e) => {
+                panic!("Failed to pay invoice: {:?}", e);
+            }
+        }
+    }
     #[test]
     async fn test_list_offers() {
         match NODE.get_offer(None).await {

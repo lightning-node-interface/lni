@@ -1,7 +1,10 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::{phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceResponse, Transaction};
+use crate::{
+    phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceParams, PayInvoiceResponse,
+    Transaction,
+};
 
 use crate::{CreateInvoiceParams, PayCode};
 
@@ -43,6 +46,13 @@ impl PhoenixdNode {
             params.expiry,
         )
         .await
+    }
+
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        pay_invoice(self.url.clone(), self.password.clone(), params).await
     }
 
     pub async fn get_offer(&self) -> Result<PayCode, ApiError> {
@@ -157,6 +167,25 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    async fn test_pay_invoice() {
+        match NODE
+            .pay_invoice(PayInvoiceParams {
+                invoice: "".to_string(), // TODO pull from somewhere
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.payment_hash.is_empty(), "Payment hash should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to pay invoice: {:?}", e);
             }
         }
     }

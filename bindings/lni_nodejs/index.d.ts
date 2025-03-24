@@ -16,6 +16,13 @@ export interface Bolt11Resp {
   paymentHash: string
   serialized: string
 }
+export interface PhoenixPayInvoiceResp {
+  amountSat: number
+  routingFeeSat: number
+  paymentId: string
+  paymentHash: string
+  preimage: string
+}
 export interface ClnConfig {
   url: string
   rune: string
@@ -150,7 +157,7 @@ export interface LightningBalanceResponse {
 export interface PayInvoiceResponse {
   paymentHash: string
   preimage: string
-  fee: number
+  feeMsats: number
 }
 export interface PayKeysendResponse {
   fee: number
@@ -189,6 +196,18 @@ export interface PayCode {
   singleUse?: boolean
   used?: boolean
 }
+export interface PayInvoiceParams {
+  invoice: string
+  feeLimitMsat?: number
+  feeLimitPercentage?: number
+  timeoutSeconds?: number
+  amountMsats?: number
+  maxParts?: number
+  firstHopPubkey?: string
+  lastHopPubkey?: string
+  allowSelfPayment?: boolean
+  isAmp?: boolean
+}
 export interface Payment {
   paymentId: string
   circId: string
@@ -204,6 +223,7 @@ export declare class PhoenixdNode {
   getConfig(): PhoenixdConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   getOffer(): Promise<PayCode>
   lookupInvoice(paymentHash: string): Promise<Transaction>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
@@ -216,6 +236,7 @@ export declare class ClnNode {
   getConfig(): ClnConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   getOffer(search?: string | undefined | null): Promise<PayCode>
   listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
@@ -230,6 +251,7 @@ export declare class LndNode {
   getConfig(): LndConfig
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   getOffer(search?: string | undefined | null): Promise<PayCode>
   listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>

@@ -1,8 +1,10 @@
 use super::types::{
-    Bolt11Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
+    Bolt11Req, Bolt11Resp, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
+    PhoenixPayInvoiceResp,
 };
-use crate::phoenixd::types::Bolt11Resp;
-use crate::{ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceResponse, Transaction};
+use crate::{
+    ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+};
 use serde_urlencoded;
 
 // TODO
@@ -95,6 +97,37 @@ pub async fn create_invoice(
     }
 }
 
+pub async fn pay_invoice(
+    url: String,
+    password: String,
+    invoice_params: PayInvoiceParams,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = reqwest::blocking::Client::new();
+    let req_url = format!("{}/payinvoice", url);
+    let mut params = vec![];
+    if invoice_params.amount_msats.is_some() {
+        params.push((
+            "amountSat",
+            Some((invoice_params.amount_msats.unwrap_or_default() / 1000).to_string()),
+        ));
+    }
+    params.push(("invoice", Some(invoice_params.invoice.to_string())));
+    let response: reqwest::blocking::Response = client
+        .post(&req_url)
+        .basic_auth("", Some(password))
+        .form(&params)
+        .send()
+        .unwrap();
+    println!("Status: {}", response.status());
+    let pay_invoice_resp: PhoenixPayInvoiceResp =
+        serde_json::from_str(&response.text().unwrap()).unwrap();
+    Ok(PayInvoiceResponse {
+        payment_hash: pay_invoice_resp.payment_hash,
+        preimage: pay_invoice_resp.preimage,
+        fee_msats: pay_invoice_resp.routing_fee_sat * 1000,
+    })
+}
+
 // TODO decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
 // Not supported by Phoenixd api so maybe we can use ldk to decode the bolt12 offer?
 pub async fn decode(str: String) -> Result<String, ApiError> {
@@ -155,11 +188,11 @@ pub async fn pay_offer(
     Ok(PayInvoiceResponse {
         payment_hash: pay_resp.payment_hash,
         preimage: pay_resp.preimage,
-        fee: pay_resp.routing_fee_sat,
+        fee_msats: pay_resp.routing_fee_sat * 1000,
     })
 }
 
-// TODO implement list_offers, currently just one 
+// TODO implement list_offers, currently just one is returned by Phoenixd
 pub async fn list_offers() {}
 
 pub fn lookup_invoice(

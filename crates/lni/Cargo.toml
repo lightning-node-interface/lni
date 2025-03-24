@@ -28,6 +28,9 @@ serde_urlencoded = "0.7"
 rand = "0.8"
 hex = "0.4"
 sha2 = "0.10"
+lightning-invoice = "0.33.1"
+regex = "1"
+json = "0.12"
 
 [dev-dependencies]
 async-attributes = "1.1.1"

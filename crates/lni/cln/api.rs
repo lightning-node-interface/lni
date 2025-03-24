@@ -3,7 +3,10 @@ use super::types::{
     ListOffersResponse, PayResponse,
 };
 use crate::types::NodeInfo;
-use crate::{ApiError, InvoiceType, PayCode, PayInvoiceResponse, Transaction};
+use crate::{
+    calculate_fee_msats, ApiError, InvoiceType, PayCode, PayInvoiceParams, PayInvoiceResponse,
+    Transaction,
+};
 use reqwest::header;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
@@ -126,6 +129,88 @@ pub async fn create_invoice(
             })
         }
     }
+}
+
+pub async fn pay_invoice(
+    url: String,
+    rune: String,
+    invoice_params: PayInvoiceParams,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = clnrest_client(rune.clone());
+    let pay_url = format!("{}/v1/pay", url);
+
+    let mut params: Vec<(&str, Option<serde_json::Value>)> = vec![];
+    params.push((
+        "bolt11",
+        Some(serde_json::Value::String(
+            (invoice_params.invoice.to_string()),
+        )),
+    ));
+    invoice_params.amount_msats.map(|amt| {
+        params.push((
+            "amount_msat",
+            Some(serde_json::Value::String((amt.to_string()))),
+        ))
+    });
+
+    // calculate fee limit
+    if invoice_params.fee_limit_msat.is_some() && invoice_params.fee_limit_percentage.is_some() {
+        return Err(ApiError::Json {
+            reason: "Cannot set both fee_limit_msat and fee_limit_percentage".to_string(),
+        });
+    }
+    invoice_params.fee_limit_msat.map(|amt| {
+        params.push(("maxfee", Some(serde_json::Value::String(amt.to_string()))));
+    });
+    invoice_params.fee_limit_percentage.map(|fee_percentage| {
+        let fee_msats = calculate_fee_msats(
+            invoice_params.invoice.as_str(),
+            fee_percentage,
+            invoice_params.amount_msats.map(|v| v as u64),
+        )
+        .unwrap();
+        params.push((
+            "maxfee",
+            Some(serde_json::Value::String(fee_msats.to_string())),
+        ));
+    });
+    invoice_params.timeout_seconds.map(|timeout| {
+        params.push((
+            "retry_for",
+            Some(serde_json::Value::String(timeout.to_string())),
+        ))
+    });
+
+    let params_json: serde_json::Value = params
+        .into_iter()
+        .filter_map(|(k, v)| v.map(|v| (k.to_string(), v)))
+        .collect::<serde_json::Map<String, _>>()
+        .into();
+
+    println!("PayInvoice params: {:?}", &params_json);
+
+    let pay_response: reqwest::blocking::Response = client
+        .post(&pay_url)
+        .header("Content-Type", "application/json")
+        .json(&params_json)
+        .send()
+        .unwrap();
+    let pay_response_text = pay_response.text().unwrap();
+    let pay_response_text = pay_response_text.as_str();
+    let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Err(ApiError::Json {
+                reason: pay_response_text.to_string(),
+            })
+        }
+    };
+
+    Ok(PayInvoiceResponse {
+        payment_hash: pay_resp.payment_hash,
+        preimage: pay_resp.payment_preimage,
+        fee_msats: pay_resp.amount_sent_msat - pay_resp.amount_msat,
+    })
 }
 
 // decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
@@ -330,7 +415,7 @@ pub async fn pay_offer(
     Ok(PayInvoiceResponse {
         payment_hash: pay_resp.payment_hash,
         preimage: pay_resp.payment_preimage,
-        fee: pay_resp.amount_sent_msat - pay_resp.amount_msat,
+        fee_msats: pay_resp.amount_sent_msat - pay_resp.amount_msat,
     })
 }
 

@@ -4,6 +4,7 @@ extern crate napi_derive;
 
 pub use lni::ApiError;
 pub use lni::types::*;
+pub use lni::utils::*;
 pub use lni::types::{Transaction, InvoiceType, ListTransactionsParams, PayInvoiceResponse};
 
 mod phoenixd;

@@ -44,5 +44,8 @@ pub mod lnd {
 pub mod types;
 pub use types::*;
 
+pub mod utils;
+pub use utils::*;
+
 pub mod database;
 pub use database::{Db, DbError, Payment};

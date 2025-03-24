@@ -3,7 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceParams,
+    PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -37,6 +38,13 @@ impl LndNode {
         crate::lnd::api::create_invoice(self.url.clone(), self.macaroon.clone(), params).await
     }
 
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::lnd::api::pay_invoice(self.url.clone(), self.macaroon.clone(), params).await
+    }
+
     pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::lnd::api::get_offer(self.url.clone(), self.macaroon.clone(), search).await
     }
@@ -65,11 +73,7 @@ impl LndNode {
         &self,
         payment_hash: String,
     ) -> Result<crate::Transaction, ApiError> {
-        crate::lnd::api::lookup_invoice(
-            self.url.clone(),
-            self.macaroon.clone(),
-            Some(payment_hash),
-        )
+        crate::lnd::api::lookup_invoice(self.url.clone(), self.macaroon.clone(), Some(payment_hash))
     }
 
     pub async fn list_transactions(
@@ -91,15 +95,15 @@ impl LndNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::InvoiceType;
+    use crate::{InvoiceType, PayInvoiceParams};
 
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
-    use std::env;
-    use tokio::test;
     use rand::Rng;
     use sha2::{Digest, Sha256};
+    use std::env;
+    use tokio::test;
 
     lazy_static! {
         static ref URL: String = {
@@ -153,7 +157,7 @@ mod tests {
         // Generate a random 32-byte preimage
         let mut preimage_bytes = [0u8; 32];
         rand::thread_rng().fill(&mut preimage_bytes);
-        
+
         // Hex encode the preimage for human readability
         let preimage = hex::encode(preimage_bytes);
         // Note: payment_hash is automatically derived from the preimage by the LND node
@@ -212,10 +216,30 @@ mod tests {
                 );
             }
             Err(e) => {
-                panic!("BOLT11 with blinded create_invoice Failed to make invoice: {:?}", e);
+                panic!(
+                    "BOLT11 with blinded create_invoice Failed to make invoice: {:?}",
+                    e
+                );
             }
         }
+    }
 
+    #[test]
+    async fn test_pay_invoice() {
+        match NODE.pay_invoice(PayInvoiceParams{
+            invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
+            fee_limit_percentage: Some(1.0), // 1% fee limit
+            allow_self_payment: Some(true),
+            ..Default::default()
+        }).await {
+            Ok(invoice_resp) => {
+                // println!("Pay invoice resp: {:?}", invoice_resp);
+                assert!(!invoice_resp.payment_hash.is_empty(), "Payment Hash should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to pay invoice: {:?}", e);
+            }
+        }
     }
 
     // #[test]

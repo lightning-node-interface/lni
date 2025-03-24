@@ -1,4 +1,4 @@
-use lni::{phoenixd::lib::PhoenixdConfig, CreateInvoiceParams};
+use lni::{phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -59,10 +59,23 @@ impl PhoenixdNode {
   }
 
   #[napi]
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice =
+      lni::phoenixd::api::pay_invoice(self.inner.url.clone(), self.inner.password.clone(), params)
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(invoice)
+  }
+
+  #[napi]
   pub async fn get_offer(&self) -> Result<lni::PayCode> {
-    let paycode = lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let paycode =
+      lni::phoenixd::api::get_offer(self.inner.url.clone(), self.inner.password.clone())
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(paycode)
   }
 
