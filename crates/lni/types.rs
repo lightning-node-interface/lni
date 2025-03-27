@@ -26,6 +26,28 @@ pub struct NodeInfo {
     pub network: String,
     pub block_height: i64,
     pub block_hash: String,
+    pub send_balance_msat: i64,
+    pub receive_balance_msat: i64,
+    pub fee_credit_balance_msat: i64,
+    pub pending_balance_msat: i64,
+    pub inactive_balance_msat: i64,
+}
+impl Default for NodeInfo {
+    fn default() -> Self {
+        Self {
+            alias: String::new(),
+            color: String::new(),
+            pubkey: String::new(),
+            network: String::new(),
+            block_height: 0,
+            block_hash: String::new(),
+            send_balance_msat: 0,
+            receive_balance_msat: 0,
+            fee_credit_balance_msat: 0,
+            pending_balance_msat: 0,
+            inactive_balance_msat: 0,
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]

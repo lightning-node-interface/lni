@@ -24,6 +24,10 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
     println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
+    // balance
+    // /v1/listfunds
+    // https://github.com/ZeusLN/zeus/blob/master/backends/CoreLightningRequestHandler.ts#L28
+
     let node_info = NodeInfo {
         alias: info.alias,
         color: info.color,
@@ -31,6 +35,7 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
         network: info.network,
         block_height: info.blockheight,
         block_hash: "".to_string(),
+        ..Default::default()
     };
     Ok(node_info)
 }

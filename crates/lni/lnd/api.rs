@@ -38,6 +38,11 @@ pub fn get_info(url: String, macaroon: String) -> Result<NodeInfo, ApiError> {
     let response_text = response_text.as_str();
     let info: GetInfoResponse = serde_json::from_str(&response_text)?;
 
+    // get balance
+    // /v1/balance/channels
+    // https://lightning.engineering/api-docs/api/lnd/lightning/channel-balance/
+    // send_balance_msats, receive_balance_msats, pending_balance, inactive_balance
+
     let node_info = NodeInfo {
         alias: info.alias,
         color: info.color,
@@ -45,6 +50,7 @@ pub fn get_info(url: String, macaroon: String) -> Result<NodeInfo, ApiError> {
         network: info.chains[0].network.clone(),
         block_height: info.block_height,
         block_hash: info.block_hash,
+        ..Default::default()
     };
     Ok(node_info)
 }
