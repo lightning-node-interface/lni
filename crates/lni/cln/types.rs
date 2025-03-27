@@ -88,3 +88,23 @@ pub struct Bolt12Resp {
 pub struct ListOffersResponse {
     pub offers: Vec<PayCode>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ChannelWrapper {
+    #[serde(skip)]
+    pub outputs: Vec<serde_json::Value>,
+    pub channels: Vec<Channel>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Channel {
+    pub peer_id: String,
+    pub connected: bool,
+    pub state: String,
+    pub channel_id: String,
+    pub short_channel_id: Option<String>,
+    pub our_amount_msat: i64,
+    pub amount_msat: i64,
+    pub funding_txid: String,
+    pub funding_output: i32,
+}
