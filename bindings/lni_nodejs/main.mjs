@@ -142,9 +142,9 @@ async function test() {
 
 async function main() {
   // phoenixd();
-  // cln();
+  cln();
   // lnd();
-  test();
+  // test();
 }
 
 main();
