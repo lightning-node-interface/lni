@@ -26,11 +26,13 @@ pub struct NodeInfo {
     pub network: String,
     pub block_height: i64,
     pub block_hash: String,
-    pub send_balance_msat: i64,
-    pub receive_balance_msat: i64,
-    pub fee_credit_balance_msat: i64,
-    pub pending_balance_msat: i64,
-    pub inactive_balance_msat: i64,
+    pub send_balance_msat: i64, // Sum of channels send capacity
+    pub receive_balance_msat: i64, // Sum of channels receive capacity
+    pub fee_credit_balance_msat: i64, // used in Phoenixd, typically first 30,000 sats are a "fee credit" aka custodial, but cannot withdraw (balance is used for future fees). Then it opens channel when it gets above 30,000 sats.
+    pub unsettled_send_balance_msat: i64, // Sum of channels send unsettled balances.
+    pub unsettled_receive_balance_msat: i64, // Sum of channels receive unsettled balances.
+    pub pending_open_send_balance: i64, // Sum of channels pending open send balances.
+    pub pending_open_receive_balance: i64, // Sum of channels pending open receive balances.
 }
 impl Default for NodeInfo {
     fn default() -> Self {
@@ -44,8 +46,10 @@ impl Default for NodeInfo {
             send_balance_msat: 0,
             receive_balance_msat: 0,
             fee_credit_balance_msat: 0,
-            pending_balance_msat: 0,
-            inactive_balance_msat: 0,
+            unsettled_send_balance_msat: 0,
+            unsettled_receive_balance_msat: 0,
+            pending_open_send_balance: 0,
+            pending_open_receive_balance: 0,
         }
     }
 }
@@ -280,7 +284,7 @@ pub struct PayCode {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayInvoiceParams {
     pub invoice: String,
-    pub fee_limit_msat: Option<i64>, // mutually exclusive with fee_limit_percentage (only set one or the other) 
+    pub fee_limit_msat: Option<i64>, // mutually exclusive with fee_limit_percentage (only set one or the other)
     pub fee_limit_percentage: Option<f64>, // mutually exclusive with fee_limit_msat
     pub timeout_seconds: Option<i64>,
     pub amount_msats: Option<i64>, // used the specify the amount for zero amount invoices
@@ -297,7 +301,7 @@ impl Default for PayInvoiceParams {
             invoice: "".to_string(),
             fee_limit_msat: None,
             fee_limit_percentage: None, // 0.2% is a sensible default
-            timeout_seconds: Some(60),   // default to 60 seconds timeout
+            timeout_seconds: Some(60),  // default to 60 seconds timeout
             amount_msats: None,
 
             max_parts: None,

@@ -39,8 +39,7 @@ pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
         send_balance_msat: info.channels[0].balance_sat * 1000,
         receive_balance_msat: info.channels[0].inbound_liquidity_sat * 1000,
         fee_credit_balance_msat: balance.fee_credit_sat * 1000,
-        pending_balance_msat: 0,
-        inactive_balance_msat: 0,
+        ..Default::default()
     };
     Ok(node_info)
 }
