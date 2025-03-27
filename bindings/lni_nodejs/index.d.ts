@@ -54,6 +54,13 @@ export interface NodeInfo {
   network: string
   blockHeight: number
   blockHash: string
+  sendBalanceMsat: number
+  receiveBalanceMsat: number
+  feeCreditBalanceMsat: number
+  unsettledSendBalanceMsat: number
+  unsettledReceiveBalanceMsat: number
+  pendingOpenSendBalance: number
+  pendingOpenReceiveBalance: number
 }
 export interface Transaction {
   type: string

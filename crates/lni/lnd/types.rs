@@ -220,3 +220,22 @@ pub struct Htlc {
     pub failure: Option<serde_json::Value>,
     pub preimage: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct BalancesResponse {
+    pub balance: String,
+    pub pending_open_balance: String,
+    pub local_balance: Amount,
+    pub remote_balance: Amount,
+    pub unsettled_local_balance: Amount,
+    pub unsettled_remote_balance: Amount,
+    pub pending_open_local_balance: Amount,
+    pub pending_open_remote_balance: Amount,
+    pub custom_channel_data: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Amount {
+    pub sat: Option<String>,
+    pub msat: Option<String>,
+}

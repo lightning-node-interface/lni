@@ -8,6 +8,31 @@ use napi_derive::napi;
 pub struct InfoResponse {
     #[serde(rename = "nodeId")] // Handle JSON field `nodeId`
     pub node_id: String,
+    pub channels: Vec<Channel>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Channel {
+    #[serde(rename = "state")]
+    pub state: String, // Normal
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+    #[serde(rename = "balanceSat")]
+    pub balance_sat: i64,
+    #[serde(rename = "inboundLiquiditySat")]
+    pub inbound_liquidity_sat: i64,
+    #[serde(rename = "capacitySat")]
+    pub capacity_sat: i64,
+    #[serde(rename = "fundingTxId")]
+    pub funding_tx_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetBalanceResponse {
+    #[serde(rename = "balanceSat")]
+    pub balance_sat: i64,
+    #[serde(rename = "feeCreditSat")]
+    pub fee_credit_sat: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

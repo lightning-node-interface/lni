@@ -3,7 +3,7 @@ use super::types::{
     PhoenixPayInvoiceResp,
 };
 use crate::{
-    ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction
 };
 use serde_urlencoded;
 
@@ -14,13 +14,20 @@ use serde_urlencoded;
 // https://phoenix.acinq.co/server/api
 
 pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
-    let url = format!("{}/getinfo", url);
+    let info_url = format!("{}/getinfo", url);
     let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
-    let response = client.get(&url).basic_auth("", Some(password)).send();
 
+    let response: Result<reqwest::blocking::Response, reqwest::Error> = client.get(&info_url).basic_auth("", Some(password.clone())).send();
     let response_text = response.unwrap().text().unwrap();
-    println!("Raw response: {}", response_text);
+    println!("get node info response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
+
+    // /getbalance
+    let balance_url = format!("{}/getbalance", url);
+    let balance_response: Result<reqwest::blocking::Response, reqwest::Error> = client.get(&balance_url).basic_auth("", Some(password)).send();
+    let balance_response_text = balance_response.unwrap().text().unwrap();
+    println!("balance_response: {}", balance_response_text);
+    let balance: GetBalanceResponse = serde_json::from_str(&balance_response_text)?;
 
     let node_info = NodeInfo {
         alias: "Phoenixd".to_string(),
@@ -29,6 +36,10 @@ pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
         network: "bitcoin".to_string(),
         block_height: 0,
         block_hash: "".to_string(),
+        send_balance_msat: info.channels[0].balance_sat * 1000,
+        receive_balance_msat: info.channels[0].inbound_liquidity_sat * 1000,
+        fee_credit_balance_msat: balance.fee_credit_sat * 1000,
+        ..Default::default()
     };
     Ok(node_info)
 }

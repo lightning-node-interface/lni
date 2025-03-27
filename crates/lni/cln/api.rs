@@ -1,5 +1,5 @@
 use super::types::{
-    Bolt11Resp, Bolt12Resp, FetchInvoiceResponse, InfoResponse, InvoicesResponse,
+    Bolt11Resp, Bolt12Resp, ChannelWrapper, FetchInvoiceResponse, InfoResponse, InvoicesResponse,
     ListOffersResponse, PayResponse,
 };
 use crate::types::NodeInfo;
@@ -21,8 +21,47 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
         .send()
         .unwrap();
     let response_text = response.text().unwrap();
-    println!("Raw response: {}", response_text);
+    // println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
+
+    // https://github.com/ZeusLN/zeus/blob/master/backends/CoreLightningRequestHandler.ts#L28
+    let funds_url = format!("{}/v1/listfunds", url);
+    let funds_response = client
+        .post(&funds_url)
+        .header("Content-Type", "application/json")
+        .send()
+        .unwrap();
+    let funds_response_text = funds_response.text().unwrap();
+    // println!("funds_response_text: {}", funds_response_text);
+    let channels: ChannelWrapper = serde_json::from_str(&funds_response_text)?;
+
+    let mut local_balance: i64 = 0;
+    let mut remote_balance: i64 = 0;
+    let mut unsettled_send_balance_msat: i64 = 0;
+    let mut unsettled_receive_balance_msat: i64 = 0;
+    let mut pending_open_send_balance: i64 = 0;
+    let mut pending_open_receive_balance: i64 = 0;
+    // rules and states here https://docs.corelightning.org/reference/listfunds
+    for channel in channels.channels.iter() {
+        if channel.state == "CHANNELD_NORMAL" && channel.connected {
+            // Active channels
+            local_balance += channel.our_amount_msat;
+            remote_balance += channel.amount_msat - channel.our_amount_msat;
+        } else if channel.state == "CHANNELD_NORMAL" && !channel.connected {
+            // Unsettled channels (previously inactive)
+            unsettled_send_balance_msat += channel.our_amount_msat;
+            unsettled_receive_balance_msat += channel.amount_msat - channel.our_amount_msat;
+        } else if channel.state == "CHANNELD_AWAITING_LOCKIN" 
+            || channel.state == "DUALOPEND_AWAITING_LOCKIN"
+            || channel.state == "DUALOPEND_OPEN_INIT"
+            || channel.state == "DUALOPEND_OPEN_COMMITTED"
+            || channel.state == "DUALOPEND_OPEN_COMMIT_READY"
+            || channel.state == "OPENINGD" {
+            // Pending open channels
+            pending_open_send_balance += channel.our_amount_msat;
+            pending_open_receive_balance += channel.amount_msat - channel.our_amount_msat;
+        }
+    }
 
     let node_info = NodeInfo {
         alias: info.alias,
@@ -31,6 +70,13 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
         network: info.network,
         block_height: info.blockheight,
         block_hash: "".to_string(),
+        send_balance_msat: local_balance,
+        receive_balance_msat: remote_balance,
+        unsettled_send_balance_msat,
+        unsettled_receive_balance_msat,
+        pending_open_send_balance,
+        pending_open_receive_balance,
+        ..Default::default()
     };
     Ok(node_info)
 }

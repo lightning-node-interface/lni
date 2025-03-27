@@ -168,6 +168,13 @@ dictionary NodeInfo {
     string network;
     i64 block_height;
     string block_hash;
+    i64 send_balance_msat;
+    i64 receive_balance_msat;
+    i64 fee_credit_balance_msat;
+    i64 unsettled_send_balance_msat;
+    i64 unsettled_receive_balance_msat;
+    i64 pending_open_send_balance;
+    i64 pending_open_receive_balance;
 };
 
 dictionary Transaction {
