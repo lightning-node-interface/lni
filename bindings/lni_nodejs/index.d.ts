@@ -34,10 +34,11 @@ export interface ClnNode {
 export interface LndConfig {
   url: string
   macaroon: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
 }
 export interface LndNode {
-  url: string
-  macaroon: string
+  config: LndConfig
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',

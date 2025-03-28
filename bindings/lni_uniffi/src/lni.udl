@@ -71,6 +71,8 @@ interface ClnNode {
 dictionary LndConfig {
     string url;
     string macaroon;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
 };
 
 interface LndNode {
