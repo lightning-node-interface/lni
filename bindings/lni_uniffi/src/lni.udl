@@ -3,6 +3,8 @@ namespace lni {};
 dictionary PhoenixdConfig {
     string url;
     string password;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
 };
 
 interface PhoenixdNode {
@@ -34,6 +36,8 @@ interface PhoenixdNode {
 dictionary ClnConfig {
     string url;
     string rune;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
 };
 
 interface ClnNode {
