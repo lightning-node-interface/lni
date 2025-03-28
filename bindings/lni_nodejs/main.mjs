@@ -132,19 +132,27 @@ async function lnd() {
 }
 
 async function test() {
+  // const config = {
+  //   url: process.env.PHOENIXD_URL,
+  //   password: process.env.PHOENIXD_PASSWORD,
+  //   test_hash: process.env.PHOENIXD_TEST_PAYMENT_HASH,
+  // };
+  // const node = new PhoenixdNode(config);
   const config = {
-    url: process.env.PHOENIXD_URL,
-    password: process.env.PHOENIXD_PASSWORD,
-    test_hash: process.env.PHOENIXD_TEST_PAYMENT_HASH,
+    url: process.env.LND_URL,
+    macaroon: process.env.LND_MACAROON,
+    socks5Proxy: "socks5h://127.0.0.1:9150",
+    acceptInvalidCerts: true,
   };
-  const node = new PhoenixdNode(config);
+  const node = new LndNode(config);
+  console.log("Node info:", await node.getInfo());
 }
 
 async function main() {
   // phoenixd();
-  cln();
+  // cln();
   // lnd();
-  // test();
+  test();
 }
 
 main();

@@ -8,49 +8,58 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Clone)]
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
+    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    pub accept_invalid_certs: Option<bool>,
+}
+impl Default for LndConfig {
+    fn default() -> Self {
+        Self {
+            url: "https://127.0.0.1:8080".to_string(),
+            macaroon: "".to_string(),
+            socks5_proxy: None,
+            accept_invalid_certs: Some(true),
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct LndNode {
-    pub url: String,
-    pub macaroon: String,
+    pub config: LndConfig,
 }
 
 impl LndNode {
     pub fn new(config: LndConfig) -> Self {
-        Self {
-            url: config.url,
-            macaroon: config.macaroon,
-        }
+        Self { config }
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::lnd::api::get_info(self.url.clone(), self.macaroon.clone())
+        crate::lnd::api::get_info(&self.config).await
     }
 
     pub async fn create_invoice(
         &self,
         params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
-        crate::lnd::api::create_invoice(self.url.clone(), self.macaroon.clone(), params).await
+        crate::lnd::api::create_invoice(&self.config, params).await
     }
 
     pub async fn pay_invoice(
         &self,
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::lnd::api::pay_invoice(self.url.clone(), self.macaroon.clone(), params).await
+        crate::lnd::api::pay_invoice(&self.config, params).await
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::lnd::api::get_offer(self.url.clone(), self.macaroon.clone(), search).await
+        crate::lnd::api::get_offer(&self.config, search).await
     }
 
     pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::lnd::api::list_offers(self.url.clone(), self.macaroon.clone(), search).await
+        crate::lnd::api::list_offers(&self.config, search).await
     }
 
     pub async fn pay_offer(
@@ -59,37 +68,25 @@ impl LndNode {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::lnd::api::pay_offer(
-            self.url.clone(),
-            self.macaroon.clone(),
-            offer,
-            amount_msats,
-            payer_note,
-        )
-        .await
+        crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
     pub async fn lookup_invoice(
         &self,
         payment_hash: String,
     ) -> Result<crate::Transaction, ApiError> {
-        crate::lnd::api::lookup_invoice(self.url.clone(), self.macaroon.clone(), Some(payment_hash))
+        crate::lnd::api::lookup_invoice(&self.config, Some(payment_hash)).await
     }
 
     pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::lnd::api::list_transactions(
-            self.url.clone(),
-            self.macaroon.clone(),
-            params.from,
-            params.limit,
-        )
+        crate::lnd::api::list_transactions(&self.config, params.from, params.limit).await
     }
 
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::lnd::api::decode(self.url.clone(), self.macaroon.clone(), str).await
+        crate::lnd::api::decode(&self.config, str).await
     }
 }
 
@@ -130,6 +127,9 @@ mod tests {
             LndNode::new(LndConfig {
                 url: URL.clone(),
                 macaroon: macaroon.clone(),
+                socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
+                accept_invalid_certs: Some(true),
+                ..Default::default()
             })
         };
     }
@@ -226,15 +226,21 @@ mod tests {
 
     #[test]
     async fn test_pay_invoice() {
-        match NODE.pay_invoice(PayInvoiceParams{
-            invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
-            fee_limit_percentage: Some(1.0), // 1% fee limit
-            allow_self_payment: Some(true),
-            ..Default::default()
-        }).await {
+        match NODE
+            .pay_invoice(PayInvoiceParams {
+                invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
+                fee_limit_percentage: Some(1.0), // 1% fee limit
+                allow_self_payment: Some(true),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(invoice_resp) => {
                 // println!("Pay invoice resp: {:?}", invoice_resp);
-                assert!(!invoice_resp.payment_hash.is_empty(), "Payment Hash should not be empty");
+                assert!(
+                    !invoice_resp.payment_hash.is_empty(),
+                    "Payment Hash should not be empty"
+                );
             }
             Err(e) => {
                 panic!("Failed to pay invoice: {:?}", e);

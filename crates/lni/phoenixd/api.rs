@@ -2,8 +2,10 @@ use super::types::{
     Bolt11Req, Bolt11Resp, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
     PhoenixPayInvoiceResp,
 };
+use super::PhoenixdConfig;
 use crate::{
-    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction
+    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, PayCode,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use serde_urlencoded;
 
@@ -13,19 +15,44 @@ use serde_urlencoded;
 
 // https://phoenix.acinq.co/server/api
 
-pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
-    let info_url = format!("{}/getinfo", url);
-    let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
+fn client(config: &PhoenixdConfig) -> reqwest::Client {
+    let mut client = reqwest::ClientBuilder::new();
+    if config.socks5_proxy.is_some() {
+        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
+        client = client.proxy(proxy);
+    }
+    if config.accept_invalid_certs.is_some() {
+        client = client.danger_accept_invalid_certs(true);
+    }
+    client.build().unwrap()
+}
 
-    let response: Result<reqwest::blocking::Response, reqwest::Error> = client.get(&info_url).basic_auth("", Some(password.clone())).send();
-    let response_text = response.unwrap().text().unwrap();
+pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
+    let info_url = format!("{}/getinfo", config.url);
+    let client: reqwest::Client = client(config);
+
+    let response = client
+        .get(&info_url)
+        .basic_auth("", Some(config.password.clone()))
+        .send()
+        .await
+        .expect("Failed to get node info");
+    let response_text = response.text().await.unwrap();
     println!("get node info response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
     // /getbalance
-    let balance_url = format!("{}/getbalance", url);
-    let balance_response: Result<reqwest::blocking::Response, reqwest::Error> = client.get(&balance_url).basic_auth("", Some(password)).send();
-    let balance_response_text = balance_response.unwrap().text().unwrap();
+    let balance_url = format!("{}/getbalance", config.url);
+    let balance_response = client
+        .get(&balance_url)
+        .basic_auth("", Some(config.password.clone()))
+        .send()
+        .await
+        .expect("Failed to get balance");
+    let balance_response_text = balance_response
+        .text()
+        .await
+        .expect("Failed to parse get balance");
     println!("balance_response: {}", balance_response_text);
     let balance: GetBalanceResponse = serde_json::from_str(&balance_response_text)?;
 
@@ -45,18 +72,17 @@ pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
 }
 
 pub async fn create_invoice(
-    url: String,
-    password: String,
+    config: &PhoenixdConfig,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
     description: Option<String>,
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = reqwest::blocking::Client::new();
+    let client = client(config);
     match invoice_type {
         InvoiceType::Bolt11 => {
-            let req_url = format!("{}/createinvoice", url);
+            let req_url = format!("{}/createinvoice", config.url);
 
             let bolt11_req = Bolt11Req {
                 description: description.clone(),
@@ -66,16 +92,17 @@ pub async fn create_invoice(
                 webhook_url: None, // TODO
             };
 
-            let response: reqwest::blocking::Response = client
+            let response = client
                 .post(&req_url)
-                .basic_auth("", Some(password))
+                .basic_auth("", Some(config.password.clone()))
                 .form(&bolt11_req)
                 .send()
-                .unwrap();
+                .await
+                .expect("Failed to create invoice");
 
             println!("Status: {}", response.status());
 
-            let invoice_str = response.text().unwrap();
+            let invoice_str = response.text().await.expect("Failed to parse get invoice");
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
 
@@ -109,12 +136,11 @@ pub async fn create_invoice(
 }
 
 pub async fn pay_invoice(
-    url: String,
-    password: String,
+    config: &PhoenixdConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = reqwest::blocking::Client::new();
-    let req_url = format!("{}/payinvoice", url);
+    let client = client(config);
+    let req_url = format!("{}/payinvoice", config.url);
     let mut params = vec![];
     if invoice_params.amount_msats.is_some() {
         params.push((
@@ -123,14 +149,15 @@ pub async fn pay_invoice(
         ));
     }
     params.push(("invoice", Some(invoice_params.invoice.to_string())));
-    let response: reqwest::blocking::Response = client
+    let response = client
         .post(&req_url)
-        .basic_auth("", Some(password))
+        .basic_auth("", Some(config.password.clone()))
         .form(&params)
         .send()
-        .unwrap();
+        .await
+        .expect("Failed to pay invoice");
     println!("Status: {}", response.status());
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.expect("Failed to parse pay invoice");
     let pay_invoice_resp: PhoenixPayInvoiceResp =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
             reason: format!("Failed to parse pay_invoice response: {}", e),
@@ -152,15 +179,16 @@ pub async fn decode(str: String) -> Result<String, ApiError> {
 // TODO On Phoenixd there is not currenly a way to create a new BOLT 12 offer
 
 // Get latest BOLT12 offer
-pub async fn get_offer(url: String, password: String) -> Result<PayCode, ApiError> {
-    let req_url = format!("{}/getoffer", url);
-    let client = reqwest::blocking::Client::new();
-    let response: reqwest::blocking::Response = client
+pub async fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
+    let req_url = format!("{}/getoffer", config.url);
+    let client = client(config);
+    let response = client
         .get(&req_url)
-        .basic_auth("", Some(password))
+        .basic_auth("", Some(config.password.clone()))
         .send()
-        .unwrap();
-    let offer_str = response.text().unwrap();
+        .await
+        .expect("Failed to get offer");
+    let offer_str = response.text().await.expect("Failed to parse get offer");
     Ok(PayCode {
         offer_id: "".to_string(),
         bolt12: offer_str.to_string(),
@@ -172,25 +200,25 @@ pub async fn get_offer(url: String, password: String) -> Result<PayCode, ApiErro
 }
 
 pub async fn pay_offer(
-    url: String,
-    password: String,
+    config: &PhoenixdConfig,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = reqwest::blocking::Client::new();
-    let req_url = format!("{}/payoffer", url);
-    let response: reqwest::blocking::Response = client
+    let req_url = format!("{}/payoffer", config.url);
+    let client = client(config);
+    let response = client
         .post(&req_url)
-        .basic_auth("", Some(password))
+        .basic_auth("", Some(config.password.clone()))
         .form(&[
             ("amountSat", (amount_msats / 1000).to_string()),
             ("offer", offer),
             ("message", payer_note.unwrap_or_default()),
         ])
         .send()
-        .unwrap();
-    let response_text = response.text().unwrap();
+        .await
+        .expect("Failed to pay offer");
+    let response_text = response.text().await.expect("Failed to parse pay offer");
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
@@ -210,15 +238,22 @@ pub async fn pay_offer(
 // TODO implement list_offers, currently just one is returned by Phoenixd
 pub async fn list_offers() {}
 
-pub fn lookup_invoice(
-    url: String,
-    password: String,
+pub async fn lookup_invoice(
+    config: &PhoenixdConfig,
     payment_hash: String,
 ) -> Result<Transaction, ApiError> {
-    let url = format!("{}/payments/incoming/{}", url, payment_hash);
-    let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
-    let response = client.get(&url).basic_auth("", Some(password)).send();
-    let response_text = response.unwrap().text().unwrap();
+    let url = format!("{}/payments/incoming/{}", config.url, payment_hash);
+    let client = client(config);
+    let response = client
+        .get(&url)
+        .basic_auth("", Some(config.password.clone()))
+        .send()
+        .await
+        .expect("failed to lookup invoice");
+    let response_text = response
+        .text()
+        .await
+        .expect("failed to parse lookup invoice");
     let response_text = response_text.as_str();
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
 
@@ -240,9 +275,8 @@ pub fn lookup_invoice(
     Ok(txn)
 }
 
-pub fn list_transactions(
-    url: String,
-    password: String,
+pub async fn list_transactions(
+    config: &PhoenixdConfig,
     from: i64,
     // until: i64,
     limit: i64,
@@ -252,7 +286,7 @@ pub fn list_transactions(
     // invoice_type: Option<String>, // not currently used but included for parity
     // search_term: Option<String>,  // not currently used but included for parity
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = reqwest::blocking::Client::new();
+    let client = client(config);
 
     // 1) Build query for incoming transactions
     let mut incoming_params = vec![];
@@ -272,14 +306,19 @@ pub fn list_transactions(
 
     // Build the final incoming URL with query
     let incoming_query = serde_urlencoded::to_string(&incoming_params).unwrap();
-    let incoming_url = format!("{}/payments/incoming?{}", url, incoming_query);
+    let incoming_url = format!("{}/payments/incoming?{}", config.url, incoming_query);
 
     // Fetch incoming transactions
     let incoming_resp = client
         .get(&incoming_url)
-        .basic_auth("", Some(password.clone()))
-        .send();
-    let incoming_text = incoming_resp.unwrap().text().unwrap();
+        .basic_auth("", Some(config.password.clone()))
+        .send()
+        .await
+        .expect("Failed to get incoming payments");
+    let incoming_text = incoming_resp
+        .text()
+        .await
+        .expect("Failed to parse incoming payments");
     let incoming_text = incoming_text.as_str();
     let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
 
@@ -329,14 +368,19 @@ pub fn list_transactions(
 
     // Build the final outgoing URL with query
     let outgoing_query = serde_urlencoded::to_string(&outgoing_params).unwrap();
-    let outgoing_url = format!("{}/payments/outgoing?{}", url, outgoing_query);
+    let outgoing_url = format!("{}/payments/outgoing?{}", config.url, outgoing_query);
 
     // Fetch outgoing transactions
     let outgoing_resp = client
         .get(&outgoing_url)
-        .basic_auth("", Some(password))
-        .send();
-    let outgoing_text = outgoing_resp.unwrap().text().unwrap();
+        .basic_auth("", Some(config.password.clone()))
+        .send()
+        .await
+        .expect("Failed to get outgoing payments");
+    let outgoing_text = outgoing_resp
+        .text()
+        .await
+        .expect("failed to parse outgoing payments");
     let outgoing_text = outgoing_text.as_str();
     let outgoing_payments: Vec<OutgoingPaymentResponse> =
         serde_json::from_str(&outgoing_text).unwrap();

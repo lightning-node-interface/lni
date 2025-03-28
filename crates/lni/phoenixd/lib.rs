@@ -9,27 +9,36 @@ use crate::{
 use crate::{CreateInvoiceParams, PayCode};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Clone)]
 pub struct PhoenixdConfig {
     pub url: String,
     pub password: String,
+    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    pub accept_invalid_certs: Option<bool>,
+}
+impl Default for PhoenixdConfig {
+    fn default() -> Self {
+        Self {
+            url: "https://127.0.0.1:8080".to_string(),
+            password: "".to_string(),
+            socks5_proxy: None,
+            accept_invalid_certs: Some(true),
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct PhoenixdNode {
-    pub url: String,
-    pub password: String,
+    pub config: PhoenixdConfig,
 }
 
 impl PhoenixdNode {
     pub fn new(config: PhoenixdConfig) -> Self {
-        Self {
-            url: config.url,
-            password: config.password,
-        }
+        Self { config }
     }
 
     pub async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
-        crate::phoenixd::api::get_info(self.url.clone(), self.password.clone())
+        crate::phoenixd::api::get_info(&self.config).await
     }
 
     pub async fn create_invoice(
@@ -37,8 +46,7 @@ impl PhoenixdNode {
         params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
         create_invoice(
-            self.url.clone(),
-            self.password.clone(),
+            &self.config,
             params.invoice_type,
             Some(params.amount_msats.unwrap_or_default()),
             params.description,
@@ -52,11 +60,11 @@ impl PhoenixdNode {
         &self,
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        pay_invoice(self.url.clone(), self.password.clone(), params).await
+        pay_invoice(&self.config, params).await
     }
 
     pub async fn get_offer(&self) -> Result<PayCode, ApiError> {
-        crate::phoenixd::api::get_offer(self.url.clone(), self.password.clone()).await
+        crate::phoenixd::api::get_offer(&self.config).await
     }
 
     pub async fn pay_offer(
@@ -65,34 +73,21 @@ impl PhoenixdNode {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::phoenixd::api::pay_offer(
-            self.url.clone(),
-            self.password.clone(),
-            offer,
-            amount_msats,
-            payer_note,
-        )
-        .await
+        crate::phoenixd::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
     pub async fn lookup_invoice(
         &self,
         payment_hash: String,
     ) -> Result<crate::Transaction, ApiError> {
-        crate::phoenixd::api::lookup_invoice(self.url.clone(), self.password.clone(), payment_hash)
+        crate::phoenixd::api::lookup_invoice(&self.config, payment_hash).await
     }
 
     pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::phoenixd::api::list_transactions(
-            self.url.clone(),
-            self.password.clone(),
-            params.from,
-            params.limit,
-            None,
-        )
+        crate::phoenixd::api::list_transactions(&self.config, params.from, params.limit, None).await
     }
 }
 
@@ -119,6 +114,9 @@ mod tests {
             PhoenixdNode::new(PhoenixdConfig {
                 url: URL.clone(),
                 password: PASSWORD.clone(),
+                // socks5_proxy: "socks5h://127.0.0.1:9150".to_string().into(),
+                // accept_invalid_certs: true.into(),
+                ..Default::default()
             })
         };
         static ref TEST_PAYMENT_HASH: String = {
@@ -182,7 +180,10 @@ mod tests {
         {
             Ok(txn) => {
                 println!("txn: {:?}", txn);
-                assert!(!txn.payment_hash.is_empty(), "Payment hash should not be empty");
+                assert!(
+                    !txn.payment_hash.is_empty(),
+                    "Payment hash should not be empty"
+                );
             }
             Err(e) => {
                 panic!("Failed to pay invoice: {:?}", e);

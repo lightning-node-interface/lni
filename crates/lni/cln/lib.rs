@@ -8,27 +8,36 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Clone)]
 pub struct ClnConfig {
     pub url: String,
     pub rune: String,
+    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    pub accept_invalid_certs: Option<bool>,
+}
+impl Default for ClnConfig {
+    fn default() -> Self {
+        Self {
+            url: "https://127.0.0.1:8080".to_string(),
+            rune: "".to_string(),
+            socks5_proxy: None,
+            accept_invalid_certs: Some(true),
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct ClnNode {
-    pub url: String,
-    pub rune: String,
+    pub config: ClnConfig,
 }
 
 impl ClnNode {
     pub fn new(config: ClnConfig) -> Self {
-        Self {
-            url: config.url,
-            rune: config.rune,
-        }
+        Self { config }
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::cln::api::get_info(self.url.clone(), self.rune.clone())
+        crate::cln::api::get_info(&self.config).await
     }
 
     pub async fn create_invoice(
@@ -36,8 +45,7 @@ impl ClnNode {
         params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
         crate::cln::api::create_invoice(
-            self.url.clone(),
-            self.rune.clone(),
+            &self.config,
             params.invoice_type,
             params.amount_msats,
             params.offer.clone(),
@@ -52,15 +60,15 @@ impl ClnNode {
         &self,
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::cln::api::pay_invoice(self.url.clone(), self.rune.clone(), params).await
+        crate::cln::api::pay_invoice(&self.config, params).await
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::cln::api::get_offer(self.url.clone(), self.rune.clone(), search).await
+        crate::cln::api::get_offer(&self.config, search).await
     }
 
     pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::cln::api::list_offers(self.url.clone(), self.rune.clone(), search).await
+        crate::cln::api::list_offers(&self.config, search).await
     }
 
     pub async fn pay_offer(
@@ -69,43 +77,25 @@ impl ClnNode {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::cln::api::pay_offer(
-            self.url.clone(),
-            self.rune.clone(),
-            offer,
-            amount_msats,
-            payer_note,
-        )
-        .await
+        crate::cln::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
     pub async fn lookup_invoice(
         &self,
         payment_hash: String,
     ) -> Result<crate::Transaction, ApiError> {
-        crate::cln::api::lookup_invoice(
-            self.url.clone(),
-            self.rune.clone(),
-            Some(payment_hash),
-            None,
-            None,
-        )
+        crate::cln::api::lookup_invoice(&self.config, Some(payment_hash), None, None).await
     }
 
     pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::cln::api::list_transactions(
-            self.url.clone(),
-            self.rune.clone(),
-            params.from,
-            params.limit,
-        )
+        crate::cln::api::list_transactions(&self.config, params.from, params.limit).await
     }
 
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::cln::api::decode(self.url.clone(), self.rune.clone(), str).await
+        crate::cln::api::decode(&self.config, str).await
     }
 }
 
@@ -140,6 +130,9 @@ mod tests {
             ClnNode::new(ClnConfig {
                 url: URL.clone(),
                 rune: RUNE.clone(),
+                // socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+                // accept_invalid_certs: Some(true)
+                ..Default::default()
             })
         };
     }

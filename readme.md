@@ -194,7 +194,18 @@ pub struct PhoenixdNode {
 
 Tor
 ===
-Use Tor socks if connecting to a .onion hidden service by passing in socks5 proxy. (TODO WIP)
+Use the Tor Socks5 proxy settings if you are connecting to a `.onion` hidden service. Make sure to include the "h" in "socks5h://" to resolve onion addresses properly. You can start up a Tor Socks5 proxy easily using Arti https://tpo.pages.torproject.net/core/arti/
+
+example
+```rust
+LndNode::new(LndConfig {
+    url: "https://YOUR_LND_ONION_ADDRESS.onion",
+    macaroon: "YOUR_MACAROON",
+    socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+    accept_invalid_certs: Some(true),
+    ..Default::default()
+})
+```
 
 
 Inspiration

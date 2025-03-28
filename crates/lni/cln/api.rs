@@ -2,6 +2,7 @@ use super::types::{
     Bolt11Resp, Bolt12Resp, ChannelWrapper, FetchInvoiceResponse, InfoResponse, InvoicesResponse,
     ListOffersResponse, PayResponse,
 };
+use super::ClnConfig;
 use crate::types::NodeInfo;
 use crate::{
     calculate_fee_msats, ApiError, InvoiceType, PayCode, PayInvoiceParams, PayInvoiceResponse,
@@ -11,27 +12,43 @@ use reqwest::header;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
 
-pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
-    let req_url = format!("{}/v1/getinfo", url);
-    println!("Constructed URL: {} rune {}", req_url, rune);
-    let client = clnrest_client(rune.clone());
+fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
+    let mut client = reqwest::ClientBuilder::new().default_headers(headers);
+    if config.socks5_proxy.is_some() {
+        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
+        client = client.proxy(proxy);
+    }
+    if config.accept_invalid_certs.is_some() {
+        client = client.danger_accept_invalid_certs(true);
+    }
+    client.build().unwrap()
+}
+
+pub async fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
+    let req_url = format!("{}/v1/getinfo", config.url);
+    println!("Constructed URL: {} rune {}", req_url, config.rune);
+    let client = clnrest_client(config);
     let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .send()
+        .await
         .unwrap();
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     // println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
     // https://github.com/ZeusLN/zeus/blob/master/backends/CoreLightningRequestHandler.ts#L28
-    let funds_url = format!("{}/v1/listfunds", url);
+    let funds_url = format!("{}/v1/listfunds", config.url);
     let funds_response = client
         .post(&funds_url)
         .header("Content-Type", "application/json")
         .send()
+        .await
         .unwrap();
-    let funds_response_text = funds_response.text().unwrap();
+    let funds_response_text = funds_response.text().await.unwrap();
     // println!("funds_response_text: {}", funds_response_text);
     let channels: ChannelWrapper = serde_json::from_str(&funds_response_text)?;
 
@@ -51,12 +68,13 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
             // Unsettled channels (previously inactive)
             unsettled_send_balance_msat += channel.our_amount_msat;
             unsettled_receive_balance_msat += channel.amount_msat - channel.our_amount_msat;
-        } else if channel.state == "CHANNELD_AWAITING_LOCKIN" 
+        } else if channel.state == "CHANNELD_AWAITING_LOCKIN"
             || channel.state == "DUALOPEND_AWAITING_LOCKIN"
             || channel.state == "DUALOPEND_OPEN_INIT"
             || channel.state == "DUALOPEND_OPEN_COMMITTED"
             || channel.state == "DUALOPEND_OPEN_COMMIT_READY"
-            || channel.state == "OPENINGD" {
+            || channel.state == "OPENINGD"
+        {
             // Pending open channels
             pending_open_send_balance += channel.our_amount_msat;
             pending_open_receive_balance += channel.amount_msat - channel.our_amount_msat;
@@ -83,8 +101,7 @@ pub fn get_info(url: String, rune: String) -> Result<NodeInfo, ApiError> {
 
 // invoice - amount_msat label description expiry fallbacks preimage exposeprivatechannels cltv
 pub async fn create_invoice(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
     offer: Option<String>,
@@ -92,7 +109,7 @@ pub async fn create_invoice(
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = clnrest_client(rune.clone());
+    let client = clnrest_client(config);
     let amount_msat_str: String = amount_msats.map_or("any".to_string(), |amt| amt.to_string());
     let mut params: Vec<(&str, Option<String>)> = vec![];
     params.push((
@@ -107,8 +124,8 @@ pub async fn create_invoice(
     ));
     match invoice_type {
         InvoiceType::Bolt11 => {
-            let req_url = format!("{}/v1/invoice", url);
-            let response: reqwest::blocking::Response = client
+            let req_url = format!("{}/v1/invoice", config.url);
+            let response: reqwest::Response = client
                 .post(&req_url)
                 .header("Content-Type", "application/json")
                 .json(&serde_json::json!(params
@@ -116,10 +133,11 @@ pub async fn create_invoice(
                     .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
                     .collect::<serde_json::Value>()))
                 .send()
+                .await
                 .unwrap();
 
             println!("Status: {}", response.status());
-            let invoice_str = response.text().unwrap();
+            let invoice_str = response.text().await.unwrap();
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
             let bolt11_resp: Bolt11Resp =
@@ -150,8 +168,7 @@ pub async fn create_invoice(
                 });
             }
             let fetch_invoice_resp = fetch_invoice_from_offer(
-                url.clone(),
-                rune.clone(),
+                config,
                 offer.clone().unwrap(),
                 amount_msats.unwrap_or(0), // TODO make this optional if the lno already has amount in it
                 Some(description.clone().unwrap_or_default()),
@@ -178,12 +195,11 @@ pub async fn create_invoice(
 }
 
 pub async fn pay_invoice(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = clnrest_client(rune.clone());
-    let pay_url = format!("{}/v1/pay", url);
+    let client = clnrest_client(config);
+    let pay_url = format!("{}/v1/pay", config.url);
 
     let mut params: Vec<(&str, Option<serde_json::Value>)> = vec![];
     params.push((
@@ -235,13 +251,14 @@ pub async fn pay_invoice(
 
     println!("PayInvoice params: {:?}", &params_json);
 
-    let pay_response: reqwest::blocking::Response = client
+    let pay_response: reqwest::Response = client
         .post(&pay_url)
         .header("Content-Type", "application/json")
         .json(&params_json)
         .send()
+        .await
         .unwrap();
-    let pay_response_text = pay_response.text().unwrap();
+    let pay_response_text = pay_response.text().await.unwrap();
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
@@ -260,29 +277,26 @@ pub async fn pay_invoice(
 }
 
 // decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
-pub async fn decode(url: String, rune: String, str: String) -> Result<String, ApiError> {
-    let client = clnrest_client(rune);
-    let req_url = format!("{}/v1/decode", url);
-    let response: reqwest::blocking::Response = client
+pub async fn decode(config: &ClnConfig, str: String) -> Result<String, ApiError> {
+    let client = clnrest_client(config);
+    let req_url = format!("{}/v1/decode", config.url);
+    let response: reqwest::Response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "string": str,
         }))
         .send()
+        .await
         .unwrap();
     // TODO parse JSON response
-    let decoded = response.text().unwrap();
+    let decoded = response.text().await.unwrap();
     Ok(decoded)
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
-pub async fn get_offer(
-    url: String,
-    rune: String,
-    search: Option<String>,
-) -> Result<PayCode, ApiError> {
-    let offers = list_offers(url.clone(), rune.clone(), search.clone()).await?;
+pub async fn get_offer(config: &ClnConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+    let offers = list_offers(config, search.clone()).await?;
     if offers.is_empty() {
         return Ok(PayCode {
             offer_id: "".to_string(),
@@ -297,17 +311,16 @@ pub async fn get_offer(
 }
 
 pub async fn list_offers(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     search: Option<String>,
 ) -> Result<Vec<PayCode>, ApiError> {
-    let client = clnrest_client(rune);
-    let req_url = format!("{}/v1/listoffers", url);
+    let client = clnrest_client(config);
+    let req_url = format!("{}/v1/listoffers", config.url);
     let mut params = vec![];
     if let Some(search) = search {
         params.push(("offer_id", Some(search)))
     }
-    let response: reqwest::blocking::Response = client
+    let response: reqwest::Response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!(params
@@ -315,8 +328,9 @@ pub async fn list_offers(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
+        .await
         .unwrap();
-    let offers = response.text().unwrap();
+    let offers = response.text().await.unwrap();
     let offers_str = offers.as_str();
     let offers_list: ListOffersResponse =
         serde_json::from_str(&offers_str).map_err(|e| crate::ApiError::Json {
@@ -326,14 +340,13 @@ pub async fn list_offers(
 }
 
 pub async fn create_offer(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     amount_msats: Option<i64>,
     description: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = clnrest_client(rune);
-    let req_url = format!("{}/v1/offer", url);
+    let client = clnrest_client(config);
+    let req_url = format!("{}/v1/offer", config.url);
     let mut params: Vec<(&str, Option<String>)> = vec![];
     if let Some(amount_msats) = amount_msats {
         params.push(("amount", Some(format!("{}msat", amount_msats))))
@@ -344,7 +357,7 @@ pub async fn create_offer(
     if let Some(description) = description_clone {
         params.push(("description", Some(description)))
     }
-    let response: reqwest::blocking::Response = client
+    let response: reqwest::Response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!(params
@@ -352,8 +365,9 @@ pub async fn create_offer(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
+        .await
         .unwrap();
-    let offer_str = response.text().unwrap();
+    let offer_str = response.text().await.unwrap();
     let offer_str = offer_str.as_str();
     let bolt12resp: Bolt12Resp =
         serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
@@ -377,15 +391,14 @@ pub async fn create_offer(
 }
 
 pub async fn fetch_invoice_from_offer(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     offer: String,
     amount_msats: i64, // TODO make optional if the lno already has amount in it
     payer_note: Option<String>,
 ) -> Result<FetchInvoiceResponse, ApiError> {
-    let fetch_invoice_url = format!("{}/v1/fetchinvoice", url);
-    let client = clnrest_client(rune);
-    let response: reqwest::blocking::Response = client
+    let fetch_invoice_url = format!("{}/v1/fetchinvoice", config.url);
+    let client = clnrest_client(config);
+    let response: reqwest::Response = client
         .post(&fetch_invoice_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
@@ -395,8 +408,9 @@ pub async fn fetch_invoice_from_offer(
             "timeout": 60,
         }))
         .send()
+        .await
         .unwrap();
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     let response_text = response_text.as_str();
     let fetch_invoice_resp: FetchInvoiceResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => {
@@ -413,22 +427,16 @@ pub async fn fetch_invoice_from_offer(
 }
 
 pub async fn pay_offer(
-    url: String,
-    rune: String,
+    config: &ClnConfig,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = clnrest_client(rune.clone());
-    let fetch_invoice_resp = fetch_invoice_from_offer(
-        url.clone(),
-        rune.clone(),
-        offer.clone(),
-        amount_msats,
-        payer_note.clone(),
-    )
-    .await
-    .unwrap();
+    let client = clnrest_client(config);
+    let fetch_invoice_resp =
+        fetch_invoice_from_offer(config, offer.clone(), amount_msats, payer_note.clone())
+            .await
+            .unwrap();
     if (fetch_invoice_resp.invoice.is_empty()) {
         return Err(ApiError::Json {
             reason: "Missing BOLT 12 invoice".to_string(),
@@ -436,8 +444,8 @@ pub async fn pay_offer(
     }
 
     // now pay the bolt 12 invoice lni
-    let pay_url = format!("{}/v1/pay", url);
-    let pay_response: reqwest::blocking::Response = client
+    let pay_url = format!("{}/v1/pay", config.url);
+    let pay_response: reqwest::Response = client
         .post(&pay_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
@@ -446,8 +454,9 @@ pub async fn pay_offer(
             "retry_for": 60,
         }))
         .send()
+        .await
         .unwrap();
-    let pay_response_text = pay_response.text().unwrap();
+    let pay_response_text = pay_response.text().await.unwrap();
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
@@ -465,14 +474,13 @@ pub async fn pay_offer(
     })
 }
 
-pub fn lookup_invoice(
-    url: String,
-    rune: String,
+pub async fn lookup_invoice(
+    config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    match lookup_invoices(url, rune, payment_hash, from, limit) {
+    match lookup_invoices(config, payment_hash, from, limit).await {
         Ok(transactions) => {
             if let Some(tx) = transactions.first() {
                 Ok(tx.clone())
@@ -487,15 +495,14 @@ pub fn lookup_invoice(
 }
 
 // label, invstring, payment_hash, offer_id, index, start, limit
-fn lookup_invoices(
-    url: String,
-    rune: String,
+async fn lookup_invoices(
+    config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let list_invoices_url = format!("{}/v1/listinvoices", url);
-    let client = clnrest_client(rune);
+    let list_invoices_url = format!("{}/v1/listinvoices", config.url);
+    let client = clnrest_client(config);
 
     // 1) Build query for incoming transactions
     let mut params: Vec<(&str, Option<String>)> = vec![];
@@ -511,7 +518,7 @@ fn lookup_invoices(
     }
 
     // Fetch incoming transactions
-    let response: reqwest::blocking::Response = client
+    let response: reqwest::Response = client
         .post(&list_invoices_url)
         .header("Content-Type", "application/json")
         //.json(&serde_json::json!(params))
@@ -520,8 +527,9 @@ fn lookup_invoices(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
+        .await
         .unwrap();
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     let response_text = response_text.as_str();
     let incoming_payments: InvoicesResponse = serde_json::from_str(&response_text).unwrap();
 
@@ -554,24 +562,13 @@ fn lookup_invoices(
     Ok(transactions)
 }
 
-pub fn list_transactions(
-    url: String,
-    rune: String,
+pub async fn list_transactions(
+    config: &ClnConfig,
     from: i64,
     limit: i64,
 ) -> Result<Vec<Transaction>, ApiError> {
-    match lookup_invoices(url, rune, None, Some(from), Some(limit)) {
+    match lookup_invoices(config, None, Some(from), Some(limit)).await {
         Ok(transactions) => Ok(transactions),
         Err(e) => Err(e),
     }
-}
-
-fn clnrest_client(rune: String) -> reqwest::blocking::Client {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("Rune", header::HeaderValue::from_str(&rune).unwrap());
-    reqwest::blocking::ClientBuilder::new()
-        .danger_accept_invalid_certs(true)
-        .default_headers(headers)
-        .build()
-        .unwrap()
 }
