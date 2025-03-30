@@ -9,58 +9,128 @@ LNI - Lightning Node Interface. Connect to the major lightning node implementati
 
 <img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
 
-### Interface API
+### Interface API Examples
 
-#### LND
+#### Rust
 ```rust
-let lnd_node = LndNode::new("test_macaroon".to_string(), "https://127.0.0.1:8080".to_string());
-let lnd_result =  lnd_node.pay_invoice("invoice".to_string());
-println!("Pay LND invoice result {}", lnd_result);
-let lnd_txns = lnd_node.get_wallet_transactions("wallet_id".to_string());
-lnd_txns.iter().for_each(|txn| {
-    println!("LND Transaction amount: {}, date: {}, memo: {}", txn.amount(), txn.date(), txn.memo()); 
+let lnd_node = LndNode::new(LndConfig { url, macaroon });
+let cln_node = ClnNode::new(ClnConfig { url, rune });
+
+let lnd_node_info = lnd_node.get_info();
+let cln_node_info = cln_node.get_info();
+
+let invoice_params = CreateInvoiceParams {
+    invoice_type: InvoiceType::Bolt11,
+    amount_msats: Some(2000),
+    description: Some("your memo"),
+    expiry: Some(1743355716),
+    ..Default::default()
 });
-let lnd_macaroon = lnd_node.key();
+
+let lnd_invoice = lnd_node.create_invoice(invoice_params).await;
+let cln_invoice = cln_node.create_invoice(invoice_params).await;
+
+let pay_invoice_params = PayInvoiceParams{
+    invoice: "{lnbc1***}", // BOLT 11 payment request
+    fee_limit_percentage: Some(1.0), // 1% fee limit
+    allow_self_payment: Some(true), // This setting works with LND, but is simply ignored for CLN etc...
+    ..Default::default(),
+});
+
+let lnd_pay_invoice = lnd_node.pay_invoice(pay_invoice_params);
+let cln_pay_invoice = cln_node.pay_invoice(pay_invoice_params);
+
+let lnd_invoice_status = lnd_node.lookup_invoice("{PAYMENT_HASH}");
+let cln_invoice_status = cln_node.lookup_invoice("{PAYMENT_HASH}");
+
+let list_txn_params = ListTransactionsParams {
+    from: 0,
+    limit: 10,
+    payment_hash: None, // Optionally pass in the payment hash, or None to search all
+};
+
+let lnd_txns = lnd_node.list_transactions(list_txn_params).await;
+let cln_txns = cln_node.list_transactions(list_txn_params).await;
+
+// See the tests for more examples
+// LND - https://github.com/lightning-node-interface/lni/blob/master/crates/lni/lnd/lib.rs#L96
+// CLN - https://github.com/lightning-node-interface/lni/blob/master/crates/lni/cln/lib.rs#L113
+// Phoenixd - https://github.com/lightning-node-interface/lni/blob/master/crates/lni/phoenixd/lib.rs#L100
 ```
 
-#### CLN
-```rust
-let cln_node = ClnNode::new("test_rune".to_string(), "https://127.0.0.1:8081".to_string());
-let cln_result =  cln_node.pay_invoice("invoice".to_string());
-println!("Pay CLN invoice result {}", cln_result);
-let cln_txns = cln_node.get_wallet_transactions("wallet_id".to_string());
-cln_txns.iter().for_each(|txn| {
-    println!("CLN Transaction amount: {}, date: {}, memo: {}", txn.amount(), txn.date(), txn.memo()); 
+#### Typescript
+```typescript
+const lndNode = new LndNode({ url, macaroon });
+const clnNode = new ClnNode({ url, rune });
+
+const lndNodeInfo = lndNode.getInfo();
+const clnNodeInfo = clnNode.getInfo();
+
+const invoiceParams = {
+    invoiceType: InvoiceType.Bolt11,
+    amountMsats: 2000,
+    description: "your memo",
+    expiry: 1743355716,
 });
-let cln_rune = cln_node.key();
+
+const lndInvoice = await lndNode.createInvoice(invoiceParams);
+const clnInvoice = await clnNode.createInvoice(invoiceParams);
+
+const payInvoiceParams = {
+    invoice: "{lnbc1***}", // BOLT 11 payment request
+    feeLimitPercentage: 1, // 1% fee limit
+    allowSelfPayment: true, // This setting works with LND, but is simply ignored for CLN etc...
+});
+
+const lndPayInvoice = await lndNode.payInvoice(payInvoiceParams);
+const clnPayInvoice = await clnNode.payInvoice(payInvoiceParams);
+
+const lndInvoiceStatus = await lndNode.lookupInvoice("{PAYMENT_HASH}");
+const clnInvoiceStatus = await clnNode.lookupInvoice("{PAYMENT_HASH}");
+
+const listTxnParams = {
+    from: 0,
+    limit: 10,
+    payment_hash: None, // Optionally pass in the payment hash, or None to search all
+};
+
+const lndTxns = await lndNode.listTransactions(listTxnParams);
+const clnTxns = await clnNode.listTransactions(listTxnParams);
 ```
 
 
 #### Payments
 ```rust
-lni.create_invoice(amount, expiration, memo, BOLT11 | BOLT12)
-lni.pay_invoice()
-lni.pay_offer(offer)
-lni.fetch_invoice_from_offer('lno***')
-lni.decode_invoice(invoice)
-lni.check_invoice_status(invoice)
+// BOLT 11
+node.create_invoice(CreateInvoiceParams) -> Result<Transaction, ApiError>
+node.pay_invoice(PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>
+
+// BOLT 12
+node.get_offer(search: Option<String>) -> Result<PayCode, ApiError> // return the first offer or by search id
+node.pay_offer(offer: String, amount_msats: i64, payer_note: Option<String>) -> Result<PayInvoiceResponse, ApiError> 
+node.list_offers(search: Option<String>) -> Result<Vec<PayCode>, ApiError>
+
+// Lookup
+node.decode(str: String) -> Result<String, ApiError> 
+node.lookup_invoice(payment_hash: String) -> Result<Transaction, ApiError>
+node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 ```
 
 #### Node Management
-```
-lni.get_info()
-lni.get_transactions(limit, skip)
-lni.wallet_balance()
+```rust
+node.get_info() -> Result<NodeInfo, ApiError> // returns NodeInfo and balances
 ```
 
 #### Channel Management
-```
-lni.fetch_channel_info()
+```rust
+// TODO - Not implemented
+node.channel_info()
 ```
 
 #### Event Polling
-```
-await lni.on_invoice_events(invoice_id, (event) =>{
+```rust
+// TODO - Not implemented
+node.on_invoice_events(invoice_id, (event) =>{
     console.log("Callback result:", result);
 })
 ```
@@ -69,7 +139,7 @@ await lni.on_invoice_events(invoice_id, (event) =>{
 Event Polling
 ============
 LNI does some simple event polling over https to get some basic invoice status events. 
-Polling is used instead of a heavier grpc/pubsub (for now) event system to make sure the lib runs cross platform and stays lightweight. TODO websockets
+Polling is used instead of a heavier grpc/pubsub (for now) event system to make sure the lib runs cross platform and stays lightweight. NOT YET IMPLEMENTED. TODO websockets
 
 Build
 =======
@@ -135,8 +205,8 @@ CLN_RUNE=YOUR_RUNE
 CLN_TEST_PAYMENT_HASH=YOUR_HASH
 ```
 
-Bindings
-========
+Language Bindings
+=================
 
 - nodejs 
     - napi_rs
@@ -277,7 +347,8 @@ Todo
 - [X] uniffi bindings for Android and IOS
 - [X] react-native - uniffi-bindgen-react-native
 - [X] async promise architecture for bindings
-- [ ] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
+- [X] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
+- [ ] Simple event polling
 - [ ] implement lightning nodes
     - [X] phoenixd
     - [X] cln
