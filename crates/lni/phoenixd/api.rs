@@ -15,7 +15,12 @@ use serde_urlencoded;
 
 pub fn get_info(url: String, password: String) -> Result<NodeInfo, ApiError> {
     let info_url = format!("{}/getinfo", url);
-    let client: reqwest::blocking::Client = reqwest::blocking::Client::new();
+    let mut builder = reqwest::blocking::ClientBuilder::new();
+    let proxy = reqwest::Proxy::all("socks5h://127.0.0.1:9050").unwrap();
+    builder = builder.proxy(proxy);
+    builder = builder.timeout(std::time::Duration::from_secs(120));
+    builder = builder.danger_accept_invalid_certs(true);
+    let client = builder.build().unwrap();
 
     let response: Result<reqwest::blocking::Response, reqwest::Error> = client.get(&info_url).basic_auth("", Some(password.clone())).send();
     let response_text = response.unwrap().text().unwrap();
