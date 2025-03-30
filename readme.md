@@ -1,10 +1,13 @@
-LNI - Lightning Node Interface
-==============================
+LNI Remote - Lightning Node Interface Remote
+============================================
 
-LNI - Lightning Node Interface. Connect to the major lightning node implementations with a standard interface. 
+Remote connect to all the major lightning node implementations with a standard interface. 
 
-- Supports *CLN, *LND, *LNDK, *Phoenixd, *LNURL, *BOLT 11 and *BOLT 12 (WIP). 
+- Supports all major nodes - CLN, LND, Phoenixd, *LNDK, (WIP) 
+- Supports the main protocols - BOLT 11, BOLT 12, *LNURL and NWC
+- Also popular REST apis - Strike
 - Language Binding support for kotlin, swift, react-native, nodejs (typescript, javaScript). No support for WASM (yet)
+- Tor support
 - Runs on Android, iOS, Linux, Windows and Mac
 
 <img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
