@@ -14,6 +14,7 @@ pub struct ClnConfig {
     pub rune: String,
     pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
     pub accept_invalid_certs: Option<bool>,
+    pub http_timeout: Option<i64>,
 }
 impl Default for ClnConfig {
     fn default() -> Self {
@@ -22,6 +23,7 @@ impl Default for ClnConfig {
             rune: "".to_string(),
             socks5_proxy: None,
             accept_invalid_certs: Some(true),
+            http_timeout: Some(60),
         }
     }
 }

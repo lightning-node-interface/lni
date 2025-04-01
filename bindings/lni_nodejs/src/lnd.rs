@@ -30,6 +30,7 @@ impl LndNode {
       macaroon: self.inner.macaroon.clone(),
       socks5_proxy: self.inner.socks5_proxy.clone(),
       accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
     }
   }
 

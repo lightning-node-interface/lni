@@ -15,8 +15,8 @@ use serde_urlencoded;
 
 // https://phoenix.acinq.co/server/api
 
-fn client(config: &PhoenixdConfig) -> reqwest::Client {
-    let mut client = reqwest::ClientBuilder::new();
+fn client(config: &PhoenixdConfig) -> reqwest::blocking::Client {
+    let mut client = reqwest::blocking::ClientBuilder::new();
     if config.socks5_proxy.is_some() {
         let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
         client = client.proxy(proxy);
@@ -24,20 +24,24 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     if config.accept_invalid_certs.is_some() {
         client = client.danger_accept_invalid_certs(true);
     }
+    if config.http_timeout.is_some() {
+        client = client.timeout(std::time::Duration::from_secs(
+            config.http_timeout.unwrap_or_default() as u64,
+        ));
+    }
     client.build().unwrap()
 }
 
 pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     let info_url = format!("{}/getinfo", config.url);
-    let client: reqwest::Client = client(config);
+    let client = client(config);
 
     let response = client
         .get(&info_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("Failed to get node info");
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().unwrap();
     println!("get node info response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
@@ -47,11 +51,9 @@ pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         .get(&balance_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("Failed to get balance");
     let balance_response_text = balance_response
         .text()
-        .await
         .expect("Failed to parse get balance");
     println!("balance_response: {}", balance_response_text);
     let balance: GetBalanceResponse = serde_json::from_str(&balance_response_text)?;
@@ -97,12 +99,11 @@ pub async fn create_invoice(
                 .basic_auth("", Some(config.password.clone()))
                 .form(&bolt11_req)
                 .send()
-                .await
                 .expect("Failed to create invoice");
 
             println!("Status: {}", response.status());
 
-            let invoice_str = response.text().await.expect("Failed to parse get invoice");
+            let invoice_str = response.text().expect("Failed to parse get invoice");
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
 
@@ -154,10 +155,9 @@ pub async fn pay_invoice(
         .basic_auth("", Some(config.password.clone()))
         .form(&params)
         .send()
-        .await
         .expect("Failed to pay invoice");
     println!("Status: {}", response.status());
-    let response_text = response.text().await.expect("Failed to parse pay invoice");
+    let response_text = response.text().expect("Failed to parse pay invoice");
     let pay_invoice_resp: PhoenixPayInvoiceResp =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
             reason: format!("Failed to parse pay_invoice response: {}", e),
@@ -186,9 +186,8 @@ pub async fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
         .get(&req_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("Failed to get offer");
-    let offer_str = response.text().await.expect("Failed to parse get offer");
+    let offer_str = response.text().expect("Failed to parse get offer");
     Ok(PayCode {
         offer_id: "".to_string(),
         bolt12: offer_str.to_string(),
@@ -216,9 +215,8 @@ pub async fn pay_offer(
             ("message", payer_note.unwrap_or_default()),
         ])
         .send()
-        .await
         .expect("Failed to pay offer");
-    let response_text = response.text().await.expect("Failed to parse pay offer");
+    let response_text = response.text().expect("Failed to parse pay offer");
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
@@ -248,12 +246,8 @@ pub async fn lookup_invoice(
         .get(&url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("failed to lookup invoice");
-    let response_text = response
-        .text()
-        .await
-        .expect("failed to parse lookup invoice");
+    let response_text = response.text().expect("failed to parse lookup invoice");
     let response_text = response_text.as_str();
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
 
@@ -313,11 +307,9 @@ pub async fn list_transactions(
         .get(&incoming_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("Failed to get incoming payments");
     let incoming_text = incoming_resp
         .text()
-        .await
         .expect("Failed to parse incoming payments");
     let incoming_text = incoming_text.as_str();
     let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
@@ -375,11 +367,9 @@ pub async fn list_transactions(
         .get(&outgoing_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .await
         .expect("Failed to get outgoing payments");
     let outgoing_text = outgoing_resp
         .text()
-        .await
         .expect("failed to parse outgoing payments");
     let outgoing_text = outgoing_text.as_str();
     let outgoing_payments: Vec<OutgoingPaymentResponse> =

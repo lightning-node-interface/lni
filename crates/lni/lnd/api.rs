@@ -13,13 +13,13 @@ use reqwest::header;
 // Docs
 // https://lightning.engineering/api-docs/api/lnd/rest-endpoints/
 
-fn client(config: &LndConfig) -> reqwest::Client {
+fn client(config: &LndConfig) -> reqwest::blocking::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
         "Grpc-Metadata-macaroon",
         header::HeaderValue::from_str(&config.macaroon).unwrap(),
     );
-    let mut client = reqwest::ClientBuilder::new().default_headers(headers);
+    let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
     if config.socks5_proxy.is_some() {
         let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
         client = client.proxy(proxy);
@@ -27,14 +27,19 @@ fn client(config: &LndConfig) -> reqwest::Client {
     if config.accept_invalid_certs.is_some() {
         client = client.danger_accept_invalid_certs(true);
     }
+    if config.http_timeout.is_some() {
+        client = client.timeout(std::time::Duration::from_secs(
+            config.http_timeout.unwrap_or_default() as u64,
+        ));
+    }
     client.build().unwrap()
 }
 
 pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
-    let client: reqwest::Client = client(config);
-    let response = client.get(&req_url).send().await.unwrap();
-    let response_text = response.text().await.unwrap();
+    let client = client(config);
+    let response = client.get(&req_url).send().unwrap();
+    let response_text = response.text().unwrap();
     let response_text = response_text.as_str();
     let info: GetInfoResponse = serde_json::from_str(&response_text)?;
 
@@ -43,8 +48,8 @@ pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     // https://lightning.engineering/api-docs/api/lnd/lightning/channel-balance/
     // send_balance_msats, receive_balance_msats, pending_balance, inactive_balance
     let balance_url = format!("{}/v1/balance/channels", config.url);
-    let balance_response = client.get(&balance_url).send().await.unwrap();
-    let balance_response_text = balance_response.text().await.unwrap();
+    let balance_response = client.get(&balance_url).send().unwrap();
+    let balance_response_text = balance_response.text().unwrap();
     let balance_response_text = balance_response_text.as_str();
     let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
 
@@ -120,11 +125,10 @@ pub async fn create_invoice(
                     "private": invoice_params.is_private,
                 }))
                 .send()
-                .await
                 .unwrap();
 
             println!("Status: {}", response.status());
-            let invoice_str = response.text().await.unwrap();
+            let invoice_str = response.text().unwrap();
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
             let bolt11_resp: Bolt11Resp =
@@ -240,15 +244,10 @@ pub async fn pay_invoice(
     println!("PayInvoice params: {:?}", &params_json);
 
     let req_url = format!("{}/v2/router/send", config.url);
-    let response = client
-        .post(&req_url)
-        .json(&params_json)
-        .send()
-        .await
-        .unwrap();
+    let response = client.post(&req_url).json(&params_json).send().unwrap();
 
     println!("Status: {}", response.status());
-    let invoice_str = response.text().await.unwrap();
+    let invoice_str = response.text().unwrap();
 
     // * LND returns a stream of JSON objects, one per line, so we need to parse each line and grab the JSON string and then parse
     let invoice_lines: Vec<&str> = invoice_str.split('\n').collect();
@@ -283,9 +282,9 @@ pub async fn pay_invoice(
 pub async fn decode(config: &LndConfig, str: String) -> Result<String, ApiError> {
     let client = client(config);
     let req_url = format!("{}/v1/payreq/{}", config.url, str);
-    let response = client.get(&req_url).send().await.unwrap();
+    let response = client.get(&req_url).send().unwrap();
     // TODO parse JSON response
-    let decoded = response.text().await.unwrap();
+    let decoded = response.text().unwrap();
     let decoded = decoded.as_str();
     Ok(decoded.to_string())
 }
@@ -348,7 +347,7 @@ pub async fn lookup_invoice(
     println!("list_invoices_url {}", &list_invoices_url);
     let client = client(config);
     // Fetch incoming transactions
-    let response = client.get(&list_invoices_url).send().await.unwrap();
+    let response = client.get(&list_invoices_url).send().unwrap();
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
         return Err(ApiError::Json {
@@ -356,7 +355,7 @@ pub async fn lookup_invoice(
         });
     }
     println!("Status: {}", status);
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().unwrap();
     let response_text = response_text.as_str();
     let inv: ListInvoiceResponse = serde_json::from_str(&response_text).unwrap();
     Ok(Transaction {
@@ -408,8 +407,8 @@ pub async fn list_transactions(
     let client = client(config);
 
     // Fetch incoming transactions
-    let response = client.get(&list_txns_url).send().await.unwrap();
-    let response_text = response.text().await.unwrap();
+    let response = client.get(&list_txns_url).send().unwrap();
+    let response_text = response.text().unwrap();
     let response_text = response_text.as_str();
     let txns: ListInvoiceResponseWrapper = serde_json::from_str(&response_text).unwrap();
 

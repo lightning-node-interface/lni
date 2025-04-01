@@ -5,6 +5,7 @@ dictionary PhoenixdConfig {
     string password;
     string? socks5_proxy;
     boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface PhoenixdNode {
@@ -38,6 +39,7 @@ dictionary ClnConfig {
     string rune;
     string? socks5_proxy;
     boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface ClnNode {
@@ -77,6 +79,7 @@ dictionary LndConfig {
     string macaroon;
     string? socks5_proxy;
     boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface LndNode {

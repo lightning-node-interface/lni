@@ -8,6 +8,7 @@ export interface PhoenixdConfig {
   password: string
   socks5Proxy?: string
   acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface PhoenixdNode {
   config: PhoenixdConfig
@@ -29,6 +30,7 @@ export interface ClnConfig {
   rune: string
   socks5Proxy?: string
   acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface ClnNode {
   config: ClnConfig
@@ -38,6 +40,7 @@ export interface LndConfig {
   macaroon: string
   socks5Proxy?: string
   acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface LndNode {
   config: LndConfig

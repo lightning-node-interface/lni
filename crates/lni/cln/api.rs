@@ -12,16 +12,21 @@ use reqwest::header;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
 
-fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
+fn clnrest_client(config: &ClnConfig) -> reqwest::blocking::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
-    let mut client = reqwest::ClientBuilder::new().default_headers(headers);
+    let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
     if config.socks5_proxy.is_some() {
         let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
         client = client.proxy(proxy);
     }
     if config.accept_invalid_certs.is_some() {
         client = client.danger_accept_invalid_certs(true);
+    }
+    if config.http_timeout.is_some() {
+        client = client.timeout(std::time::Duration::from_secs(
+            config.http_timeout.unwrap_or_default() as u64,
+        ));
     }
     client.build().unwrap()
 }
@@ -34,9 +39,8 @@ pub async fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
         .post(&req_url)
         .header("Content-Type", "application/json")
         .send()
-        .await
         .unwrap();
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().unwrap();
     // println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
@@ -46,9 +50,8 @@ pub async fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
         .post(&funds_url)
         .header("Content-Type", "application/json")
         .send()
-        .await
         .unwrap();
-    let funds_response_text = funds_response.text().await.unwrap();
+    let funds_response_text = funds_response.text().unwrap();
     // println!("funds_response_text: {}", funds_response_text);
     let channels: ChannelWrapper = serde_json::from_str(&funds_response_text)?;
 
@@ -125,7 +128,7 @@ pub async fn create_invoice(
     match invoice_type {
         InvoiceType::Bolt11 => {
             let req_url = format!("{}/v1/invoice", config.url);
-            let response: reqwest::Response = client
+            let response = client
                 .post(&req_url)
                 .header("Content-Type", "application/json")
                 .json(&serde_json::json!(params
@@ -133,11 +136,10 @@ pub async fn create_invoice(
                     .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
                     .collect::<serde_json::Value>()))
                 .send()
-                .await
                 .unwrap();
 
             println!("Status: {}", response.status());
-            let invoice_str = response.text().await.unwrap();
+            let invoice_str = response.text().unwrap();
             let invoice_str = invoice_str.as_str();
             println!("Bolt11 {}", &invoice_str.to_string());
             let bolt11_resp: Bolt11Resp =
@@ -251,14 +253,13 @@ pub async fn pay_invoice(
 
     println!("PayInvoice params: {:?}", &params_json);
 
-    let pay_response: reqwest::Response = client
+    let pay_response = client
         .post(&pay_url)
         .header("Content-Type", "application/json")
         .json(&params_json)
         .send()
-        .await
         .unwrap();
-    let pay_response_text = pay_response.text().await.unwrap();
+    let pay_response_text = pay_response.text().unwrap();
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
@@ -280,17 +281,16 @@ pub async fn pay_invoice(
 pub async fn decode(config: &ClnConfig, str: String) -> Result<String, ApiError> {
     let client = clnrest_client(config);
     let req_url = format!("{}/v1/decode", config.url);
-    let response: reqwest::Response = client
+    let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
             "string": str,
         }))
         .send()
-        .await
         .unwrap();
     // TODO parse JSON response
-    let decoded = response.text().await.unwrap();
+    let decoded = response.text().unwrap();
     Ok(decoded)
 }
 
@@ -320,7 +320,7 @@ pub async fn list_offers(
     if let Some(search) = search {
         params.push(("offer_id", Some(search)))
     }
-    let response: reqwest::Response = client
+    let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!(params
@@ -328,9 +328,8 @@ pub async fn list_offers(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
-        .await
         .unwrap();
-    let offers = response.text().await.unwrap();
+    let offers = response.text().unwrap();
     let offers_str = offers.as_str();
     let offers_list: ListOffersResponse =
         serde_json::from_str(&offers_str).map_err(|e| crate::ApiError::Json {
@@ -357,7 +356,7 @@ pub async fn create_offer(
     if let Some(description) = description_clone {
         params.push(("description", Some(description)))
     }
-    let response: reqwest::Response = client
+    let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!(params
@@ -365,9 +364,8 @@ pub async fn create_offer(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
-        .await
         .unwrap();
-    let offer_str = response.text().await.unwrap();
+    let offer_str = response.text().unwrap();
     let offer_str = offer_str.as_str();
     let bolt12resp: Bolt12Resp =
         serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
@@ -398,7 +396,7 @@ pub async fn fetch_invoice_from_offer(
 ) -> Result<FetchInvoiceResponse, ApiError> {
     let fetch_invoice_url = format!("{}/v1/fetchinvoice", config.url);
     let client = clnrest_client(config);
-    let response: reqwest::Response = client
+    let response = client
         .post(&fetch_invoice_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
@@ -408,9 +406,8 @@ pub async fn fetch_invoice_from_offer(
             "timeout": 60,
         }))
         .send()
-        .await
         .unwrap();
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().unwrap();
     let response_text = response_text.as_str();
     let fetch_invoice_resp: FetchInvoiceResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => {
@@ -445,7 +442,7 @@ pub async fn pay_offer(
 
     // now pay the bolt 12 invoice lni
     let pay_url = format!("{}/v1/pay", config.url);
-    let pay_response: reqwest::Response = client
+    let pay_response = client
         .post(&pay_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({
@@ -454,9 +451,8 @@ pub async fn pay_offer(
             "retry_for": 60,
         }))
         .send()
-        .await
         .unwrap();
-    let pay_response_text = pay_response.text().await.unwrap();
+    let pay_response_text = pay_response.text().unwrap();
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
@@ -518,7 +514,7 @@ async fn lookup_invoices(
     }
 
     // Fetch incoming transactions
-    let response: reqwest::Response = client
+    let response = client
         .post(&list_invoices_url)
         .header("Content-Type", "application/json")
         //.json(&serde_json::json!(params))
@@ -527,9 +523,8 @@ async fn lookup_invoices(
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<serde_json::Value>()))
         .send()
-        .await
         .unwrap();
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().unwrap();
     let response_text = response_text.as_str();
     let incoming_payments: InvoicesResponse = serde_json::from_str(&response_text).unwrap();
 
