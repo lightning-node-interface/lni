@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { LndNode, PhoenixdNode } from 'lni_react_native';
+import { LndNode } from 'lni_react_native';
 
 export default function App() {
   const [result, setResult] = useState<string>('Loading...');
@@ -10,14 +10,13 @@ export default function App() {
       try {
         setResult('Done');
         // Initialize the Rust library
-        const node = new PhoenixdNode({
-          password:
-            '',
-          url: '',
-          acceptInvalidCerts: true,
-          socks5Proxy: undefined, //'socks5h://127.0.0.1:9050',
-          httpTimeout: BigInt(60),
-        });
+        const node = new LndNode(
+          '', //url: string,
+          '', //macaroon: string,
+          'socks5h://127.0.0.1:9050', //socks5Proxy: string | undefined,
+          true, //acceptInvalidCerts: boolean | undefined,
+          BigInt(60), //httpTimeout: /*i64*/ bigint | undefined,
+        );
         const info = await node.getInfo();
         setResult(
           JSON.stringify(info, (_, value) =>
