@@ -6,10 +6,12 @@
 export interface PhoenixdConfig {
   url: string
   password: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface PhoenixdNode {
-  url: string
-  password: string
+  config: PhoenixdConfig
 }
 export interface Bolt11Resp {
   amountSat: number
@@ -26,18 +28,22 @@ export interface PhoenixPayInvoiceResp {
 export interface ClnConfig {
   url: string
   rune: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface ClnNode {
-  url: string
-  rune: string
+  config: ClnConfig
 }
 export interface LndConfig {
   url: string
   macaroon: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface LndNode {
-  url: string
-  macaroon: string
+  config: LndConfig
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',

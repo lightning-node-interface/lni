@@ -3,6 +3,9 @@ namespace lni {};
 dictionary PhoenixdConfig {
     string url;
     string password;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface PhoenixdNode {
@@ -34,6 +37,9 @@ interface PhoenixdNode {
 dictionary ClnConfig {
     string url;
     string rune;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface ClnNode {
@@ -71,6 +77,9 @@ interface ClnNode {
 dictionary LndConfig {
     string url;
     string macaroon;
+    string? socks5_proxy;
+    boolean? accept_invalid_certs;
+    i64? http_timeout;
 };
 
 interface LndNode {

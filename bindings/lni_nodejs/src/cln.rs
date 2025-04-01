@@ -25,15 +25,13 @@ impl ClnNode {
 
   #[napi]
   pub fn get_config(&self) -> ClnConfig {
-    ClnConfig {
-      url: self.inner.url.clone(),
-      rune: self.inner.rune.clone(),
-    }
+    self.inner.clone()
   }
 
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::cln::api::get_info(self.inner.url.clone(), self.inner.rune.clone())
+    let info = lni::cln::api::get_info(&self.inner)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
@@ -44,8 +42,7 @@ impl ClnNode {
     params: CreateInvoiceParams,
   ) -> napi::Result<lni::Transaction> {
     let txn = lni::cln::api::create_invoice(
-      self.inner.url.clone(),
-      self.inner.rune.clone(),
+      &self.inner,
       params.invoice_type,
       params.amount_msats,
       params.offer,
@@ -63,16 +60,15 @@ impl ClnNode {
     &self,
     params: PayInvoiceParams,
   ) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice =
-      lni::cln::api::pay_invoice(self.inner.url.clone(), self.inner.rune.clone(), params)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let invoice = lni::cln::api::pay_invoice(&self.inner, params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
   pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
-    let offer = lni::cln::api::get_offer(self.inner.url.clone(), self.inner.rune.clone(), search)
+    let offer = lni::cln::api::get_offer(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
@@ -80,10 +76,9 @@ impl ClnNode {
 
   #[napi]
   pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
-    let offers =
-      lni::cln::api::list_offers(self.inner.url.clone(), self.inner.rune.clone(), search)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offers = lni::cln::api::list_offers(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
@@ -94,28 +89,17 @@ impl ClnNode {
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
-    let offer = lni::cln::api::pay_offer(
-      self.inner.url.clone(),
-      self.inner.rune.clone(),
-      offer,
-      amount_msats,
-      payer_note,
-    )
-    .await
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer = lni::cln::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
   pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::cln::api::lookup_invoice(
-      self.inner.url.clone(),
-      self.inner.rune.clone(),
-      Some(payment_hash),
-      None,
-      None,
-    )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txn = lni::cln::api::lookup_invoice(&self.inner, Some(payment_hash), None, None)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -124,19 +108,15 @@ impl ClnNode {
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::cln::api::list_transactions(
-      self.inner.url.clone(),
-      self.inner.rune.clone(),
-      params.from,
-      params.limit,
-    )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::cln::api::list_transactions(&self.inner, params.from, params.limit)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
   #[napi]
   pub async fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::cln::api::decode(self.inner.url.clone(), self.inner.rune.clone(), str)
+    let decoded = lni::cln::api::decode(&self.inner, str)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)

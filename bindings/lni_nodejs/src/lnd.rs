@@ -28,12 +28,16 @@ impl LndNode {
     LndConfig {
       url: self.inner.url.clone(),
       macaroon: self.inner.macaroon.clone(),
+      socks5_proxy: self.inner.socks5_proxy.clone(),
+      accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
     }
   }
 
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::lnd::api::get_info(self.inner.url.clone(), self.inner.macaroon.clone())
+    let info = lni::lnd::api::get_info(&self.inner)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
@@ -43,10 +47,9 @@ impl LndNode {
     &self,
     params: CreateInvoiceParams,
   ) -> napi::Result<lni::Transaction> {
-    let txn =
-      lni::lnd::api::create_invoice(self.inner.url.clone(), self.inner.macaroon.clone(), params)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txn = lni::lnd::api::create_invoice(&self.inner, params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -55,28 +58,25 @@ impl LndNode {
     &self,
     params: PayInvoiceParams,
   ) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice =
-      lni::lnd::api::pay_invoice(self.inner.url.clone(), self.inner.macaroon.clone(), params)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let invoice = lni::lnd::api::pay_invoice(&self.inner, params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
   pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
-    let offer =
-      lni::lnd::api::get_offer(self.inner.url.clone(), self.inner.macaroon.clone(), search)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer = lni::lnd::api::get_offer(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
   pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
-    let offers =
-      lni::lnd::api::list_offers(self.inner.url.clone(), self.inner.macaroon.clone(), search)
-        .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offers = lni::lnd::api::list_offers(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
@@ -87,26 +87,17 @@ impl LndNode {
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
-    let offer = lni::lnd::api::pay_offer(
-      self.inner.url.clone(),
-      self.inner.macaroon.clone(),
-      offer,
-      amount_msats,
-      payer_note,
-    )
-    .await
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer = lni::lnd::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
   pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::lookup_invoice(
-      self.inner.url.clone(),
-      self.inner.macaroon.clone(),
-      Some(payment_hash),
-    )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txn = lni::lnd::api::lookup_invoice(&self.inner, Some(payment_hash))
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -115,19 +106,15 @@ impl LndNode {
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::lnd::api::list_transactions(
-      self.inner.url.clone(),
-      self.inner.macaroon.clone(),
-      params.from,
-      params.limit,
-    )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::lnd::api::list_transactions(&self.inner, params.from, params.limit)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
   #[napi]
   pub async fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::lnd::api::decode(self.inner.url.clone(), self.inner.macaroon.clone(), str)
+    let decoded = lni::lnd::api::decode(&self.inner, str)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)

@@ -8,10 +8,11 @@ name = "lni"
 path = "lib.rs"
 
 [dependencies]
-reqwest = { version = "0.10", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
     "blocking",
+    "socks",
 ] }
 async-trait = "0.1"
 thiserror = "1.0"
