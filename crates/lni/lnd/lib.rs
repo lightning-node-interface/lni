@@ -8,6 +8,7 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, Clone)]
 pub struct LndConfig {
     pub url: String,

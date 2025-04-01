@@ -18,6 +18,7 @@ pub struct TLVRecord {
     pub value: String,
 }
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub alias: String,

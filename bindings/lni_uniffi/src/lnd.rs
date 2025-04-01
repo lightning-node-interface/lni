@@ -1,29 +1,10 @@
-use lni::{lnd::lib::LndConfig as LndConfigRn, ApiError as ApiErrorRn, NodeInfo as NodeInfoRn};
-
-#[derive(uniffi::Object)]
-pub struct LndConfig {
-    pub inner: LndConfigRn,
-}
+use lni::lnd::LndConfig;
+use lni::types::NodeInfo;
+use lni::ApiError;
 
 #[derive(uniffi::Object)]
 pub struct LndNode {
     pub config: LndConfig,
-}
-
-#[derive(Debug, thiserror::Error, uniffi::Object)]
-pub struct ApiError {
-    pub inner: ApiErrorRn,
-}
-
-impl std::fmt::Display for ApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.inner)
-    }
-}
-
-#[derive(uniffi::Object)]
-pub struct NodeInfo {
-    pub inner: NodeInfoRn,
 }
 
 #[uniffi::export]
@@ -38,30 +19,25 @@ impl LndNode {
     ) -> Self {
         Self {
             config: LndConfig {
-                inner: LndConfigRn {
-                    url,
-                    macaroon,
-                    socks5_proxy,
-                    accept_invalid_certs: Some(accept_invalid_certs.unwrap_or(false)),
-                    http_timeout: Some(http_timeout.unwrap_or(30)),
-                },
+                url,
+                macaroon,
+                socks5_proxy,
+                accept_invalid_certs: Some(accept_invalid_certs.unwrap_or(false)),
+                http_timeout: Some(http_timeout.unwrap_or(30)),
             },
         }
     }
 
     fn get_url(&self) -> String {
-        self.config.inner.url.clone()
+        self.config.url.clone()
     }
 
     fn get_macaroon(&self) -> String {
-        self.config.inner.macaroon.clone()
+        self.config.macaroon.clone()
     }
 
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        lni::lnd::api::get_info(&self.config.inner)
-            .await
-            .map(|info| NodeInfo { inner: info })
-            .map_err(|err| ApiError { inner: err })
+        lni::lnd::api::get_info(&self.config).await
     }
 
     // pub async fn create_invoice(
