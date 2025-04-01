@@ -93,6 +93,97 @@ impl LndNode {
     }
 }
 
+
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct LndNodeUniffi {
+    pub config: LndConfig,
+}
+
+// We need a separate implementation for react-native uniffi due to contraints in the lib
+#[uniffi::export]
+impl LndNodeUniffi{
+    #[uniffi::constructor]
+    fn new(
+        url: String,
+        macaroon: String,
+        socks5_proxy: Option<String>,
+        accept_invalid_certs: Option<bool>,
+        http_timeout: Option<i64>,
+    ) -> Self {
+        Self {
+            config: LndConfig {
+                url,
+                macaroon,
+                socks5_proxy,
+                accept_invalid_certs,
+                http_timeout,
+            },
+        }
+    }
+
+    fn get_url(&self) -> String {
+        self.config.url.clone()
+    }
+
+    fn get_macaroon(&self) -> String {
+        self.config.macaroon.clone()
+    }
+
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::lnd::api::get_info(&self.config).await
+    }
+
+    // pub async fn create_invoice(
+    //     &self,
+    //     params: CreateInvoiceParams,
+    // ) -> Result<Transaction, ApiError> {
+    //     crate::lnd::api::create_invoice(&self.config, params).await
+    // }
+
+    // pub async fn pay_invoice(
+    //     &self,
+    //     params: PayInvoiceParams,
+    // ) -> Result<PayInvoiceResponse, ApiError> {
+    //     crate::lnd::api::pay_invoice(&self.config, params).await
+    // }
+
+    // pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    //     crate::lnd::api::get_offer(&self.config, search).await
+    // }
+
+    // pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    //     crate::lnd::api::list_offers(&self.config, search).await
+    // }
+
+    // pub async fn pay_offer(
+    //     &self,
+    //     offer: String,
+    //     amount_msats: i64,
+    //     payer_note: Option<String>,
+    // ) -> Result<PayInvoiceResponse, ApiError> {
+    //     crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
+    // }
+
+    // pub async fn lookup_invoice(
+    //     &self,
+    //     payment_hash: String,
+    // ) -> Result<crate::Transaction, ApiError> {
+    //     crate::lnd::api::lookup_invoice(&self.config, Some(payment_hash)).await
+    // }
+
+    // pub async fn list_transactions(
+    //     &self,
+    //     params: ListTransactionsParams,
+    // ) -> Result<Vec<crate::Transaction>, ApiError> {
+    //     crate::lnd::api::list_transactions(&self.config, params.from, params.limit).await
+    // }
+
+    // pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+    //     crate::lnd::api::decode(&self.config, str).await
+    // }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{InvoiceType, PayInvoiceParams};

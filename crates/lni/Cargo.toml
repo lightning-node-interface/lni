@@ -49,4 +49,4 @@ strip = "symbols"
 [features]
 napi_rs = []
 uniffi = []
-default = []
+default = ["uniffi"]
