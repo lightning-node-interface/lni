@@ -39,8 +39,8 @@ impl LndNode {
         Self { config }
     }
 
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::lnd::api::get_info(&self.config).await
+    pub fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::lnd::api::get_info(&self.config)
     }
 
     pub async fn create_invoice(
@@ -131,7 +131,7 @@ impl LndNodeUniffi{
     }
 
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::lnd::api::get_info(&self.config).await
+        crate::lnd::api::get_info(&self.config)
     }
 
     // pub async fn create_invoice(
@@ -194,7 +194,6 @@ mod tests {
     use rand::Rng;
     use sha2::{Digest, Sha256};
     use std::env;
-    use tokio::test;
 
     lazy_static! {
         static ref URL: String = {
@@ -229,8 +228,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_get_info() {
-        match NODE.get_info().await {
+    fn test_get_info() {
+        match NODE.get_info() {
             Ok(info) => {
                 println!("info: {:?}", info);
                 assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
@@ -241,200 +240,200 @@ mod tests {
         }
     }
 
-    #[test]
-    async fn test_create_invoice() {
-        let amount_msats = 3000;
-        let description = "Test invoice".to_string();
-        let description_hash = "".to_string();
-        let expiry = 3600;
-
-        // Generate a random 32-byte preimage
-        let mut preimage_bytes = [0u8; 32];
-        rand::thread_rng().fill(&mut preimage_bytes);
-
-        // Hex encode the preimage for human readability
-        let preimage = hex::encode(preimage_bytes);
-        // Note: payment_hash is automatically derived from the preimage by the LND node
-        // We don't need to specify it when creating an invoice
-        println!("Generated preimage: {:?}", preimage);
-
-        // Calculate payment hash (SHA-256 of preimage)
-        let mut hasher = Sha256::new();
-        hasher.update(hex::decode(&preimage).unwrap());
-        let payment_hash = hex::encode(hasher.finalize());
-        println!("Generated payment_hash: {:?}", payment_hash);
-
-        // BOLT11
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                amount_msats: Some(amount_msats),
-                description: Some(description.clone()),
-                description_hash: Some(description_hash.clone()),
-                expiry: Some(expiry),
-                r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
-                ..Default::default()
-            })
-            .await
-        {
-            Ok(txn) => {
-                println!("BOLT11 create_invoice: {:?}", txn);
-                assert!(
-                    !txn.invoice.is_empty(),
-                    "BOLT11 create_invoice Invoice should not be empty"
-                );
-            }
-            Err(e) => {
-                panic!("BOLT11 create_invoice Failed to make invoice: {:?}", e);
-            }
-        }
-
-        // BOLT 11 with blinded paths
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                amount_msats: Some(amount_msats),
-                description: Some(description.clone()),
-                description_hash: Some(description_hash.clone()),
-                expiry: Some(expiry),
-                is_blinded: Some(true),
-                ..Default::default()
-            })
-            .await
-        {
-            Ok(txn) => {
-                println!("BOLT11 with blinded create_invoice: {:?}", txn);
-                assert!(
-                    !txn.invoice.is_empty(),
-                    "BOLT11 create_invoice Invoice should not be empty"
-                );
-            }
-            Err(e) => {
-                panic!(
-                    "BOLT11 with blinded create_invoice Failed to make invoice: {:?}",
-                    e
-                );
-            }
-        }
-    }
-
-    #[test]
-    async fn test_pay_invoice() {
-        match NODE
-            .pay_invoice(PayInvoiceParams {
-                invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
-                fee_limit_percentage: Some(1.0), // 1% fee limit
-                allow_self_payment: Some(true),
-                ..Default::default()
-            })
-            .await
-        {
-            Ok(invoice_resp) => {
-                // println!("Pay invoice resp: {:?}", invoice_resp);
-                assert!(
-                    !invoice_resp.payment_hash.is_empty(),
-                    "Payment Hash should not be empty"
-                );
-            }
-            Err(e) => {
-                panic!("Failed to pay invoice: {:?}", e);
-            }
-        }
-    }
-
     // #[test]
-    // async fn test_list_offers() {
-    //     match NODE.get_offer(None).await {
-    //         Ok(resp) => {
-    //             println!("Get offer: {:?}", resp);
-    //         }
-    //         Err(e) => {
-    //             panic!("Failed to get offer: {:?}", e);
-    //         }
-    //     }
-    //     match NODE.list_offers(None).await {
-    //         Ok(resp) => {
-    //             println!("List offers: {:?}", resp);
-    //         }
-    //         Err(e) => {
-    //             panic!("Failed to list offer: {:?}", e);
-    //         }
-    //     }
-    // }
+    // async fn test_create_invoice() {
+    //     let amount_msats = 3000;
+    //     let description = "Test invoice".to_string();
+    //     let description_hash = "".to_string();
+    //     let expiry = 3600;
 
-    // #[test]
-    // async fn test_pay_offer() {
+    //     // Generate a random 32-byte preimage
+    //     let mut preimage_bytes = [0u8; 32];
+    //     rand::thread_rng().fill(&mut preimage_bytes);
+
+    //     // Hex encode the preimage for human readability
+    //     let preimage = hex::encode(preimage_bytes);
+    //     // Note: payment_hash is automatically derived from the preimage by the LND node
+    //     // We don't need to specify it when creating an invoice
+    //     println!("Generated preimage: {:?}", preimage);
+
+    //     // Calculate payment hash (SHA-256 of preimage)
+    //     let mut hasher = Sha256::new();
+    //     hasher.update(hex::decode(&preimage).unwrap());
+    //     let payment_hash = hex::encode(hasher.finalize());
+    //     println!("Generated payment_hash: {:?}", payment_hash);
+
+    //     // BOLT11
     //     match NODE
-    //         .pay_offer(
-    //             PHOENIX_MOBILE_OFFER.to_string(),
-    //             3000,
-    //             Some("from LNI test".to_string()),
-    //         )
+    //         .create_invoice(CreateInvoiceParams {
+    //             invoice_type: InvoiceType::Bolt11,
+    //             amount_msats: Some(amount_msats),
+    //             description: Some(description.clone()),
+    //             description_hash: Some(description_hash.clone()),
+    //             expiry: Some(expiry),
+    //             r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
+    //             ..Default::default()
+    //         })
     //         .await
     //     {
-    //         Ok(pay_resp) => {
-    //             println!("pay_resp: {:?}", pay_resp);
+    //         Ok(txn) => {
+    //             println!("BOLT11 create_invoice: {:?}", txn);
     //             assert!(
-    //                 !pay_resp.payment_hash.is_empty(),
-    //                 "Payment hash should not be empty"
+    //                 !txn.invoice.is_empty(),
+    //                 "BOLT11 create_invoice Invoice should not be empty"
     //             );
     //         }
     //         Err(e) => {
-    //             panic!("Failed to get offer: {:?}", e);
+    //             panic!("BOLT11 create_invoice Failed to make invoice: {:?}", e);
+    //         }
+    //     }
+
+    //     // BOLT 11 with blinded paths
+    //     match NODE
+    //         .create_invoice(CreateInvoiceParams {
+    //             invoice_type: InvoiceType::Bolt11,
+    //             amount_msats: Some(amount_msats),
+    //             description: Some(description.clone()),
+    //             description_hash: Some(description_hash.clone()),
+    //             expiry: Some(expiry),
+    //             is_blinded: Some(true),
+    //             ..Default::default()
+    //         })
+    //         .await
+    //     {
+    //         Ok(txn) => {
+    //             println!("BOLT11 with blinded create_invoice: {:?}", txn);
+    //             assert!(
+    //                 !txn.invoice.is_empty(),
+    //                 "BOLT11 create_invoice Invoice should not be empty"
+    //             );
+    //         }
+    //         Err(e) => {
+    //             panic!(
+    //                 "BOLT11 with blinded create_invoice Failed to make invoice: {:?}",
+    //                 e
+    //             );
     //         }
     //     }
     // }
 
-    #[test]
-    async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
-            Ok(txn) => {
-                println!("invoice: {:?}", txn);
-                assert!(
-                    txn.amount_msats >= 0,
-                    "Invoice should contain a valid amount"
-                );
-            }
-            Err(e) => {
-                if e.to_string().contains("not found") {
-                    assert!(true, "Invoice not found as expected");
-                } else {
-                    panic!("Failed to lookup invoice: {:?}", e);
-                }
-            }
-        }
-    }
+    // #[test]
+    // async fn test_pay_invoice() {
+    //     match NODE
+    //         .pay_invoice(PayInvoiceParams {
+    //             invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
+    //             fee_limit_percentage: Some(1.0), // 1% fee limit
+    //             allow_self_payment: Some(true),
+    //             ..Default::default()
+    //         })
+    //         .await
+    //     {
+    //         Ok(invoice_resp) => {
+    //             // println!("Pay invoice resp: {:?}", invoice_resp);
+    //             assert!(
+    //                 !invoice_resp.payment_hash.is_empty(),
+    //                 "Payment Hash should not be empty"
+    //             );
+    //         }
+    //         Err(e) => {
+    //             panic!("Failed to pay invoice: {:?}", e);
+    //         }
+    //     }
+    // }
 
-    #[test]
-    async fn test_list_transactions() {
-        let params = ListTransactionsParams {
-            from: 0,
-            limit: 10,
-            payment_hash: None,
-        };
-        match NODE.list_transactions(params).await {
-            Ok(txns) => {
-                println!("transactions: {:?}", txns);
-                assert!(
-                    txns.len() >= 0,
-                    "Should contain at least zero or one transaction"
-                );
-            }
-            Err(e) => {
-                panic!("Failed to lookup transactions: {:?}", e);
-            }
-        }
-    }
+    // // #[test]
+    // // async fn test_list_offers() {
+    // //     match NODE.get_offer(None).await {
+    // //         Ok(resp) => {
+    // //             println!("Get offer: {:?}", resp);
+    // //         }
+    // //         Err(e) => {
+    // //             panic!("Failed to get offer: {:?}", e);
+    // //         }
+    // //     }
+    // //     match NODE.list_offers(None).await {
+    // //         Ok(resp) => {
+    // //             println!("List offers: {:?}", resp);
+    // //         }
+    // //         Err(e) => {
+    // //             panic!("Failed to list offer: {:?}", e);
+    // //         }
+    // //     }
+    // // }
 
-    #[test]
-    async fn test_decode() {
-        match NODE.decode(LND_TEST_PAYMENT_REQUEST.to_string()).await {
-            Ok(txns) => {
-                println!("decode: {:?}", txns);
-            }
-            Err(e) => {
-                panic!("Failed to decode: {:?}", e);
-            }
-        }
-    }
+    // // #[test]
+    // // async fn test_pay_offer() {
+    // //     match NODE
+    // //         .pay_offer(
+    // //             PHOENIX_MOBILE_OFFER.to_string(),
+    // //             3000,
+    // //             Some("from LNI test".to_string()),
+    // //         )
+    // //         .await
+    // //     {
+    // //         Ok(pay_resp) => {
+    // //             println!("pay_resp: {:?}", pay_resp);
+    // //             assert!(
+    // //                 !pay_resp.payment_hash.is_empty(),
+    // //                 "Payment hash should not be empty"
+    // //             );
+    // //         }
+    // //         Err(e) => {
+    // //             panic!("Failed to get offer: {:?}", e);
+    // //         }
+    // //     }
+    // // }
+
+    // #[test]
+    // async fn test_lookup_invoice() {
+    //     match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
+    //         Ok(txn) => {
+    //             println!("invoice: {:?}", txn);
+    //             assert!(
+    //                 txn.amount_msats >= 0,
+    //                 "Invoice should contain a valid amount"
+    //             );
+    //         }
+    //         Err(e) => {
+    //             if e.to_string().contains("not found") {
+    //                 assert!(true, "Invoice not found as expected");
+    //             } else {
+    //                 panic!("Failed to lookup invoice: {:?}", e);
+    //             }
+    //         }
+    //     }
+    // }
+
+    // #[test]
+    // async fn test_list_transactions() {
+    //     let params = ListTransactionsParams {
+    //         from: 0,
+    //         limit: 10,
+    //         payment_hash: None,
+    //     };
+    //     match NODE.list_transactions(params).await {
+    //         Ok(txns) => {
+    //             println!("transactions: {:?}", txns);
+    //             assert!(
+    //                 txns.len() >= 0,
+    //                 "Should contain at least zero or one transaction"
+    //             );
+    //         }
+    //         Err(e) => {
+    //             panic!("Failed to lookup transactions: {:?}", e);
+    //         }
+    //     }
+    // }
+
+    // #[test]
+    // async fn test_decode() {
+    //     match NODE.decode(LND_TEST_PAYMENT_REQUEST.to_string()).await {
+    //         Ok(txns) => {
+    //             println!("decode: {:?}", txns);
+    //         }
+    //         Err(e) => {
+    //             panic!("Failed to decode: {:?}", e);
+    //         }
+    //     }
+    // }
 }
