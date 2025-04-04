@@ -35,11 +35,40 @@ fn client(config: &LndConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
+async fn client2(cfg: &LndConfig) -> reqwest::Client {
+    let config = cfg.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "Grpc-Metadata-macaroon",
+            header::HeaderValue::from_str(&config.macaroon).unwrap(),
+        );
+        let mut client = reqwest::ClientBuilder::new().default_headers(headers);
+        if config.socks5_proxy.is_some() {
+            let proxy =
+                reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
+            client = client.proxy(proxy);
+        }
+        if config.accept_invalid_certs.is_some() {
+            client = client.danger_accept_invalid_certs(true);
+        }
+        if config.http_timeout.is_some() {
+            client = client.timeout(std::time::Duration::from_secs(
+                config.http_timeout.unwrap_or_default() as u64,
+            ));
+        }
+        client.build().unwrap()
+    })
+    .await
+    .expect("Failed to build client");
+    res
+}
+
 pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
-    let client = client(config);
-    let response = client.get(&req_url).send().unwrap();
-    let response_text = response.text().unwrap();
+    let client = client2(config).await;
+    let response = client.get(&req_url).send().await.unwrap();
+    let response_text = response.text().await.unwrap();
     let response_text = response_text.as_str();
     let info: GetInfoResponse = serde_json::from_str(&response_text)?;
 
@@ -48,8 +77,8 @@ pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     // https://lightning.engineering/api-docs/api/lnd/lightning/channel-balance/
     // send_balance_msats, receive_balance_msats, pending_balance, inactive_balance
     let balance_url = format!("{}/v1/balance/channels", config.url);
-    let balance_response = client.get(&balance_url).send().unwrap();
-    let balance_response_text = balance_response.text().unwrap();
+    let balance_response = client.get(&balance_url).send().await.unwrap();
+    let balance_response_text = balance_response.text().await.unwrap();
     let balance_response_text = balance_response_text.as_str();
     let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
 
