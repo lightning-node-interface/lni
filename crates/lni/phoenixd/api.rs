@@ -32,35 +32,67 @@ fn client(config: &PhoenixdConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
+async fn client2(cfg: &PhoenixdConfig) -> reqwest::Client {
+    let config = cfg.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let mut client = reqwest::ClientBuilder::new();
+        if config.socks5_proxy.is_some() {
+            let proxy =
+                reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
+            client = client.proxy(proxy);
+        }
+        if config.accept_invalid_certs.is_some() {
+            client = client.danger_accept_invalid_certs(true);
+        }
+        if config.http_timeout.is_some() {
+            client = client.timeout(std::time::Duration::from_secs(
+                config.http_timeout.unwrap_or_default() as u64,
+            ));
+        }
+        client.build().unwrap()
+    })
+    .await
+    .expect("Failed to build client");
+    res
+}
+
 pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
-    let info_url = format!("{}/getinfo", config.url);
-    let client = client(config);
+    // Clone config for use in the blocking task
+    let config_clone = config.clone();
+
+    // Run blocking code in a separate thread
+    let info_url = format!("{}/getinfo", config_clone.url);
+    let client = client2(&config_clone).await;
 
     let response = client
         .get(&info_url)
-        .basic_auth("", Some(config.password.clone()))
+        .basic_auth("", Some(config_clone.password.clone()))
         .send()
+        .await
         .expect("Failed to get node info");
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     println!("get node info response: {}", response_text);
-    let info: InfoResponse = serde_json::from_str(&response_text)?;
 
-    // /getbalance
-    let balance_url = format!("{}/getbalance", config.url);
+    // Get balance info as well
+    let balance_url = format!("{}/getbalance", config_clone.url);
     let balance_response = client
         .get(&balance_url)
-        .basic_auth("", Some(config.password.clone()))
+        .basic_auth("", Some(config_clone.password.clone()))
         .send()
+        .await
         .expect("Failed to get balance");
     let balance_response_text = balance_response
         .text()
+        .await
         .expect("Failed to parse get balance");
     println!("balance_response: {}", balance_response_text);
+
+    // Now process the results in async context
+    let info: InfoResponse = serde_json::from_str(&response_text)?;
     let balance: GetBalanceResponse = serde_json::from_str(&balance_response_text)?;
 
     let node_info = NodeInfo {
         alias: "Phoenixd".to_string(),
-        color: "".to_string(),
         pubkey: info.node_id,
         network: "bitcoin".to_string(),
         block_height: 0,
@@ -72,6 +104,7 @@ pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     };
     Ok(node_info)
 }
+
 
 pub async fn create_invoice(
     config: &PhoenixdConfig,
