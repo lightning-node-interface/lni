@@ -36,8 +36,8 @@ impl LndNode {
         self.config.macaroon.clone()
     }
 
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        lni::lnd::api::get_info(&self.config).await
+    fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        lni::lnd::api::get_info(&self.config)
     }
 
     // pub async fn create_invoice(
