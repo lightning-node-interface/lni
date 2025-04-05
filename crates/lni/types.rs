@@ -18,10 +18,11 @@ pub struct TLVRecord {
     pub value: String,
 }
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[cfg_attr(not(feature = "uniffi"), derive(Debug, Serialize, Deserialize))]
 pub struct NodeInfo {
     pub alias: String,
+    #[uniffi(default = "Blue")]
     pub color: String,
     pub pubkey: String,
     pub network: String,

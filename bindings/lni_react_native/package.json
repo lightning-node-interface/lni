@@ -183,6 +183,6 @@
     "version": "0.49.0"
   },
   "dependencies": {
-    "uniffi-bindgen-react-native": "git+https://github.com/jhugman/uniffi-bindgen-react-native"
+    "uniffi-bindgen-react-native": "0.29.0-0"
   }
 }
