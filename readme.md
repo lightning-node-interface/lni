@@ -352,6 +352,7 @@ Todo
 - [X] async promise architecture for bindings
 - [X] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
 - [ ] Simple event polling
+- [ ] HTTP retries
 - [ ] implement lightning nodes
     - [X] phoenixd
     - [X] cln

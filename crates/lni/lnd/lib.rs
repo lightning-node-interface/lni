@@ -13,7 +13,8 @@ use crate::{
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
-    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    #[uniffi(default = Some(""))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
     #[uniffi(default = Some(true))]
     pub accept_invalid_certs: Option<bool>,
     #[uniffi(default = Some(120))]
@@ -24,7 +25,7 @@ impl Default for LndConfig {
         Self {
             url: "https://127.0.0.1:8080".to_string(),
             macaroon: "".to_string(),
-            socks5_proxy: None,
+            socks5_proxy: Some("".to_string()),
             accept_invalid_certs: Some(true),
             http_timeout: Some(60),
         }
@@ -95,8 +96,6 @@ impl LndNode {
     }
 }
 
-
-
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct LndNodeUniffi {
     pub config: LndConfig,
@@ -104,7 +103,7 @@ pub struct LndNodeUniffi {
 
 // We need a separate implementation for react-native uniffi due to contraints in the lib
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-impl LndNodeUniffi{
+impl LndNodeUniffi {
     // #[uniffi::constructor]
     // fn new(
     //     url: String,

@@ -19,7 +19,7 @@ pub struct TLVRecord {
 }
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[cfg_attr(not(feature = "uniffi"), derive(Debug, Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub alias: String,
     #[uniffi(default = "Blue")]

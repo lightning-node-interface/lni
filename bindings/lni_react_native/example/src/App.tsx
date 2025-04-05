@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { LndNodeUniffi } from 'lni_react_native';
+import { LndNodeUniffi, LndConfig } from 'lni_react_native';
 
 export default function App() {
   const [result, setResult] = useState<string>('Loading...');
@@ -10,13 +10,11 @@ export default function App() {
       try {
         setResult('Done');
         // Initialize the Rust library
-        const node = new LndNodeUniffi(
-          '', //url: string,
-          '', //macaroon: string,
-          'socks5h://127.0.0.1:9050', //socks5Proxy: string | undefined,
-          true, //acceptInvalidCerts: boolean | undefined,
-          BigInt(60), //httpTimeout: /*i64*/ bigint | undefined,
-        );
+        const node = new LndNodeUniffi(LndConfig.create({
+          url: '',
+          macaroon: '',
+          socks5Proxy: '',
+        }));
         const info = await node.getInfo();
         setResult(
           JSON.stringify(info, (_, value) =>
