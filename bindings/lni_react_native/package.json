@@ -38,6 +38,7 @@
     "!**/.*"
   ],
   "scripts": {
+    "start": "yarn example start",
     "ubrn:ios": "ubrn build ios --config ubrn.config.yaml --and-generate && (cd example/ios && pod install)",
     "ubrn:android": "ubrn build android --config ubrn.config.yaml --and-generate",
     "ubrn:checkout": "ubrn checkout --config ubrn.config.yaml",

@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import { LndNodeUniffi, LndConfig } from 'lni_react_native';
-import {
-  LND_URL,
-  LND_MACAROON,
-} from '@env';
+import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
   const [result, setResult] = useState<string>('Loading...');

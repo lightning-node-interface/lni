@@ -15,4 +15,5 @@ module.exports = getConfig(getDefaultConfig(__dirname), {
   root,
   pkg,
   project: __dirname,
+  resetCache: true,
 });
