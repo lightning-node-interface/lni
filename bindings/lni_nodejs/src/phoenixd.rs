@@ -30,18 +30,14 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
+  pub fn get_info(&self) -> napi::Result<lni::NodeInfo> {
     let info = lni::phoenixd::api::get_info(&self.inner)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub async fn create_invoice(
-    &self,
-    params: CreateInvoiceParams,
-  ) -> napi::Result<lni::Transaction> {
+  pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::create_invoice(
       &self.inner,
       params.invoice_type,
@@ -50,58 +46,49 @@ impl PhoenixdNode {
       params.description_hash,
       params.expiry,
     )
-    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_invoice(
-    &self,
-    params: PayInvoiceParams,
-  ) -> Result<lni::types::PayInvoiceResponse> {
+  pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
     let invoice = lni::phoenixd::api::pay_invoice(&self.inner, params)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub async fn get_offer(&self) -> Result<lni::PayCode> {
+  pub fn get_offer(&self) -> Result<lni::PayCode> {
     let paycode = lni::phoenixd::api::get_offer(&self.inner)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(paycode)
   }
 
   #[napi]
-  pub async fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
+  pub fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::lookup_invoice(&self.inner, payment_hash)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_offer(
+  pub fn pay_offer(
     &self,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
     let offer = lni::phoenixd::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub async fn list_transactions(
+  pub fn list_transactions(
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
     let txns = lni::phoenixd::api::list_transactions(&self.inner, params.from, params.limit, None)
-      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
@@ -113,7 +100,7 @@ mod tests {
   use dotenv::dotenv;
   use lazy_static::lazy_static;
   use std::env;
-  use tokio::test;
+  // use tokio::test;
 
   lazy_static! {
     static ref URL: String = {
@@ -134,8 +121,8 @@ mod tests {
   }
 
   #[test]
-  async fn test_get_info() {
-    match NODE.get_info().await {
+  fn test_get_info() {
+    match NODE.get_info() {
       Ok(info) => {
         println!("info: {:?}", info.pubkey);
         assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
