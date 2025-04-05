@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { LndNodeUniffi, LndConfig } from 'lni_react_native';
+import { LndNode, LndConfig } from 'lni_react_native';
 import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
@@ -9,12 +9,19 @@ export default function App() {
   useEffect(() => {
     const runRustCode = async () => {
       try {
-        const node = new LndNodeUniffi(LndConfig.create({
-          url: '', //LND_URL,
-          macaroon: '', // LND_MACAROON,
-          socks5Proxy: "socks5h://127.0.0.1:9050",
-        }));
-        const info = await node.getInfo();
+        const node = new LndNode(
+          LndConfig.create({
+            url: '', //LND_URL,
+            macaroon:
+              '', // LND_MACAROON,
+            socks5Proxy: 'socks5h://127.0.0.1:9050',
+          })
+        );
+        const info = await node.listTransactions({
+          from: BigInt(0),
+          limit: BigInt(10),
+          paymentHash: undefined,
+        });
         setResult(
           JSON.stringify(info, (_, value) =>
             typeof value === 'bigint' ? value.toString() : value
