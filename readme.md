@@ -160,7 +160,6 @@ lni
 ├── bindings
 │   ├── lni_nodejs
 │   ├── lni_react_native
-│   ├── lni_uniffi
 ├── crates
 │   ├── lni
 │       |─── lnd
@@ -170,8 +169,8 @@ lni
 
 Example
 ========
-react-native
-```
+#### react-native
+```sh
 cd bindings/lni_react_native
 cat example/src/App.tsx 
 yarn start
@@ -185,17 +184,18 @@ yarn start
     - In the top click "Product -> Clean build folder" and then build and run
 - Lastly uninstalling the app from the mobile device
 
-nodejs 
-```
+#### nodejs 
+```sh
 cd bindings/lni_nodejs
 cat main.mjs
 yarn
+# then open ../../crates/lni/Cargo.toml and comment out #crate-type = ["staticlib"]
 yarn build
 node main.mjs
 ```
 
-### .env
-```
+#### .env
+```sh
 TEST_RECEIVER_OFFER=lno**
 PHOENIX_MOBILE_OFFER=lno***
 
@@ -206,18 +206,23 @@ PHOENIXD_TEST_PAYMENT_HASH=YOUR_TEST_PAYMENT_HASH
 CLN_URL=http://localhost:3010
 CLN_RUNE=YOUR_RUNE
 CLN_TEST_PAYMENT_HASH=YOUR_HASH
+
+LND_URL=
+LND_MACAROON=
+LND_TEST_PAYMENT_HASH=
+LND_TEST_PAYMENT_REQUEST=
 ```
 
 Language Bindings
 =================
 
-- nodejs 
+- #### nodejs 
     - napi_rs
     - https://napi.rs/docs/introduction/simple-package
     - `cd bindings/lni_nodejs && cargo clean && cargo build --release && yarn && yarn build`
     - test `node main.mjs`
 
-- nodejs - native modules (electron, vercel etc..)
+- #### nodejs - native modules (electron, vercel etc..)
     - if you want to use the native node module (maybe for an electron app) you can reference the file `bindings/lni_nodejs/lni_js.${platform}-${arch}.node`. It would look something like in your project:
         ```typescript
         const path = require("path");
@@ -230,19 +235,18 @@ Language Bindings
         );
         const { PhoenixdNode } = require(nativeModulePath);
         ```
-
-- react-native 
-    - uniffi-bindgen-react-native 
+- #### react-native 
+    - `uniffi-bindgen-react-native` lib
     - https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html
     - sample https://github.com/ianthetechie/uniffi-starter  
-    - `cd bindings/lni_react_native` && ./build.sh
-- uniffi (kotlin, swift) 
+    - `cd bindings/lni_react_native && ./build.sh`
+- #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
-    - `cd bindings/lni_uniffi && cargo build`
+    - Uses decorators like `#[cfg_attr(feature = "uniffi", uniffi::export)]` to foreign codegen 
 
-Shared Binding Objects
-====================
-If you do not want to copy objects to the foreign language bindings we can simply use the features `napi_rs` or `uniffi_rs`
+Shared Foreign Language Objects
+===============================
+If you do not want to copy objects to the foreign language bindings we can simply use the features `napi_rs` or `uniffi`
 to turn on or off language specific decorators and then implement them in their respective bindings project.
 
 Example:
@@ -251,14 +255,14 @@ Example:
 use napi_derive::napi;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PhoenixdConfig {
     pub url: String,
     pub password: String,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi_rs", derive(uniffi::Record))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PhoenixdNode {
     pub url: String,
     pub password: String,
@@ -267,7 +271,7 @@ pub struct PhoenixdNode {
 
 Tor
 ===
-Use the Tor Socks5 proxy settings if you are connecting to a `.onion` hidden service. Make sure to include the "h" in "socks5h://" to resolve onion addresses properly. You can start up a Tor Socks5 proxy easily using Arti https://tpo.pages.torproject.net/core/arti/
+Use the Tor Socks5 proxy settings if you are connecting to a `.onion` hidden service. Make sure to include the `"h"` in `"socks5h://"` to resolve onion addresses properly. You can start up a Tor Socks5 proxy easily using Arti https://tpo.pages.torproject.net/core/arti/
 
 example
 ```rust
@@ -369,5 +373,5 @@ To Research
 ============
 - [X] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
-- [ ] wasm
+- [ ] wasm?
 - [ ] Facade REST API? - Use the same api as phoenixd https://phoenix.acinq.co/server/api as a facade in front of any lightning node implementation. 
