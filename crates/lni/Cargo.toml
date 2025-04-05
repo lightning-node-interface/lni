@@ -6,8 +6,10 @@ edition = "2021"
 [lib]
 name = "lni"
 path = "lib.rs"
-[lib."cfg(not(feature = \"napi_rs\"))"] # does not enable with napi_rs builds
-crate-type = ["lib", "cdylib", "staticlib"] # this is needed for uniffi to generate the correct bindings
+[lib.uniffi]
+crate-type = ["staticlib"] # this is needed for uniffi to generate the correct bindings
+[lib.napi_rs]
+crate-type = []
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = [
