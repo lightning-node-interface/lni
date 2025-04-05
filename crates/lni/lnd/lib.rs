@@ -8,13 +8,16 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
+    #[uniffi(default = None)]
     pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    #[uniffi(default = true)]
     pub accept_invalid_certs: Option<bool>,
+    #[uniffi(default = 120)]
     pub http_timeout: Option<i64>,
 }
 impl Default for LndConfig {
@@ -101,25 +104,30 @@ pub struct LndNodeUniffi {
 }
 
 // We need a separate implementation for react-native uniffi due to contraints in the lib
-#[uniffi::export]
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LndNodeUniffi{
-    #[uniffi::constructor]
-    fn new(
-        url: String,
-        macaroon: String,
-        socks5_proxy: Option<String>,
-        accept_invalid_certs: Option<bool>,
-        http_timeout: Option<i64>,
-    ) -> Self {
-        Self {
-            config: LndConfig {
-                url,
-                macaroon,
-                socks5_proxy,
-                accept_invalid_certs,
-                http_timeout,
-            },
-        }
+    // #[uniffi::constructor]
+    // fn new(
+    //     url: String,
+    //     macaroon: String,
+    //     socks5_proxy: Option<String>,
+    //     accept_invalid_certs: Option<bool>,
+    //     http_timeout: Option<i64>,
+    // ) -> Self {
+    //     Self {
+    //         config: LndConfig {
+    //             url,
+    //             macaroon,
+    //             socks5_proxy,
+    //             accept_invalid_certs,
+    //             http_timeout,
+    //         },
+    //     }
+    // }
+
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    fn new(config: LndConfig) -> Self {
+        Self { config }
     }
 
     fn get_url(&self) -> String {
