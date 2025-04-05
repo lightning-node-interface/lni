@@ -89,3 +89,5 @@ nitrogen/
 rust_modules/
 *.a
 **/generated/**
+
+**.env**

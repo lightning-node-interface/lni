@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import { LndNodeUniffi, LndConfig } from 'lni_react_native';
+import {
+  LND_URL,
+  LND_MACAROON,
+} from '@env';
 
 export default function App() {
   const [result, setResult] = useState<string>('Loading...');
@@ -8,11 +12,9 @@ export default function App() {
   useEffect(() => {
     const runRustCode = async () => {
       try {
-        setResult('Done');
-        // Initialize the Rust library
         const node = new LndNodeUniffi(LndConfig.create({
-          url: '',
-          macaroon: '',
+          url: LND_URL,
+          macaroon: LND_MACAROON,
           socks5Proxy: "socks5h://127.0.0.1:9050",
         }));
         const info = await node.getInfo();
@@ -21,9 +23,8 @@ export default function App() {
             typeof value === 'bigint' ? value.toString() : value
           )
         );
-        // console.log('Rust library initialized');
       } catch (error) {
-        console.error('Error initializing Rust library:', error);
+        console.error('Error initializing LNI Remote library:', error);
       }
     };
     runRustCode();
