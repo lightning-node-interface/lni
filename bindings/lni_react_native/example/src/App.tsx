@@ -10,8 +10,8 @@ export default function App() {
     const runRustCode = async () => {
       try {
         const node = new LndNodeUniffi(LndConfig.create({
-          url: LND_URL,
-          macaroon: LND_MACAROON,
+          url: '', //LND_URL,
+          macaroon: '', // LND_MACAROON,
           socks5Proxy: "socks5h://127.0.0.1:9050",
         }));
         const info = await node.getInfo();

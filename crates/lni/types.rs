@@ -3,6 +3,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InvoiceType {
     Bolt11,
@@ -10,6 +11,7 @@ pub enum InvoiceType {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TLVRecord {
     #[serde(rename = "type")]
@@ -56,6 +58,7 @@ impl Default for NodeInfo {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transaction {
     pub type_: String,
@@ -74,6 +77,7 @@ pub struct Transaction {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeConnectionInfo {
     pub pubkey: String,
@@ -82,6 +86,7 @@ pub struct NodeConnectionInfo {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Channel {
     pub local_balance: i64,
@@ -104,6 +109,7 @@ pub struct Channel {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeStatus {
     #[serde(rename = "isReady")]
@@ -112,6 +118,7 @@ pub struct NodeStatus {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectPeerRequest {
     pub pubkey: String,
@@ -120,6 +127,7 @@ pub struct ConnectPeerRequest {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenChannelRequest {
     pub pubkey: String,
@@ -128,12 +136,14 @@ pub struct OpenChannelRequest {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenChannelResponse {
     pub funding_tx_id: String,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CloseChannelRequest {
     pub channel_id: String,
@@ -142,6 +152,7 @@ pub struct CloseChannelRequest {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateChannelRequest {
     pub channel_id: String,
@@ -151,10 +162,12 @@ pub struct UpdateChannelRequest {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CloseChannelResponse {}
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PendingBalanceDetails {
     pub channel_id: String,
@@ -165,6 +178,7 @@ pub struct PendingBalanceDetails {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OnchainBalanceResponse {
     pub spendable: i64,
@@ -176,6 +190,7 @@ pub struct OnchainBalanceResponse {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PeerDetails {
     pub node_id: String,
@@ -185,6 +200,7 @@ pub struct PeerDetails {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LightningBalanceResponse {
     pub total_spendable: i64,
@@ -196,6 +212,7 @@ pub struct LightningBalanceResponse {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayInvoiceResponse {
     pub payment_hash: String,
@@ -204,12 +221,14 @@ pub struct PayInvoiceResponse {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayKeysendResponse {
     pub fee: i64,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BalancesResponse {
     pub onchain: OnchainBalanceResponse,
@@ -219,6 +238,7 @@ pub struct BalancesResponse {
 // pub type NetworkGraphResponse = serde_json::Value;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaymentFailedEventProperties {
     pub transaction: Transaction,
@@ -228,6 +248,7 @@ pub struct PaymentFailedEventProperties {
 pub const DEFAULT_INVOICE_EXPIRY: i64 = 86400;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListTransactionsParams {
     pub from: i64,
@@ -236,6 +257,7 @@ pub struct ListTransactionsParams {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateInvoiceParams {
     pub invoice_type: InvoiceType,
@@ -271,6 +293,7 @@ impl Default for CreateInvoiceParams {
 
 // Pay Code aka BOLT12 Offer
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayCode {
     pub offer_id: String,
@@ -282,6 +305,7 @@ pub struct PayCode {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PayInvoiceParams {
     pub invoice: String,
