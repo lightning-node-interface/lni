@@ -8,6 +8,7 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct ClnConfig {
     pub url: String,
@@ -29,23 +30,23 @@ impl Default for ClnConfig {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct ClnNode {
     pub config: ClnConfig,
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl ClnNode {
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: ClnConfig) -> Self {
         Self { config }
     }
 
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::cln::api::get_info(&self.config).await
+    pub fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::cln::api::get_info(&self.config)
     }
 
-    pub async fn create_invoice(
-        &self,
-        params: CreateInvoiceParams,
-    ) -> Result<Transaction, ApiError> {
+    pub fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::cln::api::create_invoice(
             &self.config,
             params.invoice_type,
@@ -55,49 +56,42 @@ impl ClnNode {
             params.description_hash,
             params.expiry,
         )
-        .await
     }
 
-    pub async fn pay_invoice(
-        &self,
-        params: PayInvoiceParams,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::cln::api::pay_invoice(&self.config, params).await
+    pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::cln::api::pay_invoice(&self.config, params)
     }
 
-    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::cln::api::get_offer(&self.config, search).await
+    pub fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::cln::api::get_offer(&self.config, search)
     }
 
-    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::cln::api::list_offers(&self.config, search).await
+    pub fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::cln::api::list_offers(&self.config, search)
     }
 
-    pub async fn pay_offer(
+    pub fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::cln::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
+        crate::cln::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    pub async fn lookup_invoice(
-        &self,
-        payment_hash: String,
-    ) -> Result<crate::Transaction, ApiError> {
-        crate::cln::api::lookup_invoice(&self.config, Some(payment_hash), None, None).await
+    pub fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
+        crate::cln::api::lookup_invoice(&self.config, Some(payment_hash), None, None)
     }
 
-    pub async fn list_transactions(
+    pub fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::cln::api::list_transactions(&self.config, params.from, params.limit).await
+        crate::cln::api::list_transactions(&self.config, params.from, params.limit)
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::cln::api::decode(&self.config, str).await
+    pub fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::cln::api::decode(&self.config, str)
     }
 }
 
@@ -109,7 +103,6 @@ mod tests {
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
-    use tokio::test;
 
     lazy_static! {
         static ref URL: String = {
@@ -140,8 +133,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_get_info() {
-        match NODE.get_info().await {
+    fn test_get_info() {
+        match NODE.get_info() {
             Ok(info) => {
                 println!("info: {:?}", info);
                 assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
@@ -153,24 +146,21 @@ mod tests {
     }
 
     #[test]
-    async fn test_create_invoice() {
+    fn test_create_invoice() {
         let amount_msats = 3000;
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
         let expiry = 3600;
 
         // BOLT11
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                amount_msats: Some(amount_msats),
-                description: Some(description.clone()),
-                description_hash: Some(description_hash.clone()),
-                expiry: Some(expiry),
-                ..Default::default()
-            })
-            .await
-        {
+        match NODE.create_invoice(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(amount_msats),
+            description: Some(description.clone()),
+            description_hash: Some(description_hash.clone()),
+            expiry: Some(expiry),
+            ..Default::default()
+        }) {
             Ok(txn) => {
                 println!("BOLT11 create_invoice: {:?}", txn);
                 assert!(
@@ -184,14 +174,11 @@ mod tests {
         }
 
         // BOLT11 - Zero amount
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                expiry: Some(expiry),
-                ..Default::default()
-            })
-            .await
-        {
+        match NODE.create_invoice(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            expiry: Some(expiry),
+            ..Default::default()
+        }) {
             Ok(txn) => {
                 println!("BOLT11 - Zero amount: {:?}", txn);
                 assert!(
@@ -205,18 +192,15 @@ mod tests {
         }
 
         // BOLT12
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt12,
-                amount_msats: Some(amount_msats),
-                offer: Some(PHOENIX_MOBILE_OFFER.to_string()),
-                description: Some(description.clone()),
-                description_hash: None,
-                expiry: Some(expiry),
-                ..Default::default()
-            })
-            .await
-        {
+        match NODE.create_invoice(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt12,
+            amount_msats: Some(amount_msats),
+            offer: Some(PHOENIX_MOBILE_OFFER.to_string()),
+            description: Some(description.clone()),
+            description_hash: None,
+            expiry: Some(expiry),
+            ..Default::default()
+        }) {
             Ok(txn) => {
                 println!("BOLT12 create_invoice from offer: {:?}", txn);
                 assert!(
@@ -236,15 +220,12 @@ mod tests {
     }
 
     #[test]
-    async fn test_pay_invoice() {
-        match NODE
-            .pay_invoice(PayInvoiceParams {
-                invoice: "".to_string(),    // TODO remote grab a invoice maybe from LNURL
-                fee_limit_msat: Some(5000), // 5 sats fee limit
-                ..Default::default()
-            })
-            .await
-        {
+    fn test_pay_invoice() {
+        match NODE.pay_invoice(PayInvoiceParams {
+            invoice: "".to_string(),    // TODO remote grab a invoice maybe from LNURL
+            fee_limit_msat: Some(5000), // 5 sats fee limit
+            ..Default::default()
+        }) {
             Ok(invoice_resp) => {
                 println!("Pay invoice resp: {:?}", invoice_resp);
                 assert!(
@@ -258,8 +239,8 @@ mod tests {
         }
     }
     #[test]
-    async fn test_list_offers() {
-        match NODE.get_offer(None).await {
+    fn test_list_offers() {
+        match NODE.get_offer(None) {
             Ok(resp) => {
                 println!("Get offer: {:?}", resp);
             }
@@ -267,7 +248,7 @@ mod tests {
                 panic!("Failed to get offer: {:?}", e);
             }
         }
-        match NODE.list_offers(None).await {
+        match NODE.list_offers(None) {
             Ok(resp) => {
                 println!("List offers: {:?}", resp);
             }
@@ -278,15 +259,12 @@ mod tests {
     }
 
     #[test]
-    async fn test_pay_offer() {
-        match NODE
-            .pay_offer(
-                PHOENIX_MOBILE_OFFER.to_string(),
-                3000,
-                Some("from LNI test".to_string()),
-            )
-            .await
-        {
+    fn test_pay_offer() {
+        match NODE.pay_offer(
+            PHOENIX_MOBILE_OFFER.to_string(),
+            3000,
+            Some("from LNI test".to_string()),
+        ) {
             Ok(pay_resp) => {
                 println!("pay_resp: {:?}", pay_resp);
                 assert!(
@@ -301,8 +279,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
+    fn test_lookup_invoice() {
+        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()) {
             Ok(txn) => {
                 println!("invoice: {:?}", txn);
                 assert!(
@@ -317,13 +295,13 @@ mod tests {
     }
 
     #[test]
-    async fn test_list_transactions() {
+    fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 10,
             payment_hash: None,
         };
-        match NODE.list_transactions(params).await {
+        match NODE.list_transactions(params) {
             Ok(txns) => {
                 println!("transactions: {:?}", txns);
                 assert!(
@@ -338,8 +316,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_decode() {
-        match NODE.decode(PHOENIX_MOBILE_OFFER.to_string()).await {
+    fn test_decode() {
+        match NODE.decode(PHOENIX_MOBILE_OFFER.to_string()) {
             Ok(txns) => {
                 println!("decode: {:?}", txns);
             }

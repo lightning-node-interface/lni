@@ -123,3 +123,5 @@ xcuserdata/
 
 bindings/lni_react_native/src/generated/** 
 bindings/lni_react_native/cpp/generated/**
+
+**/lni_react_native_old/**

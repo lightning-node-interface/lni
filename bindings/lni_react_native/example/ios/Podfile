@@ -16,7 +16,7 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
-target 'LniExample' do
+target 'LniReactNativeExample' do
   config = use_native_modules!
 
   use_react_native!(
@@ -25,12 +25,8 @@ target 'LniExample' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  target 'LniExampleTests' do
-    inherit! :complete
-    # Pods for testing
-  end
 
-
+  # Run Codegen during development for the example app.
   pre_install do |installer|
     system("cd ../../ && npx bob build --target codegen")
   end

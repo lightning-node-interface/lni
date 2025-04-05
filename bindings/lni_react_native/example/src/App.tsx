@@ -1,95 +1,42 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import {
-  PhoenixdNode,
-  InvoiceType,
-  type ListTransactionsParams,
-} from 'react-native-lni';
-import {
-  PHOENIXD_URL,
-  PHOENIXD_PASSWORD,
-  PHOENIXD_TEST_PAYMENT_HASH,
-  TEST_RECEIVER_OFFER,
-} from '@env';
-// import RNFS from 'react-native-fs';
+import { LndNode, LndConfig, PhoenixdNode, PhoenixdConfig } from 'lni_react_native';
+import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
-  const [offer, setOffer] = useState<string>('');
-  const [pubKey, setPubKey] = useState<string>('');
-  const [invoice, setInvoice] = useState<string | number>('');
-  const [txns, setTxns] = useState<any>('');
-  const [payment, setPayment] = useState<any>('');
-
-  const main = async () => {
-    phoenixd();
-    cln();
-  };
-
-  async function phoenixd() {
-    try {
-      const node = new PhoenixdNode({
-        url: PHOENIXD_URL,
-        password: PHOENIXD_PASSWORD,
-      });
-
-      const info = await node.getInfo();
-      setPubKey(info.pubkey);
-
-      const offerResp = await node.createInvoice({
-        invoiceType: InvoiceType.Bolt12,
-        amountMsats: BigInt(1000),
-        description: 'Test invoice',
-        descriptionHash: undefined,
-        expiry: undefined,
-      });
-      setOffer(offerResp.invoice);
-
-      const lookupInvoice = await node.lookupInvoice(
-        PHOENIXD_TEST_PAYMENT_HASH
-      );
-      setInvoice(Number(lookupInvoice.amountMsats));
-
-      let txnParams: ListTransactionsParams = {
-        from: BigInt(0),
-        limit: BigInt(10),
-        paymentHash: undefined, // TODO figure out how to exclude this instead of passing in undefined
-      };
-      const txns = await node.listTransactions(txnParams);
-      setTxns(JSON.stringify(txns[0], bigIntReplacer));
-
-      const paymentResp = await node.payOffer(
-        TEST_RECEIVER_OFFER,
-        BigInt(3000),
-        'payment from react-native'
-      );
-      console.log('Pay offer resposne', paymentResp);
-      setPayment(JSON.stringify(paymentResp, bigIntReplacer));
-    } catch (e) {
-      console.error('Error', e);
-    }
-  }
-  function cln() {}
+  const [result, setResult] = useState<string>('Loading...');
 
   useEffect(() => {
-    setTimeout(() => {
-      console.log('Starting main');
-      main();
-    }, 1000);
+    const runRustCode = async () => {
+      try {
+        const node = new LndNode(
+          LndConfig.create({
+            url: '', //LND_URL,
+            macaroon:
+              '', // LND_MACAROON,
+            socks5Proxy: 'socks5h://127.0.0.1:9050',
+          })
+        );
+        const info = await node.listTransactions({
+          from: BigInt(0),
+          limit: BigInt(10),
+          paymentHash: undefined,
+        });
+        setResult(
+          JSON.stringify(info, (_, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+          )
+        );
+      } catch (error) {
+        console.error('Error initializing LNI Remote library:', error);
+      }
+    };
+    runRustCode();
   }, []);
 
   return (
     <View style={styles.container}>
-      <Text />
-      <Text>Node PubKey: {pubKey}</Text>
-      <Text />
-      <Text>Offer: {offer}</Text>
-      <Text />
-      <Text>Lookup Invoice Amt: {invoice}</Text>
-      <Text />
-      <Text>First Txn: {txns}</Text>
-      <Text />
-      <Text>DB: {payment}</Text>
-      <Text />
+      <Text>Result: {result}</Text>
     </View>
   );
 }
@@ -101,10 +48,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-
-function bigIntReplacer(key: any, value: any) {
-  if (typeof value === 'bigint') {
-    return value.toString();
-  }
-  return value;
-}

@@ -3,6 +3,7 @@ use napi_derive::napi;
 #[cfg(feature = "napi_rs")]
 use napi::bindgen_prelude::*;
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("HttpError: {reason}")]
@@ -21,22 +22,22 @@ impl From<serde_json::Error> for ApiError {
 }
 
 pub mod phoenixd {
-    pub mod lib;
     pub mod api;
+    pub mod lib;
     pub mod types;
     pub use lib::{PhoenixdConfig, PhoenixdNode};
 }
 
 pub mod cln {
-    pub mod lib;
     pub mod api;
+    pub mod lib;
     pub mod types;
     pub use lib::{ClnConfig, ClnNode};
 }
 
 pub mod lnd {
-    pub mod lib;
     pub mod api;
+    pub mod lib;
     pub mod types;
     pub use lib::{LndConfig, LndNode};
 }
@@ -49,3 +50,6 @@ pub use utils::*;
 
 pub mod database;
 pub use database::{Db, DbError, Payment};
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();

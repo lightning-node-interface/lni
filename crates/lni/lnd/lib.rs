@@ -8,12 +8,16 @@ use crate::{
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
-    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
     pub accept_invalid_certs: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
 impl Default for LndConfig {
@@ -21,7 +25,7 @@ impl Default for LndConfig {
         Self {
             url: "https://127.0.0.1:8080".to_string(),
             macaroon: "".to_string(),
-            socks5_proxy: None,
+            socks5_proxy: Some("".to_string()),
             accept_invalid_certs: Some(true),
             http_timeout: Some(60),
         }
@@ -29,66 +33,60 @@ impl Default for LndConfig {
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct LndNode {
     pub config: LndConfig,
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LndNode {
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: LndConfig) -> Self {
         Self { config }
     }
 
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::lnd::api::get_info(&self.config).await
+    pub fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::lnd::api::get_info(&self.config)
     }
 
-    pub async fn create_invoice(
-        &self,
-        params: CreateInvoiceParams,
-    ) -> Result<Transaction, ApiError> {
-        crate::lnd::api::create_invoice(&self.config, params).await
+    pub fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::lnd::api::create_invoice(&self.config, params)
     }
 
-    pub async fn pay_invoice(
-        &self,
-        params: PayInvoiceParams,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::lnd::api::pay_invoice(&self.config, params).await
+    pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::lnd::api::pay_invoice(&self.config, params)
     }
 
-    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::lnd::api::get_offer(&self.config, search).await
+    pub fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::lnd::api::get_offer(&self.config, search)
     }
 
-    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::lnd::api::list_offers(&self.config, search).await
+    pub fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::lnd::api::list_offers(&self.config, search)
     }
 
-    pub async fn pay_offer(
+    pub fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
+        crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    pub async fn lookup_invoice(
-        &self,
-        payment_hash: String,
-    ) -> Result<crate::Transaction, ApiError> {
-        crate::lnd::api::lookup_invoice(&self.config, Some(payment_hash)).await
+    pub fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
+        crate::lnd::api::lookup_invoice(&self.config, Some(payment_hash))
     }
 
-    pub async fn list_transactions(
+    pub fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::lnd::api::list_transactions(&self.config, params.from, params.limit).await
+        crate::lnd::api::list_transactions(&self.config, params.from, params.limit)
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::lnd::api::decode(&self.config, str).await
+    pub fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::lnd::api::decode(&self.config, str)
     }
 }
 
@@ -102,7 +100,6 @@ mod tests {
     use rand::Rng;
     use sha2::{Digest, Sha256};
     use std::env;
-    use tokio::test;
 
     lazy_static! {
         static ref URL: String = {
@@ -137,8 +134,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_get_info() {
-        match NODE.get_info().await {
+    fn test_get_info() {
+        match NODE.get_info() {
             Ok(info) => {
                 println!("info: {:?}", info);
                 assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
@@ -150,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_create_invoice() {
+    fn test_create_invoice() {
         let amount_msats = 3000;
         let description = "Test invoice".to_string();
         let description_hash = "".to_string();
@@ -173,18 +170,15 @@ mod tests {
         println!("Generated payment_hash: {:?}", payment_hash);
 
         // BOLT11
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                amount_msats: Some(amount_msats),
-                description: Some(description.clone()),
-                description_hash: Some(description_hash.clone()),
-                expiry: Some(expiry),
-                r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
-                ..Default::default()
-            })
-            .await
-        {
+        match NODE.create_invoice(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(amount_msats),
+            description: Some(description.clone()),
+            description_hash: Some(description_hash.clone()),
+            expiry: Some(expiry),
+            r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
+            ..Default::default()
+        }) {
             Ok(txn) => {
                 println!("BOLT11 create_invoice: {:?}", txn);
                 assert!(
@@ -198,18 +192,15 @@ mod tests {
         }
 
         // BOLT 11 with blinded paths
-        match NODE
-            .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
-                amount_msats: Some(amount_msats),
-                description: Some(description.clone()),
-                description_hash: Some(description_hash.clone()),
-                expiry: Some(expiry),
-                is_blinded: Some(true),
-                ..Default::default()
-            })
-            .await
-        {
+        match NODE.create_invoice(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(amount_msats),
+            description: Some(description.clone()),
+            description_hash: Some(description_hash.clone()),
+            expiry: Some(expiry),
+            is_blinded: Some(true),
+            ..Default::default()
+        }) {
             Ok(txn) => {
                 println!("BOLT11 with blinded create_invoice: {:?}", txn);
                 assert!(
@@ -227,16 +218,13 @@ mod tests {
     }
 
     #[test]
-    async fn test_pay_invoice() {
-        match NODE
-            .pay_invoice(PayInvoiceParams {
-                invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
-                fee_limit_percentage: Some(1.0), // 1% fee limit
-                allow_self_payment: Some(true),
-                ..Default::default()
-            })
-            .await
-        {
+    fn test_pay_invoice() {
+        match NODE.pay_invoice(PayInvoiceParams {
+            invoice: "".to_string(), // TODO remote grab a invoice maybe from LNURL
+            fee_limit_percentage: Some(1.0), // 1% fee limit
+            allow_self_payment: Some(true),
+            ..Default::default()
+        }) {
             Ok(invoice_resp) => {
                 // println!("Pay invoice resp: {:?}", invoice_resp);
                 assert!(
@@ -294,8 +282,8 @@ mod tests {
     // }
 
     #[test]
-    async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()).await {
+    fn test_lookup_invoice() {
+        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()) {
             Ok(txn) => {
                 println!("invoice: {:?}", txn);
                 assert!(
@@ -314,13 +302,13 @@ mod tests {
     }
 
     #[test]
-    async fn test_list_transactions() {
+    fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 10,
             payment_hash: None,
         };
-        match NODE.list_transactions(params).await {
+        match NODE.list_transactions(params) {
             Ok(txns) => {
                 println!("transactions: {:?}", txns);
                 assert!(
@@ -335,8 +323,8 @@ mod tests {
     }
 
     #[test]
-    async fn test_decode() {
-        match NODE.decode(LND_TEST_PAYMENT_REQUEST.to_string()).await {
+    fn test_decode() {
+        match NODE.decode(LND_TEST_PAYMENT_REQUEST.to_string()) {
             Ok(txns) => {
                 println!("decode: {:?}", txns);
             }

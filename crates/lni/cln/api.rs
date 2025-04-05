@@ -31,7 +31,7 @@ fn clnrest_client(config: &ClnConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
-pub async fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
+pub fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
     println!("Constructed URL: {} rune {}", req_url, config.rune);
     let client = clnrest_client(config);
@@ -103,7 +103,7 @@ pub async fn get_info(config: &ClnConfig) -> Result<NodeInfo, ApiError> {
 }
 
 // invoice - amount_msat label description expiry fallbacks preimage exposeprivatechannels cltv
-pub async fn create_invoice(
+pub fn create_invoice(
     config: &ClnConfig,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
@@ -175,7 +175,6 @@ pub async fn create_invoice(
                 amount_msats.unwrap_or(0), // TODO make this optional if the lno already has amount in it
                 Some(description.clone().unwrap_or_default()),
             )
-            .await
             .unwrap();
             Ok(Transaction {
                 type_: "incoming".to_string(),
@@ -196,7 +195,7 @@ pub async fn create_invoice(
     }
 }
 
-pub async fn pay_invoice(
+pub fn pay_invoice(
     config: &ClnConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
@@ -278,7 +277,7 @@ pub async fn pay_invoice(
 }
 
 // decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
-pub async fn decode(config: &ClnConfig, str: String) -> Result<String, ApiError> {
+pub fn decode(config: &ClnConfig, str: String) -> Result<String, ApiError> {
     let client = clnrest_client(config);
     let req_url = format!("{}/v1/decode", config.url);
     let response = client
@@ -295,8 +294,8 @@ pub async fn decode(config: &ClnConfig, str: String) -> Result<String, ApiError>
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
-pub async fn get_offer(config: &ClnConfig, search: Option<String>) -> Result<PayCode, ApiError> {
-    let offers = list_offers(config, search.clone()).await?;
+pub fn get_offer(config: &ClnConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+    let offers = list_offers(config, search.clone())?;
     if offers.is_empty() {
         return Ok(PayCode {
             offer_id: "".to_string(),
@@ -310,10 +309,7 @@ pub async fn get_offer(config: &ClnConfig, search: Option<String>) -> Result<Pay
     Ok(offers.first().unwrap().clone())
 }
 
-pub async fn list_offers(
-    config: &ClnConfig,
-    search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+pub fn list_offers(config: &ClnConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
     let client = clnrest_client(config);
     let req_url = format!("{}/v1/listoffers", config.url);
     let mut params = vec![];
@@ -338,7 +334,7 @@ pub async fn list_offers(
     Ok(offers_list.offers)
 }
 
-pub async fn create_offer(
+pub fn create_offer(
     config: &ClnConfig,
     amount_msats: Option<i64>,
     description: Option<String>,
@@ -388,7 +384,7 @@ pub async fn create_offer(
     })
 }
 
-pub async fn fetch_invoice_from_offer(
+pub fn fetch_invoice_from_offer(
     config: &ClnConfig,
     offer: String,
     amount_msats: i64, // TODO make optional if the lno already has amount in it
@@ -423,7 +419,7 @@ pub async fn fetch_invoice_from_offer(
     Ok(fetch_invoice_resp)
 }
 
-pub async fn pay_offer(
+pub fn pay_offer(
     config: &ClnConfig,
     offer: String,
     amount_msats: i64,
@@ -431,9 +427,7 @@ pub async fn pay_offer(
 ) -> Result<PayInvoiceResponse, ApiError> {
     let client = clnrest_client(config);
     let fetch_invoice_resp =
-        fetch_invoice_from_offer(config, offer.clone(), amount_msats, payer_note.clone())
-            .await
-            .unwrap();
+        fetch_invoice_from_offer(config, offer.clone(), amount_msats, payer_note.clone()).unwrap();
     if (fetch_invoice_resp.invoice.is_empty()) {
         return Err(ApiError::Json {
             reason: "Missing BOLT 12 invoice".to_string(),
@@ -470,13 +464,13 @@ pub async fn pay_offer(
     })
 }
 
-pub async fn lookup_invoice(
+pub fn lookup_invoice(
     config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    match lookup_invoices(config, payment_hash, from, limit).await {
+    match lookup_invoices(config, payment_hash, from, limit) {
         Ok(transactions) => {
             if let Some(tx) = transactions.first() {
                 Ok(tx.clone())
@@ -491,7 +485,7 @@ pub async fn lookup_invoice(
 }
 
 // label, invstring, payment_hash, offer_id, index, start, limit
-async fn lookup_invoices(
+fn lookup_invoices(
     config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
@@ -557,12 +551,12 @@ async fn lookup_invoices(
     Ok(transactions)
 }
 
-pub async fn list_transactions(
+pub fn list_transactions(
     config: &ClnConfig,
     from: i64,
     limit: i64,
 ) -> Result<Vec<Transaction>, ApiError> {
-    match lookup_invoices(config, None, Some(from), Some(limit)).await {
+    match lookup_invoices(config, None, Some(from), Some(limit)) {
         Ok(transactions) => Ok(transactions),
         Err(e) => Err(e),
     }

@@ -32,35 +32,40 @@ fn client(config: &PhoenixdConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
-pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
-    let info_url = format!("{}/getinfo", config.url);
-    let client = client(config);
+pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
+    // Clone config for use in the blocking task
+    let config_clone = config.clone();
+
+    // Run blocking code in a separate thread
+    let info_url = format!("{}/getinfo", config_clone.url);
+    let client = client(&config_clone);
 
     let response = client
         .get(&info_url)
-        .basic_auth("", Some(config.password.clone()))
+        .basic_auth("", Some(config_clone.password.clone()))
         .send()
         .expect("Failed to get node info");
     let response_text = response.text().unwrap();
     println!("get node info response: {}", response_text);
-    let info: InfoResponse = serde_json::from_str(&response_text)?;
 
-    // /getbalance
-    let balance_url = format!("{}/getbalance", config.url);
+    // Get balance info as well
+    let balance_url = format!("{}/getbalance", config_clone.url);
     let balance_response = client
         .get(&balance_url)
-        .basic_auth("", Some(config.password.clone()))
+        .basic_auth("", Some(config_clone.password.clone()))
         .send()
         .expect("Failed to get balance");
     let balance_response_text = balance_response
         .text()
         .expect("Failed to parse get balance");
     println!("balance_response: {}", balance_response_text);
+
+    // Now process the results in  context
+    let info: InfoResponse = serde_json::from_str(&response_text)?;
     let balance: GetBalanceResponse = serde_json::from_str(&balance_response_text)?;
 
     let node_info = NodeInfo {
         alias: "Phoenixd".to_string(),
-        color: "".to_string(),
         pubkey: info.node_id,
         network: "bitcoin".to_string(),
         block_height: 0,
@@ -73,7 +78,7 @@ pub async fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-pub async fn create_invoice(
+pub fn create_invoice(
     config: &PhoenixdConfig,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
@@ -136,7 +141,7 @@ pub async fn create_invoice(
     }
 }
 
-pub async fn pay_invoice(
+pub fn pay_invoice(
     config: &PhoenixdConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
@@ -172,14 +177,14 @@ pub async fn pay_invoice(
 
 // TODO decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
 // Not supported by Phoenixd api so maybe we can use ldk to decode the bolt12 offer?
-pub async fn decode(str: String) -> Result<String, ApiError> {
+pub fn decode(str: String) -> Result<String, ApiError> {
     Ok(str)
 }
 
 // TODO On Phoenixd there is not currenly a way to create a new BOLT 12 offer
 
 // Get latest BOLT12 offer
-pub async fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
+pub fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
     let req_url = format!("{}/getoffer", config.url);
     let client = client(config);
     let response = client
@@ -198,7 +203,7 @@ pub async fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
     })
 }
 
-pub async fn pay_offer(
+pub fn pay_offer(
     config: &PhoenixdConfig,
     offer: String,
     amount_msats: i64,
@@ -234,9 +239,9 @@ pub async fn pay_offer(
 }
 
 // TODO implement list_offers, currently just one is returned by Phoenixd
-pub async fn list_offers() {}
+pub fn list_offers() {}
 
-pub async fn lookup_invoice(
+pub fn lookup_invoice(
     config: &PhoenixdConfig,
     payment_hash: String,
 ) -> Result<Transaction, ApiError> {
@@ -269,7 +274,7 @@ pub async fn lookup_invoice(
     Ok(txn)
 }
 
-pub async fn list_transactions(
+pub fn list_transactions(
     config: &PhoenixdConfig,
     from: i64,
     // until: i64,

@@ -1,5 +1,5 @@
 {
-  "name": "react-native-lni-example",
+  "name": "lni_react_native-example",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -8,11 +8,12 @@
     "start": "react-native start",
     "adb": "adb reverse tcp:9740 tcp:9740",
     "build:android": "react-native build-android --extra-params \"--no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a\"",
-    "build:ios": "react-native build-ios --scheme LniExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\""
+    "build:ios": "react-native build-ios --scheme LniReactNativeExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\"",
+    "clean:android": "cd android && ./gradlew clean && cd .."
   },
   "dependencies": {
-    "react": "18.3.1",
-    "react-native": "0.76.6",
+    "react": "19.0.0",
+    "react-native": "0.78.1",
     "react-native-dotenv": "^3.4.11"
   },
   "devDependencies": {
@@ -22,10 +23,11 @@
     "@react-native-community/cli": "15.0.1",
     "@react-native-community/cli-platform-android": "15.0.1",
     "@react-native-community/cli-platform-ios": "15.0.1",
-    "@react-native/babel-preset": "0.76.6",
-    "@react-native/metro-config": "0.76.6",
-    "@react-native/typescript-config": "0.76.6",
-    "react-native-builder-bob": "^0.35.2"
+    "@react-native/babel-preset": "0.78.1",
+    "@react-native/metro-config": "0.78.1",
+    "@react-native/typescript-config": "0.78.1",
+    "@types/react": "^19.0.0",
+    "react-native-builder-bob": "^0.39.0"
   },
   "engines": {
     "node": ">=18"

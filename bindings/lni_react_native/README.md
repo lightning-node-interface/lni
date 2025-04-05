@@ -1,18 +1,18 @@
-# react-native-lni
+# lni_react_native
 
-Lightning Node Interface
+lni_react_native
 
 ## Installation
 
 ```sh
-npm install react-native-lni
+npm install lni_react_native
 ```
 
 ## Usage
 
 
 ```js
-import { multiply } from 'react-native-lni';
+import { multiply } from 'lni_react_native';
 
 // ...
 

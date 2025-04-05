@@ -20,8 +20,9 @@ fn client(config: &LndConfig) -> reqwest::blocking::Client {
         header::HeaderValue::from_str(&config.macaroon).unwrap(),
     );
     let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
-    if config.socks5_proxy.is_some() {
-        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
+    let socks5 = config.socks5_proxy.clone().unwrap_or_default();
+    if socks5 != "".to_string() {
+        let proxy = reqwest::Proxy::all(&socks5).unwrap();
         client = client.proxy(proxy);
     }
     if config.accept_invalid_certs.is_some() {
@@ -35,7 +36,7 @@ fn client(config: &LndConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
-pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
+pub fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
     let client = client(config);
     let response = client.get(&req_url).send().unwrap();
@@ -101,7 +102,7 @@ pub async fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-pub async fn create_invoice(
+pub fn create_invoice(
     config: &LndConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
@@ -160,7 +161,7 @@ pub async fn create_invoice(
     }
 }
 
-pub async fn pay_invoice(
+pub fn pay_invoice(
     config: &LndConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
@@ -279,7 +280,7 @@ pub async fn pay_invoice(
 }
 
 // decode - bolt11 invoice (lnbc) TODO decode: bolt12 invoice (lni) or bolt12 offer (lno)
-pub async fn decode(config: &LndConfig, str: String) -> Result<String, ApiError> {
+pub fn decode(config: &LndConfig, str: String) -> Result<String, ApiError> {
     let client = client(config);
     let req_url = format!("{}/v1/payreq/{}", config.url, str);
     let response = client.get(&req_url).send().unwrap();
@@ -290,13 +291,13 @@ pub async fn decode(config: &LndConfig, str: String) -> Result<String, ApiError>
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
-pub async fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+pub fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
 }
 
-pub async fn list_offers(
+pub fn list_offers(
     config: &LndConfig,
     search: Option<String>,
 ) -> Result<Vec<PayCode>, ApiError> {
@@ -305,7 +306,7 @@ pub async fn list_offers(
     });
 }
 
-pub async fn create_offer(
+pub fn create_offer(
     config: &LndConfig,
     amount_msats: Option<i64>,
     description: Option<String>,
@@ -316,7 +317,7 @@ pub async fn create_offer(
     });
 }
 
-pub async fn fetch_invoice_from_offer(
+pub fn fetch_invoice_from_offer(
     config: &LndConfig,
     offer: String,
     amount_msats: i64, // TODO make optional if the lno already has amount in it
@@ -327,7 +328,7 @@ pub async fn fetch_invoice_from_offer(
     });
 }
 
-pub async fn pay_offer(
+pub fn pay_offer(
     config: &LndConfig,
     offer: String,
     amount_msats: i64,
@@ -338,7 +339,7 @@ pub async fn pay_offer(
     });
 }
 
-pub async fn lookup_invoice(
+pub fn lookup_invoice(
     config: &LndConfig,
     payment_hash: Option<String>,
 ) -> Result<Transaction, ApiError> {
@@ -395,7 +396,7 @@ pub async fn lookup_invoice(
     })
 }
 
-pub async fn list_transactions(
+pub fn list_transactions(
     config: &LndConfig,
     from: i64,
     limit: i64,

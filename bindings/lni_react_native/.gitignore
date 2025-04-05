@@ -28,6 +28,7 @@ DerivedData
 *.ipa
 *.xcuserstate
 project.xcworkspace
+**/.xcode.env.local
 
 # Android/IJ
 #
@@ -80,3 +81,13 @@ lib/
 # React Native Codegen
 ios/generated
 android/generated
+
+# React Native Nitro Modules
+nitrogen/
+
+# From uniffi-bindgen-react-native
+rust_modules/
+*.a
+**/generated/**
+
+**.env**

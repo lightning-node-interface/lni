@@ -6,6 +6,7 @@ edition = "2021"
 [lib]
 name = "lni"
 path = "lib.rs"
+crate-type = ["staticlib"] # *NOTE - this is needed for uniffi to generate the correct bindings in react native, comment this out when building for napi_rs
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = [
@@ -18,6 +19,7 @@ async-trait = "0.1"
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+uniffi = { version = "0.29.0", features = ["tokio", "cli"] }
 napi = { version = "2.12.2", default-features = false, features = ["napi4"] }
 napi-derive = "2.12.2"
 async-std = "1.10.0"
@@ -36,7 +38,10 @@ json = "0.12"
 [dev-dependencies]
 async-attributes = "1.1.1"
 tokio = { version = "1", features = ["full"] }
+uniffi = { version = "0.29.0", features = ["bindgen-tests"] }
 
+[build-dependencies]
+uniffi = { version = "0.29.0", features = ["build"] }
 
 [profile.release]
 lto = true
@@ -44,4 +49,5 @@ strip = "symbols"
 
 [features]
 napi_rs = []
-default = []
+uniffi = []
+default = ["uniffi"]

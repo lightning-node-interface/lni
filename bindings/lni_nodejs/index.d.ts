@@ -234,41 +234,41 @@ export declare class PhoenixdNode {
   getUrl(): string
   getPassword(): string
   getConfig(): PhoenixdConfig
-  getInfo(): Promise<NodeInfo>
-  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
-  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
-  getOffer(): Promise<PayCode>
-  lookupInvoice(paymentHash: string): Promise<Transaction>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
-  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  getInfo(): NodeInfo
+  createInvoice(params: CreateInvoiceParams): Transaction
+  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getOffer(): PayCode
+  lookupInvoice(paymentHash: string): Transaction
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
+  listTransactions(params: ListTransactionsParams): Array<Transaction>
 }
 export declare class ClnNode {
   constructor(config: ClnConfig)
   getUrl(): string
   getRune(): string
   getConfig(): ClnConfig
-  getInfo(): Promise<NodeInfo>
-  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
-  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
-  getOffer(search?: string | undefined | null): Promise<PayCode>
-  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
-  lookupInvoice(paymentHash: string): Promise<Transaction>
-  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
-  decode(str: string): Promise<string>
+  getInfo(): NodeInfo
+  createInvoice(params: CreateInvoiceParams): Transaction
+  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getOffer(search?: string | undefined | null): PayCode
+  listOffers(search?: string | undefined | null): Array<PayCode>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
+  lookupInvoice(paymentHash: string): Transaction
+  listTransactions(params: ListTransactionsParams): Array<Transaction>
+  decode(str: string): string
 }
 export declare class LndNode {
   constructor(config: LndConfig)
   getUrl(): string
   getMacaroon(): string
   getConfig(): LndConfig
-  getInfo(): Promise<NodeInfo>
-  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
-  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
-  getOffer(search?: string | undefined | null): Promise<PayCode>
-  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
-  lookupInvoice(paymentHash: string): Promise<Transaction>
-  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
-  decode(str: string): Promise<string>
+  getInfo(): NodeInfo
+  createInvoice(params: CreateInvoiceParams): Transaction
+  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getOffer(search?: string | undefined | null): PayCode
+  listOffers(search?: string | undefined | null): Array<PayCode>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
+  lookupInvoice(paymentHash: string): Transaction
+  listTransactions(params: ListTransactionsParams): Array<Transaction>
+  decode(str: string): string
 }
