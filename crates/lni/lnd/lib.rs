@@ -13,11 +13,11 @@ use crate::{
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
-    #[uniffi(default = Some(""))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
-    #[uniffi(default = Some(true))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
     pub accept_invalid_certs: Option<bool>,
-    #[uniffi(default = Some(120))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
 impl Default for LndConfig {

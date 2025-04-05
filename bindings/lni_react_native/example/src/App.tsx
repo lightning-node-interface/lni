@@ -13,7 +13,7 @@ export default function App() {
         const node = new LndNodeUniffi(LndConfig.create({
           url: '',
           macaroon: '',
-          socks5Proxy: '',
+          socks5Proxy: "socks5h://127.0.0.1:9050",
         }));
         const info = await node.getInfo();
         setResult(

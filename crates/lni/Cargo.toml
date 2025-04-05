@@ -6,7 +6,9 @@ edition = "2021"
 [lib]
 name = "lni"
 path = "lib.rs"
-crate-type = ["lib", "cdylib", "staticlib"]
+
+[lib.uniffi]
+crate-type = ["lib", "cdylib", "staticlib"] # does not enable with napi_rs builds
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = [

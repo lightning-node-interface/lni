@@ -36,9 +36,8 @@ impl LndNode {
 
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::lnd::api::get_info(&self.inner)
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let info =
+      lni::lnd::api::get_info(&self.inner).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
