@@ -93,9 +93,9 @@ impl LndNode {
         &self,
         payment_hash: String,
         poll_interval_seconds: i64,
-        callback: Box<dyn crate::lnd::api::uniffi_callback_impl::OnInvoiceEventCallback>,
+        callback: Box<dyn crate::lnd::api::OnInvoiceEventCallback>,
     ) {
-        crate::lnd::api::uniffi_callback_impl::on_invoice_events(
+        crate::lnd::api::on_invoice_events(
             self.config.clone(),
             payment_hash,
             poll_interval_seconds,
@@ -143,7 +143,7 @@ mod tests {
             LndNode::new(LndConfig {
                 url: URL.clone(),
                 macaroon: macaroon.clone(),
-                socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
+                //socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
                 accept_invalid_certs: Some(true),
                 ..Default::default()
             })
@@ -358,7 +358,7 @@ mod tests {
             events: Arc<Mutex<Vec<String>>>,
         }
 
-        impl crate::lnd::api::uniffi_callback_impl::OnInvoiceEventCallback for OnInvoiceEventCallback {
+        impl crate::lnd::api::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn call(&self, status: String, transaction: Option<Transaction>) {
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", status, transaction));

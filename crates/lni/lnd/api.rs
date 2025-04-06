@@ -513,33 +513,27 @@ fn poll_invoice_events<F>(
     }
 }
 
-// UniFFI-specific callback code
-#[cfg(feature = "uniffi")]
-pub mod uniffi_callback_impl {
-    use super::*;
+// Define the callback trait for UniFFI
+#[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
+pub trait OnInvoiceEventCallback {
+    fn call(&self, status: String, transaction: Option<Transaction>);
+}
 
-    // Define the callback trait for UniFFI
-    #[uniffi::export(callback_interface)]
-    pub trait OnInvoiceEventCallback {
-        fn call(&self, status: String, transaction: Option<Transaction>);
-    }
-
-    #[uniffi::export]
-    pub fn on_invoice_events(
-        config: LndConfig,
-        payment_hash: String,
-        poll_interval_seconds: i64,
-        callback: Box<dyn OnInvoiceEventCallback>,
-    ) {
-        poll_invoice_events(
-            &config,
-            payment_hash,
-            poll_interval_seconds,
-            move |status, tx| {
-                callback.call(status, tx);
-            },
-        );
-    }
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn on_invoice_events(
+    config: LndConfig,
+    payment_hash: String,
+    poll_interval_seconds: i64,
+    callback: Box<dyn OnInvoiceEventCallback>,
+) {
+    poll_invoice_events(
+        &config,
+        payment_hash,
+        poll_interval_seconds,
+        move |status, tx| {
+            callback.call(status, tx);
+        },
+    );
 }
 
 // #[cfg(feature = "napi")]
@@ -587,24 +581,29 @@ pub mod uniffi_callback_impl {
 //     }
 // }
 
-#[napi_derive::js_function(1)]
-pub fn test_threadsafe_function(ctx: napi::CallContext) -> Result<napi::JsUndefined, napi::Error> {
-    let func = ctx.get::<napi::JsFunction>(0)?;
+// #[napi_derive::js_function(1)]
+// pub fn test_threadsafe_function(ctx: napi::CallContext) -> Result<napi::JsUndefined, napi::Error> {
+//     let func = ctx.get::<napi::JsFunction>(0)?;
 
-    let tsfn =
-        ctx.env
-            .create_threadsafe_function(&func, 0, |ctx: napi::threadsafe_function::ThreadSafeCallContext<Vec<u32> > | {
-                ctx.value
-                    .iter()
-                    .map(|v| ctx.env.create_uint32(*v))
-                    .collect::<Result<Vec<napi::JsNumber>, napi::Error>>()
-            })?;
+//     let tsfn = ctx.env.create_threadsafe_function(
+//         &func,
+//         0,
+//         |ctx: napi::threadsafe_function::ThreadSafeCallContext<Vec<u32>>| {
+//             ctx.value
+//                 .iter()
+//                 .map(|v| ctx.env.create_uint32(*v))
+//                 .collect::<Result<Vec<napi::JsNumber>, napi::Error>>()
+//         },
+//     )?;
 
-    thread::spawn(move || {
-        let output: Vec<u32> = vec![0, 1, 2, 3];
-        // It's okay to call a threadsafe function multiple times.
-        tsfn.call(Ok(output.clone()), napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking);
-    });
+//     thread::spawn(move || {
+//         let output: Vec<u32> = vec![0, 1, 2, 3];
+//         // It's okay to call a threadsafe function multiple times.
+//         tsfn.call(
+//             Ok(output.clone()),
+//             napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking,
+//         );
+//     });
 
-    ctx.env.get_undefined()
-}
+//     ctx.env.get_undefined()
+// }
