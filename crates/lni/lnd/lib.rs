@@ -88,6 +88,20 @@ impl LndNode {
     pub fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::lnd::api::decode(&self.config, str)
     }
+
+    pub fn on_invoice_events(
+        &self,
+        payment_hash: String,
+        poll_interval_seconds: i64,
+        callback: Box<dyn crate::lnd::api::uniffi_callback_impl::OnInvoiceEventCallback>,
+    ) {
+        crate::lnd::api::uniffi_callback_impl::on_invoice_events(
+            self.config.clone(),
+            payment_hash,
+            poll_interval_seconds,
+            callback,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -100,6 +114,9 @@ mod tests {
     use rand::Rng;
     use sha2::{Digest, Sha256};
     use std::env;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
     lazy_static! {
         static ref URL: String = {
@@ -332,5 +349,44 @@ mod tests {
                 panic!("Failed to decode: {:?}", e);
             }
         }
+    }
+
+    #[test]
+    
+    fn test_on_invoice_events() {
+        struct OnInvoiceEventCallback {
+            events: Arc<Mutex<Vec<String>>>,
+        }
+
+        impl crate::lnd::api::uniffi_callback_impl::OnInvoiceEventCallback for OnInvoiceEventCallback {
+            fn call(&self, status: String, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", status, transaction));
+            }
+        }
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let callback = OnInvoiceEventCallback {
+            events: events.clone(),
+        };
+
+        let payment_hash = TEST_PAYMENT_HASH.to_string();
+        let poll_interval_seconds = 3;
+
+        // Start the event listener in a separate thread
+        thread::spawn(move || {
+            NODE.on_invoice_events(payment_hash, poll_interval_seconds, Box::new(callback));
+        });
+
+        // Wait for some time to allow events to be collected
+        thread::sleep(Duration::from_secs(10));
+
+        // Check if events were received
+        let received_events = events.lock().unwrap();
+        println!("Received events: {:?}", *received_events);
+        assert!(
+            !received_events.is_empty(),
+            "Expected to receive at least one invoice event"
+        );
     }
 }

@@ -1,3 +1,6 @@
+use std::thread;
+use std::time::Duration;
+
 use super::types::{
     BalancesResponse, Bolt11Resp, FetchInvoiceResponse, GetInfoResponse, ListInvoiceResponse,
     ListInvoiceResponseWrapper, LndPayInvoiceResponseWrapper,
@@ -297,10 +300,7 @@ pub fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, 
     });
 }
 
-pub fn list_offers(
-    config: &LndConfig,
-    search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+pub fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
@@ -458,4 +458,153 @@ pub fn list_transactions(
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     Ok(transactions)
+}
+
+// pub fn on_invoice_events(
+//     config: &LndConfig,
+//     payment_hash: String,
+//     poll_interval_seconds: i64,
+//     callback: &dyn crate::types::OnInvoiceEventCallback,
+// ) {
+//     loop {
+//         // polling for the invoice status
+//         let (status, transaction) = match lookup_invoice(config, Some(payment_hash.clone())) {
+//             Ok(transaction) => {
+//                 if transaction.settled_at > 0 {
+//                     ("settled".to_string(), Some(transaction))
+//                 } else {
+//                     ("pending".to_string(), Some(transaction))
+//                 }
+//             }
+//             Err(_) => ("error".to_string(), None),
+//         };
+
+//         // Trigger the callback with the status and transaction
+//         callback.call(status, transaction);
+
+//         // Sleep for the specified poll interval
+//         std::thread::sleep(std::time::Duration::from_secs(poll_interval_seconds as u64));
+//     }
+// }
+
+// Core logic shared by both implementations
+fn poll_invoice_events<F>(
+    config: &LndConfig,
+    payment_hash: String,
+    poll_interval_seconds: i64,
+    mut callback: F,
+) where
+    F: FnMut(String, Option<Transaction>),
+{
+    loop {
+        let (status, transaction) = match lookup_invoice(config, Some(payment_hash.clone())) {
+            Ok(transaction) => {
+                if transaction.settled_at > 0 {
+                    ("settled".to_string(), Some(transaction))
+                } else {
+                    ("pending".to_string(), Some(transaction))
+                }
+            }
+            Err(_) => ("error".to_string(), None),
+        };
+
+        callback(status, transaction);
+        thread::sleep(Duration::from_secs(poll_interval_seconds as u64));
+    }
+}
+
+// UniFFI-specific callback code
+#[cfg(feature = "uniffi")]
+pub mod uniffi_callback_impl {
+    use super::*;
+
+    // Define the callback trait for UniFFI
+    #[uniffi::export(callback_interface)]
+    pub trait OnInvoiceEventCallback {
+        fn call(&self, status: String, transaction: Option<Transaction>);
+    }
+
+    #[uniffi::export]
+    pub fn on_invoice_events(
+        config: LndConfig,
+        payment_hash: String,
+        poll_interval_seconds: i64,
+        callback: Box<dyn OnInvoiceEventCallback>,
+    ) {
+        poll_invoice_events(
+            &config,
+            payment_hash,
+            poll_interval_seconds,
+            move |status, tx| {
+                callback.call(status, tx);
+            },
+        );
+    }
+}
+
+// #[cfg(feature = "napi")]
+// pub mod napi_callback_impl {
+//     use super::*;
+
+//     #[napi_derive::napi]
+//     pub fn on_invoice_events(
+//         config: LndConfig,
+//         payment_hash: String,
+//         poll_interval_seconds: i64,
+//         callback: napi::JsFunction,
+//     ) -> Result<(), napi::Error> {
+//         let tsfn = callback.env().create_threadsafe_function(
+//             &callback,
+//             0,
+//             |ctx: napi::threadsafe_function::ThreadSafeCallContext<(
+//                 String,
+//                 Option<Transaction>,
+//             )>| {
+//                 let status = ctx.env.create_string(&ctx.value.0)?;
+//                 let transaction = match ctx.value.1 {
+//                     Some(tx) => ctx.env.to_js_value(&tx)?,
+//                     None => ctx.env.get_null()?.into_unknown(),
+//                 };
+//                 Ok(vec![status.into_unknown(), transaction])
+//             },
+//         )?;
+
+//         thread::spawn(move || {
+//             poll_invoice_events(
+//                 &config,
+//                 payment_hash,
+//                 poll_interval_seconds,
+//                 move |status, transaction| {
+//                     tsfn.call(
+//                         Ok((status, transaction)),
+//                         napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+//                     );
+//                 },
+//             );
+//         });
+
+//         Ok(())
+//     }
+// }
+
+#[napi_derive::js_function(1)]
+pub fn test_threadsafe_function(ctx: napi::CallContext) -> Result<napi::JsUndefined, napi::Error> {
+    let func = ctx.get::<napi::JsFunction>(0)?;
+
+    let tsfn =
+        ctx.env
+            .create_threadsafe_function(&func, 0, |ctx: napi::threadsafe_function::ThreadSafeCallContext<Vec<u32> > | {
+                ctx.value
+                    .iter()
+                    .map(|v| ctx.env.create_uint32(*v))
+                    .collect::<Result<Vec<napi::JsNumber>, napi::Error>>()
+            })?;
+
+    thread::spawn(move || {
+        let output: Vec<u32> = vec![0, 1, 2, 3];
+        // It's okay to call a threadsafe function multiple times.
+        tsfn.call(Ok(output.clone()), napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking);
+    });
+
+    ctx.env.get_undefined()
 }
