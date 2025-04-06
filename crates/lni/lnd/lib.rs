@@ -352,16 +352,23 @@ mod tests {
     }
 
     #[test]
-    
     fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
 
         impl crate::lnd::api::OnInvoiceEventCallback for OnInvoiceEventCallback {
-            fn call(&self, status: String, transaction: Option<Transaction>) {
+            fn success(&self, transaction: Option<Transaction>) {
                 let mut events = self.events.lock().unwrap();
-                events.push(format!("{} - {:?}", status, transaction));
+                events.push(format!("{} - {:?}", "success", transaction));
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "pending", transaction));
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "failure", transaction));
             }
         }
 

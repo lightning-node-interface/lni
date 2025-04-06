@@ -508,7 +508,20 @@ fn poll_invoice_events<F>(
             Err(_) => ("error".to_string(), None),
         };
 
-        callback(status, transaction);
+        match status.as_str() {
+            "settled" => {
+                callback("success".to_string(), transaction);
+                break;
+            }
+            "error" => {
+                callback("failure".to_string(), transaction);
+                break;
+            }
+            _ => {
+                callback("pending".to_string(), transaction);
+            }
+        }
+
         thread::sleep(Duration::from_secs(poll_interval_seconds as u64));
     }
 }
@@ -516,7 +529,9 @@ fn poll_invoice_events<F>(
 // Define the callback trait for UniFFI
 #[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
 pub trait OnInvoiceEventCallback {
-    fn call(&self, status: String, transaction: Option<Transaction>);
+    fn success(&self, transaction: Option<Transaction>);
+    fn pending(&self, transaction: Option<Transaction>);
+    fn failure(&self, transaction: Option<Transaction>);
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
@@ -530,8 +545,11 @@ pub fn on_invoice_events(
         &config,
         payment_hash,
         poll_interval_seconds,
-        move |status, tx| {
-            callback.call(status, tx);
+        move |status, tx| match status.as_str() {
+            "success" => callback.success(tx),
+            "pending" => callback.pending(tx),
+            "failure" => callback.failure(tx),
+            _ => {}
         },
     );
 }

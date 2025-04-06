@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { LndNode, LndConfig, PhoenixdNode, PhoenixdConfig } from 'lni_react_native';
+import {
+  LndNode,
+  LndConfig,
+  PhoenixdNode,
+  PhoenixdConfig,
+  type OnInvoiceEventCallback,
+  Transaction,
+} from 'lni_react_native';
 import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
@@ -11,12 +18,31 @@ export default function App() {
       try {
         const node = new LndNode(
           LndConfig.create({
-            url: '', //LND_URL,
+            url: '',
             macaroon:
-              '', // LND_MACAROON,
-            socks5Proxy: 'socks5h://127.0.0.1:9050',
+              '',
+            socks5Proxy: undefined, // 'socks5h://127.0.0.1:9050',
           })
         );
+
+        
+
+        await node.onInvoiceEvents(
+          '',
+          BigInt(5),
+          {
+            pending: (status: string, transaction: Transaction | undefined): void => {
+              console.log('Received invoice event:', status, transaction);
+            },
+            success: (status: string, transaction: Transaction | undefined): void => {
+              console.log('Received invoice event:', status, transaction);
+            }
+            failure: (status: string, transaction: Transaction | undefined): void => {
+              console.log('Received invoice event:', status, transaction);
+            }
+          }
+        );
+
         const info = await node.listTransactions({
           from: BigInt(0),
           limit: BigInt(10),
