@@ -131,18 +131,76 @@ node.channel_info()
 ```
 
 #### Event Polling
-```rust
-// TODO - Not implemented
-node.on_invoice_events(invoice_id, (event) =>{
-    console.log("Callback result:", result);
-})
+
+LNI does some simple event polling over http to get some basic invoice status events. 
+Polling is used instead of a heavier grpc/pubsub (for now) to make sure the lib runs cross platform and stays lightweight.
+
+Typescript for react-native
+```typescript
+await node.onInvoiceEvents(
+    // polling params
+    {
+        paymentHash: TEST_PAYMENT_HASH,
+        pollingDelaySec: BigInt(3), // poll every 3 seconds
+        maxPollingSec: BigInt(60), // for up to 60 seconds
+    },
+    // callbacks for each polling round
+    // The polling ends if success or maxPollingSec timeout is hit
+    {
+        success(transaction: Transaction | undefined): void {
+            console.log('Received success invoice event:', transaction);
+            setResult('Success');
+        },
+        pending(transaction: Transaction | undefined): void {
+            console.log('Received pending event:', transaction);
+        },
+        failure(transaction: Transaction | undefined): void {
+            console.log('Received failure event:', transaction);
+        },
+    }
+);
 ```
 
+Typescript for nodejs
+```typescript
+await node.onInvoiceEvents(
+    // polling params
+    {
+        paymentHash: process.env.LND_TEST_PAYMENT_HASH,
+        pollingDelaySec: 4,
+        maxPollingSec: 60,
+    }, 
+    // callback for each polling round
+    // The polling ends if success or maxPollingSec timeout is hit
+    (status, tx) => {
+        console.log("Invoice event:", status, tx);
+    }
+);
+```
 
-Event Polling
-============
-LNI does some simple event polling over https to get some basic invoice status events. 
-Polling is used instead of a heavier grpc/pubsub (for now) event system to make sure the lib runs cross platform and stays lightweight. NOT YET IMPLEMENTED. TODO websockets
+Rust
+```rust
+struct OnInvoiceEventCallback {}
+impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+    fn success(&self, transaction: Option<Transaction>) {
+        println!("success");
+    }
+    fn pending(&self, transaction: Option<Transaction>) {
+        println!("pending");
+    }
+    fn failure(&self, transaction: Option<Transaction>) {
+        println!("epic fail");
+    }
+}
+let params = crate::types::OnInvoiceEventParams {
+    payment_hash: TEST_PAYMENT_HASH.to_string(),
+    polling_delay_sec: 3,
+    max_polling_sec: 60,
+};
+let callback = OnInvoiceEventCallback {};
+NODE.on_invoice_events(params, Box::new(callback));
+```
+
 
 Build
 =======
@@ -355,7 +413,7 @@ Todo
 - [X] react-native - uniffi-bindgen-react-native
 - [X] async promise architecture for bindings
 - [X] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
-- [ ] Simple event polling
+- [X] Simple event polling
 - [ ] HTTP retries
 - [ ] implement lightning nodes
     - [X] phoenixd

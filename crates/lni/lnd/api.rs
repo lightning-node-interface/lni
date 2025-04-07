@@ -1,3 +1,6 @@
+use std::thread;
+use std::time::Duration;
+
 use super::types::{
     BalancesResponse, Bolt11Resp, FetchInvoiceResponse, GetInfoResponse, ListInvoiceResponse,
     ListInvoiceResponseWrapper, LndPayInvoiceResponseWrapper,
@@ -6,7 +9,7 @@ use super::LndConfig;
 use crate::types::NodeInfo;
 use crate::{
     calculate_fee_msats, ApiError, CreateInvoiceParams, InvoiceType, PayCode, PayInvoiceParams,
-    PayInvoiceResponse, Transaction,
+    PayInvoiceResponse, Transaction, OnInvoiceEventCallback, OnInvoiceEventParams,
 };
 use reqwest::header;
 
@@ -297,10 +300,7 @@ pub fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, 
     });
 }
 
-pub fn list_offers(
-    config: &LndConfig,
-    search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+pub fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
@@ -458,4 +458,60 @@ pub fn list_transactions(
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     Ok(transactions)
+}
+
+// Core logic shared by both implementations
+pub fn poll_invoice_events<F>(config: &LndConfig, params: OnInvoiceEventParams, mut callback: F)
+where
+    F: FnMut(String, Option<Transaction>),
+{
+    let mut start_time = std::time::Instant::now();
+    loop {
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            // timeout
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let (status, transaction) = match lookup_invoice(config, Some(params.payment_hash.clone()))
+        {
+            Ok(transaction) => {
+                if transaction.settled_at > 0 {
+                    ("settled".to_string(), Some(transaction))
+                } else {
+                    ("pending".to_string(), Some(transaction))
+                }
+            }
+            Err(_) => ("error".to_string(), None),
+        };
+
+        match status.as_str() {
+            "settled" => {
+                callback("success".to_string(), transaction);
+                break;
+            }
+            "error" => {
+                callback("failure".to_string(), transaction);
+                break;
+            }
+            _ => {
+                callback("pending".to_string(), transaction);
+            }
+        }
+
+        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+    }
+}
+
+pub fn on_invoice_events(
+    config: LndConfig,
+    params: OnInvoiceEventParams,
+    callback: Box<dyn OnInvoiceEventCallback>,
+) {
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    });
 }

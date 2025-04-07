@@ -1,5 +1,5 @@
 ---
 rust:
   repo: https://github.com/lightning-node-interface/lni
-  branch: fix-react-native
+  branch: on-invoice-events
   manifestPath: crates/lni/Cargo.toml

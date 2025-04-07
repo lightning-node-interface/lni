@@ -88,6 +88,14 @@ impl LndNode {
     pub fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::lnd::api::decode(&self.config, str)
     }
+
+    pub fn on_invoice_events(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    ) {
+        crate::lnd::api::on_invoice_events(self.config.clone(), params, callback)
+    }
 }
 
 #[cfg(test)]
@@ -100,6 +108,9 @@ mod tests {
     use rand::Rng;
     use sha2::{Digest, Sha256};
     use std::env;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
     lazy_static! {
         static ref URL: String = {
@@ -126,7 +137,7 @@ mod tests {
             LndNode::new(LndConfig {
                 url: URL.clone(),
                 macaroon: macaroon.clone(),
-                socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
+                //socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
                 accept_invalid_certs: Some(true),
                 ..Default::default()
             })
@@ -332,5 +343,54 @@ mod tests {
                 panic!("Failed to decode: {:?}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_on_invoice_events() {
+        struct OnInvoiceEventCallback {
+            events: Arc<Mutex<Vec<String>>>,
+        }
+
+        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+            fn success(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "success", transaction));
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "pending", transaction));
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "failure", transaction));
+            }
+        }
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let callback = OnInvoiceEventCallback {
+            events: events.clone(),
+        };
+
+        let params= crate::types::OnInvoiceEventParams {
+            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            polling_delay_sec: 3,
+            max_polling_sec: 60,
+        };
+
+        // Start the event listener in a separate thread
+        thread::spawn(move || {
+            NODE.on_invoice_events(params, Box::new(callback));
+        });
+
+        // Wait for some time to allow events to be collected
+        thread::sleep(Duration::from_secs(10));
+
+        // Check if events were received
+        let received_events = events.lock().unwrap();
+        println!("Received events: {:?}", *received_events);
+        assert!(
+            !received_events.is_empty(),
+            "Expected to receive at least one invoice event"
+        );
     }
 }

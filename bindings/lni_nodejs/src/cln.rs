@@ -106,6 +106,18 @@ impl ClnNode {
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
+
+  #[napi]
+  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
+    &self,
+    params: lni::types::OnInvoiceEventParams,
+    callback: T,
+  ) -> Result<()> {
+    lni::cln::api::poll_invoice_events(&self.inner, params, move |status, tx| {
+      callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+    });
+    Ok(())
+  }
 }
 
 // #[cfg(test)]

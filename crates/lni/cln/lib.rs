@@ -93,6 +93,14 @@ impl ClnNode {
     pub fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::cln::api::decode(&self.config, str)
     }
+
+    pub fn on_invoice_events(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    ) {
+        crate::cln::api::on_invoice_events(self.config.clone(), params, callback)
+    }
 }
 
 #[cfg(test)]
@@ -325,5 +333,28 @@ mod tests {
                 panic!("Failed to decode: {:?}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_on_invoice_events() {
+        struct OnInvoiceEventCallback {}
+        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+            fn success(&self, transaction: Option<Transaction>) {
+                println!("success");
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                println!("pending");
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                println!("epic fail");
+            }
+        }
+        let params = crate::types::OnInvoiceEventParams {
+            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            polling_delay_sec: 3,
+            max_polling_sec: 60,
+        };
+        let callback = OnInvoiceEventCallback {};
+        NODE.on_invoice_events(params, Box::new(callback));
     }
 }
