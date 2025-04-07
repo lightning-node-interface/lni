@@ -106,21 +106,14 @@ impl LndNode {
   }
 
   #[napi]
-  pub fn on_invoice_events(
+  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
     &self,
-    payment_hash: String,
-    poll_interval_seconds: i64,
-    callback: Box<dyn lni::lnd::api::napi_callback_impl::OnInvoiceEventCallback>,
-  ) {
-    let raw_env = napi::Env::from_raw(callback.env);
-    let cb_info = lni::lnd::api::napi_callback_impl::CallbackInfo {
-      payment_hash,
-      poll_interval_seconds,
-      callback,
-    };
-
-    lni::lnd::api::test_threadsafe_function(raw_env, cb_info)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))
-      .unwrap();
+    params: lni::types::OnInvoiceEventParams,
+    callback: T,
+  ) -> Result<()> {
+    lni::lnd::api::poll_invoice_events(&self.inner, params, move |status, tx| {
+      callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+    });
+    Ok(())
   }
 }

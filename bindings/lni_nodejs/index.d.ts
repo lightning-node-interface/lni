@@ -221,6 +221,11 @@ export interface PayInvoiceParams {
   allowSelfPayment?: boolean
   isAmp?: boolean
 }
+export interface OnInvoiceEventParams {
+  paymentHash: string
+  pollingDelaySec: number
+  maxPollingSec: number
+}
 export interface Payment {
   paymentId: string
   circId: string
@@ -271,4 +276,5 @@ export declare class LndNode {
   lookupInvoice(paymentHash: string): Transaction
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }

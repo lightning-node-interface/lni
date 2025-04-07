@@ -91,8 +91,8 @@ impl LndNode {
 
     pub fn on_invoice_events(
         &self,
-        params: crate::lnd::api::OnInvoiceEventParams,
-        callback: Box<dyn crate::lnd::api::OnInvoiceEventCallback>,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::lnd::api::on_invoice_events(self.config.clone(), params, callback)
     }
@@ -351,7 +351,7 @@ mod tests {
             events: Arc<Mutex<Vec<String>>>,
         }
 
-        impl crate::lnd::api::OnInvoiceEventCallback for OnInvoiceEventCallback {
+        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn success(&self, transaction: Option<Transaction>) {
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "success", transaction));
@@ -371,7 +371,7 @@ mod tests {
             events: events.clone(),
         };
 
-        let params: crate::lnd::api::OnInvoiceEventParams = crate::lnd::api::OnInvoiceEventParams {
+        let params= crate::types::OnInvoiceEventParams {
             payment_hash: TEST_PAYMENT_HASH.to_string(),
             polling_delay_sec: 3,
             max_polling_sec: 60,

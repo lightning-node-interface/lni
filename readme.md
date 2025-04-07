@@ -135,7 +135,7 @@ node.channel_info()
 LNI does some simple event polling over http to get some basic invoice status events. 
 Polling is used instead of a heavier grpc/pubsub (for now) to make sure the lib runs cross platform and stays lightweight.
 
-Typescript
+Typescript for react-native
 ```typescript
 await node.onInvoiceEvents(
     // polling params
@@ -144,7 +144,7 @@ await node.onInvoiceEvents(
         pollingDelaySec: BigInt(3), // poll every 3 seconds
         maxPollingSec: BigInt(60), // for up to 60 seconds
     },
-    // callbacks for each round
+    // callbacks for each polling round
     // The polling ends if success or maxPollingSec timeout is hit
     {
         success(transaction: Transaction | undefined): void {
@@ -157,6 +157,23 @@ await node.onInvoiceEvents(
         failure(transaction: Transaction | undefined): void {
             console.log('Received failure event:', transaction);
         },
+    }
+);
+```
+
+Typescript for nodejs
+```typescript
+await node.onInvoiceEvents(
+    // polling params
+    {
+        paymentHash: process.env.LND_TEST_PAYMENT_HASH,
+        pollingDelaySec: 4,
+        maxPollingSec: 60,
+    }, 
+    // callback for each polling round
+    // The polling ends if success or maxPollingSec timeout is hit
+    (status, tx) => {
+        console.log("Invoice event:", status, tx);
     }
 );
 ```

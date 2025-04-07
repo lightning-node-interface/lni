@@ -141,11 +141,22 @@ async function test() {
   const config = {
     url: process.env.LND_URL,
     macaroon: process.env.LND_MACAROON,
-    socks5Proxy: "socks5h://127.0.0.1:9150",
+    // socks5Proxy: "socks5h://127.0.0.1:9150",
     acceptInvalidCerts: true,
   };
   const node = new LndNode(config);
   console.log("Node info:", await node.getInfo());
+
+  await node.onInvoiceEvents(
+    {
+      paymentHash: process.env.LND_TEST_PAYMENT_HASH,
+      pollingDelaySec: 4,
+      maxPollingSec: 60,
+    }, 
+    (status, tx) => {
+      console.log("Invoice event:", status, tx);
+    }
+  );
 }
 
 async function main() {

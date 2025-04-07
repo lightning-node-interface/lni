@@ -29,8 +29,8 @@ pub struct NodeInfo {
     pub network: String,
     pub block_height: i64,
     pub block_hash: String,
-    pub send_balance_msat: i64, // Sum of channels send capacity
-    pub receive_balance_msat: i64, // Sum of channels receive capacity
+    pub send_balance_msat: i64,           // Sum of channels send capacity
+    pub receive_balance_msat: i64,        // Sum of channels receive capacity
     pub fee_credit_balance_msat: i64, // used in Phoenixd, typically first 30,000 sats are a "fee credit" aka custodial, but cannot withdraw (balance is used for future fees). Then it opens channel when it gets above 30,000 sats.
     pub unsettled_send_balance_msat: i64, // Sum of channels send unsettled balances.
     pub unsettled_receive_balance_msat: i64, // Sum of channels receive unsettled balances.
@@ -336,4 +336,20 @@ impl Default for PayInvoiceParams {
             is_amp: None,
         }
     }
+}
+
+// Define the callback trait for UniFFI
+#[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
+pub trait OnInvoiceEventCallback: Send + Sync {
+    fn success(&self, transaction: Option<Transaction>);
+    fn pending(&self, transaction: Option<Transaction>);
+    fn failure(&self, transaction: Option<Transaction>);
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
+pub struct OnInvoiceEventParams {
+    pub payment_hash: String,
+    pub polling_delay_sec: i64,
+    pub max_polling_sec: i64,
 }
