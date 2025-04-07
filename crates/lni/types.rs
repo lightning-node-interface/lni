@@ -340,7 +340,7 @@ impl Default for PayInvoiceParams {
 
 // Define the callback trait for UniFFI
 #[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
-pub trait OnInvoiceEventCallback: Send + Sync {
+pub trait OnInvoiceEventCallback {
     fn success(&self, transaction: Option<Transaction>);
     fn pending(&self, transaction: Option<Transaction>);
     fn failure(&self, transaction: Option<Transaction>);
