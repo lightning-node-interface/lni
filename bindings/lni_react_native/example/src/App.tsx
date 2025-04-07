@@ -10,6 +10,18 @@ import {
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON } from '@env';
 
+// class InvoiceCallback implements OnInvoiceEventCallback {
+//   success(transaction: Transaction | undefined): void {
+//     console.log('Received pending invoice event:', transaction);
+//   }
+//   pending(transaction: Transaction | undefined): void {
+//     console.log('Received success event:', transaction);
+//   }
+//   failure(transaction: Transaction | undefined): void {
+//     console.log('Received failure event:', transaction);
+//   }
+// }
+
 export default function App() {
   const [result, setResult] = useState<string>('Loading...');
 
@@ -25,34 +37,36 @@ export default function App() {
           })
         );
 
-        
-
         await node.onInvoiceEvents(
-          '',
-          BigInt(5),
           {
-            pending: (status: string, transaction: Transaction | undefined): void => {
-              console.log('Received invoice event:', status, transaction);
+            paymentHash: ''
+            pollingDelaySec: BigInt(3),
+            maxPollingSec: BigInt(60),
+          },
+          {
+            success(transaction: Transaction | undefined): void {
+              console.log('Received pending invoice event:', transaction);
+              setResult('Success');
             },
-            success: (status: string, transaction: Transaction | undefined): void => {
-              console.log('Received invoice event:', status, transaction);
-            }
-            failure: (status: string, transaction: Transaction | undefined): void => {
-              console.log('Received invoice event:', status, transaction);
-            }
+            pending(transaction: Transaction | undefined): void {
+              console.log('Received success event:', transaction);
+            },
+            failure(transaction: Transaction | undefined): void {
+              console.log('Received failure event:', transaction);
+            },
           }
         );
 
-        const info = await node.listTransactions({
-          from: BigInt(0),
-          limit: BigInt(10),
-          paymentHash: undefined,
-        });
-        setResult(
-          JSON.stringify(info, (_, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-          )
-        );
+        // const info = await node.listTransactions({
+        //   from: BigInt(0),
+        //   limit: BigInt(10),
+        //   paymentHash: undefined,
+        // });
+        // setResult(
+        //   JSON.stringify(info, (_, value) =>
+        //     typeof value === 'bigint' ? value.toString() : value
+        //   )
+        // );
       } catch (error) {
         console.error('Error initializing LNI Remote library:', error);
       }

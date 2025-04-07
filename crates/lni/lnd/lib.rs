@@ -91,16 +91,10 @@ impl LndNode {
 
     pub fn on_invoice_events(
         &self,
-        payment_hash: String,
-        poll_interval_seconds: i64,
+        params: crate::lnd::api::OnInvoiceEventParams,
         callback: Box<dyn crate::lnd::api::OnInvoiceEventCallback>,
     ) {
-        crate::lnd::api::on_invoice_events(
-            self.config.clone(),
-            payment_hash,
-            poll_interval_seconds,
-            callback,
-        )
+        crate::lnd::api::on_invoice_events(self.config.clone(), params, callback)
     }
 }
 
@@ -377,12 +371,15 @@ mod tests {
             events: events.clone(),
         };
 
-        let payment_hash = TEST_PAYMENT_HASH.to_string();
-        let poll_interval_seconds = 3;
+        let params: crate::lnd::api::OnInvoiceEventParams = crate::lnd::api::OnInvoiceEventParams {
+            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            polling_delay_sec: 3,
+            max_polling_sec: 60,
+        };
 
         // Start the event listener in a separate thread
         thread::spawn(move || {
-            NODE.on_invoice_events(payment_hash, poll_interval_seconds, Box::new(callback));
+            NODE.on_invoice_events(params, Box::new(callback));
         });
 
         // Wait for some time to allow events to be collected

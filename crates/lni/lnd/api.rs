@@ -460,44 +460,21 @@ pub fn list_transactions(
     Ok(transactions)
 }
 
-// pub fn on_invoice_events(
-//     config: &LndConfig,
-//     payment_hash: String,
-//     poll_interval_seconds: i64,
-//     callback: &dyn crate::types::OnInvoiceEventCallback,
-// ) {
-//     loop {
-//         // polling for the invoice status
-//         let (status, transaction) = match lookup_invoice(config, Some(payment_hash.clone())) {
-//             Ok(transaction) => {
-//                 if transaction.settled_at > 0 {
-//                     ("settled".to_string(), Some(transaction))
-//                 } else {
-//                     ("pending".to_string(), Some(transaction))
-//                 }
-//             }
-//             Err(_) => ("error".to_string(), None),
-//         };
-
-//         // Trigger the callback with the status and transaction
-//         callback.call(status, transaction);
-
-//         // Sleep for the specified poll interval
-//         std::thread::sleep(std::time::Duration::from_secs(poll_interval_seconds as u64));
-//     }
-// }
-
 // Core logic shared by both implementations
-fn poll_invoice_events<F>(
-    config: &LndConfig,
-    payment_hash: String,
-    poll_interval_seconds: i64,
-    mut callback: F,
-) where
+fn poll_invoice_events<F>(config: &LndConfig, params: OnInvoiceEventParams, mut callback: F)
+where
     F: FnMut(String, Option<Transaction>),
 {
+    let mut start_time = std::time::Instant::now();
     loop {
-        let (status, transaction) = match lookup_invoice(config, Some(payment_hash.clone())) {
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            // timeout
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let (status, transaction) = match lookup_invoice(config, Some(params.payment_hash.clone()))
+        {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -522,7 +499,7 @@ fn poll_invoice_events<F>(
             }
         }
 
-        thread::sleep(Duration::from_secs(poll_interval_seconds as u64));
+        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
     }
 }
 
@@ -534,24 +511,25 @@ pub trait OnInvoiceEventCallback {
     fn failure(&self, transaction: Option<Transaction>);
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct OnInvoiceEventParams {
+    pub payment_hash: String,
+    pub polling_delay_sec: i64,
+    pub max_polling_sec: i64,
+}
+
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn on_invoice_events(
     config: LndConfig,
-    payment_hash: String,
-    poll_interval_seconds: i64,
+    params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    poll_invoice_events(
-        &config,
-        payment_hash,
-        poll_interval_seconds,
-        move |status, tx| match status.as_str() {
-            "success" => callback.success(tx),
-            "pending" => callback.pending(tx),
-            "failure" => callback.failure(tx),
-            _ => {}
-        },
-    );
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    });
 }
 
 // #[cfg(feature = "napi")]
