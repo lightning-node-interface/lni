@@ -246,6 +246,7 @@ export declare class PhoenixdNode {
   lookupInvoice(paymentHash: string): Transaction
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
   listTransactions(params: ListTransactionsParams): Array<Transaction>
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class ClnNode {
   constructor(config: ClnConfig)
@@ -261,6 +262,7 @@ export declare class ClnNode {
   lookupInvoice(paymentHash: string): Transaction
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class LndNode {
   constructor(config: LndConfig)

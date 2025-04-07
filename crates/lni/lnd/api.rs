@@ -515,5 +515,3 @@ pub fn on_invoice_events(
         _ => {}
     });
 }
-
-// }

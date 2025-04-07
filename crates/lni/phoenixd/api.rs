@@ -5,9 +5,11 @@ use super::types::{
 use super::PhoenixdConfig;
 use crate::{
     phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, PayCode,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
+    PayInvoiceParams, PayInvoiceResponse, Transaction, OnInvoiceEventCallback, OnInvoiceEventParams,
 };
 use serde_urlencoded;
+use std::thread;
+use std::time::Duration;
 
 // TODO
 // list_channels
@@ -265,7 +267,7 @@ pub fn lookup_invoice(
         fees_paid: inv.fees * 1000,
         created_at: inv.created_at,
         expires_at: 0, // TODO
-        settled_at: 0, // TODO
+        settled_at: inv.completed_at,
         description: inv.description.unwrap_or_default(),
         description_hash: "".to_string(), // TODO
         payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
@@ -408,4 +410,60 @@ pub fn list_transactions(
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     Ok(transactions)
+}
+
+// Core logic shared by both implementations
+pub fn poll_invoice_events<F>(config: &PhoenixdConfig, params: OnInvoiceEventParams, mut callback: F)
+where
+    F: FnMut(String, Option<Transaction>),
+{
+    let mut start_time = std::time::Instant::now();
+    loop {
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            // timeout
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let (status, transaction) = match lookup_invoice(config, params.payment_hash.clone())
+        {
+            Ok(transaction) => {
+                if transaction.settled_at > 0 {
+                    ("settled".to_string(), Some(transaction))
+                } else {
+                    ("pending".to_string(), Some(transaction))
+                }
+            }
+            Err(_) => ("error".to_string(), None),
+        };
+
+        match status.as_str() {
+            "settled" => {
+                callback("success".to_string(), transaction);
+                break;
+            }
+            "error" => {
+                callback("failure".to_string(), transaction);
+                break;
+            }
+            _ => {
+                callback("pending".to_string(), transaction);
+            }
+        }
+
+        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+    }
+}
+
+pub fn on_invoice_events(
+    config: PhoenixdConfig,
+    params: OnInvoiceEventParams,
+    callback: Box<dyn OnInvoiceEventCallback>,
+) {
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    });
 }

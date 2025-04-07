@@ -85,6 +85,14 @@ impl PhoenixdNode {
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::phoenixd::api::list_transactions(&self.config, params.from, params.limit, None)
     }
+
+    pub fn on_invoice_events(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    ) {
+        crate::phoenixd::api::on_invoice_events(self.config.clone(), params, callback)
+    }
 }
 
 #[cfg(test)]
@@ -243,5 +251,28 @@ mod tests {
                 panic!("Failed to lookup invoice: {:?}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_on_invoice_events() {
+        struct OnInvoiceEventCallback {}
+        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+            fn success(&self, transaction: Option<Transaction>) {
+                println!("success");
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                println!("pending {:?}", transaction);
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                println!("epic fail");
+            }
+        }
+        let params = crate::types::OnInvoiceEventParams {
+            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            polling_delay_sec: 3,
+            max_polling_sec: 5,
+        };
+        let callback = OnInvoiceEventCallback {};
+        NODE.on_invoice_events(params, Box::new(callback));
     }
 }

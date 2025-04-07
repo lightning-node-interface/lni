@@ -181,7 +181,7 @@ await node.onInvoiceEvents(
 Rust
 ```rust
 struct OnInvoiceEventCallback {}
-impl crate::lnd::api::OnInvoiceEventCallback for OnInvoiceEventCallback {
+impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
     fn success(&self, transaction: Option<Transaction>) {
         println!("success");
     }
@@ -192,7 +192,7 @@ impl crate::lnd::api::OnInvoiceEventCallback for OnInvoiceEventCallback {
         println!("epic fail");
     }
 }
-let params = crate::lnd::api::OnInvoiceEventParams {
+let params = crate::types::OnInvoiceEventParams {
     payment_hash: TEST_PAYMENT_HASH.to_string(),
     polling_delay_sec: 3,
     max_polling_sec: 60,
