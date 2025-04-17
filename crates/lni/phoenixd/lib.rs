@@ -37,6 +37,7 @@ pub struct PhoenixdNode {
 }
 
 // Constructor is inherent, not part of the trait
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl PhoenixdNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: PhoenixdConfig) -> Self {

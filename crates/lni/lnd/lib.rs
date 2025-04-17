@@ -39,6 +39,7 @@ pub struct LndNode {
 }
 
 // Constructor is inherent, not part of the trait
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LndNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: LndConfig) -> Self {
