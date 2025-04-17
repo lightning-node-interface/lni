@@ -4,8 +4,8 @@ use super::types::{
 };
 use super::PhoenixdConfig;
 use crate::{
-    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, PayCode,
-    PayInvoiceParams, PayInvoiceResponse, Transaction, OnInvoiceEventCallback, OnInvoiceEventParams,
+    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, OnInvoiceEventCallback,
+    OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use serde_urlencoded;
 use std::thread;
@@ -241,7 +241,9 @@ pub fn pay_offer(
 }
 
 // TODO implement list_offers, currently just one is returned by Phoenixd
-pub fn list_offers() {}
+pub fn list_offers() -> Result<Vec<PayCode>, ApiError> {
+    Ok(vec![])
+}
 
 pub fn lookup_invoice(
     config: &PhoenixdConfig,
@@ -413,8 +415,11 @@ pub fn list_transactions(
 }
 
 // Core logic shared by both implementations
-pub fn poll_invoice_events<F>(config: &PhoenixdConfig, params: OnInvoiceEventParams, mut callback: F)
-where
+pub fn poll_invoice_events<F>(
+    config: &PhoenixdConfig,
+    params: OnInvoiceEventParams,
+    mut callback: F,
+) where
     F: FnMut(String, Option<Transaction>),
 {
     let mut start_time = std::time::Instant::now();
@@ -425,8 +430,7 @@ where
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(config, params.payment_hash.clone())
-        {
+        let (status, transaction) = match lookup_invoice(config, params.payment_hash.clone()) {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))

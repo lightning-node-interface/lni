@@ -2,6 +2,40 @@
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
+use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, ApiError};
+
+pub enum LightningNodeEnum {
+    Phoenixd(PhoenixdNode),
+    Lnd(LndNode),
+    Cln(ClnNode),
+}
+
+
+pub trait LightningNode {
+    fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
+    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
+    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
+    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError>;
+    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError>;
+    fn pay_offer(
+        &self,
+        offer: String,
+        amount_msats: i64,
+        payer_note: Option<String>,
+    ) -> Result<PayInvoiceResponse, ApiError>;
+    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError>;
+    fn list_transactions(
+        &self,
+        params: ListTransactionsParams,
+    ) -> Result<Vec<crate::Transaction>, ApiError>;
+    fn decode(&self, str: String) -> Result<String, ApiError>;
+    fn on_invoice_events(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    );
+}
+
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize)]

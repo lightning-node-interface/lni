@@ -149,16 +149,16 @@ async function test() {
 
   console.log("Node info:", await node.getInfo());
 
-  await node.onInvoiceEvents(
-    {
-      paymentHash: config.test_hash,
-      pollingDelaySec: 4,
-      maxPollingSec: 60,
-    }, 
-    (status, tx) => {
-      console.log("Invoice event:", status, tx);
-    }
-  );
+  // await node.onInvoiceEvents(
+  //   {
+  //     paymentHash: config.test_hash,
+  //     pollingDelaySec: 4,
+  //     maxPollingSec: 60,
+  //   }, 
+  //   (status, tx) => {
+  //     console.log("Invoice event:", status, tx);
+  //   }
+  // );
 }
 
 async function main() {

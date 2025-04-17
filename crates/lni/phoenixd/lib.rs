@@ -6,7 +6,7 @@ use crate::{
     Transaction,
 };
 
-use crate::{CreateInvoiceParams, PayCode};
+use crate::{CreateInvoiceParams, LightningNode, PayCode};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -36,18 +36,21 @@ pub struct PhoenixdNode {
     pub config: PhoenixdConfig,
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+// Constructor is inherent, not part of the trait
 impl PhoenixdNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: PhoenixdConfig) -> Self {
         Self { config }
     }
+}
 
-    pub fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl LightningNode for PhoenixdNode {
+    fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
         crate::phoenixd::api::get_info(&self.config)
     }
 
-    pub fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         create_invoice(
             &self.config,
             params.invoice_type,
@@ -58,15 +61,19 @@ impl PhoenixdNode {
         )
     }
 
-    pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         pay_invoice(&self.config, params)
     }
 
-    pub fn get_offer(&self) -> Result<PayCode, ApiError> {
+    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::phoenixd::api::get_offer(&self.config)
     }
 
-    pub fn pay_offer(
+    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::phoenixd::api::list_offers()
+    }
+
+    fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -75,18 +82,22 @@ impl PhoenixdNode {
         crate::phoenixd::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    pub fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
+    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
         crate::phoenixd::api::lookup_invoice(&self.config, payment_hash)
     }
 
-    pub fn list_transactions(
+    fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::phoenixd::api::list_transactions(&self.config, params.from, params.limit, None)
     }
 
-    pub fn on_invoice_events(
+    fn decode(&self, str: String) -> Result<String, ApiError> {
+        Ok("".to_string())
+    }
+
+    fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -193,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_get_offer() {
-        match NODE.get_offer() {
+        match NODE.get_offer(None) {
             Ok(resp) => {
                 println!("Get Offer resp: {:?}", resp);
                 assert!(!resp.bolt12.is_empty(), "Offer should not be empty");

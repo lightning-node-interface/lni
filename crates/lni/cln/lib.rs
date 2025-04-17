@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, PayCode, PayInvoiceParams,
-    PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, PayCode,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -35,18 +35,21 @@ pub struct ClnNode {
     pub config: ClnConfig,
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+// Constructor is inherent, not part of the trait
 impl ClnNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: ClnConfig) -> Self {
         Self { config }
     }
+}
 
-    pub fn get_info(&self) -> Result<NodeInfo, ApiError> {
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl LightningNode for ClnNode {
+    fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::cln::api::get_info(&self.config)
     }
 
-    pub fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::cln::api::create_invoice(
             &self.config,
             params.invoice_type,
@@ -58,19 +61,19 @@ impl ClnNode {
         )
     }
 
-    pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::cln::api::pay_invoice(&self.config, params)
     }
 
-    pub fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::cln::api::get_offer(&self.config, search)
     }
 
-    pub fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::cln::api::list_offers(&self.config, search)
     }
 
-    pub fn pay_offer(
+    fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -79,22 +82,22 @@ impl ClnNode {
         crate::cln::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    pub fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
+    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
         crate::cln::api::lookup_invoice(&self.config, Some(payment_hash), None, None)
     }
 
-    pub fn list_transactions(
+    fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::cln::api::list_transactions(&self.config, params.from, params.limit)
     }
 
-    pub fn decode(&self, str: String) -> Result<String, ApiError> {
+    fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::cln::api::decode(&self.config, str)
     }
 
-    pub fn on_invoice_events(
+    fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -124,6 +127,10 @@ mod tests {
         static ref PHOENIX_MOBILE_OFFER: String = {
             dotenv().ok();
             env::var("PHOENIX_MOBILE_OFFER").expect("PHOENIX_MOBILE_OFFER must be set")
+        };
+        static ref CLN_OFFER: String = {
+            dotenv().ok();
+            env::var("CLN_OFFER").expect("CLN_OFFER must be set")
         };
         static ref TEST_PAYMENT_HASH: String = {
             dotenv().ok();
