@@ -10,7 +10,6 @@ pub enum LightningNodeEnum {
     Cln(ClnNode),
 }
 
-
 pub trait LightningNode {
     fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
     fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
@@ -23,7 +22,7 @@ pub trait LightningNode {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError>;
-    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError>;
+    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError>;
     fn list_transactions(
         &self,
         params: ListTransactionsParams,
@@ -288,6 +287,23 @@ pub struct ListTransactionsParams {
     pub from: i64,
     pub limit: i64,
     pub payment_hash: Option<String>,
+    pub search: Option<String>, // searches the payer_note/memo/decription
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LookupInvoiceParams {
+    pub payment_hash: Option<String>,
+    pub search: Option<String>, // searches the payer_note/memo/decription
+}
+impl Default for LookupInvoiceParams {
+    fn default() -> Self {
+        Self {
+            payment_hash: None,
+            search: None,
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -383,7 +399,18 @@ pub trait OnInvoiceEventCallback {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[cfg_attr(feature = "napi_rs", napi(object))]
 pub struct OnInvoiceEventParams {
-    pub payment_hash: String,
+    pub payment_hash: Option<String>,
+    pub search: Option<String>,
     pub polling_delay_sec: i64,
     pub max_polling_sec: i64,
+}
+impl Default for OnInvoiceEventParams {
+    fn default() -> Self {
+        Self {
+            payment_hash: None,
+            search: None,
+            polling_delay_sec: 5,
+            max_polling_sec: 60,
+        }
+    }
 }

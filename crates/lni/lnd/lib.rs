@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, PayCode,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -78,15 +78,21 @@ impl LightningNode for LndNode {
         crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
-        crate::lnd::api::lookup_invoice(&self.config, Some(payment_hash))
+    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+        crate::lnd::api::lookup_invoice(
+            &self.config,
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        )
     }
 
     fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::lnd::api::list_transactions(&self.config, params.from, params.limit)
+        crate::lnd::api::list_transactions(&self.config, params.from, params.limit, params.search)
     }
 
     fn decode(&self, str: String) -> Result<String, ApiError> {
@@ -298,9 +304,12 @@ mod tests {
 
     #[test]
     fn test_lookup_invoice() {
-        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()) {
+        match NODE.lookup_invoice(LookupInvoiceParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            ..Default::default()
+        }) {
             Ok(txn) => {
-                println!("invoice: {:?}", txn);
+                dbg!(&txn);
                 assert!(
                     txn.amount_msats >= 0,
                     "Invoice should contain a valid amount"
@@ -322,10 +331,11 @@ mod tests {
             from: 0,
             limit: 10,
             payment_hash: None,
+            search: None,
         };
         match NODE.list_transactions(params) {
             Ok(txns) => {
-                println!("transactions: {:?}", txns);
+                dbg!(&txns);
                 assert!(
                     txns.len() >= 0,
                     "Should contain at least zero or one transaction"
@@ -357,6 +367,7 @@ mod tests {
 
         impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn success(&self, transaction: Option<Transaction>) {
+                dbg!(&transaction);
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "success", transaction));
             }
@@ -376,9 +387,10 @@ mod tests {
         };
 
         let params = crate::types::OnInvoiceEventParams {
-            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 3,
             max_polling_sec: 60,
+            ..Default::default()
         };
 
         // Start the event listener in a separate thread

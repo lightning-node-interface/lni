@@ -247,9 +247,12 @@ pub fn list_offers() -> Result<Vec<PayCode>, ApiError> {
 
 pub fn lookup_invoice(
     config: &PhoenixdConfig,
-    payment_hash: String,
+    payment_hash: Option<String>,
+    from: Option<i64>,
+    limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let url = format!("{}/payments/incoming/{}", config.url, payment_hash);
+    let url = format!("{}/payments/incoming/{}", config.url, payment_hash.unwrap());
     let client = client(config);
     let response = client
         .get(&url)
@@ -283,7 +286,7 @@ pub fn list_transactions(
     from: i64,
     // until: i64,
     limit: i64,
-    payment_hash: Option<String>,
+    search: Option<String>,
     // offset: i64,
     // unpaid: bool,
     // invoice_type: Option<String>, // not currently used but included for parity
@@ -430,7 +433,13 @@ pub fn poll_invoice_events<F>(
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(config, params.payment_hash.clone()) {
+        let (status, transaction) = match lookup_invoice(
+            config,
+            params.payment_hash.clone(),
+            None,
+            None,
+            params.search.clone(),
+        ) {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -448,7 +457,7 @@ pub fn poll_invoice_events<F>(
             }
             "error" => {
                 callback("failure".to_string(), transaction);
-                break;
+                // break;
             }
             _ => {
                 callback("pending".to_string(), transaction);

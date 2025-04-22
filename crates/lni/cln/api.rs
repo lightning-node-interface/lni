@@ -3,10 +3,11 @@ use super::types::{
     ListOffersResponse, PayResponse,
 };
 use super::ClnConfig;
+use crate::cln::types::Invoice;
 use crate::types::NodeInfo;
 use crate::{
-    calculate_fee_msats, ApiError, InvoiceType, PayCode, PayInvoiceParams, PayInvoiceResponse,
-    Transaction, OnInvoiceEventCallback, OnInvoiceEventParams,
+    calculate_fee_msats, ApiError, InvoiceType, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 use std::thread;
@@ -466,13 +467,15 @@ pub fn pay_offer(
     })
 }
 
+// Looks up invoice by payment_hash or search field, or returns latest invoice
 pub fn lookup_invoice(
     config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
     limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    match lookup_invoices(config, payment_hash, from, limit) {
+    match lookup_invoices(config, payment_hash, from, limit, search) {
         Ok(transactions) => {
             if let Some(tx) = transactions.first() {
                 Ok(tx.clone())
@@ -486,16 +489,117 @@ pub fn lookup_invoice(
     }
 }
 
-// label, invstring, payment_hash, offer_id, index, start, limit
 fn lookup_invoices(
     config: &ClnConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
     limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let list_invoices_url = format!("{}/v1/listinvoices", config.url);
     let client = clnrest_client(config);
 
+    if search.is_some() {
+        let list_invoices_url = format!("{}/v1/sql", config.url);
+        let sql = format!(
+            "SELECT label, bolt11, bolt12, payment_hash, amount_msat, status, amount_received_msat, paid_at, payment_preimage, description, local_offer_id, invreq_payer_note, expires_at FROM invoices"
+        );
+        let where_clause = if search.is_some() {
+            format!(
+                "WHERE description = '{}' or invreq_payer_note ='{}' or payment_hash = '{}' ORDER BY created_index DESC LIMIT {}",
+                search.clone().unwrap(),
+                search.clone().unwrap(),
+                search.clone().unwrap(),
+                limit.unwrap_or(150),
+            )
+        } else {
+            format!("ORDER BY created_index DESC LIMIT {}", limit.unwrap_or(150),)
+        };
+
+        dbg!(format!("{} {}", sql, where_clause));
+        let response = client
+            .post(&list_invoices_url)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "query": format!("{} {}", sql, where_clause),
+            }))
+            .send()
+            .unwrap();
+        let response_text = response.text().unwrap();
+        let response_text = response_text.as_str();
+        dbg!(&response_text);
+
+        if response_text.len() > 25 { // i.e not blank resp like "[rows: []]"
+            // Parse the SQL response into InvoicesResponse
+            #[derive(serde::Deserialize)]
+            struct SqlResponse {
+                rows: Vec<Vec<serde_json::Value>>,
+            }
+            // Map SQL row indices to InvoicesResponse fields
+            let sql_resp: SqlResponse = serde_json::from_str(response_text).unwrap();
+
+            let mut invoices = Vec::new();
+            for row in sql_resp.rows {
+                invoices.push(Invoice {
+                    label: row
+                        .get(0)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    bolt11: row.get(1).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    bolt12: row.get(2).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    payment_hash: row
+                        .get(3)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    amount_msat: Some(row.get(4).and_then(|v| v.as_i64()).unwrap_or(0)),
+                    status: row
+                        .get(5)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    amount_received_msat: row.get(6).and_then(|v| v.as_i64()),
+                    paid_at: row.get(7).and_then(|v| v.as_i64()),
+                    payment_preimage: row.get(8).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    description: row.get(9).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    local_offer_id: row.get(10).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    invreq_payer_note: row.get(11).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    expires_at: row.get(12).and_then(|v| v.as_i64()).unwrap_or(0),
+                    pay_index: None,
+                    created_index: 0,
+                    updated_index: None,
+                    paid_outpoint: None,
+                });
+            }
+            let incoming_payments = InvoicesResponse { invoices };
+            let mut transactions: Vec<Transaction> = incoming_payments
+                .invoices
+                .into_iter()
+                .map(|inv| Transaction {
+                    type_: "incoming".to_string(),
+                    invoice: inv
+                        .bolt11
+                        .clone()
+                        .unwrap_or_else(|| inv.bolt12.clone().unwrap_or_default()),
+                    preimage: inv.payment_preimage.unwrap_or_default(),
+                    payment_hash: inv.payment_hash,
+                    amount_msats: inv.amount_received_msat.unwrap_or(0),
+                    fees_paid: 0,
+                    created_at: 0, // TODO: parse if available
+                    expires_at: inv.expires_at,
+                    settled_at: inv.paid_at.unwrap_or(0),
+                    description: inv.description.unwrap_or_default(),
+                    description_hash: "".to_string(),
+                    payer_note: Some(inv.invreq_payer_note.unwrap_or_default()),
+                    external_id: Some(inv.label),
+                })
+                .collect();
+            transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            return Ok(transactions);
+        }
+    }
+
+    let list_invoices_url = format!("{}/v1/listinvoices", config.url);
     // 1) Build query for incoming transactions
     let mut params: Vec<(&str, Option<String>)> = vec![];
     if let Some(from_value) = from {
@@ -505,7 +609,14 @@ fn lookup_invoices(
     if let Some(limit_value) = limit {
         params.push(("limit", Some(limit_value.to_string())));
     }
-    if let Some(payment_hash_value) = payment_hash {
+    let pay_hash = if payment_hash.is_some() {
+        payment_hash.clone()
+    } else if search.is_some() {
+        search.clone()
+    } else {
+        None
+    };
+    if let Some(payment_hash_value) = pay_hash {
         params.push(("payment_hash", Some(payment_hash_value)));
     }
 
@@ -557,13 +668,13 @@ pub fn list_transactions(
     config: &ClnConfig,
     from: i64,
     limit: i64,
+    search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    match lookup_invoices(config, None, Some(from), Some(limit)) {
+    match lookup_invoices(config, None, Some(from), Some(limit), search) {
         Ok(transactions) => Ok(transactions),
         Err(e) => Err(e),
     }
 }
-
 
 // Core logic shared by both implementations
 pub fn poll_invoice_events<F>(config: &ClnConfig, params: OnInvoiceEventParams, mut callback: F)
@@ -578,7 +689,13 @@ where
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(config, Some(params.payment_hash.clone()), None, None ) {
+        let (status, transaction) = match lookup_invoice(
+            config,
+            params.payment_hash.clone(),
+            None,
+            None,
+            params.search.clone(),
+        ) {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -596,7 +713,7 @@ where
             }
             "error" => {
                 callback("failure".to_string(), transaction);
-                break;
+                // break;
             }
             _ => {
                 callback("pending".to_string(), transaction);

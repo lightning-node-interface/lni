@@ -1,4 +1,4 @@
-use lni::{cln::lib::ClnConfig, CreateInvoiceParams, PayInvoiceParams};
+use lni::{cln::lib::ClnConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -84,9 +84,10 @@ impl ClnNode {
   }
 
   #[napi]
-  pub fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::cln::api::lookup_invoice(&self.inner, Some(payment_hash), None, None)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn =
+      lni::cln::api::lookup_invoice(&self.inner, params.payment_hash, None, None, params.search)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -95,8 +96,9 @@ impl ClnNode {
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::cln::api::list_transactions(&self.inner, params.from, params.limit)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns =
+      lni::cln::api::list_transactions(&self.inner, params.from, params.limit, params.search)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
