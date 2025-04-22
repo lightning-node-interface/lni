@@ -97,12 +97,7 @@ impl LightningNode for PhoenixdNode {
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::phoenixd::api::list_transactions(
-            &self.config,
-            params.from,
-            params.limit,
-            params.search,
-        )
+        crate::phoenixd::api::list_transactions(&self.config, params)
     }
 
     fn decode(&self, str: String) -> Result<String, ApiError> {
@@ -296,7 +291,7 @@ mod tests {
             }
         }
         let params = crate::types::OnInvoiceEventParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            search: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 3,
             max_polling_sec: 5,
             ..Default::default()

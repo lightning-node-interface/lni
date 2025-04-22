@@ -82,9 +82,9 @@ pub struct OutgoingPaymentResponse {
     #[serde(rename = "paymentId")]
     pub payment_id: Option<String>,
     #[serde(rename = "preimage")]
-    pub preimage: String,
+    pub preimage: Option<String>,
     #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
+    pub payment_hash: Option<String>,
     #[serde(rename = "sent")]
     pub sent: i64,
     #[serde(rename = "fees")]
