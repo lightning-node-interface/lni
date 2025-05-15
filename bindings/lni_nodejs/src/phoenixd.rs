@@ -96,7 +96,7 @@ impl PhoenixdNode {
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::phoenixd::api::list_transactions(&self.inner, params.from, params.limit, None)
+    let txns = lni::phoenixd::api::list_transactions(&self.inner, params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
