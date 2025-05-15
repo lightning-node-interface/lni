@@ -73,8 +73,8 @@ pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         network: "bitcoin".to_string(),
         block_height: 0,
         block_hash: "".to_string(),
-        send_balance_msat: info.channels[0].balance_sat * 1000,
-        receive_balance_msat: info.channels[0].inbound_liquidity_sat * 1000,
+        send_balance_msat: info.channels.first().map_or(0, |c| c.balance_sat * 1000),
+        receive_balance_msat: info.channels.first().map_or(0, |c| c.inbound_liquidity_sat * 1000),
         fee_credit_balance_msat: balance.fee_credit_sat * 1000,
         ..Default::default()
     };
