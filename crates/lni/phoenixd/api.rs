@@ -1,6 +1,6 @@
 use super::types::{
-    Bolt11Req, Bolt11Resp, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
-    PhoenixPayInvoiceResp, Bolt12Req,
+    Bolt11Req, Bolt11Resp, Bolt12Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse,
+    PayResponse, PhoenixPayInvoiceResp,
 };
 use super::PhoenixdConfig;
 use crate::ListTransactionsParams;
@@ -74,7 +74,10 @@ pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         block_height: 0,
         block_hash: "".to_string(),
         send_balance_msat: info.channels.first().map_or(0, |c| c.balance_sat * 1000),
-        receive_balance_msat: info.channels.first().map_or(0, |c| c.inbound_liquidity_sat * 1000),
+        receive_balance_msat: info
+            .channels
+            .first()
+            .map_or(0, |c| c.inbound_liquidity_sat * 1000),
         fee_credit_balance_msat: balance.fee_credit_sat * 1000,
         ..Default::default()
     };
@@ -139,24 +142,32 @@ pub fn create_invoice(
         InvoiceType::Bolt12 => {
             let req_url = format!("{}/createoffer", config.url);
 
-            let bolt12_req = Bolt12Req {
-                description: description.clone(),
-                amount_sat: amount_msats.unwrap_or_default() / 1000,
-            };
+            let response;
+            if amount_msats.is_none() {
+                response = client
+                    .post(&req_url)
+                    .basic_auth("", Some(config.password.clone()))
+                    .send()
+                    .expect("Failed to create invoice");
+            } else {
+                let bolt12_req = Bolt12Req {
+                    description: description.clone(),
+                    amount_sat: amount_msats.unwrap_or_default() / 1000,
+                };
 
-            let response = client
-                .post(&req_url)
-                .basic_auth("", Some(config.password.clone()))
-                .form(&bolt12_req)
-                .send()
-                .expect("Failed to create invoice");
+                response = client
+                    .post(&req_url)
+                    .basic_auth("", Some(config.password.clone()))
+                    .form(&bolt12_req)
+                    .send()
+                    .expect("Failed to create invoice");
+            }
 
             println!("Status: {}", response.status());
 
             let invoice_str = response.text().expect("Failed to parse get invoice");
             let invoice_str = invoice_str.as_str();
             println!("Bolt12 {}", &invoice_str.to_string());
-
 
             Ok(Transaction {
                 type_: "incoming".to_string(),
