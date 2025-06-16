@@ -1,6 +1,6 @@
 use super::types::{
     Bolt11Req, Bolt11Resp, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
-    PhoenixPayInvoiceResp,
+    PhoenixPayInvoiceResp, Bolt12Req,
 };
 use super::PhoenixdConfig;
 use crate::ListTransactionsParams;
@@ -137,9 +137,42 @@ pub fn create_invoice(
             })
         }
         InvoiceType::Bolt12 => {
-            return Err(ApiError::Json {
-                reason: "phoenixd does not support bolt12 invoices".to_string(),
-            });
+            let req_url = format!("{}/createoffer", config.url);
+
+            let bolt12_req = Bolt12Req {
+                description: description.clone(),
+                amount_sat: amount_msats.unwrap_or_default() / 1000,
+            };
+
+            let response = client
+                .post(&req_url)
+                .basic_auth("", Some(config.password.clone()))
+                .form(&bolt12_req)
+                .send()
+                .expect("Failed to create invoice");
+
+            println!("Status: {}", response.status());
+
+            let invoice_str = response.text().expect("Failed to parse get invoice");
+            let invoice_str = invoice_str.as_str();
+            println!("Bolt12 {}", &invoice_str.to_string());
+
+
+            Ok(Transaction {
+                type_: "incoming".to_string(),
+                invoice: invoice_str.to_string(),
+                preimage: "".to_string(),
+                payment_hash: "".to_string(),
+                amount_msats: amount_msats.unwrap_or(0),
+                fees_paid: 0,
+                created_at: 0,
+                expires_at: expiry.unwrap_or(3600),
+                settled_at: 0,
+                description: description.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some("".to_string()),
+            })
         }
     }
 }
