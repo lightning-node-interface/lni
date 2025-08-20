@@ -5,6 +5,7 @@ use nwc::prelude::*;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use sha2::{Digest, Sha256};
 
 // Helper function to create NWC client
 async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
@@ -129,8 +130,19 @@ pub fn pay_invoice(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayIn
         let response = nwc.pay_invoice(request).await
             .map_err(|e| ApiError::Api { reason: format!("Failed to pay invoice: {}", e) })?;
         
+        // Compute payment hash from preimage (payment_hash = SHA256(preimage))
+        let payment_hash = if !response.preimage.is_empty() {
+            let preimage_bytes = hex::decode(&response.preimage)
+                .map_err(|e| ApiError::Api { reason: format!("Invalid preimage hex: {}", e) })?;
+            let mut hasher = Sha256::new();
+            hasher.update(preimage_bytes);
+            hex::encode(hasher.finalize())
+        } else {
+            "".to_string()
+        };
+        
         Ok(PayInvoiceResponse {
-            payment_hash: "".to_string(), // Response doesn't have payment hash directly
+            payment_hash,
             preimage: response.preimage,
             fee_msats: 0, // Not available in response
         })
