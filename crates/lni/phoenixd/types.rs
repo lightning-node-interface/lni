@@ -50,6 +50,15 @@ pub struct Bolt11Req {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Bolt12Req {
+    #[serde(rename = "amountSat")]
+    pub amount_sat: i64,
+    #[serde(rename = "description")]
+    pub description: Option<String>,
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InvoiceResponse {
     #[serde(rename = "preimage")]
     pub preimage: String,
@@ -82,9 +91,9 @@ pub struct OutgoingPaymentResponse {
     #[serde(rename = "paymentId")]
     pub payment_id: Option<String>,
     #[serde(rename = "preimage")]
-    pub preimage: String,
+    pub preimage: Option<String>,
     #[serde(rename = "paymentHash")]
-    pub payment_hash: String,
+    pub payment_hash: Option<String>,
     #[serde(rename = "sent")]
     pub sent: i64,
     #[serde(rename = "fees")]

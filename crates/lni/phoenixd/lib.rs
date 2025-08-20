@@ -6,7 +6,7 @@ use crate::{
     Transaction,
 };
 
-use crate::{CreateInvoiceParams, LightningNode, PayCode};
+use crate::{CreateInvoiceParams, LightningNode, LookupInvoiceParams, PayCode};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -83,15 +83,21 @@ impl LightningNode for PhoenixdNode {
         crate::phoenixd::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 
-    fn lookup_invoice(&self, payment_hash: String) -> Result<crate::Transaction, ApiError> {
-        crate::phoenixd::api::lookup_invoice(&self.config, payment_hash)
+    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+        crate::phoenixd::api::lookup_invoice(
+            &self.config,
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        )
     }
 
     fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::phoenixd::api::list_transactions(&self.config, params.from, params.limit, None)
+        crate::phoenixd::api::list_transactions(&self.config, params)
     }
 
     fn decode(&self, str: String) -> Result<String, ApiError> {
@@ -239,10 +245,11 @@ mod tests {
             from: 0,
             limit: 10,
             payment_hash: None,
+            search: None,
         };
         match NODE.list_transactions(params) {
             Ok(txns) => {
-                println!("Transactions: {:?}", txns);
+                dbg!(&txns);
                 // You can add more assertions here if desired
                 assert!(true, "Successfully fetched transactions");
             }
@@ -254,10 +261,13 @@ mod tests {
 
     #[test]
     fn test_lookup_invoice() {
-        match NODE.lookup_invoice(TEST_PAYMENT_HASH.to_string()) {
+        match NODE.lookup_invoice(LookupInvoiceParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            ..Default::default()
+        }) {
             Ok(txn) => {
-                println!("invoice: {:?}", txn);
-                assert!(txn.amount_msats.gt(&1), "Invoice contain an amount");
+                dbg!(&txn);
+                assert!(txn.amount_msats.gt(&1), "Invoice should contain an amount");
             }
             Err(e) => {
                 panic!("Failed to lookup invoice: {:?}", e);
@@ -270,6 +280,7 @@ mod tests {
         struct OnInvoiceEventCallback {}
         impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn success(&self, transaction: Option<Transaction>) {
+                dbg!(transaction);
                 println!("success");
             }
             fn pending(&self, transaction: Option<Transaction>) {
@@ -280,9 +291,10 @@ mod tests {
             }
         }
         let params = crate::types::OnInvoiceEventParams {
-            payment_hash: TEST_PAYMENT_HASH.to_string(),
+            search: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 3,
             max_polling_sec: 5,
+            ..Default::default()
         };
         let callback = OnInvoiceEventCallback {};
         NODE.on_invoice_events(params, Box::new(callback));

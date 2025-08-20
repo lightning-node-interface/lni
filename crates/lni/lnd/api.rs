@@ -8,8 +8,8 @@ use super::types::{
 use super::LndConfig;
 use crate::types::NodeInfo;
 use crate::{
-    calculate_fee_msats, ApiError, CreateInvoiceParams, InvoiceType, PayCode, PayInvoiceParams,
-    PayInvoiceResponse, Transaction, OnInvoiceEventCallback, OnInvoiceEventParams,
+    calculate_fee_msats, ApiError, CreateInvoiceParams, InvoiceType, OnInvoiceEventCallback,
+    OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 
@@ -342,6 +342,9 @@ pub fn pay_offer(
 pub fn lookup_invoice(
     config: &LndConfig,
     payment_hash: Option<String>,
+    from: Option<i64>,
+    limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let payment_hash_str = payment_hash.unwrap_or_default();
     let list_invoices_url = format!("{}/v1/invoice/{}", config.url, payment_hash_str);
@@ -400,6 +403,7 @@ pub fn list_transactions(
     config: &LndConfig,
     from: i64,
     limit: i64,
+    search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
     let list_txns_url = format!(
         "{}/v1/invoices?index_offest={}&num_max_invoices={}",
@@ -473,8 +477,13 @@ where
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(config, Some(params.payment_hash.clone()))
-        {
+        let (status, transaction) = match lookup_invoice(
+            config,
+            params.payment_hash.clone(),
+            None,
+            None,
+            params.search.clone(),
+        ) {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -492,7 +501,7 @@ where
             }
             "error" => {
                 callback("failure".to_string(), transaction);
-                break;
+                // break;
             }
             _ => {
                 callback("pending".to_string(), transaction);

@@ -1,8 +1,9 @@
 use super::types::{
-    Bolt11Req, Bolt11Resp, InfoResponse, InvoiceResponse, OutgoingPaymentResponse, PayResponse,
-    PhoenixPayInvoiceResp,
+    Bolt11Req, Bolt11Resp, Bolt12Req, InfoResponse, InvoiceResponse, OutgoingPaymentResponse,
+    PayResponse, PhoenixPayInvoiceResp,
 };
 use super::PhoenixdConfig;
+use crate::ListTransactionsParams;
 use crate::{
     phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, OnInvoiceEventCallback,
     OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
@@ -72,8 +73,11 @@ pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         network: "bitcoin".to_string(),
         block_height: 0,
         block_hash: "".to_string(),
-        send_balance_msat: info.channels[0].balance_sat * 1000,
-        receive_balance_msat: info.channels[0].inbound_liquidity_sat * 1000,
+        send_balance_msat: info.channels.first().map_or(0, |c| c.balance_sat * 1000),
+        receive_balance_msat: info
+            .channels
+            .first()
+            .map_or(0, |c| c.inbound_liquidity_sat * 1000),
         fee_credit_balance_msat: balance.fee_credit_sat * 1000,
         ..Default::default()
     };
@@ -136,9 +140,50 @@ pub fn create_invoice(
             })
         }
         InvoiceType::Bolt12 => {
-            return Err(ApiError::Json {
-                reason: "phoenixd does not support bolt12 invoices".to_string(),
-            });
+            let req_url = format!("{}/createoffer", config.url);
+
+            let response;
+            if amount_msats.is_none() {
+                response = client
+                    .post(&req_url)
+                    .basic_auth("", Some(config.password.clone()))
+                    .send()
+                    .expect("Failed to create invoice");
+            } else {
+                let bolt12_req = Bolt12Req {
+                    description: description.clone(),
+                    amount_sat: amount_msats.unwrap_or_default() / 1000,
+                };
+
+                response = client
+                    .post(&req_url)
+                    .basic_auth("", Some(config.password.clone()))
+                    .form(&bolt12_req)
+                    .send()
+                    .expect("Failed to create invoice");
+            }
+
+            println!("Status: {}", response.status());
+
+            let invoice_str = response.text().expect("Failed to parse get invoice");
+            let invoice_str = invoice_str.as_str();
+            println!("Bolt12 {}", &invoice_str.to_string());
+
+            Ok(Transaction {
+                type_: "incoming".to_string(),
+                invoice: invoice_str.to_string(),
+                preimage: "".to_string(),
+                payment_hash: "".to_string(),
+                amount_msats: amount_msats.unwrap_or(0),
+                fees_paid: 0,
+                created_at: 0,
+                expires_at: expiry.unwrap_or(3600),
+                settled_at: 0,
+                description: description.unwrap_or_default(),
+                description_hash: description_hash.unwrap_or_default(),
+                payer_note: Some("".to_string()),
+                external_id: Some("".to_string()),
+            })
         }
     }
 }
@@ -247,9 +292,12 @@ pub fn list_offers() -> Result<Vec<PayCode>, ApiError> {
 
 pub fn lookup_invoice(
     config: &PhoenixdConfig,
-    payment_hash: String,
+    payment_hash: Option<String>,
+    from: Option<i64>,
+    limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let url = format!("{}/payments/incoming/{}", config.url, payment_hash);
+    let url = format!("{}/payments/incoming/{}", config.url, payment_hash.unwrap());
     let client = client(config);
     let response = client
         .get(&url)
@@ -280,32 +328,19 @@ pub fn lookup_invoice(
 
 pub fn list_transactions(
     config: &PhoenixdConfig,
-    from: i64,
-    // until: i64,
-    limit: i64,
-    payment_hash: Option<String>,
-    // offset: i64,
-    // unpaid: bool,
-    // invoice_type: Option<String>, // not currently used but included for parity
-    // search_term: Option<String>,  // not currently used but included for parity
+    params: ListTransactionsParams,
 ) -> Result<Vec<Transaction>, ApiError> {
     let client = client(config);
 
     // 1) Build query for incoming transactions
     let mut incoming_params = vec![];
-    if from != 0 {
-        incoming_params.push(("from", (from * 1000).to_string()));
+    if params.from != 0 {
+        incoming_params.push(("from", (params.from * 1000).to_string()));
     }
-    if limit != 0 {
-        incoming_params.push(("limit", limit.to_string()));
+    if params.limit != 0 {
+        incoming_params.push(("limit", params.limit.to_string()));
     }
-    // if until != 0 {
-    //     incoming_params.push(("to", (until * 1000).to_string()));
-    // }
-    // if offset != 0 {
-    //     incoming_params.push(("offset", offset.to_string()));
-    // }
-    incoming_params.push(("all", "false".to_string()));
+    incoming_params.push(("all", "false".to_string())); // do not return payments that have failed
 
     // Build the final incoming URL with query
     let incoming_query = serde_urlencoded::to_string(&incoming_params).unwrap();
@@ -323,49 +358,56 @@ pub fn list_transactions(
     let incoming_text = incoming_text.as_str();
     let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
 
-    // Convert incoming payments into "incoming" Transaction
-    let mut transactions: Vec<Transaction> = incoming_payments
-        .into_iter()
-        .map(|inv| {
-            // Convert completedAt to an optional settled_at
-            let settled_at = if inv.completed_at != 0 {
-                Some((inv.completed_at / 1000) as i64)
-            } else {
-                None
-            };
-            Transaction {
-                type_: "incoming".to_string(),
-                invoice: "".to_string(),
-                preimage: inv.preimage,
-                payment_hash: inv.payment_hash,
-                amount_msats: inv.received_sat * 1000,
-                fees_paid: inv.fees * 1000,
-                created_at: (inv.created_at / 1000) as i64,
-                expires_at: 0, // TODO
-                settled_at: settled_at.unwrap_or(0),
-                description: "".to_string(),
-                description_hash: "".to_string(),
-                payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
-                external_id: Some(inv.external_id.unwrap_or("".to_string())),
+    let mut transactions: Vec<Transaction> = vec![];
+
+    for inc_payment in incoming_payments {
+        let settled_at = if inc_payment.completed_at != 0 {
+            Some((inc_payment.completed_at / 1000) as i64)
+        } else {
+            None
+        };
+        if let Some(ref search) = params.search {
+            let hash_match = inc_payment.payment_hash == *search;
+            let note_match = inc_payment
+                .payer_note
+                .as_ref()
+                .map_or(false, |note| note == search);
+            // Only include if search matches payment_hash or payer_note
+            if !(hash_match || note_match) {
+                continue;
             }
-        })
-        .collect();
+        }
+        if params.payment_hash.is_some()
+            && inc_payment.payment_hash != params.payment_hash.clone().unwrap()
+        {
+            continue;
+        }
+        transactions.push(Transaction {
+            type_: "incoming".to_string(),
+            invoice: "".to_string(), // TODO
+            preimage: inc_payment.preimage,
+            payment_hash: inc_payment.payment_hash,
+            amount_msats: inc_payment.received_sat * 1000,
+            fees_paid: inc_payment.fees * 1000,
+            created_at: (inc_payment.created_at / 1000) as i64,
+            expires_at: 0, // TODO
+            settled_at: settled_at.unwrap_or(0),
+            description: "".to_string(),
+            description_hash: "".to_string(),
+            payer_note: Some(inc_payment.payer_note.unwrap_or("".to_string())),
+            external_id: Some(inc_payment.external_id.unwrap_or("".to_string())),
+        });
+    }
 
     // 2) Build query for outgoing transactions
     let mut outgoing_params = vec![];
-    if from != 0 {
-        outgoing_params.push(("from", (from * 1000).to_string()));
+    if params.from != 0 {
+        outgoing_params.push(("from", (params.from * 1000).to_string()));
     }
-    if limit != 0 {
-        outgoing_params.push(("limit", limit.to_string()));
+    if params.limit != 0 {
+        outgoing_params.push(("limit", params.limit.to_string()));
     }
-    // if until != 0 {
-    //     outgoing_params.push(("to", (until * 1000).to_string()));
-    // }
-    // if offset != 0 {
-    //     outgoing_params.push(("offset", offset.to_string()));
-    // }
-    // outgoing_params.push(("all", unpaid.to_string()));
+    outgoing_params.push(("all", "false".to_string())); // do not return payments that have failed
 
     // Build the final outgoing URL with query
     let outgoing_query = serde_urlencoded::to_string(&outgoing_params).unwrap();
@@ -391,11 +433,28 @@ pub fn list_transactions(
         } else {
             None
         };
+        if let Some(ref search) = params.search {
+            let hash_match = payment.payment_hash == Some(search.clone());
+            let note_match = payment
+                .payer_note
+                .as_ref()
+                .map_or(false, |note| note == search);
+            // Only include if search matches payment_hash or payer_note
+            if !(hash_match || note_match) {
+                continue;
+            }
+        }
+        if params.payment_hash.is_some()
+            && payment.payment_hash.is_some()
+            && payment.payment_hash.clone().unwrap() != params.payment_hash.clone().unwrap()
+        {
+            continue;
+        }
         transactions.push(Transaction {
             type_: "outgoing".to_string(),
             invoice: "".to_string(), // TODO
-            preimage: payment.preimage,
-            payment_hash: payment.payment_hash,
+            preimage: payment.preimage.unwrap_or("".to_string()),
+            payment_hash: payment.payment_hash.unwrap_or("".to_string()),
             amount_msats: payment.sent * 1000,
             fees_paid: payment.fees * 1000,
             created_at: (payment.created_at / 1000) as i64,
@@ -430,12 +489,25 @@ pub fn poll_invoice_events<F>(
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(config, params.payment_hash.clone()) {
-            Ok(transaction) => {
-                if transaction.settled_at > 0 {
-                    ("settled".to_string(), Some(transaction))
+        let (status, transaction) = match list_transactions(
+            config,
+            ListTransactionsParams {
+                from: 0,
+                limit: 1000, // TODO remove hardcoded limit
+                payment_hash: params.payment_hash.clone(),
+                search: params.search.clone(),
+            },
+        ) {
+            Ok(transactions) => {
+                if transactions.is_empty() {
+                    ("pending".to_string(), None)
                 } else {
-                    ("pending".to_string(), Some(transaction))
+                    let transaction = transactions[0].clone();
+                    if transaction.settled_at > 0 {
+                        ("settled".to_string(), Some(transaction))
+                    } else {
+                        ("pending".to_string(), Some(transaction))
+                    }
                 }
             }
             Err(_) => ("error".to_string(), None),
@@ -448,7 +520,7 @@ pub fn poll_invoice_events<F>(
             }
             "error" => {
                 callback("failure".to_string(), transaction);
-                break;
+                // break;
             }
             _ => {
                 callback("pending".to_string(), transaction);

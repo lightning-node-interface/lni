@@ -1,4 +1,6 @@
-use lni::{phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, PayInvoiceParams};
+use lni::{
+  phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -65,9 +67,15 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::phoenixd::api::lookup_invoice(&self.inner, payment_hash)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn = lni::phoenixd::api::lookup_invoice(
+      &self.inner,
+      params.payment_hash,
+      None,
+      None,
+      params.search,
+    )
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -88,7 +96,7 @@ impl PhoenixdNode {
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::phoenixd::api::list_transactions(&self.inner, params.from, params.limit, None)
+    let txns = lni::phoenixd::api::list_transactions(&self.inner, params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }

@@ -1,4 +1,4 @@
-use lni::{lnd::lib::LndConfig, CreateInvoiceParams, PayInvoiceParams};
+use lni::{lnd::lib::LndConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -82,9 +82,10 @@ impl LndNode {
   }
 
   #[napi]
-  pub fn lookup_invoice(&self, payment_hash: String) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::lookup_invoice(&self.inner, Some(payment_hash))
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn =
+      lni::lnd::api::lookup_invoice(&self.inner, params.payment_hash, None, None, params.search)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -93,8 +94,9 @@ impl LndNode {
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::lnd::api::list_transactions(&self.inner, params.from, params.limit)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns =
+      lni::lnd::api::list_transactions(&self.inner, params.from, params.limit, params.search)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
