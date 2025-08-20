@@ -2,12 +2,13 @@
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, ApiError};
+use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
 
 pub enum LightningNodeEnum {
     Phoenixd(PhoenixdNode),
     Lnd(LndNode),
     Cln(ClnNode),
+    Nwc(NwcNode),
 }
 
 pub trait LightningNode {
