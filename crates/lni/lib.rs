@@ -49,6 +49,13 @@ pub mod nwc {
     pub use lib::{NwcConfig, NwcNode};
 }
 
+pub mod strike {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{StrikeConfig, StrikeNode};
+}
+
 pub mod types;
 pub use types::*;
 
