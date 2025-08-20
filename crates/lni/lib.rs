@@ -42,6 +42,13 @@ pub mod lnd {
     pub use lib::{LndConfig, LndNode};
 }
 
+pub mod nwc {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{NwcConfig, NwcNode};
+}
+
 pub mod types;
 pub use types::*;
 
