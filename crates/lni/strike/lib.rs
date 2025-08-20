@@ -127,9 +127,9 @@ mod tests {
             dotenv().ok();
             env::var("STRIKE_API_KEY").expect("STRIKE_API_KEY must be set")
         };
-        static ref TEST_INVOICE_ID: String = {
+        static ref TEST_PAYMENT_HASH: String = {
             dotenv().ok();
-            env::var("STRIKE_TEST_INVOICE_ID").expect("STRIKE_TEST_INVOICE_ID must be set")
+            env::var("STRIKE_TEST_PAYMENT_HASH").expect("STRIKE_TEST_PAYMENT_HASH must be set")
         };
         static ref TEST_PAYMENT_REQUEST: String = {
             dotenv().ok();
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn test_lookup_invoice() {
         match NODE.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_INVOICE_ID.to_string()),
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             ..Default::default()
         }) {
             Ok(txn) => {
@@ -296,7 +296,7 @@ mod tests {
         };
 
         let params = crate::types::OnInvoiceEventParams {
-            payment_hash: Some(TEST_INVOICE_ID.to_string()),
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 3,
             max_polling_sec: 60,
             ..Default::default()
