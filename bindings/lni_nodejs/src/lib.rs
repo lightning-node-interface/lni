@@ -15,3 +15,12 @@ pub use cln::ClnNode;
 
 mod lnd;
 pub use lnd::LndNode;
+
+mod blink;
+pub use blink::BlinkNode;
+
+mod nwc;
+pub use nwc::NwcNode;
+
+mod strike;
+pub use strike::StrikeNode;
