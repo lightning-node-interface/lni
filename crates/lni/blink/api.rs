@@ -411,14 +411,19 @@ pub fn pay_offer(
 pub fn lookup_invoice(
     config: &BlinkConfig,
     payment_hash: Option<String>,
-    _from: Option<i64>,
-    _limit: Option<i64>,
-    _search: Option<String>,
+    from: Option<i64>,
+    limit: Option<i64>,
+    search: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let target_payment_hash = payment_hash.unwrap_or_default();
     
-    // Get transactions and look for the specific payment hash
-    let transactions = list_transactions(config, 0, 100, None)?;
+    // Get transactions and look for the specific payment hash, using parameters or defaults
+    let transactions = list_transactions(
+        config, 
+        from.unwrap_or(0), 
+        limit.unwrap_or(100), 
+        search
+    )?;
     
     let transaction = transactions
         .into_iter()
@@ -432,15 +437,15 @@ pub fn lookup_invoice(
 
 pub fn list_transactions(
     config: &BlinkConfig,
-    _from: i64,
+    from: i64,
     limit: i64,
-    _search: Option<String>,
+    search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
     let query = r#"
-        query TransactionsQuery($first: Int, $after: String) {
+        query TransactionsQuery($first: Int, $last: Int, $after: String, $before: String) {
             me {
                 defaultAccount {
-                    transactions(first: $first, after: $after) {
+                    transactions(first: $first, last: $last, after: $after, before: $before) {
                         edges {
                             cursor
                             node {
@@ -486,14 +491,18 @@ pub fn list_transactions(
         }
     "#;
 
+    // Simple approach: map limit directly to $first, handle from with client-side skip
+    // This is cleaner than trying to convert integer offsets to opaque cursors
     let variables = serde_json::json!({
-        "first": limit as i32,
-        "after": null
+        "first": (from + limit) as i32,  // Fetch enough to skip 'from' records
+        "last": serde_json::Value::Null,
+        "after": serde_json::Value::Null,
+        "before": serde_json::Value::Null
     });
 
     let response: TransactionsQuery = execute_graphql_query(config, query, Some(variables))?;
     
-    let mut transactions = Vec::new();
+    let mut all_transactions = Vec::new();
     
     for edge in response.me.default_account.transactions.edges {
         let node = edge.node;
@@ -538,7 +547,7 @@ pub fn list_transactions(
             0
         };
 
-        transactions.push(Transaction {
+        all_transactions.push(Transaction {
             type_: if node.direction == "SEND" { "outgoing" } else { "incoming" }.to_string(),
             invoice: "".to_string(), // Not available from this query
             preimage,
@@ -555,7 +564,28 @@ pub fn list_transactions(
         });
     }
 
-    Ok(transactions)
+    // Apply client-side search filtering if search term is provided
+    if let Some(search_term) = search {
+        let search_lower = search_term.to_lowercase();
+        all_transactions.retain(|tx| {
+            tx.description.to_lowercase().contains(&search_lower) ||
+            tx.payment_hash.to_lowercase().contains(&search_lower) ||
+            tx.preimage.to_lowercase().contains(&search_lower)
+        });
+    }
+
+    // Apply client-side pagination: skip 'from' records and take 'limit' records
+    let skip_count = from as usize;
+    let take_count = limit as usize;
+    
+    if skip_count < all_transactions.len() {
+        let end_index = std::cmp::min(skip_count + take_count, all_transactions.len());
+        all_transactions = all_transactions[skip_count..end_index].to_vec();
+    } else {
+        all_transactions.clear();
+    }
+
+    Ok(all_transactions)
 }
 
 // Core logic shared by both implementations  

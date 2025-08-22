@@ -71,7 +71,7 @@ impl NwcNode {
     let txn = lni::nwc::api::lookup_invoice(
       &self.inner,
       params.payment_hash,
-      None,
+      params.search,
     )
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
