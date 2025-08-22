@@ -558,36 +558,54 @@ pub fn list_transactions(
     Ok(transactions)
 }
 
+// Core logic shared by both implementations  
+pub fn poll_invoice_events<F>(config: &BlinkConfig, params: OnInvoiceEventParams, mut callback: F)
+where
+    F: FnMut(String, Option<Transaction>),
+{
+    let start_time = std::time::Instant::now();
+    loop {
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            // timeout
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let (status, transaction) = match lookup_invoice(
+            config,
+            params.payment_hash.clone(),
+            None,
+            None,
+            params.search.clone(),
+        ) {
+            Ok(transaction) => {
+                if transaction.settled_at > 0 {
+                    ("success".to_string(), Some(transaction))
+                } else {
+                    ("pending".to_string(), Some(transaction))
+                }
+            }
+            Err(_) => ("error".to_string(), None),
+        };
+
+        callback(status.clone(), transaction.clone());
+
+        if status == "success" || status == "failure" {
+            break;
+        }
+
+        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+    }
+}
+
 pub fn on_invoice_events(
     config: BlinkConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    let payment_hash = params.payment_hash.unwrap_or_default();
-    let polling_delay = Duration::from_secs(params.polling_delay_sec as u64);
-    let max_polling_duration = Duration::from_secs(params.max_polling_sec as u64);
-    let start_time = std::time::Instant::now();
-
-    loop {
-        if start_time.elapsed() > max_polling_duration {
-            callback.failure(None);
-            break;
-        }
-
-        match lookup_invoice(&config, Some(payment_hash.clone()), None, None, None) {
-            Ok(transaction) => {
-                if transaction.settled_at > 0 {
-                    callback.success(Some(transaction));
-                    break;
-                } else {
-                    callback.pending(Some(transaction));
-                }
-            }
-            Err(_) => {
-                callback.pending(None);
-            }
-        }
-
-        thread::sleep(polling_delay);
-    }
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" | _ => callback.failure(tx),
+    });
 }

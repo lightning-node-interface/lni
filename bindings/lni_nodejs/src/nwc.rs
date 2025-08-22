@@ -113,12 +113,14 @@ impl NwcNode {
   }
 
   #[napi]
-  pub fn on_invoice_events(
+  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
     &self,
-    _params: lni::types::OnInvoiceEventParams,
+    params: lni::types::OnInvoiceEventParams,
+    callback: T,
   ) -> Result<()> {
-    // For now, we'll implement a simple polling mechanism
-    // TODO: Implement proper callback support for Node.js bindings
-    Err(napi::Error::from_reason("on_invoice_events not yet implemented for Node.js bindings".to_string()))
+    lni::nwc::api::poll_invoice_events(&self.inner, params, move |status, tx| {
+      let _ = callback(status.clone(), tx.clone());
+    });
+    Ok(())
   }
 }

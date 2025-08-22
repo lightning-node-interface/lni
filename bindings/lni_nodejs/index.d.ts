@@ -324,7 +324,7 @@ export declare class BlinkNode {
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
-  onInvoiceEvents(params: OnInvoiceEventParams): void
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class NwcNode {
   constructor(config: NwcConfig)
@@ -340,7 +340,7 @@ export declare class NwcNode {
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
-  onInvoiceEvents(params: OnInvoiceEventParams): void
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class StrikeNode {
   constructor(config: StrikeConfig)
@@ -356,5 +356,5 @@ export declare class StrikeNode {
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
-  onInvoiceEvents(params: OnInvoiceEventParams): void
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
