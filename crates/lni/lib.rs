@@ -56,6 +56,13 @@ pub mod strike {
     pub use lib::{StrikeConfig, StrikeNode};
 }
 
+pub mod blink {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{BlinkConfig, BlinkNode};
+}
+
 pub mod types;
 pub use types::*;
 
