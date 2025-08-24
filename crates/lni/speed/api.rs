@@ -2,9 +2,9 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 
+use base64;
 use lightning_invoice::Bolt11Invoice;
 use reqwest::header;
-use base64;
 
 use super::types::*;
 use super::SpeedConfig;
@@ -18,11 +18,11 @@ use crate::{
 
 fn client(config: &SpeedConfig) -> reqwest::blocking::Client {
     let mut headers = reqwest::header::HeaderMap::new();
-    
+
     // Speed uses HTTP Basic Auth with API key as username, no password (hence the colon)
     let api_key_with_colon = config.api_key.clone() + ":";
     let auth_value = base64::encode(&api_key_with_colon);
-    
+
     let auth_header = format!("Basic {}", auth_value);
 
     headers.insert(
@@ -70,7 +70,7 @@ pub fn create_invoice(
     match invoice_params.invoice_type {
         InvoiceType::Bolt11 => {
             let client = client(config);
-            
+
             let request = SpeedCreatePaymentRequest {
                 amount: (invoice_params.amount_msats.unwrap_or(0) as f64) / 1000.0, // Convert msats to sats
                 currency: "BTC".to_string(),
@@ -86,8 +86,6 @@ pub fn create_invoice(
                     reason: e.to_string(),
                 })?;
 
-
-
             if !response.status().is_success() {
                 let status = response.status();
                 let error_text = response.text().unwrap_or_default();
@@ -96,14 +94,15 @@ pub fn create_invoice(
                 });
             }
 
-            let payment: SpeedCreatePaymentResponse = response.json().map_err(|e| ApiError::Json {
-                reason: e.to_string(),
-            })?;
-
-                        dbg!(&payment);
+            let payment: SpeedCreatePaymentResponse =
+                response.json().map_err(|e| ApiError::Json {
+                    reason: e.to_string(),
+                })?;
 
             // Extract Lightning payment request from payment_method_options
-            let lightning_invoice = payment.payment.payment_method_options
+            let lightning_invoice = payment
+                .payment
+                .payment_method_options
                 .as_ref()
                 .and_then(|options| options.get("lightning"))
                 .and_then(|lightning| lightning.as_object())
@@ -116,7 +115,8 @@ pub fn create_invoice(
                 match Bolt11Invoice::from_str(lightning_invoice) {
                     Ok(bolt11) => {
                         let hash = format!("{:x}", bolt11.payment_hash());
-                        let expiry = bolt11.expires_at()
+                        let expiry = bolt11
+                            .expires_at()
                             .map(|duration| duration.as_secs() as i64)
                             .unwrap_or(0);
                         (hash, expiry)
@@ -133,7 +133,13 @@ pub fn create_invoice(
                 preimage: "".to_string(), // Not available in Speed API
                 payment_hash,
                 amount_msats: (payment.payment.amount * 1000.0) as i64,
-                fees_paid: payment.payment.speed_fee.as_ref().and_then(|f| f.amount).map(|a| (a * 1000.0) as i64).unwrap_or(0),
+                fees_paid: payment
+                    .payment
+                    .speed_fee
+                    .as_ref()
+                    .and_then(|f| f.amount)
+                    .map(|a| (a * 1000.0) as i64)
+                    .unwrap_or(0),
                 created_at: payment.payment.created,
                 expires_at,
                 settled_at: payment.payment.target_amount_paid_at.unwrap_or(0),
@@ -204,7 +210,6 @@ pub fn pay_invoice(
         });
     }
 
-
     let send_response: SpeedSendResponse = response.json().map_err(|e| ApiError::Json {
         reason: format!("error decoding response body: {}", e),
     })?;
@@ -218,7 +223,7 @@ pub fn pay_invoice(
     Ok(PayInvoiceResponse {
         payment_hash,
         preimage: "".to_string(), // Not available in Speed send response
-        fee_msats: send_response.speed_fee.amount as i64,
+        fee_msats: (send_response.speed_fee.amount * 1000) as i64,
     })
 }
 
@@ -282,7 +287,7 @@ fn fetch_send_transactions(
     withdraw_request_filter: Option<String>,
 ) -> Result<Vec<SpeedSendResponse>, ApiError> {
     let client = client(config);
-    
+
     let request = SpeedSendFilterRequest {
         status: status_filter,
         withdraw_request: withdraw_request_filter,
@@ -368,7 +373,7 @@ pub fn lookup_invoice(
     // For lookup_invoice, we need to find a specific transaction
     // If we have a payment_hash, we need to extract the invoice from it first
     // If we have a search term, use it directly as the withdraw_request filter
-    
+
     let withdraw_request_filter = if let Some(search_term) = search {
         Some(search_term)
     } else if payment_hash.is_some() {
@@ -382,9 +387,14 @@ pub fn lookup_invoice(
     };
 
     // Fetch transactions from all statuses to ensure we find the transaction
-    let statuses = vec!["paid".to_string(), "unpaid".to_string(), "failed".to_string()];
-    let send_transactions = fetch_send_transactions(config, Some(statuses), withdraw_request_filter)?;
-    
+    let statuses = vec![
+        "paid".to_string(),
+        "unpaid".to_string(),
+        "failed".to_string(),
+    ];
+    let send_transactions =
+        fetch_send_transactions(config, Some(statuses), withdraw_request_filter)?;
+
     // Convert to Transaction and find the matching one
     let mut transactions = Vec::new();
     for send_tx in send_transactions {
@@ -419,51 +429,30 @@ pub fn list_transactions(
     limit: i64,
     search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = client(config);
-    
-    // Use the simple GET /send endpoint to list all transactions
-    let response = client
-        .get(&format!("{}/send", config.base_url))
-        .send()
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+    // Use the new /send/filter endpoint to get all transactions
+    let withdraw_request_filter = search;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("HTTP {} - {}", status, error_text),
-        });
-    }
+    // Get all transactions regardless of status, let the client filter
+    let send_transactions = fetch_send_transactions(config, None, withdraw_request_filter)?;
 
-    let filter_response: SpeedSendFilterResponse = response.json().map_err(|e| ApiError::Json {
-        reason: format!("error decoding response body: {}", e),
-    })?;
-    
     // Convert to Transaction objects
-    let mut transactions: Vec<Transaction> = filter_response.data
+    let mut transactions: Vec<Transaction> = send_transactions
         .into_iter()
         .map(convert_send_to_transaction)
         .collect();
-    
-    // Filter by search term if provided (client-side filtering by withdraw_request)
-    if let Some(search_term) = search {
-        transactions.retain(|tx| tx.invoice.contains(&search_term));
-    }
-    
+
     // Sort by created_at descending (newest first)
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    
+
     // Apply limit
     if limit > 0 {
         transactions.truncate(limit as usize);
     }
-    
+
     Ok(transactions)
 }
 
-// Core logic shared by both implementations  
+// Core logic shared by both implementations
 pub fn poll_invoice_events<F>(config: &SpeedConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
