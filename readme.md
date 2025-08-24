@@ -3,10 +3,10 @@ LNI Remote - Lightning Node Interface Remote
 
 Remote connect to all the major lightning node implementations with a standard interface. 
 
-- Supports all major nodes - CLN, LND, Phoenixd, *LNDK, (WIP) 
-- Supports the main protocols - BOLT 11, BOLT 12, *LNURL and NWC
-- Also popular REST apis - Strike
-- Language Binding support for kotlin, swift, react-native, nodejs (typescript, javaScript). No support for WASM (yet)
+- Supports all major nodes - CLN, LND, Phoenixd, *LNDK (WIP) 
+- Supports the main protocols - BOLT 11, BOLT 12, and NWC
+- Also popular REST APIs (Custodial) - Strike, Speed, Blink
+- Language Binding support for kotlin, swift, react-native, nodejs (typescript/javascript). No support for WASM (yet)
 - Tor support
 - Runs on Android, iOS, Linux, Windows and Mac
 
@@ -223,6 +223,10 @@ lni
 │       |─── lnd
 │       |─── cln
 │       |─── phoenixd
+│       |─── nwc
+│       |─── strike
+│       |─── speed
+│       |─── blink
 ```
 
 Example
@@ -254,6 +258,8 @@ node main.mjs
 
 #### .env
 ```sh
+# These env vars are used for tests
+
 TEST_RECEIVER_OFFER=lnotestoffer***
 PHOENIX_MOBILE_OFFER=lnotestoffer***
 
@@ -266,12 +272,12 @@ CLN_RUNE=YOUR_RUNE
 CLN_TEST_PAYMENT_HASH=YOUR_HASH
 CLN_OFER=lnotestoffer***
 
-LND_URL=
-LND_MACAROON=
-LND_TEST_PAYMENT_HASH=
-LND_TEST_PAYMENT_REQUEST=
+LND_URL=""
+LND_MACAROON=""
+LND_TEST_PAYMENT_HASH=""
+LND_TEST_PAYMENT_REQUEST=""
 
-NWC_URI=""
+NWC_URI="nostr+walletconnect://*"
 NWC_TEST_PAYMENT_HASH=""
 NWC_TEST_PAYMENT_REQUEST=""
 
@@ -282,6 +288,10 @@ STRIKE_TEST_PAYMENT_REQUEST=""
 BLINK_API_KEY=""
 BLINK_TEST_PAYMENT_HASH=""
 BLINK_TEST_PAYMENT_REQUEST=""
+
+SPEED_API_KEY=""
+SPEED_TEST_PAYMENT_HASH=""
+SPEED_TEST_PAYMENT_REQUEST=""
 ```
 
 Language Bindings
@@ -427,17 +437,17 @@ Todo
 - [X] async promise architecture for bindings
 - [X] Tor Socks5 fetch https://tpo.pages.torproject.net/core/arti/guides/starting-arti
 - [X] Simple event polling
-- [ ] HTTP retries
 - [ ] implement lightning nodes
     - [X] phoenixd
     - [X] cln
     - [X] lnd
     - [ ] lndk
-    - [ ] ldk_node
+    - [ ] ldk_node? (Alby hub?)
     - [ ] eclair
-    - [ ] strike?? (BOLT 12 support, BOLT 11 blinded path support?)
-    - [ ] nwc?? (AlbyHub - blinded path support?) https://github.com/rust-nostr/nostr/blob/master/crates/nwc/examples/nwc.rs
-    - [ ] LNURL?
+    - [X] strike (BOLT 12 support?, BOLT 11 blinded path support?)
+    - [X] nwc
+    - [X] blink
+    - [X] speed
 
 
 To Research
@@ -445,4 +455,3 @@ To Research
 - [X] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
 - [ ] wasm?
-- [ ] Facade REST API? - Use the same api as phoenixd https://phoenix.acinq.co/server/api as a facade in front of any lightning node implementation. 
