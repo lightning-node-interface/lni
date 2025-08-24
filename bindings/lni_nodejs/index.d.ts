@@ -69,6 +69,11 @@ export interface BlinkConfig {
 export interface BlinkNode {
   config: BlinkConfig
 }
+export interface SpeedConfig {
+  baseUrl: string
+  apiKey: string
+  httpTimeout?: number
+}
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
   Bolt12 = 'Bolt12'
@@ -347,6 +352,22 @@ export declare class StrikeNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): StrikeConfig
+  getInfo(): NodeInfo
+  createInvoice(params: CreateInvoiceParams): Transaction
+  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getOffer(search?: string | undefined | null): PayCode
+  listOffers(search?: string | undefined | null): Array<PayCode>
+  lookupInvoice(params: LookupInvoiceParams): Transaction
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
+  listTransactions(params: ListTransactionsParams): Array<Transaction>
+  decode(str: string): string
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
+}
+export declare class SpeedNode {
+  constructor(config: SpeedConfig)
+  getBaseUrl(): string
+  getApiKey(): string
+  getConfig(): SpeedConfig
   getInfo(): NodeInfo
   createInvoice(params: CreateInvoiceParams): Transaction
   payInvoice(params: PayInvoiceParams): PayInvoiceResponse

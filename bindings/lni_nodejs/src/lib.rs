@@ -24,3 +24,6 @@ pub use nwc::NwcNode;
 
 mod strike;
 pub use strike::StrikeNode;
+
+mod speed;
+pub use speed::SpeedNode;

@@ -63,6 +63,13 @@ pub mod blink {
     pub use lib::{BlinkConfig, BlinkNode};
 }
 
+pub mod speed {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{SpeedConfig, SpeedNode};
+}
+
 pub mod types;
 pub use types::*;
 
