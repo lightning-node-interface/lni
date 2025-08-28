@@ -7,7 +7,9 @@ import {
   PhoenixdConfig,
   type OnInvoiceEventCallback,
   Transaction,
-} from 'lni_react_native';
+  BlinkConfig,
+  BlinkNode,
+} from 'react-native-lni';
 import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
@@ -24,31 +26,32 @@ export default function App() {
           })
         );
 
-        await node.onInvoiceEvents(
-          {
-            paymentHash: '',
-            pollingDelaySec: BigInt(3), // poll every 3 seconds
-            maxPollingSec: BigInt(60), // for up to 60 seconds
-          },
-          {
-            success(transaction: Transaction | undefined): void {
-              console.log('Received success invoice event:', transaction);
-              setResult('Success');
-            },
-            pending(transaction: Transaction | undefined): void {
-              console.log('Received pending event:', transaction);
-            },
-            failure(transaction: Transaction | undefined): void {
-              console.log('Received failure event:', transaction);
-            },
-          }
-        );
+        // await node.onInvoiceEvents(
+        //   {
+        //     paymentHash: '',
+        //     pollingDelaySec: BigInt(3), // poll every 3 seconds
+        //     maxPollingSec: BigInt(60), // for up to 60 seconds
+        //   },
+        //   {
+        //     success(transaction: Transaction | undefined): void {
+        //       console.log('Received success invoice event:', transaction);
+        //       setResult('Success');
+        //     },
+        //     pending(transaction: Transaction | undefined): void {
+        //       console.log('Received pending event:', transaction);
+        //     },
+        //     failure(transaction: Transaction | undefined): void {
+        //       console.log('Received failure event:', transaction);
+        //     },
+        //   }
+        // );
 
-        const info = await node.listTransactions({
-          from: BigInt(0),
-          limit: BigInt(10),
-          paymentHash: undefined,
-        });
+        // const info = await node.listTransactions({
+        //   from: BigInt(0),
+        //   limit: BigInt(10),
+        //   paymentHash: undefined,
+        // });
+        const info = await node.getInfo();
         setResult(
           JSON.stringify(info, (_, value) =>
             typeof value === 'bigint' ? value.toString() : value

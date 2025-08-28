@@ -1,6 +1,6 @@
 {
-  "name": "lni_react_native",
-  "version": "0.1.0",
+  "name": "react-native-lni",
+  "version": "0.1.1",
   "description": "lni_react_native",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
@@ -49,7 +49,8 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
-    "release": "release-it"
+    "release": "release-it",
+    "package": "yarn pack"
   },
   "keywords": [
     "react-native",

@@ -321,6 +321,31 @@ Language Bindings
     - https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html
     - sample https://github.com/ianthetechie/uniffi-starter  
     - `cd bindings/lni_react_native && ./build.sh`
+
+    **To include it in your react-native project:**
+
+    1. In this project run `cd bindings/lni_react_native && yarn pack --out react-native-lni.tgz`
+    2. This creates a `react-native-lni.tgz`. Copy this to your target React Native project and
+    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/react-native-lni` folder
+    3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
+    4. Install lni: `yarn add "react-native-lni@link:./modules/react-native-lni"`
+    5. `yarn cache clean && yarn`
+    6. import it in your RN component:
+    ```
+    import {
+        LndNode,
+        LndConfig,
+        ClnNode,
+        ClnConfig,
+        PhoenixdNode,
+        PhoenixdConfig,
+        StrikeNode,
+        StrikeConfig,
+        Transaction,
+        ListTransactionsParams,
+    } from 'react-native-lni';
+    ```
+
 - #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
     - Uses decorators like `#[cfg_attr(feature = "uniffi", uniffi::export)]` to foreign codegen 
@@ -430,6 +455,7 @@ sequenceDiagram
 
 Todo
 ====
+- [] bug in fees (bad conversion? msats)
 - [X] make interface
 - [X] napi-rs for nodejs
 - [X] uniffi bindings for Android and IOS

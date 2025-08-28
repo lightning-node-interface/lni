@@ -1,22 +1,38 @@
-# lni_react_native
+# react-native-lni
 
-lni_react_native
+react-native-lni
 
 ## Installation
 
 ```sh
-npm install lni_react_native
+npm install react-native-lni
 ```
 
 ## Usage
 
 
 ```js
-import { multiply } from 'lni_react_native';
+import {
+  LndNode,
+  LndConfig,
+  PhoenixdNode,
+  PhoenixdConfig,
+  type OnInvoiceEventCallback,
+  Transaction,
+  BlinkConfig,
+  BlinkNode,
+} from 'react-native-lni';
 
 // ...
 
-const result = multiply(3, 7);
+const node = new LndNode(
+    LndConfig.create({
+    url: '',
+    macaroon: '',
+    socks5Proxy: undefined, // 'socks5h://127.0.0.1:9050',
+    })
+);
+const info = await node.getInfo();
 ```
 
 
