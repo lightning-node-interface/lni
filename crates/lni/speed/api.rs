@@ -45,7 +45,36 @@ fn client(config: &SpeedConfig) -> reqwest::blocking::Client {
 }
 
 pub fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
-    // Speed doesn't have a specific node info endpoint, so we'll return basic info
+    let client = client(config);
+
+    // Get balance from Speed API
+    let response = client
+        .get(&format!("{}/balances", config.base_url))
+        .send()
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().unwrap_or_default();
+        return Err(ApiError::Http {
+            reason: format!("HTTP {} - {}", status, error_text),
+        });
+    }
+
+    let balance_response: SpeedBalanceResponse = response.json().map_err(|e| ApiError::Json {
+        reason: e.to_string(),
+    })?;
+
+    // Extract SATS balance and convert to millisats
+    let send_balance_msat = balance_response
+        .available
+        .iter()
+        .find(|balance| balance.target_currency == "SATS")
+        .map(|balance| (balance.amount * 1000.0) as i64)
+        .unwrap_or(0);
+
     Ok(NodeInfo {
         alias: "Speed Node".to_string(),
         color: "".to_string(),
@@ -53,7 +82,7 @@ pub fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
         network: "mainnet".to_string(),
         block_height: 0,
         block_hash: "".to_string(),
-        send_balance_msat: 0,
+        send_balance_msat,
         receive_balance_msat: 0,
         fee_credit_balance_msat: 0,
         unsettled_send_balance_msat: 0,
@@ -430,10 +459,18 @@ pub fn list_transactions(
     search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
     // Use the new /send/filter endpoint to get all transactions
-    let withdraw_request_filter = search;
+    let withdraw_request_filter = search.clone();
 
-    // Get all transactions regardless of status, let the client filter
-    let send_transactions = fetch_send_transactions(config, None, withdraw_request_filter)?;
+    // If search is not set, use default status filter for unpaid, paid, and failed
+    let status_filter = if search.is_none() {
+        Some(vec!["unpaid".to_string(), "paid".to_string(), "failed".to_string()])
+    } else {
+        None
+    };
+
+    let send_transactions = fetch_send_transactions(config, status_filter, withdraw_request_filter)?;
+
+    dbg!(&send_transactions);
 
     // Convert to Transaction objects
     let mut transactions: Vec<Transaction> = send_transactions

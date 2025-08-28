@@ -42,8 +42,39 @@ fn client(config: &StrikeConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
-pub fn get_info(_config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
-    // Return dummy data without making any API calls
+pub fn get_info(config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
+    let client = client(config);
+
+    // Get balance from Strike API
+    let response = client
+        .get(&format!("{}/balances", config.base_url))
+        .send()
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().unwrap_or_default();
+        return Err(ApiError::Http {
+            reason: format!("HTTP {} - {}", status, error_text),
+        });
+    }
+
+    let balances: Vec<super::types::StrikeBalance> = response.json().map_err(|e| ApiError::Json {
+        reason: e.to_string(),
+    })?;
+
+    // Extract BTC balance and convert to millisats
+    let send_balance_msat = balances
+        .iter()
+        .find(|balance| balance.currency == "BTC")
+        .map(|balance| {
+            let btc_amount = balance.current.parse::<f64>().unwrap_or(0.0);
+            (btc_amount * 100_000_000_000.0) as i64
+        })
+        .unwrap_or(0);
+
     Ok(NodeInfo {
         alias: "Strike Node".to_string(),
         color: "".to_string(),
@@ -51,7 +82,7 @@ pub fn get_info(_config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
         network: "mainnet".to_string(),
         block_height: 0,
         block_hash: "".to_string(),
-        send_balance_msat: 0,
+        send_balance_msat,
         receive_balance_msat: 0,
         fee_credit_balance_msat: 0,        // No fee credit for Strike
         unsettled_send_balance_msat: 0,    // No unsettled balance

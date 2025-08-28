@@ -18,6 +18,18 @@ pub struct BalancesResponse {
     pub data: Vec<Balance>,
 }
 
+// Strike API v1/balances response structure
+#[derive(Debug, Deserialize)]
+pub struct StrikeBalance {
+    pub currency: String,
+    pub current: String,
+    pub pending: String,
+    pub outgoing: String,
+    pub reserved: String,
+    pub available: String,
+    pub total: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Account {
     pub id: String,

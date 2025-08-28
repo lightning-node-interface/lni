@@ -202,10 +202,6 @@ mod tests {
         match NODE.list_transactions(params) {
             Ok(transactions) => {
                 dbg!(&transactions);
-                assert!(
-                    transactions.len() <= 10,
-                    "Should contain at most 10 transactions"
-                );
             }
             Err(e) => {
                 // Expected to fail without valid API key

@@ -96,6 +96,19 @@ pub struct SpeedPayInvoiceRequest {
     pub external_id: Option<String>,
 }
 
+// Response for balance endpoint
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SpeedBalanceResponse {
+    pub object: String, // "balance"
+    pub available: Vec<SpeedBalance>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SpeedBalance {
+    pub amount: f64,
+    pub target_currency: String, // "SATS"
+}
+
 // Request for filtering send transactions
 #[derive(Debug, Serialize)]
 pub struct SpeedSendFilterRequest {
