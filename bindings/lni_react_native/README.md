@@ -1,11 +1,11 @@
-# react-native-lni
+# lni_react_native
 
-react-native-lni
+lni_react_native
 
 ## Installation
 
 ```sh
-npm install react-native-lni
+npm install lni_react_native
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ import {
   Transaction,
   BlinkConfig,
   BlinkNode,
-} from 'react-native-lni';
+} from 'lni_react_native';
 
 // ...
 

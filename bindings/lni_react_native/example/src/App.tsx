@@ -9,7 +9,7 @@ import {
   Transaction,
   BlinkConfig,
   BlinkNode,
-} from 'react-native-lni';
+} from 'lni_react_native';
 import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {

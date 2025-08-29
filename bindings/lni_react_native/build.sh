@@ -4,7 +4,8 @@ yarn ubrn:checkout
 
 #### android
 yarn ubrn:android
-# cd example && yarn build:android && yarn android
+# cd example && yarn clean:android && yarn && yarn build:android && yarn android
+# troubleshooting yarn react-native doctor 
 
 #### ios
 # yarn ubrn:ios

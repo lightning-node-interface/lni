@@ -324,12 +324,12 @@ Language Bindings
 
     **To include it in your react-native project:**
 
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out react-native-lni.tgz`
-    2. This creates a `react-native-lni.tgz`. Copy this to your target React Native project and
-    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/react-native-lni` folder
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out lni_react_native.tgz`
+    2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
+    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
     3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
-    4. Install lni: `yarn add "react-native-lni@link:./modules/react-native-lni"`
-    5. `yarn cache clean && yarn`
+    4. Install lni: `yarn add "lni_react_native@link:./modules/lni_react_native"`
+    5. `yarn cache clean && clean:android && yarn`
     6. import it in your RN component:
     ```
     import {
@@ -343,7 +343,7 @@ Language Bindings
         StrikeConfig,
         Transaction,
         ListTransactionsParams,
-    } from 'react-native-lni';
+    } from 'lni_react_native';
     ```
     7. troubleshooting `npx react-native start --reset-cache`
 
@@ -401,7 +401,7 @@ Inspiration
 Project Structure
 ==================
 This project structure was inpired by this https://github.com/ianthetechie/uniffi-starter/ with the intention of 
-automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+automating the creation of `lni_react_native` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 
 LNI Sequence Diagram
 ==================
