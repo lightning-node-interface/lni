@@ -382,7 +382,9 @@ pub struct StrikeReceive {
 pub struct StrikeReceiveLightning {
     pub invoice: String,
     pub preimage: String,
-    pub description: String,
+    pub description: Option<String>,
+    #[serde(rename = "descriptionHash")]
+    pub description_hash: Option<String>,
     #[serde(rename = "paymentHash")]
     pub payment_hash: String,
 }

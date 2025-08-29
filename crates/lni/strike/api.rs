@@ -435,8 +435,11 @@ pub fn lookup_invoice(
         } else {
             0
         },
-        description: lightning_info.description,
-        description_hash: "".to_string(), // Not available in this response
+        description: lightning_info.description.unwrap_or_else(|| {
+            // If no description, use description_hash if available
+            lightning_info.description_hash.clone().unwrap_or_default()
+        }),
+        description_hash: lightning_info.description_hash.clone().unwrap_or_default(),
         payer_note: Some("".to_string()),
         external_id: Some(receive.receive_request_id),
     })
@@ -502,8 +505,11 @@ pub fn list_transactions(
                     } else {
                         0
                     },
-                    description: lightning_info.description,
-                    description_hash: "".to_string(), // Not available in this response
+                    description: lightning_info.description.unwrap_or_else(|| {
+                        // If no description, use description_hash if available
+                        lightning_info.description_hash.clone().unwrap_or_default()
+                    }),
+                    description_hash: lightning_info.description_hash.clone().unwrap_or_default(),
                     payer_note: Some("".to_string()),
                     external_id: Some(receive.receive_request_id),
                 });

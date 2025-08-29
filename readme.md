@@ -329,7 +329,7 @@ Language Bindings
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
     3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
     4. Install lni: `yarn add "lni_react_native@link:./modules/lni_react_native"`
-    5. `yarn cache clean && clean:android && yarn`
+    5. `yarn cache clean && yarn clean:android && yarn`
     6. import it in your RN component:
     ```
     import {
@@ -345,7 +345,7 @@ Language Bindings
         ListTransactionsParams,
     } from 'lni_react_native';
     ```
-    7. troubleshooting `npx react-native start --reset-cache`
+    7. troubleshooting `npx react-native start --reset-cache` or if you have build error try symbolic links from node_modules to modules folder like this: `rm -f node_modules/lni_react_native && ln -sf ../modules/lni_react_native node_modules/lni_react_native`
 
 - #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/

@@ -194,7 +194,7 @@ mod tests {
     fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
-            limit: 10,
+            limit: 100,
             payment_hash: None,
             search: None,
         };
