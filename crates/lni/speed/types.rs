@@ -1,27 +1,4 @@
-#[cfg(feature = "napi_rs")]
-use napi_derive::napi;
-
 use serde::{Deserialize, Serialize};
-
-#[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
-pub struct SpeedConfig {
-    pub base_url: String,
-    pub api_key: String,
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(30)))]
-    pub http_timeout: Option<i64>,
-}
-
-impl Default for SpeedConfig {
-    fn default() -> Self {
-        Self {
-            base_url: "https://api.tryspeed.com".to_string(),
-            api_key: "".to_string(),
-            http_timeout: Some(30),
-        }
-    }
-}
 
 // Speed Payment object based on actual API response
 #[derive(Debug, Deserialize, Serialize)]

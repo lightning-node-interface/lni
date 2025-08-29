@@ -1,23 +1,49 @@
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
+
 use crate::types::{NodeInfo, ListTransactionsParams, LookupInvoiceParams};
 use crate::{
     ApiError, CreateInvoiceParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction, InvoiceType,
+    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
-pub use super::types::SpeedConfig;
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone)]
+pub struct SpeedConfig {
+    pub base_url: String,
+    pub api_key: String,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(30)))]
+    pub http_timeout: Option<i64>,
+}
 
+impl Default for SpeedConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://api.tryspeed.com".to_string(),
+            api_key: "".to_string(),
+            http_timeout: Some(30),
+        }
+    }
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, Clone)]
 pub struct SpeedNode {
     pub config: SpeedConfig,
 }
 
+// Constructor is inherent, not part of the trait
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl SpeedNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: SpeedConfig) -> Self {
         Self { config }
     }
+}
 
+impl SpeedNode {
     pub fn from_credentials(base_url: String, api_key: String) -> Self {
         let config = SpeedConfig {
             base_url,
@@ -28,6 +54,7 @@ impl SpeedNode {
     }
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LightningNode for SpeedNode {
     fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config)
