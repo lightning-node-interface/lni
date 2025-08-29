@@ -324,7 +324,7 @@ Language Bindings
 
     **To include it in your react-native project:**
 
-    1. In this project run `cd bindings/lni_react_native && yarn pack --out react-native-lni.tgz`
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out react-native-lni.tgz`
     2. This creates a `react-native-lni.tgz`. Copy this to your target React Native project and
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/react-native-lni` folder
     3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
@@ -345,6 +345,7 @@ Language Bindings
         ListTransactionsParams,
     } from 'react-native-lni';
     ```
+    7. troubleshooting `npx react-native start --reset-cache`
 
 - #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
