@@ -11,7 +11,8 @@ use crate::{
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct SpeedConfig {
-    pub base_url: String,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.tryspeed.com")))]
+    pub base_url: Option<String>,
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(30)))]
     pub http_timeout: Option<i64>,
@@ -20,7 +21,7 @@ pub struct SpeedConfig {
 impl Default for SpeedConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.tryspeed.com".to_string(),
+            base_url: Some("https://api.tryspeed.com".to_string()),
             api_key: "".to_string(),
             http_timeout: Some(30),
         }
@@ -46,7 +47,7 @@ impl SpeedNode {
 impl SpeedNode {
     pub fn from_credentials(base_url: String, api_key: String) -> Self {
         let config = SpeedConfig {
-            base_url,
+            base_url: Some(base_url),
             api_key,
             http_timeout: Some(30),
         };
@@ -138,7 +139,7 @@ mod tests {
         };
         static ref NODE: SpeedNode = {
             SpeedNode::new(SpeedConfig {
-                base_url: BASE_URL.clone(),
+                base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(30),
             })

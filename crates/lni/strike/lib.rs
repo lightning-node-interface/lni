@@ -11,7 +11,8 @@ use crate::{
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct StrikeConfig {
-    pub base_url: String,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.strike.me/v1")))]
+    pub base_url: Option<String>,
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
@@ -20,7 +21,7 @@ pub struct StrikeConfig {
 impl Default for StrikeConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.strike.me/v1".to_string(),
+            base_url: Some("https://api.strike.me/v1".to_string()),
             api_key: "".to_string(),
             http_timeout: Some(120),
         }
@@ -138,7 +139,7 @@ mod tests {
         };
         static ref NODE: StrikeNode = {
             StrikeNode::new(StrikeConfig {
-                base_url: BASE_URL.clone(),
+                base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(120),
             })

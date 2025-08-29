@@ -44,12 +44,16 @@ fn client(config: &SpeedConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
+fn get_base_url(config: &SpeedConfig) -> &str {
+    config.base_url.as_deref().unwrap_or("https://api.tryspeed.com")
+}
+
 pub fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
     let client = client(config);
 
     // Get balance from Speed API
     let response = client
-        .get(&format!("{}/balances", config.base_url))
+        .get(&format!("{}/balances", get_base_url(config)))
         .send()
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
@@ -108,7 +112,7 @@ pub fn create_invoice(
             };
 
             let response = client
-                .post(&format!("{}/payments", config.base_url))
+                .post(&format!("{}/payments", get_base_url(config)))
                 .json(&request)
                 .send()
                 .map_err(|e| ApiError::Http {
@@ -224,7 +228,7 @@ pub fn pay_invoice(
     };
 
     let response = client
-        .post(&format!("{}/send", config.base_url))
+        .post(&format!("{}/send", get_base_url(config)))
         .json(&request)
         .send()
         .map_err(|e| ApiError::Http {
@@ -323,7 +327,7 @@ fn fetch_send_transactions(
     };
 
     let response = client
-        .post(&format!("{}/send/filter", config.base_url))
+        .post(&format!("{}/send/filter", get_base_url(config)))
         .json(&request)
         .send()
         .map_err(|e| ApiError::Http {

@@ -42,12 +42,16 @@ fn client(config: &StrikeConfig) -> reqwest::blocking::Client {
     client.build().unwrap()
 }
 
+fn get_base_url(config: &StrikeConfig) -> &str {
+    config.base_url.as_deref().unwrap_or("https://api.strike.me/v1")
+}
+
 pub fn get_info(config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
     let client = client(config);
 
     // Get balance from Strike API
     let response = client
-        .get(&format!("{}/balances", config.base_url))
+        .get(&format!("{}/balances", get_base_url(config)))
         .send()
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
@@ -101,7 +105,7 @@ pub fn create_invoice(
     match invoice_params.invoice_type {
         InvoiceType::Bolt11 => {
             // Create a receive request with bolt11 configuration
-            let req_url = format!("{}/receive-requests", config.base_url);
+            let req_url = format!("{}/receive-requests", get_base_url(config));
 
             let amount = invoice_params.amount_msats.map(|amt| {
                 // Convert msats to BTC (Strike expects BTC amounts)
@@ -191,7 +195,7 @@ pub fn pay_invoice(
     let client = client(config);
 
     // Create payment quote first
-    let quote_url = format!("{}/payment-quotes/lightning", config.base_url);
+    let quote_url = format!("{}/payment-quotes/lightning", get_base_url(config));
     let quote_request = PaymentQuoteRequest {
         ln_invoice: invoice_params.invoice.clone(),
         source_currency: "BTC".to_string(),
@@ -228,7 +232,7 @@ pub fn pay_invoice(
     // Execute the payment quote
     let execute_url = format!(
         "{}/payment-quotes/{}/execute",
-        config.base_url, quote_resp.payment_quote_id
+        get_base_url(config), quote_resp.payment_quote_id
     );
     let execute_response = client
         .patch(&execute_url)
@@ -253,7 +257,7 @@ pub fn pay_invoice(
     
     let payment_url = format!(
         "{}/payments/{}",
-        config.base_url, payment_id
+        get_base_url(config), payment_id
     );
     let payment_response = client
         .get(&payment_url)
@@ -366,7 +370,7 @@ pub fn lookup_invoice(
     // Use the receive-requests/receives endpoint with payment hash query parameter
     let receives_url = format!(
         "{}/receive-requests/receives?$paymentHash={}",
-        config.base_url, target_payment_hash
+        get_base_url(config), target_payment_hash
     );
     let response = client
         .get(&receives_url)
@@ -456,7 +460,7 @@ pub fn list_transactions(
     // Get receives (incoming) using the receives endpoint similar to lookup_invoice
     let receives_url = format!(
         "{}/receive-requests/receives?$skip={}&$top={}",
-        config.base_url, from, limit
+        get_base_url(config), from, limit
     );
     let receives_response =
         client
@@ -518,7 +522,7 @@ pub fn list_transactions(
     }
 
     // Get payments (outgoing)
-    let payments_url = format!("{}/payments?skip={}&top={}", config.base_url, from, limit);
+    let payments_url = format!("{}/payments?skip={}&top={}", get_base_url(config), from, limit);
     let payments_response = client
         .get(&payments_url)
         .send()

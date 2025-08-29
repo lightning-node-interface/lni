@@ -51,7 +51,7 @@ where
     };
 
     let response = client
-        .post(&config.base_url)
+        .post(config.base_url.as_deref().unwrap_or("https://api.blink.sv/graphql"))
         .json(&request)
         .send()
         .map_err(|e| ApiError::Http {

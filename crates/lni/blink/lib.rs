@@ -11,7 +11,8 @@ use crate::{
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone)]
 pub struct BlinkConfig {
-    pub base_url: String,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.blink.sv/graphql")))]
+    pub base_url: Option<String>,
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
@@ -20,7 +21,7 @@ pub struct BlinkConfig {
 impl Default for BlinkConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.blink.sv/graphql".to_string(),
+            base_url: Some("https://api.blink.sv/graphql".to_string()),
             api_key: "".to_string(),
             http_timeout: Some(120),
         }
