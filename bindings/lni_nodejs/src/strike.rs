@@ -18,7 +18,7 @@ impl StrikeNode {
 
   #[napi]
   pub fn get_base_url(&self) -> String {
-    self.inner.base_url.clone()
+    self.inner.base_url.clone().unwrap_or_default()
   }
 
   #[napi]

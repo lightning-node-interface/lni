@@ -345,7 +345,8 @@ Language Bindings
         ListTransactionsParams,
     } from 'lni_react_native';
     ```
-    7. troubleshooting `npx react-native start --reset-cache` or if you have build error try symbolic links from node_modules to modules folder like this: `rm -f node_modules/lni_react_native && ln -sf ../modules/lni_react_native node_modules/lni_react_native`
+    7. troubleshooting `npx react-native start --reset-cache` or if you have build error try symbolic links from node_modules to modules folder like this: `yarn remove lni_react_native && rm -f node_modules/lni_react_native && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"`
+    if the app has build failures on android, undo the diff for build.gradle, i.e like the gradle version might be wrong 8.8.0 vs 7.2.1 etc..
 
 - #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
