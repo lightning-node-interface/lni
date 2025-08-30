@@ -50,7 +50,7 @@
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
     "release": "release-it",
-    "package": "yarn pack"
+    "package": "yarn prepare && yarn pack"
   },
   "keywords": [
     "react-native",

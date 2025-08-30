@@ -324,7 +324,7 @@ Language Bindings
 
     **To include it in your react-native project:**
 
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out lni_react_native.tgz`
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
     2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
     3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
@@ -349,13 +349,13 @@ Language Bindings
     if the app has build failures on android, undo the diff for build.gradle, i.e like the gradle version might be wrong 8.8.0 vs 7.2.1 etc..
 
     **To Update the package:** if you updated the lni source code
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out lni_react_native.tgz`
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
     2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
     3. Undo gradle changes to `modules/lni_react_native/android/build.gradle`
     4. In the remote project, uninstall the android/ios app, then run:
     ```sh
-    yarn remove lni_react_native yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
+    yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
     
     yarn android
     ```
