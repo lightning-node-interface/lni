@@ -348,6 +348,20 @@ Language Bindings
     7. troubleshooting `npx react-native start --reset-cache` or if you have build error try symbolic links from node_modules to modules folder like this: `yarn remove lni_react_native && rm -f node_modules/lni_react_native && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"`
     if the app has build failures on android, undo the diff for build.gradle, i.e like the gradle version might be wrong 8.8.0 vs 7.2.1 etc..
 
+    **To Update the package:** if you updated the lni source code
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn pack --out lni_react_native.tgz`
+    2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
+    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
+    3. Undo gradle changes to `modules/lni_react_native/android/build.gradle`
+    4. In the remote project, uninstall the android/ios app, then run:
+    ```sh
+    yarn remove lni_react_native yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
+    
+    yarn android
+    ```
+
+
+
 - #### uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
     - Uses decorators like `#[cfg_attr(feature = "uniffi", uniffi::export)]` to foreign codegen 

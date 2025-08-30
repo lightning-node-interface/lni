@@ -139,7 +139,7 @@ mod tests {
         };
         static ref NODE: BlinkNode = {
             BlinkNode::new(BlinkConfig {
-                base_url: BASE_URL.clone(),
+                base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(120),
             })
