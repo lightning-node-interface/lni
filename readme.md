@@ -352,8 +352,25 @@ Language Bindings
     1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
     2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
-    3. Undo gradle changes to `modules/lni_react_native/android/build.gradle`
-    4. In the remote project, uninstall the android/ios app, then run:
+    3. Undo gradle changes to `modules/lni_react_native/android/build.gradle` to avoid version mismatches. you might need to update the following build.gradle config:
+    ```gradle
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.8.0"
+        // noinspection DifferentKotlinGradleVersion
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += [
+                "generated/java",
+                "generated/jni"
+            ]
+        }
+    }
+
+    ```
+    4. In the remote project re-add the package `lni_react_native` by running:
     ```sh
     yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
     
