@@ -123,4 +123,113 @@ impl NwcNode {
     });
     Ok(())
   }
+
+  #[napi]
+  pub fn on_invoice_events_cancel(
+    &self,
+    params: lni::types::OnInvoiceEventParams,
+  ) -> Result<InvoiceEventsHandle> {
+    // Create channels to communicate results
+    let (tx, rx) = std::sync::mpsc::channel::<(String, Option<lni::Transaction>)>();
+
+    // Create the callback that sends to the channel
+    struct ChannelCallback {
+      sender: std::sync::mpsc::Sender<(String, Option<lni::Transaction>)>,
+    }
+
+    impl lni::types::OnInvoiceEventCallback for ChannelCallback {
+      fn success(&self, transaction: Option<lni::Transaction>) {
+        let _ = self.sender.send(("success".to_string(), transaction));
+      }
+      
+      fn pending(&self, transaction: Option<lni::Transaction>) {
+        let _ = self.sender.send(("pending".to_string(), transaction));
+      }
+      
+      fn failure(&self, transaction: Option<lni::Transaction>) {
+        let _ = self.sender.send(("failure".to_string(), transaction));
+      }
+    }
+
+    let callback = ChannelCallback { sender: tx };
+    let config = self.inner.clone();
+
+    // Use the existing cancellation-aware function
+    let cancellation = lni::nwc::api::on_invoice_events_with_cancellation(
+      config,
+      params,
+      Box::new(callback),
+    );
+
+    Ok(InvoiceEventsHandle { 
+      cancellation: InvoiceEventsCancellation { inner: cancellation },
+      receiver: std::sync::Arc::new(std::sync::Mutex::new(rx)),
+    })
+  }
+}
+
+// NAPI wrapper for handling events with cancellation
+#[napi]
+pub struct InvoiceEventsHandle {
+  cancellation: InvoiceEventsCancellation,
+  receiver: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<(String, Option<lni::Transaction>)>>>,
+}
+
+#[napi]
+impl InvoiceEventsHandle {
+  #[napi]
+  pub fn cancel(&self) {
+    self.cancellation.cancel();
+  }
+
+  #[napi]
+  pub fn is_cancelled(&self) -> bool {
+    self.cancellation.is_cancelled()
+  }
+
+  #[napi]
+  pub fn poll_event(&self) -> Option<InvoiceEvent> {
+    if let Ok(receiver) = self.receiver.lock() {
+      if let Ok((status, transaction)) = receiver.try_recv() {
+        return Some(InvoiceEvent { status, transaction });
+      }
+    }
+    None
+  }
+
+  #[napi]
+  pub fn wait_for_event(&self, timeout_ms: u32) -> Option<InvoiceEvent> {
+    if let Ok(receiver) = self.receiver.lock() {
+      let timeout = std::time::Duration::from_millis(timeout_ms as u64);
+      if let Ok((status, transaction)) = receiver.recv_timeout(timeout) {
+        return Some(InvoiceEvent { status, transaction });
+      }
+    }
+    None
+  }
+}
+
+#[napi(object)]
+pub struct InvoiceEvent {
+  pub status: String,
+  pub transaction: Option<lni::Transaction>,
+}
+
+// NAPI wrapper for the cancellation token
+#[napi]
+pub struct InvoiceEventsCancellation {
+  inner: std::sync::Arc<lni::nwc::api::InvoiceEventsCancellation>,
+}
+
+#[napi]
+impl InvoiceEventsCancellation {
+  #[napi]
+  pub fn cancel(&self) {
+    self.inner.cancel();
+  }
+
+  #[napi]
+  pub fn is_cancelled(&self) -> bool {
+    self.inner.is_cancelled()
+  }
 }

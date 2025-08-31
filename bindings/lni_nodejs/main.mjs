@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, LndNode, InvoiceType } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, NwcNode, InvoiceType } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -131,6 +131,108 @@ async function lnd() {
   console.log("LND Transactions:", txns);
 }
 
+async function nwc() {
+  const config = {
+    nwcUri: process.env.NWC_URI,
+    socks5Proxy: process.env.NWC_SOCKS5_PROXY || "", // Use empty string instead of null
+    httpTimeout: 60
+  };
+
+  if (!config.nwcUri) {
+    console.log("Skipping NWC test - NWC_URI not set");
+    return;
+  }
+
+  const node = new NwcNode(config);
+  
+  try {
+    const info = await node.getInfo();
+    console.log("NWC Node info:", info);
+
+    const invoice = await node.createInvoice({
+      amountMsats: 1000,
+      description: "test invoice from NWC",
+      invoiceType: InvoiceType.Bolt11,
+    });
+    console.log("NWC Invoice:", invoice);
+
+    // Test cancellation functionality
+    console.log("Testing NWC invoice events with cancellation...");
+    
+    const params = {
+      paymentHash: process.env.NWC_TEST_PAYMENT_HASH,
+      search: "", // Use empty string instead of null
+      pollingDelaySec: 3,
+      maxPollingSec: 60
+    };
+
+    // Start polling with cancellation support
+    const handle = node.onInvoiceEventsCancel(params);
+    console.log("Started cancellable invoice polling");
+
+    // Poll for events for 15 seconds
+    let eventCount = 0;
+    const startTime = Date.now();
+    const maxTestTime = 15000; // 15 seconds
+
+    const pollInterval = setInterval(() => {
+      const event = handle.pollEvent();
+      if (event) {
+        eventCount++;
+        console.log(`NWC Event ${eventCount}: ${event.status}`, event.transaction ? `Payment Hash: ${event.transaction.paymentHash}` : 'No transaction data');
+        
+        if (event.status === 'success' || event.status === 'failure') {
+          console.log("Final event received, stopping polling");
+          clearInterval(pollInterval);
+          return;
+        }
+      }
+      
+      // Check if cancelled
+      if (handle.isCancelled()) {
+        console.log("NWC Polling was cancelled");
+        clearInterval(pollInterval);
+        return;
+      }
+
+      // Stop after max test time
+      if (Date.now() - startTime > maxTestTime) {
+        console.log("Test timeout reached, cancelling...");
+        handle.cancel();
+        clearInterval(pollInterval);
+      }
+    }, 1000);
+
+    // Test the wait_for_event method after 5 seconds
+    setTimeout(() => {
+      console.log("Testing wait_for_event with 5 second timeout...");
+      const event = handle.waitForEvent(5000);
+      if (event) {
+        console.log("Event received via waitForEvent:", event);
+      } else {
+        console.log("No event received within waitForEvent timeout");
+      }
+    }, 2000);
+
+    // Cancel after 10 seconds to test cancellation
+    setTimeout(() => {
+      if (!handle.isCancelled()) {
+        console.log("Cancelling NWC invoice event polling...");
+        handle.cancel();
+      }
+    }, 10000);
+
+    const txns = await node.listTransactions({
+      from: 0,
+      limit: 5,
+    });
+    console.log("NWC Transactions:", txns);
+
+  } catch (error) {
+    console.error("NWC test error:", error.message);
+  }
+}
+
 async function test() {
   const config = {
     url: process.env.PHOENIXD_URL,
@@ -165,7 +267,8 @@ async function main() {
   // phoenixd();
   // cln();
   // lnd();
-  test();
+  await nwc();
+  // test();
 }
 
 main();

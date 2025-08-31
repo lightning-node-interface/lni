@@ -6,6 +6,8 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Helper function to create NWC client
 async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
@@ -257,6 +259,138 @@ pub fn list_transactions(config: &NwcConfig, params: ListTransactionsParams) -> 
 pub fn decode(_config: &NwcConfig, str: String) -> Result<String, ApiError> {
     // NWC doesn't have a decode method, just return the input
     Ok(str)
+}
+
+// Simple cancellation token that's uniffi-compatible
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct InvoiceEventsCancellation {
+    cancelled: Arc<AtomicBool>,
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl InvoiceEventsCancellation {
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+    
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+}
+
+// Modified polling function that checks for cancellation
+pub fn poll_invoice_events_with_cancellation<F>(
+    config: &NwcConfig, 
+    params: OnInvoiceEventParams, 
+    cancellation: Arc<InvoiceEventsCancellation>,
+    mut callback: F
+) where
+    F: FnMut(String, Option<Transaction>),
+{
+    let start_time = std::time::Instant::now();
+    
+    loop {
+        // Check for cancellation first
+        if cancellation.is_cancelled() {
+            callback("cancelled".to_string(), None);
+            break;
+        }
+        
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let (status, transaction) =
+            match lookup_invoice(config, params.payment_hash.clone(), params.search.clone()) {
+                Ok(transaction) => {
+                    if transaction.settled_at > 0 {
+                        ("settled".to_string(), Some(transaction))
+                    } else {
+                        ("pending".to_string(), Some(transaction))
+                    }
+                }
+                Err(_) => ("error".to_string(), None),
+            };
+
+        match status.as_str() {
+            "settled" => {
+                callback("success".to_string(), transaction);
+                break;
+            }
+            "error" => {
+                callback("failure".to_string(), transaction);
+                // Don't break on error, keep polling
+            }
+            _ => {
+                callback("pending".to_string(), transaction);
+            }
+        }
+
+        // Sleep in small increments to check cancellation more frequently
+        let delay_secs = params.polling_delay_sec as u64;
+        for _ in 0..delay_secs {
+            if cancellation.is_cancelled() {
+                callback("cancelled".to_string(), None);
+                return;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+}
+
+// Updated function that returns a cancellation token
+pub fn on_invoice_events_with_cancellation(
+    config: NwcConfig,
+    params: OnInvoiceEventParams,
+    callback: Box<dyn crate::types::OnInvoiceEventCallback + Send>,
+) -> Arc<InvoiceEventsCancellation> {
+    let cancellation = Arc::new(InvoiceEventsCancellation {
+        cancelled: Arc::new(AtomicBool::new(false)),
+    });
+    
+    let cancellation_clone = cancellation.clone();
+    
+    // Spawn on a thread pool to avoid blocking
+    std::thread::spawn(move || {
+        poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
+            match status.as_str() {
+                "success" => callback.success(tx),
+                "pending" => callback.pending(tx),
+                "failure" | "cancelled" => callback.failure(tx),
+                _ => {}
+            }
+        });
+    });
+    
+    cancellation
+}
+
+// UniFFI-compatible version that doesn't require Send
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn nwc_on_invoice_events_with_cancellation(
+    config: NwcConfig,
+    params: OnInvoiceEventParams,
+    callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+) -> Arc<InvoiceEventsCancellation> {
+    let cancellation = Arc::new(InvoiceEventsCancellation {
+        cancelled: Arc::new(AtomicBool::new(false)),
+    });
+    
+    let cancellation_clone = cancellation.clone();
+    
+    // For uniffi, we'll execute the polling directly in the current thread
+    // This is less ideal but necessary due to Send constraints
+    poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
+        match status.as_str() {
+            "success" => callback.success(tx),
+            "pending" => callback.pending(tx),
+            "failure" | "cancelled" => callback.failure(tx),
+            _ => {}
+        }
+    });
+    
+    cancellation
 }
 
 pub fn poll_invoice_events<F>(config: &NwcConfig, params: OnInvoiceEventParams, mut callback: F)

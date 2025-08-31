@@ -54,7 +54,7 @@ export interface NwcNode {
   config: NwcConfig
 }
 export interface StrikeConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
   httpTimeout?: number
 }
@@ -62,7 +62,7 @@ export interface StrikeNode {
   config: StrikeConfig
 }
 export interface BlinkConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
   httpTimeout?: number
 }
@@ -70,9 +70,12 @@ export interface BlinkNode {
   config: BlinkConfig
 }
 export interface SpeedConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
   httpTimeout?: number
+}
+export interface SpeedNode {
+  config: SpeedConfig
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
@@ -269,6 +272,10 @@ export interface Payment {
   updatedAt: number
   amountMsats: number
 }
+export interface InvoiceEvent {
+  status: string
+  transaction?: Transaction
+}
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
@@ -346,6 +353,17 @@ export declare class NwcNode {
   listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
+  onInvoiceEventsCancel(params: OnInvoiceEventParams): InvoiceEventsHandle
+}
+export declare class InvoiceEventsHandle {
+  cancel(): void
+  isCancelled(): boolean
+  pollEvent(): InvoiceEvent | null
+  waitForEvent(timeoutMs: number): InvoiceEvent | null
+}
+export declare class InvoiceEventsCancellation {
+  cancel(): void
+  isCancelled(): boolean
 }
 export declare class StrikeNode {
   constructor(config: StrikeConfig)

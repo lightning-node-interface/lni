@@ -514,3 +514,13 @@ To Research
 - [X] napi-rs https://napi.rs/docs/introduction/simple-package
 - [ ] can we support more complex grpc in 
 - [ ] wasm?
+
+
+
+## Bugs
+- cancelable
+- NWC onInvoiceEvent Transaction amountMsats not correct, its 0
+- Speed onInvoiceEvent failure for new invoice
+- Strike onInvoiceEvent failure for new invoice
+- Blink receives fail
+- Phoenix createInvoice fails

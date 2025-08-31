@@ -104,7 +104,7 @@ impl LightningNode for NwcNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::{InvoiceType, PayInvoiceParams};
+    use crate::InvoiceType;
 
     use super::*;
     use dotenv::dotenv;
@@ -253,7 +253,7 @@ mod tests {
     // }
 
     #[test]
-    fn test_on_invoice_events() {
+    fn test_on_invoice_events_with_cancellation() {
         struct OnInvoiceEventCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
@@ -281,18 +281,26 @@ mod tests {
 
         let params = crate::types::OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 60,
+            polling_delay_sec: 2,
+            max_polling_sec: 10,
             ..Default::default()
         };
 
-        // Start the event listener in a separate thread
-        thread::spawn(move || {
-            NODE.on_invoice_events(params, Box::new(callback));
-        });
+        // Start the event listener and get cancellation token
+        let cancellation = crate::nwc::api::on_invoice_events_with_cancellation(
+            NODE.config.clone(), 
+            params, 
+            Box::new(callback)
+        );
 
-        // Wait for some time to allow events to be collected
-        thread::sleep(Duration::from_secs(10));
+        // Wait for a few polling cycles
+        thread::sleep(Duration::from_secs(5));
+
+        // Cancel the polling
+        cancellation.cancel();
+
+        // Wait a bit more to ensure cancellation takes effect
+        thread::sleep(Duration::from_secs(2));
 
         // Check if events were received
         let received_events = events.lock().unwrap();
@@ -301,5 +309,8 @@ mod tests {
             !received_events.is_empty(),
             "Expected to receive at least one invoice event"
         );
+        
+        // Verify cancellation token is working
+        assert!(cancellation.is_cancelled(), "Cancellation token should be marked as cancelled");
     }
 }
