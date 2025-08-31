@@ -379,8 +379,7 @@ pub fn nwc_on_invoice_events_with_cancellation(
     
     let cancellation_clone = cancellation.clone();
     
-    // For uniffi, we'll execute the polling directly in the current thread
-    // This is less ideal but necessary due to Send constraints
+    // For UniFFI, run synchronously - UniFFI will handle threading 
     poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
         match status.as_str() {
             "success" => callback.success(tx),
