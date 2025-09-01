@@ -391,7 +391,7 @@ impl Default for PayInvoiceParams {
 
 // Define the callback trait for UniFFI
 #[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
-pub trait OnInvoiceEventCallback {
+pub trait OnInvoiceEventCallback: Send + Sync {
     fn success(&self, transaction: Option<Transaction>);
     fn pending(&self, transaction: Option<Transaction>);
     fn failure(&self, transaction: Option<Transaction>);
@@ -399,6 +399,7 @@ pub trait OnInvoiceEventCallback {
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Clone)]
 pub struct OnInvoiceEventParams {
     pub payment_hash: Option<String>,
     pub search: Option<String>,

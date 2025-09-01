@@ -28,13 +28,13 @@ export default function App() {
 
       // Use a simpler test configuration
       const config = NwcConfig.create({
-        nwcUri: 'nostr+walletconnect://test',
+        nwcUri: '',
         socks5Proxy: '', // empty string instead of null
       });
 
       // Use a complete params object to avoid any parameter issues
       const params = OnInvoiceEventParams.create({
-        paymentHash: undefined,
+        paymentHash: "",
         search: undefined,
         pollingDelaySec: BigInt(5),
         maxPollingSec: BigInt(60),

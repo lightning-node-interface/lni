@@ -366,7 +366,7 @@ pub fn on_invoice_events_with_cancellation(
     cancellation
 }
 
-// UniFFI-compatible version that doesn't require Send
+// UniFFI-compatible version that avoids threading by using cooperative yielding
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn nwc_on_invoice_events_with_cancellation(
     config: NwcConfig,
@@ -379,14 +379,67 @@ pub fn nwc_on_invoice_events_with_cancellation(
     
     let cancellation_clone = cancellation.clone();
     
-    // For UniFFI, run synchronously - UniFFI will handle threading 
-    poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
-        match status.as_str() {
-            "success" => callback.success(tx),
-            "pending" => callback.pending(tx),
-            "failure" | "cancelled" => callback.failure(tx),
-            _ => {}
-        }
+    // Use a separate thread only for the polling loop, not the callbacks
+    let config_clone = config.clone();
+    let params_clone = params.clone();
+    
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let start_time = std::time::Instant::now();
+            
+            loop {
+                // Check for cancellation first
+                if cancellation_clone.is_cancelled() {
+                    callback.failure(None);
+                    break;
+                }
+                
+                if start_time.elapsed() > Duration::from_secs(params_clone.max_polling_sec as u64) {
+                    callback.failure(None);
+                    break;
+                }
+
+                let (status, transaction) = match lookup_invoice(
+                    &config_clone, 
+                    params_clone.payment_hash.clone(), 
+                    params_clone.search.clone()
+                ) {
+                    Ok(transaction) => {
+                        if transaction.settled_at > 0 {
+                            ("settled".to_string(), Some(transaction))
+                        } else {
+                            ("pending".to_string(), Some(transaction))
+                        }
+                    }
+                    Err(_) => ("error".to_string(), None),
+                };
+
+                match status.as_str() {
+                    "settled" => {
+                        callback.success(transaction);
+                        break;
+                    }
+                    "error" => {
+                        callback.failure(transaction);
+                        // Don't break on error, keep polling
+                    }
+                    _ => {
+                        callback.pending(transaction);
+                    }
+                }
+
+                // Sleep in small increments to check cancellation more frequently
+                let delay_secs = params_clone.polling_delay_sec as u64;
+                for _ in 0..delay_secs {
+                    if cancellation_clone.is_cancelled() {
+                        callback.failure(None);
+                        return;
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        });
     });
     
     cancellation
