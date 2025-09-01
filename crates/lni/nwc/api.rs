@@ -401,7 +401,41 @@ pub async fn nwc_lookup_invoice_async(
         payer_note: None,
         external_id: None,
     })
-}// UniFFI-compatible version using state polling instead of callbacks
+}
+
+// Polling state tracker for main-thread querying
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct InvoicePollingState {
+    cancelled: Arc<AtomicBool>,
+    poll_count: Arc<std::sync::atomic::AtomicU32>,
+    last_status: Arc<std::sync::Mutex<String>>,
+    last_transaction: Arc<std::sync::Mutex<Option<Transaction>>>,
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl InvoicePollingState {
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+    
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+    
+    pub fn get_poll_count(&self) -> u32 {
+        self.poll_count.load(Ordering::Relaxed)
+    }
+    
+    pub fn get_last_status(&self) -> String {
+        self.last_status.lock().unwrap().clone()
+    }
+    
+    pub fn get_last_transaction(&self) -> Option<Transaction> {
+        self.last_transaction.lock().unwrap().clone()
+    }
+}
+
+// UniFFI-compatible version using state polling instead of callbacks
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn nwc_start_invoice_polling(
     config: NwcConfig,
