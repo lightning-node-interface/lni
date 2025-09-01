@@ -291,11 +291,8 @@ async fn get_info_async_internal(config: &LndConfig) -> Result<NodeInfo, ApiErro
 
 // Direct async export function for simpler usage
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, String> {
-    match get_info_async_internal(&config).await {
-        Ok(node_info) => Ok(node_info),
-        Err(e) => Err(format!("{}", e)),
-    }
+pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
+    get_info_async_internal(&config).await
 }
 
 pub fn create_invoice(

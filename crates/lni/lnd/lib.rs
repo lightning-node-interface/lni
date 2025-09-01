@@ -113,7 +113,7 @@ impl LightningNode for LndNode {
 impl LndNode {
     /// Async version of get_info that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn get_info_async(&self) -> Result<NodeInfo, String> {
+    pub async fn get_info_async(&self) -> Result<NodeInfo, ApiError> {
         crate::lnd::api::lnd_get_info_async(self.config.clone()).await
     }
 }
