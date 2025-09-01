@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, Alert } from 'react-native';
+import { Text, View, StyleSheet, Button, Alert, TextInput, Animated } from 'react-native';
 import {
   LndNode,
   LndConfig,
@@ -18,10 +18,41 @@ import {
 import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
 export default function App() {
-  const [result, setResult] = useState<string>('Ready to test new InvoicePollingState approach...');
+  const [result, setResult] = useState<string>('Ready to test UI thread blocking...');
   const [isPolling, setIsPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
+  const [uiCounter, setUiCounter] = useState(0);
+  const [spinnerRotation] = useState(new Animated.Value(0));
+  const [textInput, setTextInput] = useState('Type here to test UI responsiveness');
   const pollingStateRef = useRef<InvoicePollingStateInterface | null>(null);
+  const counterIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // UI responsiveness test - counter that increments every second
+  useEffect(() => {
+    counterIntervalRef.current = setInterval(() => {
+      setUiCounter(prev => prev + 1);
+    }, 1000);
+
+    // Start spinning animation
+    Animated.loop(
+      Animated.timing(spinnerRotation, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    return () => {
+      if (counterIntervalRef.current) {
+        clearInterval(counterIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const spin = spinnerRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Helper function to safely serialize objects with BigInt values
   const safetStringify = (obj: any, indent = 2) => {
@@ -41,7 +72,7 @@ export default function App() {
         return;
       }
 
-      setResult('🔄 Testing LND async get_info...');
+      setResult('🔄 Testing LND sync get_info (with 3-second delay to test UI blocking)...');
 
       const config = LndConfig.create({
         url: LND_URL,
@@ -55,27 +86,36 @@ export default function App() {
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
       console.log('📋 Calling lndGetInfoSync()...');
+      const startTime = Date.now();
       const nodeInfo = lndGetInfoSync(config);
-      
-      console.log('✅ LND async response received:', safetStringify(nodeInfo));
-      
-      setResult(`✅ LND Sync Success! 
+      const endTime = Date.now();
+
+      console.log('✅ LND sync response received:', safetStringify(nodeInfo));
+      console.log(`⏱️ API call took ${endTime - startTime}ms`);
+
+      setResult(`✅ LND Sync Success! (${endTime - startTime}ms)
 Node: ${nodeInfo.alias || 'Unknown'}
 Pubkey: ${nodeInfo.pubkey.substring(0, 20)}...
 Network: ${nodeInfo.network}
 Block Height: ${nodeInfo.blockHeight}
 Send Balance: ${nodeInfo.sendBalanceMsat} msat
-Receive Balance: ${nodeInfo.receiveBalanceMsat} msat`);
+Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
+
+🔍 UI Test Results:
+• Counter should have continued incrementing
+• Spinner should have kept spinning
+• Buttons should remain responsive
+• Text input should be editable`);
 
     } catch (error) {
-      console.error('❌ LND async test error:', error);
+      console.error('❌ LND sync test error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('connection refused') || errorMessage.includes('timeout')) {
         setResult(`❌ LND Connection Error: Could not connect to LND at ${LND_URL}. Please check your LND node is running and accessible.`);
       } else if (errorMessage.includes('authentication') || errorMessage.includes('macaroon')) {
         setResult(`❌ LND Auth Error: Invalid macaroon. Please check your LND_MACAROON environment variable.`);
       } else {
-        setResult(`❌ LND Async Error: ${errorMessage}`);
+        setResult(`❌ LND Sync Error: ${errorMessage}`);
       }
     }
   };
@@ -242,8 +282,46 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat`);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>InvoicePollingState NWC Test</Text>
+      <Text style={styles.title}>UI Thread Blocking Test</Text>
+      
+      {/* UI Responsiveness Indicators */}
+      <View style={styles.indicatorsContainer}>
+        <View style={styles.indicator}>
+          <Animated.Text style={[styles.spinner, { transform: [{ rotate: spin }] }]}>
+            🔄
+          </Animated.Text>
+          <Text style={styles.indicatorText}>Spinner: {uiCounter}</Text>
+        </View>
+        
+        <TextInput
+          style={styles.textInput}
+          value={textInput}
+          onChangeText={setTextInput}
+          placeholder="Type here during API call..."
+        />
+      </View>
+
       <Text style={styles.result}>{result}</Text>
+      
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Test LND Sync (3s delay)"
+          onPress={testLndAsync}
+          color="green"
+        />
+        
+        <Button
+          title="UI Test Button 1"
+          onPress={() => Alert.alert('Button 1', `Counter: ${uiCounter}`)}
+          color="blue"
+        />
+        
+        <Button
+          title="UI Test Button 2" 
+          onPress={() => Alert.alert('Button 2', `Text: ${textInput}`)}
+          color="orange"
+        />
+      </View>
       
       <View style={styles.buttonContainer}>
         <Button
@@ -260,23 +338,18 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat`);
         />
       </View>
       
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Test LND Sync"
-          onPress={testLndAsync}
-          color="green"
-        />
-      </View>
-      
       <View style={styles.statusContainer}>
         <Text style={styles.statusText}>
           Status: {isPolling ? `🔄 Polling... (${pollCount} attempts)` : '⏸️ Stopped'}
         </Text>
         <Text style={styles.helperText}>
           {isPolling 
-            ? "🔥 UI should remain responsive! Try tapping Cancel." 
-            : "Tap 'Start' to begin Promise-based polling with proper cancellation."
+            ? "🔥 UI should remain responsive! Try tapping buttons." 
+            : "Test the sync function to see if UI blocks during 3s delay."
           }
+        </Text>
+        <Text style={styles.helperText}>
+          Watch the spinner and counter - they should keep moving if UI thread is not blocked!
         </Text>
       </View>
     </View>
@@ -295,6 +368,35 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
+  },
+  indicatorsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+  },
+  indicator: {
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  spinner: {
+    fontSize: 30,
+    marginBottom: 5,
+  },
+  indicatorText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    marginLeft: 10,
+    backgroundColor: 'white',
   },
   result: {
     fontSize: 14,

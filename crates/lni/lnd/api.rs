@@ -137,6 +137,9 @@ pub fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
 // Synchronous version that works reliably with uniffi-bindgen-react-native
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn lnd_get_info_sync(config: LndConfig) -> Result<NodeInfo, ApiError> {
+    // Add artificial delay to test UI blocking (remove in production)
+    std::thread::sleep(std::time::Duration::from_secs(15));
+
     let req_url = format!("{}/v1/getinfo", config.url);
     let client = client(&config);
     
