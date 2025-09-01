@@ -366,39 +366,42 @@ pub fn on_invoice_events_with_cancellation(
     cancellation
 }
 
-// Polling state tracker for main-thread querying
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
-pub struct InvoicePollingState {
-    cancelled: Arc<AtomicBool>,
-    poll_count: Arc<std::sync::atomic::AtomicU32>,
-    last_status: Arc<std::sync::Mutex<String>>,
-    last_transaction: Arc<std::sync::Mutex<Option<Transaction>>>,
-}
-
+// Simple async lookup function
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-impl InvoicePollingState {
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
-    }
+pub async fn nwc_lookup_invoice_async(
+    config: NwcConfig,
+    payment_hash: Option<String>,
+    invoice: Option<String>,
+) -> Result<Transaction, ApiError> {
+    let nwc = create_nwc_client(&config).await?;
     
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
-    }
+    let request = LookupInvoiceRequest {
+        payment_hash: payment_hash.clone(),
+        invoice: invoice.clone(),
+    };
     
-    pub fn get_poll_count(&self) -> u32 {
-        self.poll_count.load(Ordering::Relaxed)
-    }
+    let response = nwc.lookup_invoice(request).await
+        .map_err(|e| ApiError::Api { reason: format!("Failed to lookup invoice: {}", e) })?;
     
-    pub fn get_last_status(&self) -> String {
-        self.last_status.lock().unwrap().clone()
-    }
-    
-    pub fn get_last_transaction(&self) -> Option<Transaction> {
-        self.last_transaction.lock().unwrap().clone()
-    }
-}
-
-// UniFFI-compatible version using state polling instead of callbacks
+    Ok(Transaction {
+        type_: match response.transaction_type {
+            Some(t) => format!("{:?}", t).to_lowercase(),
+            None => "unknown".to_string(),
+        },
+        invoice: response.invoice.unwrap_or_default(),
+        description: response.description.unwrap_or_default(),
+        description_hash: "".to_string(),
+        preimage: response.preimage.unwrap_or_default(),
+        payment_hash: payment_hash.unwrap_or_default(),
+        amount_msats: response.amount as i64,
+        fees_paid: response.fees_paid as i64,
+        created_at: response.created_at.as_u64() as i64,
+        expires_at: response.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+        settled_at: response.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+        payer_note: None,
+        external_id: None,
+    })
+}// UniFFI-compatible version using state polling instead of callbacks
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn nwc_start_invoice_polling(
     config: NwcConfig,
