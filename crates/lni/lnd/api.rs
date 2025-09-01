@@ -202,21 +202,6 @@ pub async fn get_info_async(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-// Async callback trait following uniffi-bindgen-react-native pattern
-#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
-#[async_trait::async_trait]
-pub trait LndAsyncCallback: Send + Sync {
-    async fn get_info(&self, config: LndConfig) -> Result<NodeInfo, String>;
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-pub async fn lnd_get_info_with_callback(
-    config: LndConfig, 
-    callback: std::sync::Arc<dyn LndAsyncCallback>
-) -> Result<NodeInfo, String> {
-    callback.get_info(config).await
-}
-
 // Keep the internal implementation separate
 async fn get_info_async_internal(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
