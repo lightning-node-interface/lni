@@ -20,11 +20,13 @@ export default function App() {
   const [result, setResult] = useState<string>('Ready to test NWC cancellation...');
   const [cancellation, setCancellation] = useState<InvoiceEventsCancellationInterface | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [pollCount, setPollCount] = useState(0);
 
   const testNwcCancellation = async () => {
     try {
       setResult('Starting NWC invoice event polling with cancellation...');
       setIsPolling(true);
+      setPollCount(0);
 
       // Use a simpler test configuration
       const config = NwcConfig.create({
@@ -36,53 +38,83 @@ export default function App() {
       const params = OnInvoiceEventParams.create({
         paymentHash: "",
         search: undefined,
-        pollingDelaySec: BigInt(5),
-        maxPollingSec: BigInt(60),
+        pollingDelaySec: BigInt(3), // Shorter delay for more responsive testing
+        maxPollingSec: BigInt(30), // Shorter timeout for testing
       });
 
       const callback = {
         success(transaction: Transaction | undefined): void {
           console.log('✅ NWC Success event:', transaction);
-          setResult(`✅ Success! Payment completed.`);
+          setResult(`✅ Success! Payment completed: ${transaction?.paymentHash || 'N/A'}`);
           setIsPolling(false);
+          setCancellation(null);
         },
         pending(transaction: Transaction | undefined): void {
           console.log('⏳ NWC Pending event:', transaction);
-          setResult(`⏳ Pending... Still waiting for payment.`);
+          setPollCount(prev => {
+            const newCount = prev + 1;
+            setResult(`⏳ Polling attempt #${newCount} - Still waiting for payment. Hash: ${transaction?.paymentHash || 'N/A'}`);
+            return newCount;
+          });
         },
         failure(transaction: Transaction | undefined): void {
           console.log('❌ NWC Failure event:', transaction);
-          setResult(`❌ Failed! Payment failed.`);
-          setIsPolling(false);
+          setPollCount(prev => {
+            const newCount = prev + 1;
+            const reason = cancellation?.isCancelled() ? 'Cancelled by user' : 'Payment failed or timeout';
+            setResult(`❌ Poll #${newCount}: ${reason}! ${transaction?.paymentHash || 'N/A'}`);
+            return newCount;
+          });
+          // Don't immediately stop polling - let it continue for debugging
+          // setIsPolling(false);
+          // setCancellation(null);
         },
       };
+
+      console.log('🔧 Starting NWC polling with config:', {
+        nwcUri: config.nwcUri.substring(0, 50) + '...', // Log partial URI for privacy
+        params: {
+          paymentHash: params.paymentHash,
+          pollingDelaySec: params.pollingDelaySec.toString(),
+          maxPollingSec: params.maxPollingSec.toString(),
+        }
+      });
 
       // Start cancellable invoice event monitoring
       const cancellationHandle = nwcOnInvoiceEventsWithCancellation(config, params, callback);
       setCancellation(cancellationHandle);
+      
+      console.log('📡 Cancellation handle created, polling should start now...');
 
-      setResult('🔄 Polling for invoice events... Use "Cancel" to stop or wait 30 seconds for timeout.');
+      setResult('🔄 Background polling started! The cancel button should now be responsive.');
 
     } catch (error) {
       console.error('❌ Error testing NWC cancellation:', error);
       setResult(`❌ Error: ${error}`);
       setIsPolling(false);
+      setCancellation(null);
     }
   };
 
   const cancelPolling = () => {
-    console.log('🛑 Click Cancelling invoice event polling...');
+    console.log('🛑 Cancel button clicked...');
     if (cancellation) {
-      console.log('🛑 Cancelling invoice event polling...');
+      console.log('🛑 Calling cancellation.cancel()...');
       cancellation.cancel();
       
       // Check if it was actually cancelled
       const isCancelled = cancellation.isCancelled();
       console.log('Cancellation status:', isCancelled); 
       
-      setResult(`🛑 Cancelled! Polling stopped. Was cancelled: ${isCancelled}`);
-      setCancellation(null);
-      setIsPolling(false);
+      setResult(`🛑 Cancel requested! Status: ${isCancelled ? 'Cancelled' : 'Still Active'}`);
+      
+      // Don't immediately clear state - let the callback handle cleanup
+      if (isCancelled) {
+        setTimeout(() => {
+          setIsPolling(false);
+          setCancellation(null);
+        }, 1000); // Give the polling loop time to detect cancellation
+      }
     } else {
       Alert.alert('No Active Polling', 'There is no active polling to cancel.');
     }
@@ -120,26 +152,32 @@ export default function App() {
         <Button
           title="Start NWC Polling"
           onPress={testNwcCancellation}
-          //disabled={isPolling}
+          disabled={isPolling}
         />
         
         <Button
           title="Cancel Polling"
           onPress={cancelPolling}
-          //disabled={!isPolling || !cancellation}
+          disabled={!isPolling || !cancellation}
           color="red"
         />
       </View>
       
       <View style={styles.statusContainer}>
         <Text style={styles.statusText}>
-          Status: {isPolling ? '🔄 Polling...' : '⏸️ Stopped'}
+          Status: {isPolling ? `🔄 Polling... (${pollCount} attempts)` : '⏸️ Stopped'}
         </Text>
         {cancellation && (
           <Text style={styles.statusText}>
-            Cancellable: {cancellation.isCancelled() ? '❌ Cancelled' : '✅ Active'}
+            Cancellation: {cancellation.isCancelled() ? '❌ Cancelled' : '✅ Active'}
           </Text>
         )}
+        <Text style={styles.helperText}>
+          {isPolling 
+            ? "🔥 UI should remain responsive! Try tapping Cancel." 
+            : "Tap 'Start' to begin polling, then test cancellation."
+          }
+        </Text>
       </View>
     </View>
   );
@@ -176,5 +214,13 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     marginVertical: 5,
+  },
+  helperText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 10,
+    color: '#666',
+    paddingHorizontal: 20,
   },
 });

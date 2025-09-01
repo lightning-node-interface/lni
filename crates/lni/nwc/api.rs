@@ -387,58 +387,81 @@ pub fn nwc_on_invoice_events_with_cancellation(
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let start_time = std::time::Instant::now();
+            let mut poll_count = 0;
+            
+            // Use eprintln! for Android logging instead of println!
+            eprintln!("🔧 NWC: Starting polling loop...");
             
             loop {
+                poll_count += 1;
+                eprintln!("🔄 NWC: Poll attempt #{}", poll_count);
+                
                 // Check for cancellation first
                 if cancellation_clone.is_cancelled() {
+                    eprintln!("🛑 NWC: Cancellation detected, stopping loop");
                     callback.failure(None);
                     break;
                 }
                 
                 if start_time.elapsed() > Duration::from_secs(params_clone.max_polling_sec as u64) {
+                    eprintln!("⏰ NWC: Timeout reached, stopping loop");
                     callback.failure(None);
                     break;
                 }
 
+                eprintln!("🔍 NWC: Looking up invoice with hash: {:?}", params_clone.payment_hash);
                 let (status, transaction) = match lookup_invoice(
                     &config_clone, 
                     params_clone.payment_hash.clone(), 
                     params_clone.search.clone()
                 ) {
                     Ok(transaction) => {
+                        eprintln!("✅ NWC: lookup_invoice succeeded, settled_at: {}", transaction.settled_at);
                         if transaction.settled_at > 0 {
                             ("settled".to_string(), Some(transaction))
                         } else {
                             ("pending".to_string(), Some(transaction))
                         }
                     }
-                    Err(_) => ("error".to_string(), None),
+                    Err(e) => {
+                        eprintln!("❌ NWC: lookup_invoice failed: {:?}", e);
+                        ("error".to_string(), None)
+                    },
                 };
+
+                eprintln!("📊 NWC: Poll #{} result: status={}, has_transaction={}", poll_count, status, transaction.is_some());
 
                 match status.as_str() {
                     "settled" => {
+                        eprintln!("🎉 NWC: Payment settled! Calling success callback");
                         callback.success(transaction);
                         break;
                     }
                     "error" => {
+                        eprintln!("⚠️ NWC: Error occurred, calling failure callback but continuing");
                         callback.failure(transaction);
                         // Don't break on error, keep polling
                     }
                     _ => {
+                        eprintln!("⏳ NWC: Still pending, calling pending callback");
                         callback.pending(transaction);
                     }
                 }
 
+                eprintln!("😴 NWC: Sleeping for {} seconds...", params_clone.polling_delay_sec);
                 // Sleep in small increments to check cancellation more frequently
                 let delay_secs = params_clone.polling_delay_sec as u64;
-                for _ in 0..delay_secs {
+                for i in 0..delay_secs {
                     if cancellation_clone.is_cancelled() {
+                        eprintln!("🛑 NWC: Cancellation detected during sleep ({}s into {}s delay)", i, delay_secs);
                         callback.failure(None);
                         return;
                     }
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
+            
+            eprintln!("🏁 NWC: Polling loop finished after {} attempts", poll_count);
         });
     });
     
