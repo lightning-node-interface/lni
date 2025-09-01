@@ -202,6 +202,81 @@ pub async fn get_info_async(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
+    let req_url = format!("{}/v1/getinfo", config.url);
+    let client = async_client(&config);
+    
+    let response = client.get(&req_url).send().await
+        .map_err(|e| ApiError::Json { reason: format!("Failed to send request: {}", e) })?;
+    
+    let response_text = response.text().await
+        .map_err(|e| ApiError::Json { reason: format!("Failed to read response text: {}", e) })?;
+    
+    let info: GetInfoResponse = serde_json::from_str(&response_text)?;
+
+    // get balance
+    // /v1/balance/channels
+    // https://lightning.engineering/api-docs/api/lnd/lightning/channel-balance/
+    // send_balance_msats, receive_balance_msats, pending_balance, inactive_balance
+    let balance_url = format!("{}/v1/balance/channels", config.url);
+    
+    let balance_response = client.get(&balance_url).send().await
+        .map_err(|e| ApiError::Json { reason: format!("Failed to send balance request: {}", e) })?;
+    
+    let balance_response_text = balance_response.text().await
+        .map_err(|e| ApiError::Json { reason: format!("Failed to read balance response text: {}", e) })?;
+    
+    let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
+
+    let node_info = NodeInfo {
+        alias: info.alias,
+        color: info.color,
+        pubkey: info.identity_pubkey,
+        network: info.chains[0].network.clone(),
+        block_height: info.block_height,
+        block_hash: info.block_hash,
+        send_balance_msat: balance
+            .local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        receive_balance_msat: balance
+            .remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_send_balance_msat: balance
+            .unsettled_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_receive_balance_msat: balance
+            .unsettled_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_send_balance: balance
+            .pending_open_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_receive_balance: balance
+            .pending_open_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        ..Default::default()
+    };
+    Ok(node_info)
+}
+
 pub fn create_invoice(
     config: &LndConfig,
     invoice_params: CreateInvoiceParams,
