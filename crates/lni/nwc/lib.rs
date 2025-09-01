@@ -46,15 +46,15 @@ impl NwcNode {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LightningNode for NwcNode {
     fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::nwc::api::get_info(&self.config)
+        crate::nwc::api::get_info_sync(&self.config)
     }
 
     fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::nwc::api::create_invoice(&self.config, params)
+        crate::nwc::api::create_invoice_sync(&self.config, params)
     }
 
     fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::nwc::api::pay_invoice(&self.config, params)
+        crate::nwc::api::pay_invoice_sync(&self.config, params)
     }
 
     fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
@@ -75,7 +75,7 @@ impl LightningNode for NwcNode {
     }
 
     fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::nwc::api::lookup_invoice(
+        crate::nwc::api::lookup_invoice_sync(
             &self.config,
             params.payment_hash,
             params.search,
@@ -86,7 +86,7 @@ impl LightningNode for NwcNode {
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::nwc::api::list_transactions(&self.config, params)
+        crate::nwc::api::list_transactions_sync(&self.config, params)
     }
 
     fn decode(&self, str: String) -> Result<String, ApiError> {

@@ -20,11 +20,7 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
     Ok(nwc)
 }
 
-pub fn get_info(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    
-    rt.block_on(async {
+pub async fn get_info(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
         let nwc = create_nwc_client(config).await?;
         
         // Get balance first
@@ -82,72 +78,61 @@ pub fn get_info(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
                 })
             }
         }
+}
+
+pub async fn create_invoice(config: &NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    let nwc = create_nwc_client(config).await?;
+    
+    let request = MakeInvoiceRequest {
+        amount: params.amount_msats.unwrap_or(0) as u64,
+        description: params.description.clone(),
+        description_hash: None,
+        expiry: params.expiry.map(|e| e as u64),
+    };
+    
+    let response = nwc.make_invoice(request).await
+        .map_err(|e| ApiError::Api { reason: format!("Failed to create invoice: {}", e) })?;
+    
+    Ok(Transaction {
+        type_: "incoming".to_string(),
+        invoice: response.invoice,
+        description: params.description.unwrap_or_default(),
+        description_hash: "".to_string(),
+        preimage: "".to_string(), // Not available in response
+        payment_hash: response.payment_hash,
+        amount_msats: params.amount_msats.unwrap_or(0),
+        fees_paid: 0,
+        created_at: 0, // Not available in response
+        expires_at: 0, // Not available in response
+        settled_at: 0, // Not settled yet
+        payer_note: None,
+        external_id: None,
     })
 }
 
-pub fn create_invoice(config: &NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
+pub async fn pay_invoice(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    let nwc = create_nwc_client(config).await?;
     
-    rt.block_on(async {
-        let nwc = create_nwc_client(config).await?;
-        
-        let request = MakeInvoiceRequest {
-            amount: params.amount_msats.unwrap_or(0) as u64,
-            description: params.description.clone(),
-            description_hash: None,
-            expiry: params.expiry.map(|e| e as u64),
-        };
-        
-        let response = nwc.make_invoice(request).await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to create invoice: {}", e) })?;
-        
-        Ok(Transaction {
-            type_: "incoming".to_string(),
-            invoice: response.invoice,
-            description: params.description.unwrap_or_default(),
-            description_hash: "".to_string(),
-            preimage: "".to_string(), // Not available in response
-            payment_hash: response.payment_hash,
-            amount_msats: params.amount_msats.unwrap_or(0),
-            fees_paid: 0,
-            created_at: 0, // Not available in response
-            expires_at: 0, // Not available in response
-            settled_at: 0, // Not settled yet
-            payer_note: None,
-            external_id: None,
-        })
-    })
-}
-
-pub fn pay_invoice(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
+    let request = PayInvoiceRequest::new(params.invoice);
     
-    rt.block_on(async {
-        let nwc = create_nwc_client(config).await?;
-        
-        let request = PayInvoiceRequest::new(params.invoice);
-        
-        let response = nwc.pay_invoice(request).await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to pay invoice: {}", e) })?;
-        
-        // Compute payment hash from preimage (payment_hash = SHA256(preimage))
-        let payment_hash = if !response.preimage.is_empty() {
-            let preimage_bytes = hex::decode(&response.preimage)
-                .map_err(|e| ApiError::Api { reason: format!("Invalid preimage hex: {}", e) })?;
-            let mut hasher = Sha256::new();
-            hasher.update(preimage_bytes);
-            hex::encode(hasher.finalize())
-        } else {
-            "".to_string()
-        };
-        
-        Ok(PayInvoiceResponse {
-            payment_hash,
-            preimage: response.preimage,
-            fee_msats: 0, // Not available in response
-        })
+    let response = nwc.pay_invoice(request).await
+        .map_err(|e| ApiError::Api { reason: format!("Failed to pay invoice: {}", e) })?;
+    
+    // Compute payment hash from preimage (payment_hash = SHA256(preimage))
+    let payment_hash = if !response.preimage.is_empty() {
+        let preimage_bytes = hex::decode(&response.preimage)
+            .map_err(|e| ApiError::Api { reason: format!("Invalid preimage hex: {}", e) })?;
+        let mut hasher = Sha256::new();
+        hasher.update(preimage_bytes);
+        hex::encode(hasher.finalize())
+    } else {
+        "".to_string()
+    };
+    
+    Ok(PayInvoiceResponse {
+        payment_hash,
+        preimage: response.preimage,
+        fee_msats: 0, // Not available in response
     })
 }
 
@@ -171,89 +156,114 @@ pub fn pay_offer(
     Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
 }
 
-pub fn lookup_invoice(
+pub async fn lookup_invoice(
+    config: &NwcConfig,
+    payment_hash: Option<String>,
+    invoice: Option<String>,
+) -> Result<Transaction, ApiError> {
+    let nwc = create_nwc_client(config).await?;
+    
+    let request = LookupInvoiceRequest {
+        payment_hash: payment_hash.clone(),
+        invoice: invoice.clone(),
+    };
+    
+    let response = nwc.lookup_invoice(request).await
+        .map_err(|e| ApiError::Api { reason: format!("Failed to lookup invoice: {}", e) })?;
+    
+    Ok(Transaction {
+        type_: match response.transaction_type {
+            Some(t) => format!("{:?}", t).to_lowercase(),
+            None => "unknown".to_string(),
+        },
+        invoice: response.invoice.unwrap_or_default(),
+        description: response.description.unwrap_or_default(),
+        description_hash: "".to_string(),
+        preimage: response.preimage.unwrap_or_default(),
+        payment_hash: payment_hash.unwrap_or_default(),
+        amount_msats: response.amount as i64,
+        fees_paid: response.fees_paid as i64,
+        created_at: response.created_at.as_u64() as i64,
+        expires_at: response.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+        settled_at: response.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+        payer_note: None,
+        external_id: None,
+    })
+}
+
+pub async fn list_transactions(config: &NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
+    let nwc = create_nwc_client(config).await?;
+    
+    let request = ListTransactionsRequest {
+        from: Some(Timestamp::from(params.from as u64)),
+        until: None,
+        limit: Some(params.limit as u64),
+        offset: None,
+        unpaid: None,
+        transaction_type: None,
+    };
+    
+    let response = nwc.list_transactions(request).await
+        .map_err(|e| ApiError::Api { reason: format!("Failed to list transactions: {}", e) })?;
+    
+    let mut transactions = Vec::new();
+    for tx in response {
+        transactions.push(Transaction {
+            type_: match tx.transaction_type {
+                Some(t) => format!("{:?}", t).to_lowercase(),
+                None => "unknown".to_string(),
+            },
+            invoice: tx.invoice.unwrap_or_default(),
+            description: tx.description.unwrap_or_default(),
+            description_hash: "".to_string(),
+            preimage: tx.preimage.unwrap_or_default(),
+            payment_hash: tx.payment_hash,
+            amount_msats: tx.amount as i64,
+            fees_paid: tx.fees_paid as i64,
+            created_at: tx.created_at.as_u64() as i64,
+            expires_at: tx.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+            settled_at: tx.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
+            payer_note: None,
+            external_id: None,
+        });
+    }
+    
+    Ok(transactions)
+}
+
+// Sync wrappers for trait compatibility (internal use only)
+pub fn get_info_sync(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
+    rt.block_on(get_info(config))
+}
+
+pub fn create_invoice_sync(config: &NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
+    rt.block_on(create_invoice(config, params))
+}
+
+pub fn pay_invoice_sync(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
+    rt.block_on(pay_invoice(config, params))
+}
+
+pub fn lookup_invoice_sync(
     config: &NwcConfig,
     payment_hash: Option<String>,
     invoice: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    
-    rt.block_on(async {
-        let nwc = create_nwc_client(config).await?;
-        
-        let request = LookupInvoiceRequest {
-            payment_hash: payment_hash.clone(),
-            invoice: invoice.clone(),
-        };
-        
-        let response = nwc.lookup_invoice(request).await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to lookup invoice: {}", e) })?;
-        
-        Ok(Transaction {
-            type_: match response.transaction_type {
-                Some(t) => format!("{:?}", t).to_lowercase(),
-                None => "unknown".to_string(),
-            },
-            invoice: response.invoice.unwrap_or_default(),
-            description: response.description.unwrap_or_default(),
-            description_hash: "".to_string(),
-            preimage: response.preimage.unwrap_or_default(),
-            payment_hash: payment_hash.unwrap_or_default(),
-            amount_msats: response.amount as i64,
-            fees_paid: response.fees_paid as i64,
-            created_at: response.created_at.as_u64() as i64,
-            expires_at: response.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-            settled_at: response.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-            payer_note: None,
-            external_id: None,
-        })
-    })
+    rt.block_on(lookup_invoice(config, payment_hash, invoice))
 }
 
-pub fn list_transactions(config: &NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
+pub fn list_transactions_sync(config: &NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    
-    rt.block_on(async {
-        let nwc = create_nwc_client(config).await?;
-        
-        let request = ListTransactionsRequest {
-            from: Some(Timestamp::from(params.from as u64)),
-            until: None,
-            limit: Some(params.limit as u64),
-            offset: None,
-            unpaid: None,
-            transaction_type: None,
-        };
-        
-        let response = nwc.list_transactions(request).await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to list transactions: {}", e) })?;
-        
-        let mut transactions = Vec::new();
-        for tx in response {
-            transactions.push(Transaction {
-                type_: match tx.transaction_type {
-                    Some(t) => format!("{:?}", t).to_lowercase(),
-                    None => "unknown".to_string(),
-                },
-                invoice: tx.invoice.unwrap_or_default(),
-                description: tx.description.unwrap_or_default(),
-                description_hash: "".to_string(),
-                preimage: tx.preimage.unwrap_or_default(),
-                payment_hash: tx.payment_hash,
-                amount_msats: tx.amount as i64,
-                fees_paid: tx.fees_paid as i64,
-                created_at: tx.created_at.as_u64() as i64,
-                expires_at: tx.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-                settled_at: tx.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-                payer_note: None,
-                external_id: None,
-            });
-        }
-        
-        Ok(transactions)
-    })
+    rt.block_on(list_transactions(config, params))
 }
 
 pub fn decode(_config: &NwcConfig, str: String) -> Result<String, ApiError> {
@@ -279,7 +289,7 @@ impl InvoiceEventsCancellation {
 }
 
 // Modified polling function that checks for cancellation
-pub fn poll_invoice_events_with_cancellation<F>(
+pub async fn poll_invoice_events_with_cancellation<F>(
     config: &NwcConfig, 
     params: OnInvoiceEventParams, 
     cancellation: Arc<InvoiceEventsCancellation>,
@@ -302,7 +312,7 @@ pub fn poll_invoice_events_with_cancellation<F>(
         }
 
         let (status, transaction) =
-            match lookup_invoice(config, params.payment_hash.clone(), params.search.clone()) {
+            match lookup_invoice(config, params.payment_hash.clone(), params.search.clone()).await {
                 Ok(transaction) => {
                     if transaction.settled_at > 0 {
                         ("settled".to_string(), Some(transaction))
@@ -334,7 +344,7 @@ pub fn poll_invoice_events_with_cancellation<F>(
                 callback("cancelled".to_string(), None);
                 return;
             }
-            thread::sleep(Duration::from_secs(1));
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
 }
@@ -353,13 +363,16 @@ pub fn on_invoice_events_with_cancellation(
     
     // Spawn on a thread pool to avoid blocking
     std::thread::spawn(move || {
-        poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
-            match status.as_str() {
-                "success" => callback.success(tx),
-                "pending" => callback.pending(tx),
-                "failure" | "cancelled" => callback.failure(tx),
-                _ => {}
-            }
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
+                match status.as_str() {
+                    "success" => callback.success(tx),
+                    "pending" => callback.pending(tx),
+                    "failure" | "cancelled" => callback.failure(tx),
+                    _ => {}
+                }
+            }).await;
         });
     });
     
@@ -593,7 +606,7 @@ pub fn nwc_on_invoice_events_with_cancellation(
     cancellation
 }
 
-pub fn poll_invoice_events<F>(config: &NwcConfig, params: OnInvoiceEventParams, mut callback: F)
+pub async fn poll_invoice_events<F>(config: &NwcConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
 {
@@ -609,7 +622,7 @@ where
             config,
             params.payment_hash.clone(),
             params.search.clone(),
-        ) {
+        ).await {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -634,7 +647,7 @@ where
             }
         }
 
-        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+        tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
@@ -643,10 +656,15 @@ pub fn on_invoice_events(
     params: OnInvoiceEventParams,
     callback: Box<dyn crate::types::OnInvoiceEventCallback>,
 ) {
-    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
-        "success" => callback.success(tx),
-        "pending" => callback.pending(tx),
-        "failure" => callback.failure(tx),
-        _ => {}
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+                "success" => callback.success(tx),
+                "pending" => callback.pending(tx),
+                "failure" => callback.failure(tx),
+                _ => {}
+            }).await;
+        });
     });
 }

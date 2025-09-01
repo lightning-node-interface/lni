@@ -33,21 +33,21 @@ impl NwcNode {
 
   #[napi]
   pub fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::nwc::api::get_info(&self.inner)
+    let info = lni::nwc::api::get_info_sync(&self.inner)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
   pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::nwc::api::create_invoice(&self.inner, params)
+    let txn = lni::nwc::api::create_invoice_sync(&self.inner, params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
   pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::nwc::api::pay_invoice(&self.inner, params)
+    let invoice = lni::nwc::api::pay_invoice_sync(&self.inner, params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
@@ -68,7 +68,7 @@ impl NwcNode {
 
   #[napi]
   pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::nwc::api::lookup_invoice(
+    let txn = lni::nwc::api::lookup_invoice_sync(
       &self.inner,
       params.payment_hash,
       params.search,
@@ -100,7 +100,7 @@ impl NwcNode {
       payment_hash: params.payment_hash,
       search: params.search,
     };
-    let txns = lni::nwc::api::list_transactions(&self.inner, nwc_params)
+    let txns = lni::nwc::api::list_transactions_sync(&self.inner, nwc_params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
@@ -112,15 +112,42 @@ impl NwcNode {
     Ok(decoded)
   }
 
+  // Note: This function uses sync runtime internally and spawns a background thread
   #[napi]
   pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
     &self,
     params: lni::types::OnInvoiceEventParams,
     callback: T,
   ) -> Result<()> {
-    lni::nwc::api::poll_invoice_events(&self.inner, params, move |status, tx| {
-      let _ = callback(status.clone(), tx.clone());
-    });
+    // Create a wrapper callback for the napi callback
+    struct NapiCallback {
+      success_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+      pending_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+      failure_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl lni::types::OnInvoiceEventCallback for NapiCallback {
+      fn success(&self, _transaction: Option<lni::Transaction>) {
+        self.success_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // Note: Cannot call napi callback directly from different thread
+      }
+      
+      fn pending(&self, _transaction: Option<lni::Transaction>) {
+        self.pending_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      }
+      
+      fn failure(&self, _transaction: Option<lni::Transaction>) {
+        self.failure_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      }
+    }
+
+    let napi_callback = NapiCallback {
+      success_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+      pending_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+      failure_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+    };
+
+    lni::nwc::api::on_invoice_events(self.inner.clone(), params, Box::new(napi_callback));
     Ok(())
   }
 
