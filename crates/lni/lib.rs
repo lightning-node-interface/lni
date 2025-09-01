@@ -40,8 +40,8 @@ pub mod lnd {
     pub mod lib;
     pub mod types;
     pub use lib::{LndConfig, LndNode};
-    // Re-export the standalone async function for uniffi
-    pub use api::lnd_get_info_async;
+    // Re-export the standalone sync function for uniffi
+    pub use api::lnd_get_info_sync;
 }
 
 pub mod nwc {

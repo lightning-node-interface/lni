@@ -44,8 +44,9 @@ impl LndNode {
   #[napi]
   pub async fn get_info_async(&self) -> napi::Result<lni::NodeInfo> {
     let config = self.inner.clone();
-    let info = lni::lnd::api::get_info_async(config)
-      .await
+    let info = tokio::task::spawn_blocking(move || {
+      lni::lnd::api::lnd_get_info_sync(config)
+    }).await.map_err(|e| napi::Error::from_reason(format!("Failed to run sync task: {}", e)))?
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
@@ -123,7 +124,9 @@ impl LndNode {
     callback: T,
   ) -> Result<()> {
     lni::lnd::api::poll_invoice_events(&self.inner, params, move |status, tx| {
-      callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+      if let Err(err) = callback(status.clone(), tx.clone()) {
+        eprintln!("Callback error: {}", err);
+      }
     });
     Ok(())
   }
