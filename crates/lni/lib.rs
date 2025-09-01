@@ -81,8 +81,8 @@ pub use utils::*;
 pub mod database;
 pub use database::{Db, DbError, Payment};
 
-// Re-export standalone async functions at crate level for uniffi
-pub use lnd::api::{lnd_get_info_async, lnd_test_sync};
+// Re-export standalone functions at crate level for uniffi
+pub use lnd::api::lnd_get_info_sync;
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();

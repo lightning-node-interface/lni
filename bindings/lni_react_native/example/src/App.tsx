@@ -13,7 +13,7 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
-  lndGetInfoAsync
+  lndGetInfoSync
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
@@ -50,16 +50,16 @@ export default function App() {
         acceptInvalidCerts: true,
       });
 
-      console.log('🔧 Testing LND async functionality with LndNode.getInfoAsync()');
+      console.log('🔧 Testing LND sync functionality with lndGetInfoSync()');
       console.log('🔧 Using LND_URL:', LND_URL);
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
-      console.log('📋 Calling lndGetInfoAsync()...');
-      const nodeInfo = await lndGetInfoAsync(config);
+      console.log('📋 Calling lndGetInfoSync()...');
+      const nodeInfo = lndGetInfoSync(config);
       
       console.log('✅ LND async response received:', safetStringify(nodeInfo));
       
-      setResult(`✅ LND Async Success! 
+      setResult(`✅ LND Sync Success! 
 Node: ${nodeInfo.alias || 'Unknown'}
 Pubkey: ${nodeInfo.pubkey.substring(0, 20)}...
 Network: ${nodeInfo.network}
@@ -262,7 +262,7 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat`);
       
       <View style={styles.buttonContainer}>
         <Button
-          title="Test LND Async"
+          title="Test LND Sync"
           onPress={testLndAsync}
           color="green"
         />

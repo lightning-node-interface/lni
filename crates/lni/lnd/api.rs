@@ -134,31 +134,70 @@ pub fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-// Async version of get_info using reqwest async client
+// Synchronous version that works reliably with uniffi-bindgen-react-native
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
-    // First try to create the async client - this might be where it panics
-    let _client = match async_client(&config) {
-        client => client,
-    };
+pub fn lnd_get_info_sync(config: LndConfig) -> Result<NodeInfo, ApiError> {
+    let req_url = format!("{}/v1/getinfo", config.url);
+    let client = client(&config);
     
-    // If we get here, client creation succeeded
-    // Let's try a simple test first
-    Ok(NodeInfo {
-        alias: "test".to_string(),
-        color: "#ffffff".to_string(),
-        pubkey: "test_pubkey".to_string(),
-        network: "mainnet".to_string(),
-        block_height: 12345,
-        block_hash: "test_block_hash".to_string(),
-        send_balance_msat: 0,
-        receive_balance_msat: 0,
-        fee_credit_balance_msat: 0,
-        unsettled_send_balance_msat: 0,
-        unsettled_receive_balance_msat: 0,
-        pending_open_send_balance: 0,
-        pending_open_receive_balance: 0,
-    })
+    let response = client.get(&req_url).send().unwrap();
+    let response_text = response.text().unwrap();
+    let response_text = response_text.as_str();
+    let info: GetInfoResponse = serde_json::from_str(&response_text)?;
+
+    // get balance
+    let balance_url = format!("{}/v1/balance/channels", config.url);
+    let balance_response = client.get(&balance_url).send().unwrap();
+    let balance_response_text = balance_response.text().unwrap();
+    let balance_response_text = balance_response_text.as_str();
+    let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
+
+    let node_info = NodeInfo {
+        alias: info.alias,
+        color: info.color,
+        pubkey: info.identity_pubkey,
+        network: info.chains[0].network.clone(),
+        block_height: info.block_height,
+        block_hash: info.block_hash,
+        send_balance_msat: balance
+            .local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        receive_balance_msat: balance
+            .remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_send_balance_msat: balance
+            .unsettled_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_receive_balance_msat: balance
+            .unsettled_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_send_balance: balance
+            .pending_open_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_receive_balance: balance
+            .pending_open_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        ..Default::default()
+    };
+    Ok(node_info)
 }
 
 pub fn create_invoice(
