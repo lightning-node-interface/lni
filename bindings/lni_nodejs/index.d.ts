@@ -312,6 +312,7 @@ export declare class LndNode {
   getMacaroon(): string
   getConfig(): LndConfig
   getInfo(): NodeInfo
+  getInfoAsync(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Transaction
   payInvoice(params: PayInvoiceParams): PayInvoiceResponse
   getOffer(search?: string | undefined | null): PayCode

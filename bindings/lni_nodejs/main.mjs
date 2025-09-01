@@ -99,10 +99,17 @@ async function lnd() {
   const config = {
     url: process.env.LND_URL,
     macaroon: process.env.LND_MACAROON,
+    socks5Proxy: process.env.LND_SOCKS5_PROXY || "",
+    acceptInvalidCerts: true
   };
   const node = new LndNode(config);
+  
+  // Test both sync and async versions
   const info = await node.getInfo();
-  console.log("Node info:", info);
+  console.log("Node info (sync):", info);
+
+  const infoAsync = await node.getInfoAsync();
+  console.log("Node info (async):", infoAsync);
 
   const invoice = await node.createInvoice({
     amountMsats: 1000,
@@ -266,8 +273,8 @@ async function test() {
 async function main() {
   // phoenixd();
   // cln();
-  // lnd();
-  await nwc();
+  await lnd();
+  // await nwc();
   // test();
 }
 

@@ -108,6 +108,16 @@ impl LightningNode for LndNode {
     }
 }
 
+// Additional async methods for LndNode
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl LndNode {
+    /// Async version of get_info that returns a Future/Promise
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn get_info_async(&self) -> Result<NodeInfo, ApiError> {
+        crate::lnd::api::get_info_async(&self.config).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{InvoiceType, PayInvoiceParams};
@@ -163,6 +173,19 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to get offer: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_info_async() {
+        match NODE.get_info_async().await {
+            Ok(info) => {
+                println!("async info: {:?}", info);
+                assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to get info async: {:?}", e);
             }
         }
     }
