@@ -366,7 +366,125 @@ pub fn on_invoice_events_with_cancellation(
     cancellation
 }
 
-// UniFFI-compatible version that avoids threading by using cooperative yielding
+// Polling state tracker for main-thread querying
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+pub struct InvoicePollingState {
+    cancelled: Arc<AtomicBool>,
+    poll_count: Arc<std::sync::atomic::AtomicU32>,
+    last_status: Arc<std::sync::Mutex<String>>,
+    last_transaction: Arc<std::sync::Mutex<Option<Transaction>>>,
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl InvoicePollingState {
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+    
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+    
+    pub fn get_poll_count(&self) -> u32 {
+        self.poll_count.load(Ordering::Relaxed)
+    }
+    
+    pub fn get_last_status(&self) -> String {
+        self.last_status.lock().unwrap().clone()
+    }
+    
+    pub fn get_last_transaction(&self) -> Option<Transaction> {
+        self.last_transaction.lock().unwrap().clone()
+    }
+}
+
+// UniFFI-compatible version using state polling instead of callbacks
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn nwc_start_invoice_polling(
+    config: NwcConfig,
+    params: OnInvoiceEventParams,
+) -> Arc<InvoicePollingState> {
+    let polling_state = Arc::new(InvoicePollingState {
+        cancelled: Arc::new(AtomicBool::new(false)),
+        poll_count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+        last_status: Arc::new(std::sync::Mutex::new("starting".to_string())),
+        last_transaction: Arc::new(std::sync::Mutex::new(None)),
+    });
+    
+    let state_clone = polling_state.clone();
+    let config_clone = config.clone();
+    let params_clone = params.clone();
+    
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let start_time = std::time::Instant::now();
+            
+            eprintln!("🔧 NWC: Starting polling loop...");
+            
+            loop {
+                let poll_count = state_clone.poll_count.fetch_add(1, Ordering::Relaxed) + 1;
+                eprintln!("🔄 NWC: Poll attempt #{}", poll_count);
+                
+                // Check for cancellation first
+                if state_clone.cancelled.load(Ordering::Relaxed) {
+                    eprintln!("🛑 NWC: Cancellation detected");
+                    *state_clone.last_status.lock().unwrap() = "cancelled".to_string();
+                    break;
+                }
+                
+                if start_time.elapsed() > Duration::from_secs(params_clone.max_polling_sec as u64) {
+                    eprintln!("⏰ NWC: Timeout reached");
+                    *state_clone.last_status.lock().unwrap() = "timeout".to_string();
+                    break;
+                }
+
+                eprintln!("🔍 NWC: Looking up invoice with hash: {:?}", params_clone.payment_hash);
+                match lookup_invoice(
+                    &config_clone, 
+                    params_clone.payment_hash.clone(), 
+                    params_clone.search.clone()
+                ) {
+                    Ok(transaction) => {
+                        eprintln!("✅ NWC: lookup_invoice succeeded, settled_at: {}", transaction.settled_at);
+                        if transaction.settled_at > 0 {
+                            *state_clone.last_status.lock().unwrap() = "success".to_string();
+                            *state_clone.last_transaction.lock().unwrap() = Some(transaction);
+                            break;
+                        } else {
+                            *state_clone.last_status.lock().unwrap() = "pending".to_string();
+                            *state_clone.last_transaction.lock().unwrap() = Some(transaction);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ NWC: lookup_invoice failed: {:?}", e);
+                        *state_clone.last_status.lock().unwrap() = "failure".to_string();
+                        *state_clone.last_transaction.lock().unwrap() = None;
+                        // Don't break on error, keep polling
+                    }
+                };
+
+                eprintln!("� NWC: Sleeping for {} seconds...", params_clone.polling_delay_sec);
+                // Sleep in small increments to check cancellation more frequently
+                let delay_secs = params_clone.polling_delay_sec as u64;
+                for i in 0..delay_secs {
+                    if state_clone.cancelled.load(Ordering::Relaxed) {
+                        eprintln!("🛑 NWC: Cancellation detected during sleep ({}s into {}s)", i, delay_secs);
+                        *state_clone.last_status.lock().unwrap() = "cancelled".to_string();
+                        return;
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+            
+            eprintln!("🏁 NWC: Polling loop finished");
+        });
+    });
+    
+    polling_state
+}
+
+// Legacy callback-based version for compatibility
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn nwc_on_invoice_events_with_cancellation(
     config: NwcConfig,
@@ -377,92 +495,50 @@ pub fn nwc_on_invoice_events_with_cancellation(
         cancelled: Arc::new(AtomicBool::new(false)),
     });
     
+    // Start polling using the new state-based approach
+    let polling_state = nwc_start_invoice_polling(config, params.clone());
     let cancellation_clone = cancellation.clone();
     
-    // Use a separate thread only for the polling loop, not the callbacks
-    let config_clone = config.clone();
-    let params_clone = params.clone();
-    
+    // Monitor the polling state and trigger callbacks on the main thread
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let start_time = std::time::Instant::now();
-            let mut poll_count = 0;
+        let mut last_count = 0;
+        let mut last_status = "starting".to_string();
+        
+        loop {
+            if cancellation_clone.is_cancelled() {
+                polling_state.cancel();
+                callback.failure(None);
+                break;
+            }
             
-            // Use eprintln! for Android logging instead of println!
-            eprintln!("🔧 NWC: Starting polling loop...");
+            let current_count = polling_state.get_poll_count();
+            let current_status = polling_state.get_last_status();
             
-            loop {
-                poll_count += 1;
-                eprintln!("🔄 NWC: Poll attempt #{}", poll_count);
+            // If count changed or status changed, trigger callback
+            if current_count != last_count || current_status != last_status {
+                let transaction = polling_state.get_last_transaction();
                 
-                // Check for cancellation first
-                if cancellation_clone.is_cancelled() {
-                    eprintln!("🛑 NWC: Cancellation detected, stopping loop");
-                    callback.failure(None);
-                    break;
-                }
-                
-                if start_time.elapsed() > Duration::from_secs(params_clone.max_polling_sec as u64) {
-                    eprintln!("⏰ NWC: Timeout reached, stopping loop");
-                    callback.failure(None);
-                    break;
-                }
-
-                eprintln!("🔍 NWC: Looking up invoice with hash: {:?}", params_clone.payment_hash);
-                let (status, transaction) = match lookup_invoice(
-                    &config_clone, 
-                    params_clone.payment_hash.clone(), 
-                    params_clone.search.clone()
-                ) {
-                    Ok(transaction) => {
-                        eprintln!("✅ NWC: lookup_invoice succeeded, settled_at: {}", transaction.settled_at);
-                        if transaction.settled_at > 0 {
-                            ("settled".to_string(), Some(transaction))
-                        } else {
-                            ("pending".to_string(), Some(transaction))
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("❌ NWC: lookup_invoice failed: {:?}", e);
-                        ("error".to_string(), None)
-                    },
-                };
-
-                eprintln!("📊 NWC: Poll #{} result: status={}, has_transaction={}", poll_count, status, transaction.is_some());
-
-                match status.as_str() {
-                    "settled" => {
-                        eprintln!("🎉 NWC: Payment settled! Calling success callback");
+                match current_status.as_str() {
+                    "success" => {
                         callback.success(transaction);
                         break;
                     }
-                    "error" => {
-                        eprintln!("⚠️ NWC: Error occurred, calling failure callback but continuing");
+                    "pending" => callback.pending(transaction),
+                    "failure" => callback.failure(transaction),
+                    "cancelled" | "timeout" => {
                         callback.failure(transaction);
-                        // Don't break on error, keep polling
+                        break;
                     }
-                    _ => {
-                        eprintln!("⏳ NWC: Still pending, calling pending callback");
-                        callback.pending(transaction);
-                    }
+                    _ => {}
                 }
-
-                eprintln!("😴 NWC: Sleeping for {} seconds...", params_clone.polling_delay_sec);
-                // Sleep in small increments to check cancellation more frequently
-                let delay_secs = params_clone.polling_delay_sec as u64;
-                for i in 0..delay_secs {
-                    if cancellation_clone.is_cancelled() {
-                        eprintln!("🛑 NWC: Cancellation detected during sleep ({}s into {}s delay)", i, delay_secs);
-                        callback.failure(None);
-                        return;
-                    }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
+                
+                last_count = current_count;
+                last_status = current_status;
             }
             
-            eprintln!("🏁 NWC: Polling loop finished after {} attempts", poll_count);
-        });
+            // Check every 100ms
+            thread::sleep(Duration::from_millis(100));
+        }
     });
     
     cancellation
