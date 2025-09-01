@@ -14,7 +14,7 @@ import {
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
 } from 'lni_react_native';
-import { LND_URL, LND_MACAROON } from '@env';
+import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
 export default function App() {
   const [result, setResult] = useState<string>('Ready to test new InvoicePollingState approach...');
@@ -22,31 +22,52 @@ export default function App() {
   const [pollCount, setPollCount] = useState(0);
   const pollingStateRef = useRef<InvoicePollingStateInterface | null>(null);
 
+  // Helper function to safely serialize objects with BigInt values
+  const safetStringify = (obj: any, indent = 2) => {
+    return JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    }, indent);
+  };
+
   const testNwcPolling = async () => {
     try {
+      // Validate environment variables
+      if (!NWC_URI) {
+        setResult('❌ Error: NWC_URI not found in environment variables');
+        return;
+      }
+      if (!NWC_TEST_PAYMENT_HASH) {
+        setResult('❌ Error: NWC_TEST_PAYMENT_HASH not found in environment variables');
+        return;
+      }
+
       setResult('Starting InvoicePollingState-based NWC polling...');
       setIsPolling(true);
       setPollCount(0);
 
       const config = NwcConfig.create({
-        nwcUri: '',
-        socks5Proxy: '',
+        nwcUri: NWC_URI,
       });
 
       const params = OnInvoiceEventParams.create({
-        paymentHash: "",
+        paymentHash: NWC_TEST_PAYMENT_HASH,
         search: undefined,
         pollingDelaySec: BigInt(2),
         maxPollingSec: BigInt(15),
       });
 
       console.log('🔧 Starting InvoicePollingState-based NWC polling');
+      console.log('🔧 Using NWC_URI from env:', NWC_URI.substring(0, 50) + '...');
+      console.log('🔧 Using payment hash from env:', NWC_TEST_PAYMENT_HASH);
 
       // Start the polling using the new function
-      console.log('📋 Config:', config);
-      console.log('📋 Params:', params);
+      console.log('📋 Config:', safetStringify(config));
+      console.log('📋 Params:', safetStringify(params));
       const pollingState = nwcStartInvoicePolling(config, params);
-      console.log('📋 PollingState created:', pollingState);
+      console.log('📋 PollingState created:', safetStringify(pollingState));
       pollingStateRef.current = pollingState;
 
       // Check initial state
@@ -75,21 +96,20 @@ export default function App() {
           
           // Print detailed transaction info if present
           if (lastTransaction) {
-            console.log(`📊 Poll #${currentCount}: Transaction details:`, JSON.stringify(lastTransaction, null, 2));
+            console.log(`📊 Poll #${currentCount}: Transaction details:`, safetStringify(lastTransaction));
           }
 
           if (currentStatus === 'success' && lastTransaction) {
             console.log(`✅ Poll #${currentCount}: SUCCESS - Payment settled!`);
-            setResult(`✅ Poll #${currentCount}: Payment settled! Transaction: ${JSON.stringify(lastTransaction).substring(0, 100)}...`);
+            setResult(`✅ Poll #${currentCount}: Payment settled! Transaction: ${safetStringify(lastTransaction).substring(0, 100)}...`);
             setIsPolling(false);
             pollingStateRef.current = null;
             return;
           } else if (currentStatus === 'failure') {
             console.log(`❌ Poll #${currentCount}: FAILURE - Polling failed`);
             setResult(`❌ Poll #${currentCount}: Polling failed with status: ${currentStatus}`);
-            setIsPolling(false);
-            pollingStateRef.current = null;
-            return;
+            //setIsPolling(false);
+            //pollingStateRef.current = null;
           } else {
             console.log(`🔄 Poll #${currentCount}: CONTINUING - Status: ${currentStatus || 'pending'}`);
             setResult(`🔄 Poll #${currentCount}: Status: ${currentStatus || 'pending'} - ${lastTransaction ? 'Transaction found' : 'No transaction yet'}`);
@@ -118,11 +138,14 @@ export default function App() {
 
       // Start monitoring the polling state
       monitorPolling().catch((error) => {
-        if (!pollingState.isCancelled()) {
-          setResult(`❌ Monitoring error: ${error}`);
-          setIsPolling(false);
-          pollingStateRef.current = null;
+        console.error('❌ Monitoring Error:', error);
+        if (error.toString().includes('BigInt')) {
+          setResult(`❌ Monitoring Error: BigInt serialization issue - ${error}`);
+        } else {
+          setResult(`❌ Monitoring Error: ${error}`);
         }
+        setIsPolling(false);
+        pollingStateRef.current = null;
       });
 
     } catch (error) {
