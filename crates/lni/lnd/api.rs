@@ -202,10 +202,25 @@ pub async fn get_info_async(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
+// Async callback trait following uniffi-bindgen-react-native pattern
+#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
+#[async_trait::async_trait]
+pub trait LndAsyncCallback: Send + Sync {
+    async fn get_info(&self, config: LndConfig) -> Result<NodeInfo, String>;
+}
+
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
+pub async fn lnd_get_info_with_callback(
+    config: LndConfig, 
+    callback: std::sync::Arc<dyn LndAsyncCallback>
+) -> Result<NodeInfo, String> {
+    callback.get_info(config).await
+}
+
+// Keep the internal implementation separate
+async fn get_info_async_internal(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
-    let client = async_client(&config);
+    let client = async_client(config);
     
     let response = client.get(&req_url).send().await
         .map_err(|e| ApiError::Json { reason: format!("Failed to send request: {}", e) })?;
@@ -216,9 +231,6 @@ pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError>
     let info: GetInfoResponse = serde_json::from_str(&response_text)?;
 
     // get balance
-    // /v1/balance/channels
-    // https://lightning.engineering/api-docs/api/lnd/lightning/channel-balance/
-    // send_balance_msats, receive_balance_msats, pending_balance, inactive_balance
     let balance_url = format!("{}/v1/balance/channels", config.url);
     
     let balance_response = client.get(&balance_url).send().await
@@ -275,6 +287,15 @@ pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError>
         ..Default::default()
     };
     Ok(node_info)
+}
+
+// Direct async export function for simpler usage
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, String> {
+    match get_info_async_internal(&config).await {
+        Ok(node_info) => Ok(node_info),
+        Err(e) => Err(format!("{}", e)),
+    }
 }
 
 pub fn create_invoice(

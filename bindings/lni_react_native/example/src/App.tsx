@@ -12,6 +12,7 @@ import {
   NwcConfig,
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
+  lndGetInfoAsync,
   type InvoicePollingStateInterface,
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
@@ -30,6 +31,54 @@ export default function App() {
       }
       return value;
     }, indent);
+  };
+
+  const testLndAsync = async () => {
+    try {
+      // Validate environment variables
+      if (!LND_URL || !LND_MACAROON) {
+        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
+        return;
+      }
+
+      setResult('🔄 Testing LND async get_info...');
+
+      const config = LndConfig.create({
+        url: LND_URL,
+        macaroon: LND_MACAROON,
+        socks5Proxy: '', // empty string instead of undefined
+        acceptInvalidCerts: true,
+      });
+
+      console.log('🔧 Testing LND async functionality');
+      console.log('🔧 Using LND_URL:', LND_URL);
+      console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
+
+      // Test the async function
+      console.log('📋 Calling lndGetInfoAsync...');
+      const nodeInfo = await lndGetInfoAsync(config);
+      
+      console.log('✅ LND async response received:', safetStringify(nodeInfo));
+      
+      setResult(`✅ LND Async Success! 
+Node: ${nodeInfo.alias || 'Unknown'}
+Pubkey: ${nodeInfo.pubkey.substring(0, 20)}...
+Network: ${nodeInfo.network}
+Block Height: ${nodeInfo.blockHeight}
+Send Balance: ${nodeInfo.sendBalanceMsat} msat
+Receive Balance: ${nodeInfo.receiveBalanceMsat} msat`);
+
+    } catch (error) {
+      console.error('❌ LND async test error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('connection refused') || errorMessage.includes('timeout')) {
+        setResult(`❌ LND Connection Error: Could not connect to LND at ${LND_URL}. Please check your LND node is running and accessible.`);
+      } else if (errorMessage.includes('authentication') || errorMessage.includes('macaroon')) {
+        setResult(`❌ LND Auth Error: Invalid macaroon. Please check your LND_MACAROON environment variable.`);
+      } else {
+        setResult(`❌ LND Async Error: ${errorMessage}`);
+      }
+    }
   };
 
   const testNwcPolling = async () => {
@@ -209,6 +258,14 @@ export default function App() {
           onPress={cancelPolling}
           disabled={!isPolling}
           color="red"
+        />
+      </View>
+      
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Test LND Async"
+          onPress={testLndAsync}
+          color="green"
         />
       </View>
       

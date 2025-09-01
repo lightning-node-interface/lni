@@ -111,10 +111,10 @@ impl LightningNode for LndNode {
 // Additional async methods for LndNode
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LndNode {
-    /// Async version of get_info that returns a Future/Promise
+    /// Async version of get_info that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn get_info_async(&self) -> Result<NodeInfo, ApiError> {
-        crate::lnd::api::get_info_async(&self.config).await
+    pub async fn get_info_async(&self) -> Result<NodeInfo, String> {
+        crate::lnd::api::lnd_get_info_async(self.config.clone()).await
     }
 }
 
@@ -186,6 +186,22 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to get info async: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lnd_get_info_async_direct() {
+        // Test the direct API function as well
+        match crate::lnd::api::lnd_get_info_async(NODE.config.clone()).await {
+            Ok(info) => {
+                println!("direct async info: {:?}", info);
+                assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
+                assert!(!info.alias.is_empty(), "Node alias should not be empty");
+                assert!(info.block_height > 0, "Block height should be greater than 0");
+            }
+            Err(e) => {
+                panic!("Failed to get info async direct: {:?}", e);
             }
         }
     }
