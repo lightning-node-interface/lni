@@ -11,20 +11,20 @@ import {
   BlinkNode,
   NwcConfig,
   OnInvoiceEventParams,
-  nwcOnInvoiceEventsWithCancellation,
-  type InvoiceEventsCancellationInterface,
+  nwcStartInvoicePolling,
+  type InvoicePollingStateInterface,
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON } from '@env';
 
 export default function App() {
-  const [result, setResult] = useState<string>('Ready to test Promise-based NWC polling...');
+  const [result, setResult] = useState<string>('Ready to test new InvoicePollingState approach...');
   const [isPolling, setIsPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const pollingStateRef = useRef<InvoicePollingStateInterface | null>(null);
 
-  const testNwcCancellation = async () => {
+  const testNwcPolling = async () => {
     try {
-      setResult('Starting Promise-based NWC polling...');
+      setResult('Starting InvoicePollingState-based NWC polling...');
       setIsPolling(true);
       setPollCount(0);
 
@@ -36,100 +36,92 @@ export default function App() {
       const params = OnInvoiceEventParams.create({
         paymentHash: "",
         search: undefined,
-        pollingDelaySec: BigInt(3),
-        maxPollingSec: BigInt(30),
+        pollingDelaySec: BigInt(2),
+        maxPollingSec: BigInt(15),
       });
 
-      // Create AbortController for proper cancellation
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+      console.log('🔧 Starting InvoicePollingState-based NWC polling');
 
-      console.log('🔧 Starting Promise-based NWC polling');
+      // Start the polling using the new function
+      console.log('📋 Config:', config);
+      console.log('📋 Params:', params);
+      const pollingState = nwcStartInvoicePolling(config, params);
+      console.log('📋 PollingState created:', pollingState);
+      pollingStateRef.current = pollingState;
 
-      // Manual polling loop with proper async/await and cancellation
-      const pollAsync = async () => {
+      // Check initial state
+      console.log(`📋 Initial poll count: ${pollingState.getPollCount()}`);
+      console.log(`📋 Initial status: ${pollingState.getLastStatus()}`);
+      console.log(`📋 Initial transaction: ${pollingState.getLastTransaction() ? 'present' : 'null'}`);
+      console.log(`📋 Initial cancelled: ${pollingState.isCancelled()}`);
+
+      // Give it a moment to start
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Monitor the polling state
+      const monitorPolling = async () => {
         const startTime = Date.now();
-        let currentPollCount = 0;
 
-        while (!abortController.signal.aborted) {
-          currentPollCount++;
-          setPollCount(currentPollCount);
-          setResult(`🔄 Poll #${currentPollCount}: Checking invoice status...`);
+        while (!pollingState.isCancelled()) {
+          const currentCount = pollingState.getPollCount();
+          const currentStatus = pollingState.getLastStatus();
+          const lastTransaction = pollingState.getLastTransaction();
 
-          console.log(`🔍 Poll #${currentPollCount}: Looking up invoice`);
+          setPollCount(currentCount);
 
-          try {
-            // For now, use the synchronous version until we rebuild with async version
-            const { nwcLookupInvoice } = require('lni_react_native');
-            
-            // Call the Rust function (this will be sync until we rebuild)
-            const transaction = await new Promise((resolve, reject) => {
-              try {
-                const result = nwcLookupInvoice(config, params.paymentHash, params.search);
-                resolve(result);
-              } catch (error) {
-                reject(error);
-              }
-            });
+          console.log(`📊 Poll #${currentCount}: Status: ${currentStatus}`);
+          console.log(`📊 Poll #${currentCount}: Transaction: ${lastTransaction ? 'present' : 'null'}`);
+          console.log(`📊 Poll #${currentCount}: Is cancelled: ${pollingState.isCancelled()}`);
+          
+          // Print detailed transaction info if present
+          if (lastTransaction) {
+            console.log(`📊 Poll #${currentCount}: Transaction details:`, JSON.stringify(lastTransaction, null, 2));
+          }
 
-            console.log(`✅ Poll #${currentPollCount}: lookup succeeded`, transaction);
-
-            if (transaction && (transaction as any).settledAt > 0) {
-              setResult(`✅ Poll #${currentPollCount}: Payment settled! Hash: ${(transaction as any).paymentHash}`);
-              setIsPolling(false);
-              abortControllerRef.current = null;
-              return;
-            } else {
-              setResult(`⏳ Poll #${currentPollCount}: Invoice still pending...`);
-            }
-
-          } catch (error) {
-            console.log(`❌ Poll #${currentPollCount}: lookup failed:`, error);
-            setResult(`❌ Poll #${currentPollCount}: ${error}`);
-            
-            // Stop after 10 failed attempts
-            if (currentPollCount >= 10) {
-              setResult(`❌ Stopped after ${currentPollCount} failed attempts`);
-              setIsPolling(false);
-              abortControllerRef.current = null;
-              return;
-            }
+          if (currentStatus === 'success' && lastTransaction) {
+            console.log(`✅ Poll #${currentCount}: SUCCESS - Payment settled!`);
+            setResult(`✅ Poll #${currentCount}: Payment settled! Transaction: ${JSON.stringify(lastTransaction).substring(0, 100)}...`);
+            setIsPolling(false);
+            pollingStateRef.current = null;
+            return;
+          } else if (currentStatus === 'failure') {
+            console.log(`❌ Poll #${currentCount}: FAILURE - Polling failed`);
+            setResult(`❌ Poll #${currentCount}: Polling failed with status: ${currentStatus}`);
+            setIsPolling(false);
+            pollingStateRef.current = null;
+            return;
+          } else {
+            console.log(`🔄 Poll #${currentCount}: CONTINUING - Status: ${currentStatus || 'pending'}`);
+            setResult(`🔄 Poll #${currentCount}: Status: ${currentStatus || 'pending'} - ${lastTransaction ? 'Transaction found' : 'No transaction yet'}`);
           }
 
           // Check timeout
           const elapsed = Date.now() - startTime;
-          if (elapsed > 30000) {
-            setResult(`⏰ Timeout after ${currentPollCount} polls`);
+          if (elapsed > 35000) { // Give a bit more time than the Rust timeout
+            setResult(`⏰ Monitoring timeout after ${currentCount} polls`);
             setIsPolling(false);
-            abortControllerRef.current = null;
+            pollingStateRef.current = null;
             return;
           }
 
-          // Wait 3 seconds before next poll (checking for cancellation every 500ms)
-          for (let i = 0; i < 6; i++) {
-            if (abortController.signal.aborted) {
-              setResult(`🛑 Cancelled after ${currentPollCount} polls`);
-              setIsPolling(false);
-              abortControllerRef.current = null;
-              return;
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          // Wait 1 second before checking again
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        if (abortController.signal.aborted) {
-          setResult(`🛑 Cancelled after ${currentPollCount} polls`);
+        if (pollingState.isCancelled()) {
+          const finalCount = pollingState.getPollCount();
+          setResult(`🛑 Cancelled after ${finalCount} polls`);
           setIsPolling(false);
-          abortControllerRef.current = null;
+          pollingStateRef.current = null;
         }
       };
 
-      // Start the polling
-      pollAsync().catch((error) => {
-        if (!abortController.signal.aborted) {
-          setResult(`❌ Polling error: ${error}`);
+      // Start monitoring the polling state
+      monitorPolling().catch((error) => {
+        if (!pollingState.isCancelled()) {
+          setResult(`❌ Monitoring error: ${error}`);
           setIsPolling(false);
-          abortControllerRef.current = null;
+          pollingStateRef.current = null;
         }
       });
 
@@ -137,18 +129,18 @@ export default function App() {
       console.log('❌ Error starting NWC polling:', error);
       setResult(`❌ Error: ${error}`);
       setIsPolling(false);
-      abortControllerRef.current = null;
+      pollingStateRef.current = null;
     }
   };
 
   const cancelPolling = () => {
     console.log('🛑 Cancel button clicked...');
-    if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
-      console.log('🛑 Aborting polling...');
-      abortControllerRef.current.abort();
+    if (pollingStateRef.current && !pollingStateRef.current.isCancelled()) {
+      console.log('🛑 Cancelling polling...');
+      pollingStateRef.current.cancel();
       setResult('🛑 Cancel requested!');
       
-      // The polling loop will detect the abort and clean up
+      // The monitoring loop will detect the cancellation and clean up
     } else {
       Alert.alert('No Active Polling', 'There is no active polling to cancel.');
     }
@@ -168,7 +160,7 @@ export default function App() {
 
         // Don't try to connect to LND since we don't have valid credentials
         // Just test that the library loads correctly
-        setResult('✅ LNI library loaded successfully! Ready to test Promise-based NWC polling.');
+        setResult('✅ LNI library loaded successfully! Ready to test InvoicePollingState approach.');
       } catch (error) {
         console.error('Error initializing LNI library:', error);
         setResult(`⚠️ Library loaded, but LND connection failed (expected): ${error}`);
@@ -179,13 +171,13 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Promise-based NWC Polling Test</Text>
+      <Text style={styles.title}>InvoicePollingState NWC Test</Text>
       <Text style={styles.result}>{result}</Text>
       
       <View style={styles.buttonContainer}>
         <Button
           title="Start NWC Polling"
-          onPress={testNwcCancellation}
+          onPress={testNwcPolling}
           disabled={isPolling}
         />
         

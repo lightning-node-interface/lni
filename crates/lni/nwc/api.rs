@@ -477,12 +477,19 @@ pub fn nwc_start_invoice_polling(
                 }
 
                 eprintln!("🔍 NWC: Looking up invoice with hash: {:?}", params_clone.payment_hash);
-                match lookup_invoice(
-                    &config_clone, 
-                    params_clone.payment_hash.clone(), 
-                    params_clone.search.clone()
-                ) {
-                    Ok(transaction) => {
+                
+                // Use async lookup with timeout wrapper
+                let lookup_result = tokio::time::timeout(
+                    tokio::time::Duration::from_secs(10), // 10 second timeout per lookup
+                    nwc_lookup_invoice_async(
+                        config_clone.clone(), 
+                        params_clone.payment_hash.clone(), 
+                        params_clone.search.clone()
+                    )
+                ).await;
+
+                match lookup_result {
+                    Ok(Ok(transaction)) => {
                         eprintln!("✅ NWC: lookup_invoice succeeded, settled_at: {}", transaction.settled_at);
                         if transaction.settled_at > 0 {
                             *state_clone.last_status.lock().unwrap() = "success".to_string();
@@ -493,11 +500,16 @@ pub fn nwc_start_invoice_polling(
                             *state_clone.last_transaction.lock().unwrap() = Some(transaction);
                         }
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         eprintln!("❌ NWC: lookup_invoice failed: {:?}", e);
                         *state_clone.last_status.lock().unwrap() = "failure".to_string();
                         *state_clone.last_transaction.lock().unwrap() = None;
                         // Don't break on error, keep polling
+                    }
+                    Err(_timeout) => {
+                        eprintln!("⏰ NWC: lookup_invoice timed out (10s)");
+                        *state_clone.last_status.lock().unwrap() = "pending".to_string();
+                        // Continue polling on timeout - treat as pending
                     }
                 };
 
