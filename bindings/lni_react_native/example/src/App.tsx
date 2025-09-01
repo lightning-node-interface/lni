@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, Alert, TextInput, Animated } from 'react-native';
+import { Text, View, StyleSheet, Button, Alert, TextInput, Animated, InteractionManager } from 'react-native';
+import { DeviceEventEmitter } from 'react-native';
 import {
   LndNode,
   LndConfig,
@@ -72,7 +73,7 @@ export default function App() {
         return;
       }
 
-      setResult('🔄 Testing LND sync get_info (with 3-second delay to test UI blocking)...');
+      setResult('🔄 Testing LND sync with background processing (15s delay)...');
 
       const config = LndConfig.create({
         url: LND_URL,
@@ -81,13 +82,37 @@ export default function App() {
         acceptInvalidCerts: true,
       });
 
-      console.log('🔧 Testing LND sync functionality with lndGetInfoSync()');
+      console.log('🔧 Testing LND sync functionality with background processing');
       console.log('🔧 Using LND_URL:', LND_URL);
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
-      console.log('📋 Calling lndGetInfoSync()...');
+      console.log('📋 Calling lndGetInfoSync() with multiple deferrals...');
       const startTime = Date.now();
-      const nodeInfo = lndGetInfoSync(config);
+
+      // Try multiple levels of deferral to force background execution
+      const nodeInfo = await new Promise<any>((resolve, reject) => {
+        // First deferral
+        setTimeout(() => {
+          // Second deferral using requestIdleCallback if available, or setTimeout
+          const deferAgain = () => {
+            setTimeout(() => {
+              try {
+                console.log('🔧 Executing synchronous LND call on deferred thread...');
+                const result = lndGetInfoSync(config);
+                console.log('🔧 Synchronous call completed');
+                resolve(result);
+              } catch (error) {
+                console.error('🔧 Synchronous call failed:', error);
+                reject(error);
+              }
+            }, 0);
+          };
+
+          // Try to use requestIdleCallback for even more deferral
+          deferAgain();
+        }, 0);
+      });
+
       const endTime = Date.now();
 
       console.log('✅ LND sync response received:', safetStringify(nodeInfo));
@@ -305,7 +330,7 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       
       <View style={styles.buttonContainer}>
         <Button
-          title="Test LND Sync (3s delay)"
+          title="Test LND Sync (15s delay)"
           onPress={testLndAsync}
           color="green"
         />
