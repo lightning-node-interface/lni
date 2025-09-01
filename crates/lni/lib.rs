@@ -40,6 +40,8 @@ pub mod lnd {
     pub mod lib;
     pub mod types;
     pub use lib::{LndConfig, LndNode};
+    // Re-export the standalone async function for uniffi
+    pub use api::lnd_get_info_async;
 }
 
 pub mod nwc {
@@ -78,6 +80,9 @@ pub use utils::*;
 
 pub mod database;
 pub use database::{Db, DbError, Payment};
+
+// Re-export standalone async functions at crate level for uniffi
+pub use lnd::api::lnd_get_info_async;
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();

@@ -13,6 +13,7 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
+  lndGetInfoAsync
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
@@ -53,10 +54,8 @@ export default function App() {
       console.log('🔧 Using LND_URL:', LND_URL);
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
-      // Create LND node instance and test the async method
-      const lndNode = new LndNode(config);
-      console.log('📋 Calling lndNode.getInfoAsync()...');
-      const nodeInfo = await lndNode.getInfoAsync();
+      console.log('📋 Calling lndGetInfoAsync()...');
+      const nodeInfo = await lndGetInfoAsync(config);
       
       console.log('✅ LND async response received:', safetStringify(nodeInfo));
       
