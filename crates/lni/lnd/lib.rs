@@ -108,7 +108,7 @@ impl LightningNode for LndNode {
     }
 }
 
-// Additional async methods for LndNode
+// Additional async methods for LndNode  
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LndNode {
     /// Async version of get_info that returns a Promise (non-blocking)

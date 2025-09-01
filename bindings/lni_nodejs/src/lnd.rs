@@ -44,7 +44,7 @@ impl LndNode {
   #[napi]
   pub async fn get_info_async(&self) -> napi::Result<lni::NodeInfo> {
     let config = self.inner.clone();
-    let info = lni::lnd::api::get_info_async(&config)
+    let info = lni::lnd::api::get_info_async(config)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
