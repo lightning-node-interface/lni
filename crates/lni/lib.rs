@@ -3,6 +3,8 @@ use napi_derive::napi;
 #[cfg(feature = "napi_rs")]
 use napi::bindgen_prelude::*;
 
+use std::time::Duration;
+
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -83,6 +85,14 @@ pub use database::{Db, DbError, Payment};
 
 // Re-export standalone functions at crate level for uniffi
 pub use lnd::api::lnd_get_info_sync;
+
+// Say something after a certain amount of time, by using `tokio::time::sleep`
+// instead of our own `TimerFuture`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn say_after_with_tokio(ms: u16, who: String) -> String {
+    tokio::time::sleep(Duration::from_millis(ms.into())).await;
+    format!("Hello, {who} (with Tokio)!")
+}
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();

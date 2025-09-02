@@ -47,7 +47,7 @@
     "test": "jest",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
-    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
+    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib && yarn cache clean --all && cd example && npx react-native start --reset-cache && cd ..",
     "prepare": "bob build",
     "release": "release-it",
     "package": "yarn prepare && yarn pack"
