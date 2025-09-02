@@ -88,7 +88,7 @@ pub use lnd::api::lnd_get_info_sync;
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_proxy: Option<String>) -> String {
+pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_proxy: Option<String>, header_key: Option<String>, header_value: Option<String>) -> String {
     // Create HTTP client with optional SOCKS5 proxy
     let client = if let Some(proxy_url) = socks5_proxy {
         // Ignore certificate errors when using SOCKS5 proxy
@@ -107,11 +107,15 @@ pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_prox
         reqwest::Client::builder().build().unwrap_or_else(|_| reqwest::Client::new())
     };
     
-    // Make HTTP request to get IP address
-    let ip_result = client
-        .get(&url)
-        .send()
-        .await;
+    // Create request with optional header
+    let mut request = client.get(&url);
+    
+    if let (Some(key), Some(value)) = (header_key, header_value) {
+        request = request.header(&key, &value);
+    }
+    
+    // Make HTTP request
+    let ip_result = request.send().await;
     
     let page_content = match ip_result {
         Ok(response) => {
