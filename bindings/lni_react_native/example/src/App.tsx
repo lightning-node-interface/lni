@@ -14,7 +14,8 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
-  lndGetInfoSync
+  lndGetInfoSync,
+  sayAfterWithTokio,
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
@@ -362,6 +363,21 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
           color="red"
         />
       </View>
+
+      <Button
+          title="Say After Tokio"
+          onPress={()=>{
+            const say = sayAfterWithTokio(5000, "World").then(setResult);
+          }}
+          color="red"
+        />
+      <Button
+          title="Say After"
+          onPress={()=>{
+            Alert.alert('Say After', 'Hello, World!');
+          }}
+          color="pink"
+        />
       
       <View style={styles.statusContainer}>
         <Text style={styles.statusText}>

@@ -86,12 +86,32 @@ pub use database::{Db, DbError, Payment};
 // Re-export standalone functions at crate level for uniffi
 pub use lnd::api::lnd_get_info_sync;
 
-// Say something after a certain amount of time, by using `tokio::time::sleep`
-// instead of our own `TimerFuture`.
+// Make an HTTP request to get IP address and simulate latency
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn say_after_with_tokio(ms: u16, who: String) -> String {
+    // Make HTTP request to get IP address
+    let client = reqwest::Client::new();
+    let ip_result = client
+        .get("https://api.ipify.org?format=json")
+        .send()
+        .await;
+    
+    let ip_info = match ip_result {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(json) => {
+                    json.get("ip").and_then(|v| v.as_str()).unwrap_or("unknown").to_string()
+                }
+                Err(_) => "unknown".to_string()
+            }
+        }
+        Err(_) => "unknown".to_string()
+    };
+    
+    // Simulate latency
     tokio::time::sleep(Duration::from_millis(ms.into())).await;
-    format!("Hello, {who} (with Tokio)!")
+    
+    format!("Hello, {who}! Your IP address is: {ip_info} (with Tokio after {ms}ms delay)")
 }
 
 #[cfg(feature = "uniffi")]
