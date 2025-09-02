@@ -86,11 +86,27 @@ pub use database::{Db, DbError, Payment};
 // Re-export standalone functions at crate level for uniffi
 pub use lnd::api::lnd_get_info_sync;
 
-// Make an HTTP request to get IP address and simulate latency
+// Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn say_after_with_tokio(ms: u16, who: String) -> String {
+pub async fn say_after_with_tokio(ms: u16, who: String, socks5_proxy: Option<String>) -> String {
+    // Create HTTP client with optional SOCKS5 proxy
+    let client_builder = reqwest::Client::builder();
+    
+    let client = if let Some(proxy_url) = socks5_proxy {
+        match reqwest::Proxy::all(&proxy_url) {
+            Ok(proxy) => {
+                match client_builder.proxy(proxy).build() {
+                    Ok(client) => client,
+                    Err(_) => reqwest::Client::new() // Fallback to default client on error
+                }
+            }
+            Err(_) => reqwest::Client::new() // Fallback to default client on error
+        }
+    } else {
+        client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    };
+    
     // Make HTTP request to get IP address
-    let client = reqwest::Client::new();
     let ip_result = client
         .get("https://api.ipify.org?format=json")
         .send()
@@ -111,7 +127,8 @@ pub async fn say_after_with_tokio(ms: u16, who: String) -> String {
     // Simulate latency
     tokio::time::sleep(Duration::from_millis(ms.into())).await;
     
-    format!("Hello, {who}! Your IP address is: {ip_info} (with Tokio after {ms}ms delay)")
+    
+    format!("Hello, {who}! Your IP address is: {ip_info}(with Tokio after {ms}ms delay)")
 }
 
 #[cfg(feature = "uniffi")]
