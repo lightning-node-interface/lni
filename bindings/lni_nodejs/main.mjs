@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, LndNode, NwcNode, InvoiceType } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, NwcNode, InvoiceType, sayAfterWithTokio } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -240,6 +240,45 @@ async function nwc() {
   }
 }
 
+async function testSayAfterWithTokio() {
+  console.log("\n=== Testing sayAfterWithTokio function ===");
+  
+  try {
+    // Test 1: Basic HTTP request without proxy
+    console.log("Test 1: Basic HTTP request to ipify.org");
+    const result1 = await sayAfterWithTokio(
+      1000,                                    // 1 second delay
+      "Nick",                                  // Name
+      "https://api.ipify.org?format=json",     // URL
+      null,                                    // No proxy
+      null,                                    // No header key
+      null                                     // No header value
+    );
+    console.log("Result 1:", result1);
+
+    // Test 2: Request with SOCKS5 proxy (will likely fail unless you have a proxy running)
+    console.log("\nTest 3: Request with SOCKS5 proxy (may fail if no proxy available)");
+    try {
+      const result3 = await sayAfterWithTokio(
+        2000,                                  // 2 second delay
+        "ProxyUser",                           // Name
+        "https://api.ipify.org?format=json",   // URL
+        "socks5h://127.0.0.1:9150",            // SOCKS5 proxy (common default)
+        "X-Test-Header",                       // Header key
+        "proxy-test"                           // Header value
+      );
+      console.log("Result 3:", result3);
+    } catch (proxyError) {
+      console.log("Result 3: Proxy test failed (expected if no proxy running):", proxyError.message);
+    }
+
+    console.log("\n=== sayAfterWithTokio tests completed ===\n");
+
+  } catch (error) {
+    console.error("Test error:", error.message);
+  }
+}
+
 async function test() {
   const config = {
     url: process.env.PHOENIXD_URL,
@@ -271,9 +310,13 @@ async function test() {
 }
 
 async function main() {
+  // Test the HTTP function
+  await testSayAfterWithTokio();
+  
+  // Uncomment these to test other functionality
   // phoenixd();
   // cln();
-  await lnd();
+  // await lnd();
   // await nwc();
   // test();
 }

@@ -276,6 +276,7 @@ export interface InvoiceEvent {
   status: string
   transaction?: Transaction
 }
+export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
