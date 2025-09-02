@@ -90,9 +90,10 @@ pub use lnd::api::lnd_get_info_sync;
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_proxy: Option<String>) -> String {
     // Create HTTP client with optional SOCKS5 proxy
-    let client_builder = reqwest::Client::builder();
-    
     let client = if let Some(proxy_url) = socks5_proxy {
+        // Ignore certificate errors when using SOCKS5 proxy
+        let client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
+        
         match reqwest::Proxy::all(&proxy_url) {
             Ok(proxy) => {
                 match client_builder.proxy(proxy).build() {
@@ -103,7 +104,7 @@ pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_prox
             Err(_) => reqwest::Client::new() // Fallback to default client on error
         }
     } else {
-        client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+        reqwest::Client::builder().build().unwrap_or_else(|_| reqwest::Client::new())
     };
     
     // Make HTTP request to get IP address

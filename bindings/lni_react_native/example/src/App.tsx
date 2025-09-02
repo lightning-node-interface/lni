@@ -367,7 +367,7 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       <Button
           title="Say After Tokio"
           onPress={()=>{
-            const say = sayAfterWithTokio(5000, "World", "socks5h://localhost:9050").then(setResult);
+            const say = sayAfterWithTokio(5000, "World", "http://jqyzxhjk6psc6ul5jnfwloamhtyh7si74b4743k2qgpskwwxrzhsxmad.onion", "socks5h://localhost:9050").then(setResult);
           }}
           color="red"
         />
