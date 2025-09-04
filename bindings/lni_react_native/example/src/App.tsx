@@ -15,9 +15,10 @@ import {
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
   lndGetInfoSync,
+  lndOnInvoiceEventsAsync,
   sayAfterWithTokio,
 } from 'lni_react_native';
-import { LND_URL, LND_MACAROON, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
+import { LND_URL, LND_MACAROON, LND_TEST_PAYMENT_HASH, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
 export default function App() {
   const [result, setResult] = useState<string>('Ready to test UI thread blocking...');
@@ -27,6 +28,7 @@ export default function App() {
   const [spinnerRotation] = useState(new Animated.Value(0));
   const [textInput, setTextInput] = useState('Type here to test UI responsiveness');
   const pollingStateRef = useRef<InvoicePollingStateInterface | null>(null);
+  const lndNodeRef = useRef<LndNode | null>(null);
   const counterIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // UI responsiveness test - counter that increments every second
@@ -146,6 +148,115 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
     }
   };
 
+  const testLndInvoiceEvents = async () => {
+    try {
+      // Validate environment variables
+      if (!LND_URL || !LND_MACAROON) {
+        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
+        return;
+      }
+      if (!LND_TEST_PAYMENT_HASH) {
+        setResult('❌ Error: LND_TEST_PAYMENT_HASH not found in environment variables');
+        return;
+      }
+
+      setResult('🔄 Testing LND async invoice events...');
+      setIsPolling(true);
+      setPollCount(0);
+      
+      // Clear any NWC reference
+      pollingStateRef.current = null;
+
+      const config = LndConfig.create({
+        url: LND_URL,
+        macaroon: LND_MACAROON,
+        socks5Proxy: '', // empty string instead of undefined
+        acceptInvalidCerts: true,
+      });
+
+      const node = new LndNode(config);
+      lndNodeRef.current = node; // Store reference for potential cancellation
+
+      const params = OnInvoiceEventParams.create({
+        paymentHash: LND_TEST_PAYMENT_HASH,
+        search: undefined,
+        pollingDelaySec: BigInt(3),
+        maxPollingSec: BigInt(20),
+      });
+
+      console.log('🔧 Starting LND async invoice events test');
+      console.log('🔧 Using LND_URL:', LND_URL);
+      console.log('🔧 Using payment hash:', LND_TEST_PAYMENT_HASH);
+
+      // Create callback to handle events with simpler structure
+      const handleSuccess = (transaction: Transaction | undefined) => {
+        console.log('✅ LND Success callback:', transaction);
+        setResult(`✅ LND Invoice Event Success! Transaction: ${transaction ? safetStringify(transaction).substring(0, 200) + '...' : 'No transaction data'}`);
+        setIsPolling(false);
+        lndNodeRef.current = null;
+      };
+
+      const handlePending = (transaction: Transaction | undefined) => {
+        const count = pollCount + 1;
+        setPollCount(count);
+        console.log(`🔄 LND Pending callback #${count}:`, transaction);
+        setResult(`🔄 LND Poll #${count}: Invoice pending... ${transaction ? 'Transaction found' : 'No transaction yet'}`);
+      };
+
+      const handleFailure = (transaction: Transaction | undefined) => {
+        console.log(`❌ LND Failure callback ${Date.now()}:`, transaction);
+        //setResult(`❌ LND Invoice Event Failed. ${transaction ? 'Transaction: ' + safetStringify(transaction).substring(0, 100) + '...' : 'No transaction data'}`);
+        //setIsPolling(false);
+        lndNodeRef.current = null;
+      };
+
+      const callback: OnInvoiceEventCallback = {
+        success: handleSuccess,
+        pending: handlePending,
+        failure: handleFailure,
+      };
+
+      console.log('📋 Starting LND async invoice events with config:', safetStringify(config));
+      console.log('📋 Params:', safetStringify(params));
+      console.log('📋 Callback:', callback);
+      console.log('📋 Available lndOnInvoiceEventsAsync:', typeof lndOnInvoiceEventsAsync);
+
+      // Start the async invoice event monitoring using the direct function
+      try {
+        console.log('📋 Calling lndOnInvoiceEventsAsync...');
+        const result = await lndOnInvoiceEventsAsync(config, params, callback);
+        console.log('🔄 LND async invoice events completed:', result);
+        if (isPolling) {
+          setResult('🔄 LND async invoice events monitoring completed');
+          setIsPolling(false);
+          lndNodeRef.current = null;
+        }
+      } catch (error) {
+        console.error('❌ LND async invoice events error:', error);
+        console.error('❌ Error type:', typeof error);
+        console.error('❌ Error constructor:', error?.constructor?.name);
+        setResult(`❌ LND Async Invoice Events Error: ${error}`);
+        setIsPolling(false);
+        lndNodeRef.current = null;
+      }
+
+      // Set a timeout to cancel if it takes too long
+      setTimeout(() => {
+        if (isPolling) {
+          setResult('⏰ LND async invoice events test timeout (25s)');
+          setIsPolling(false);
+          lndNodeRef.current = null;
+        }
+      }, 25000);
+
+    } catch (error) {
+      console.error('❌ Error starting LND invoice events test:', error);
+      setResult(`❌ LND Test Error: ${error}`);
+      setIsPolling(false);
+      lndNodeRef.current = null;
+    }
+  };
+
   const testNwcPolling = async () => {
     try {
       // Validate environment variables
@@ -161,6 +272,9 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       setResult('Starting InvoicePollingState-based NWC polling...');
       setIsPolling(true);
       setPollCount(0);
+      
+      // Clear any LND reference 
+      lndNodeRef.current = null;
 
       const config = NwcConfig.create({
         nwcUri: NWC_URI,
@@ -272,12 +386,26 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
 
   const cancelPolling = () => {
     console.log('🛑 Cancel button clicked...');
+    
+    let cancelledSomething = false;
+    
+    // Cancel NWC polling if active
     if (pollingStateRef.current && !pollingStateRef.current.isCancelled()) {
-      console.log('🛑 Cancelling polling...');
+      console.log('🛑 Cancelling NWC polling...');
       pollingStateRef.current.cancel();
+      cancelledSomething = true;
+    }
+    
+    // Cancel LND polling if active 
+    if (lndNodeRef.current) {
+      console.log('🛑 Cancelling LND polling...');
+      lndNodeRef.current = null; // Clear reference to signal cancellation intent
+      cancelledSomething = true;
+    }
+    
+    if (cancelledSomething) {
       setResult('🛑 Cancel requested!');
-      
-      // The monitoring loop will detect the cancellation and clean up
+      setIsPolling(false);
     } else {
       Alert.alert('No Active Polling', 'There is no active polling to cancel.');
     }
@@ -357,6 +485,13 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
         />
         
         <Button
+          title="Test LND Async Events"
+          onPress={testLndInvoiceEvents}
+          disabled={isPolling}
+          color="purple"
+        />
+        
+        <Button
           title="Cancel Polling"
           onPress={cancelPolling}
           disabled={!isPolling}
@@ -386,11 +521,14 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
         <Text style={styles.helperText}>
           {isPolling 
             ? "🔥 UI should remain responsive! Try tapping buttons." 
-            : "Test the sync function to see if UI blocks during 3s delay."
+            : "Test async functions to see non-blocking behavior."
           }
         </Text>
         <Text style={styles.helperText}>
           Watch the spinner and counter - they should keep moving if UI thread is not blocked!
+        </Text>
+        <Text style={styles.helperText}>
+          Active polling: {pollingStateRef.current ? 'NWC' : lndNodeRef.current ? 'LND' : 'None'}
         </Text>
       </View>
     </View>
