@@ -14,8 +14,8 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
-  lndGetInfoSync,
-  lndOnInvoiceEventsAsync,
+  getInfoSync,
+  onInvoiceEventsAsync,
   sayAfterWithTokio,
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, LND_TEST_PAYMENT_HASH, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
@@ -101,7 +101,7 @@ export default function App() {
             setTimeout(() => {
               try {
                 console.log('🔧 Executing synchronous LND call on deferred thread...');
-                const result = lndGetInfoSync(config);
+                const result = getInfoSync(config);
                 console.log('🔧 Synchronous call completed');
                 resolve(result);
               } catch (error) {
@@ -219,12 +219,12 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       console.log('📋 Starting LND async invoice events with config:', safetStringify(config));
       console.log('📋 Params:', safetStringify(params));
       console.log('📋 Callback:', callback);
-      console.log('📋 Available lndOnInvoiceEventsAsync:', typeof lndOnInvoiceEventsAsync);
+      console.log('📋 Available onInvoiceEventsAsync:', typeof onInvoiceEventsAsync);
 
       // Start the async invoice event monitoring using the direct function
       try {
-        console.log('📋 Calling lndOnInvoiceEventsAsync...');
-        const result = await lndOnInvoiceEventsAsync(config, params, callback);
+        console.log('📋 Calling onInvoiceEventsAsync...');
+        const result = await onInvoiceEventsAsync(config, params, callback);
         console.log('🔄 LND async invoice events completed:', result);
         if (isPolling) {
           setResult('🔄 LND async invoice events monitoring completed');

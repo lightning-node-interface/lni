@@ -115,13 +115,13 @@ impl LndNode {
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn get_info_async(&self) -> Result<NodeInfo, ApiError> {
         // Use the new async API function that follows the say_after_with_tokio pattern
-        crate::lnd::api::lnd_get_info_async(self.config.clone()).await
+        crate::lnd::api::get_info_async(self.config.clone()).await
     }
 
     /// Async version of lookup_invoice that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn lookup_invoice_async(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::lnd::api::lnd_lookup_invoice_async(
+        crate::lnd::api::lookup_invoice_async(
             self.config.clone(), 
             params.payment_hash,
             None,
@@ -137,31 +137,31 @@ impl LndNode {
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::lnd::api::lnd_on_invoice_events_async(self.config.clone(), params, callback).await
+        crate::lnd::api::on_invoice_events_async(self.config.clone(), params, callback).await
     }
 
     /// Async version of create_invoice that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn create_invoice_async(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::lnd::api::lnd_create_invoice_async(self.config.clone(), params).await
+        crate::lnd::api::create_invoice_async(self.config.clone(), params).await
     }
 
     /// Async version of pay_invoice that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn pay_invoice_async(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::lnd::api::lnd_pay_invoice_async(self.config.clone(), params).await
+        crate::lnd::api::pay_invoice_async(self.config.clone(), params).await
     }
 
     /// Async version of decode that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn decode_async(&self, invoice_str: String) -> Result<String, ApiError> {
-        crate::lnd::api::lnd_decode_async(self.config.clone(), invoice_str).await
+        crate::lnd::api::decode_async(self.config.clone(), invoice_str).await
     }
 
     /// Async version of list_transactions that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn list_transactions_async(&self, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
-        crate::lnd::api::lnd_list_transactions_async(
+        crate::lnd::api::list_transactions_async(
             self.config.clone(),
             Some(params.from),
             Some(params.limit),
@@ -243,30 +243,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lnd_get_info_async_direct() {
-        // Test the direct API function as well
-        match tokio::task::spawn_blocking(move || {
-            crate::lnd::api::lnd_get_info_sync(NODE.config.clone())
-        }).await {
-            Ok(Ok(info)) => {
-                println!("direct sync info: {:?}", info);
-                assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
-                assert!(!info.alias.is_empty(), "Node alias should not be empty");
-                assert!(info.block_height > 0, "Block height should be greater than 0");
-            }
-            Ok(Err(e)) => {
-                panic!("Failed to get info sync direct: {:?}", e);
-            }
-            Err(e) => {
-                panic!("Failed to run sync task: {:?}", e);
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_lnd_get_info_async_new() {
+    async fn test_get_info_async_new() {
         // Test the new async API function directly
-        match crate::lnd::api::lnd_get_info_async(NODE.config.clone()).await {
+        match crate::lnd::api::get_info_async(NODE.config.clone()).await {
             Ok(info) => {
                 println!("new async info: {:?}", info);
                 assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");

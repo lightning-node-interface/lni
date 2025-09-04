@@ -42,16 +42,6 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn get_info_async(&self) -> napi::Result<lni::NodeInfo> {
-    let config = self.inner.clone();
-    let info = tokio::task::spawn_blocking(move || {
-      lni::lnd::api::lnd_get_info_sync(config)
-    }).await.map_err(|e| napi::Error::from_reason(format!("Failed to run sync task: {}", e)))?
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(info)
-  }
-
-  #[napi]
   pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::lnd::api::create_invoice(&self.inner, params)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;

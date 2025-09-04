@@ -17,7 +17,7 @@ use serde_json::json;
 
 // Simple test function to check if basic uniffi binding works
 #[uniffi::export]
-pub fn lnd_test_sync(config: LndConfig) -> Result<String, ApiError> {
+pub fn test_sync(config: LndConfig) -> Result<String, ApiError> {
     Ok(format!("Sync test successful. URL: {}", config.url))
 }
 
@@ -195,38 +195,9 @@ fn process_node_info_responses(
     }
 }
 
-// Synchronous version that works reliably with uniffi-bindgen-react-native
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn lnd_get_info_sync(config: LndConfig) -> Result<NodeInfo, ApiError> {
-    // Try using a different approach - spawn a separate thread for the HTTP call
-    std::thread::spawn(move || {
-        // Add artificial delay to test UI blocking (remove in production)
-        std::thread::sleep(std::time::Duration::from_secs(15));
-
-        let req_url = format!("{}/v1/getinfo", config.url);
-        let client = client(&config);
-
-        let response = client.get(&req_url).send().unwrap();
-        let response_text = response.text().unwrap();
-        let response_text = response_text.as_str();
-        let info: GetInfoResponse = serde_json::from_str(&response_text)?;
-
-        // get balance
-        let balance_url = format!("{}/v1/balance/channels", config.url);
-        let balance_response = client.get(&balance_url).send().unwrap();
-        let balance_response_text = balance_response.text().unwrap();
-        let balance_response_text = balance_response_text.as_str();
-        let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
-
-        // Use shared logic to create NodeInfo
-        let node_info = process_node_info_responses(info, balance);
-        Ok(node_info)
-    }).join().unwrap()
-}
-
 // Async version following the same pattern as say_after_with_tokio
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
+pub async fn get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
     // Create HTTP client using the helper function
     let client = async_client(&config);
     
@@ -559,9 +530,9 @@ pub fn lookup_invoice(
     })
 }
 
-// Async version of lookup_invoice following the same pattern as lnd_get_info_async
+// Async version of lookup_invoice following the same pattern as get_info_async
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_lookup_invoice_async(
+pub async fn lookup_invoice_async(
     config: LndConfig,
     payment_hash: Option<String>,
     _from: Option<i64>,
@@ -795,7 +766,7 @@ pub async fn poll_invoice_events_async<F>(
             break;
         }
 
-        let lookup_result = lnd_lookup_invoice_async(
+        let lookup_result = lookup_invoice_async(
             config.clone(),
             params.payment_hash.clone(),
             None,
@@ -816,7 +787,7 @@ pub async fn poll_invoice_events_async<F>(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_on_invoice_events_async(
+pub async fn on_invoice_events_async(
     config: LndConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
@@ -832,7 +803,7 @@ pub async fn lnd_on_invoice_events_async(
 
 // Async version of create_invoice
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_create_invoice_async(
+pub async fn create_invoice_async(
     config: LndConfig,
     params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
@@ -889,7 +860,7 @@ pub async fn lnd_create_invoice_async(
 
 // Async version of pay_invoice
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_pay_invoice_async(
+pub async fn pay_invoice_async(
     config: LndConfig,
     params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
@@ -930,7 +901,7 @@ pub async fn lnd_pay_invoice_async(
 
 // Async version of decode
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_decode_async(config: LndConfig, invoice_str: String) -> Result<String, ApiError> {
+pub async fn decode_async(config: LndConfig, invoice_str: String) -> Result<String, ApiError> {
     let client = async_client(&config);
     
     let req_url = format!("{}/v1/payreq/{}", config.url, invoice_str);
@@ -952,7 +923,7 @@ pub async fn lnd_decode_async(config: LndConfig, invoice_str: String) -> Result<
 
 // Async version of list_transactions
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn lnd_list_transactions_async(
+pub async fn list_transactions_async(
     config: LndConfig,
     _from: Option<i64>,
     _limit: Option<i64>,
