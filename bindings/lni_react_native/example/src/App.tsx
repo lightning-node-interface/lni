@@ -14,7 +14,7 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
-  getInfoSync,
+  getInfoAsync,
   onInvoiceEventsAsync,
   sayAfterWithTokio,
 } from 'lni_react_native';
@@ -76,7 +76,7 @@ export default function App() {
         return;
       }
 
-      setResult('🔄 Testing LND sync with background processing (15s delay)...');
+      setResult('🔄 Testing LND async with background processing (15s delay)...');
 
       const config = LndConfig.create({
         url: LND_URL,
@@ -85,7 +85,7 @@ export default function App() {
         acceptInvalidCerts: true,
       });
 
-      console.log('🔧 Testing LND sync functionality with background processing');
+      console.log('🔧 Testing LND async functionality with background processing');
       console.log('🔧 Using LND_URL:', LND_URL);
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
@@ -98,14 +98,14 @@ export default function App() {
         setTimeout(() => {
           // Second deferral using requestIdleCallback if available, or setTimeout
           const deferAgain = () => {
-            setTimeout(() => {
+            setTimeout(async () => {
               try {
-                console.log('🔧 Executing synchronous LND call on deferred thread...');
-                const result = getInfoSync(config);
-                console.log('🔧 Synchronous call completed');
+                console.log('🔧 Executing asynchronous LND call on deferred thread...');
+                const result = await getInfoAsync(config);
+                console.log('🔧 Asynchronous call completed');
                 resolve(result);
               } catch (error) {
-                console.error('🔧 Synchronous call failed:', error);
+                console.error('🔧 Asynchronous call failed:', error);
                 reject(error);
               }
             }, 0);
@@ -118,10 +118,10 @@ export default function App() {
 
       const endTime = Date.now();
 
-      console.log('✅ LND sync response received:', safetStringify(nodeInfo));
+      console.log('✅ LND Async response received:', safetStringify(nodeInfo));
       console.log(`⏱️ API call took ${endTime - startTime}ms`);
 
-      setResult(`✅ LND Sync Success! (${endTime - startTime}ms)
+      setResult(`✅ LND Async Success! (${endTime - startTime}ms)
 Node: ${nodeInfo.alias || 'Unknown'}
 Pubkey: ${nodeInfo.pubkey.substring(0, 20)}...
 Network: ${nodeInfo.network}
@@ -136,14 +136,14 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
 • Text input should be editable`);
 
     } catch (error) {
-      console.error('❌ LND sync test error:', error);
+      console.error('❌ LND Async test error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('connection refused') || errorMessage.includes('timeout')) {
         setResult(`❌ LND Connection Error: Could not connect to LND at ${LND_URL}. Please check your LND node is running and accessible.`);
       } else if (errorMessage.includes('authentication') || errorMessage.includes('macaroon')) {
         setResult(`❌ LND Auth Error: Invalid macaroon. Please check your LND_MACAROON environment variable.`);
       } else {
-        setResult(`❌ LND Sync Error: ${errorMessage}`);
+        setResult(`❌ LND Async Error: ${errorMessage}`);
       }
     }
   };
@@ -459,7 +459,7 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       
       <View style={styles.buttonContainer}>
         <Button
-          title="Test LND Sync (15s delay)"
+          title="Test LND Async (15s delay)"
           onPress={testLndAsync}
           color="green"
         />
