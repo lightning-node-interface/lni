@@ -10,8 +10,10 @@ use crate::types::NodeInfo;
 use crate::{
     calculate_fee_msats, ApiError, CreateInvoiceParams, InvoiceType, OnInvoiceEventCallback,
     OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    DEFAULT_INVOICE_EXPIRY,
 };
 use reqwest::header;
+use serde_json::json;
 
 // Simple test function to check if basic uniffi binding works
 #[uniffi::export]
@@ -331,13 +333,13 @@ pub fn pay_invoice(
     params.push((
         "payment_request",
         Some(serde_json::Value::String(
-            (invoice_params.invoice.to_string()),
+            invoice_params.invoice.to_string(),
         )),
     ));
     invoice_params.amount_msats.map(|amt| {
         params.push((
             "amt_msat",
-            Some(serde_json::Value::String((amt.to_string()))),
+            Some(serde_json::Value::String(amt.to_string())),
         ))
     });
     invoice_params.allow_self_payment.map(|allow| {
@@ -826,4 +828,194 @@ pub async fn lnd_on_invoice_events_async(
         _ => {}
     })
     .await;
+}
+
+// Async version of create_invoice
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_create_invoice_async(
+    config: LndConfig,
+    params: CreateInvoiceParams,
+) -> Result<Transaction, ApiError> {
+    let client = async_client(&config);
+    
+    let mut body = json!({
+        "value_msat": params.amount_msats.unwrap_or(0),
+        "memo": params.description.clone().unwrap_or_default(),
+        "expiry": params.expiry.unwrap_or(DEFAULT_INVOICE_EXPIRY),
+        "private": params.is_private.unwrap_or(false),
+    });
+
+    if let Some(preimage) = params.r_preimage.clone() {
+        body["r_preimage"] = json!(preimage);
+    }
+
+    if params.is_blinded.unwrap_or(false) {
+        body["is_blinded"] = json!(true);
+    }
+
+    let req_url = format!("{}/v1/invoices", config.url);
+    let response = client
+        .post(&req_url)
+        .header("Grpc-Metadata-macaroon", &config.macaroon)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to create invoice: {}", e),
+        })?;
+
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read create invoice response: {}", e),
+    })?;
+
+    let create_response: Bolt11Resp = serde_json::from_str(&response_text)?;
+
+    Ok(Transaction {
+        type_: "incoming".to_string(),
+        invoice: create_response.payment_request,
+        preimage: "".to_string(),
+        payment_hash: create_response.r_hash,
+        amount_msats: params.amount_msats.unwrap_or(0),
+        fees_paid: 0,
+        created_at: 0,
+        expires_at: params.expiry.unwrap_or(DEFAULT_INVOICE_EXPIRY),
+        settled_at: 0,
+        description: params.description.clone().unwrap_or_default(),
+        description_hash: params.description_hash.clone().unwrap_or_default(),
+        payer_note: Some("".to_string()),
+        external_id: Some("".to_string()),
+    })
+}
+
+// Async version of pay_invoice
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_pay_invoice_async(
+    config: LndConfig,
+    params: PayInvoiceParams,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let client = async_client(&config);
+    
+    let mut body = json!({
+        "payment_request": params.invoice,
+        "allow_self_payment": params.allow_self_payment.unwrap_or(false),
+    });
+
+    if let Some(fee_limit_percentage) = params.fee_limit_percentage {
+        if let Some(amt) = params.amount_msats {
+            body["fee_limit"] = json!({
+                "fixed_msat": Some(serde_json::Value::String(amt.to_string())),
+                "percent": Some(serde_json::Value::Number(serde_json::Number::from_f64(fee_limit_percentage).unwrap()))
+            });
+        }
+    }
+
+    let req_url = format!("{}/v2/router/send", config.url);
+    let response = client
+        .post(&req_url)
+        .header("Grpc-Metadata-macaroon", &config.macaroon)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to pay invoice: {}", e),
+        })?;
+
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read pay invoice response: {}", e),
+    })?;
+
+    let pay_response: PayInvoiceResponse = serde_json::from_str(&response_text)?;
+    Ok(pay_response)
+}
+
+// Async version of decode
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_decode_async(config: LndConfig, invoice_str: String) -> Result<String, ApiError> {
+    let client = async_client(&config);
+    
+    let req_url = format!("{}/v1/payreq/{}", config.url, invoice_str);
+    let response = client
+        .get(&req_url)
+        .header("Grpc-Metadata-macaroon", &config.macaroon)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to decode invoice: {}", e),
+        })?;
+
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read decode response: {}", e),
+    })?;
+
+    Ok(response_text)
+}
+
+// Async version of list_transactions
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_list_transactions_async(
+    config: LndConfig,
+    _from: Option<i64>,
+    _limit: Option<i64>,
+    _search: Option<String>,
+) -> Result<Vec<Transaction>, ApiError> {
+    let client = async_client(&config);
+    
+    let list_txns_url = format!("{}/v1/invoices", config.url);
+    let response = client
+        .get(&list_txns_url)
+        .header("Grpc-Metadata-macaroon", &config.macaroon)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to list transactions: {}", e),
+        })?;
+
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read list transactions response: {}", e),
+    })?;
+
+    let txns: ListInvoiceResponseWrapper = serde_json::from_str(&response_text)?;
+
+    let mut transactions: Vec<Transaction> = txns
+        .invoices
+        .into_iter()
+        .map(|inv| Transaction {
+            type_: "incoming".to_string(),
+            invoice: inv.payment_request.unwrap_or_default(),
+            preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap_or_default()),
+            payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap_or_default()),
+            amount_msats: inv
+                .amt_paid_msat
+                .unwrap_or_default()
+                .parse::<i64>()
+                .unwrap_or_default(),
+            fees_paid: inv
+                .value_msat
+                .unwrap_or_default()
+                .parse::<i64>()
+                .unwrap_or_default(),
+            created_at: inv
+                .creation_date
+                .unwrap_or_default()
+                .parse::<i64>()
+                .unwrap_or_default(),
+            expires_at: inv
+                .expiry
+                .unwrap_or_default()
+                .parse::<i64>()
+                .unwrap_or_default(),
+            settled_at: inv
+                .settle_date
+                .unwrap_or_default()
+                .parse::<i64>()
+                .unwrap_or_default(),
+            description: inv.memo.unwrap_or_default(),
+            description_hash: inv.description_hash.unwrap_or_default(),
+            payer_note: Some("".to_string()),
+            external_id: Some("".to_string()),
+        })
+        .collect();
+
+    transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(transactions)
 }

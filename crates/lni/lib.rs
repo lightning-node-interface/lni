@@ -50,6 +50,11 @@ pub mod lnd {
     pub use api::lnd_lookup_invoice_async;
     // Re-export the standalone async on_invoice_events function for uniffi
     pub use api::lnd_on_invoice_events_async;
+    // Re-export additional async functions for uniffi
+    pub use api::lnd_create_invoice_async;
+    pub use api::lnd_pay_invoice_async;
+    pub use api::lnd_decode_async;
+    pub use api::lnd_list_transactions_async;
 }
 
 pub mod nwc {

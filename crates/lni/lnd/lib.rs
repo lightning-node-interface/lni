@@ -139,6 +139,35 @@ impl LndNode {
     ) {
         crate::lnd::api::lnd_on_invoice_events_async(self.config.clone(), params, callback).await
     }
+
+    /// Async version of create_invoice that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn create_invoice_async(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::lnd::api::lnd_create_invoice_async(self.config.clone(), params).await
+    }
+
+    /// Async version of pay_invoice that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn pay_invoice_async(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::lnd::api::lnd_pay_invoice_async(self.config.clone(), params).await
+    }
+
+    /// Async version of decode that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn decode_async(&self, invoice_str: String) -> Result<String, ApiError> {
+        crate::lnd::api::lnd_decode_async(self.config.clone(), invoice_str).await
+    }
+
+    /// Async version of list_transactions that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn list_transactions_async(&self, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
+        crate::lnd::api::lnd_list_transactions_async(
+            self.config.clone(),
+            Some(params.from),
+            Some(params.limit),
+            params.search
+        ).await
+    }
 }
 
 #[cfg(test)]
