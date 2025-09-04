@@ -46,26 +46,33 @@ fn client(config: &LndConfig) -> reqwest::blocking::Client {
 }
 
 fn async_client(config: &LndConfig) -> reqwest::Client {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        "Grpc-Metadata-macaroon",
-        header::HeaderValue::from_str(&config.macaroon).unwrap(),
-    );
-    let mut client = reqwest::ClientBuilder::new().default_headers(headers);
-    let socks5 = config.socks5_proxy.clone().unwrap_or_default();
-    if socks5 != "".to_string() {
-        let proxy = reqwest::Proxy::all(&socks5).unwrap();
-        client = client.proxy(proxy);
+    // Create HTTP client with optional SOCKS5 proxy following say_after_with_tokio pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            // Accept invalid certificates when using SOCKS5 proxy
+            let client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    match client_builder.proxy(proxy).build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
     }
-    if config.accept_invalid_certs.is_some() {
-        client = client.danger_accept_invalid_certs(true);
+    
+    // Default client creation
+    let mut client_builder = reqwest::Client::builder();
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
     }
-    if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
-            config.http_timeout.unwrap_or_default() as u64,
-        ));
+    if let Some(timeout) = config.http_timeout {
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
@@ -134,6 +141,58 @@ pub fn get_info(config: &LndConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
+// Core shared logic for processing LND node info and balance responses
+fn process_node_info_responses(
+    info: GetInfoResponse,
+    balance: BalancesResponse,
+) -> NodeInfo {
+    NodeInfo {
+        alias: info.alias,
+        color: info.color,
+        pubkey: info.identity_pubkey,
+        network: info.chains[0].network.clone(),
+        block_height: info.block_height,
+        block_hash: info.block_hash,
+        send_balance_msat: balance
+            .local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        receive_balance_msat: balance
+            .remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_send_balance_msat: balance
+            .unsettled_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        unsettled_receive_balance_msat: balance
+            .unsettled_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_send_balance: balance
+            .pending_open_local_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        pending_open_receive_balance: balance
+            .pending_open_remote_balance
+            .msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
 // Synchronous version that works reliably with uniffi-bindgen-react-native
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn lnd_get_info_sync(config: LndConfig) -> Result<NodeInfo, ApiError> {
@@ -157,53 +216,51 @@ pub fn lnd_get_info_sync(config: LndConfig) -> Result<NodeInfo, ApiError> {
         let balance_response_text = balance_response_text.as_str();
         let balance: BalancesResponse = serde_json::from_str(&balance_response_text)?;
 
-        let node_info = NodeInfo {
-            alias: info.alias,
-            color: info.color,
-            pubkey: info.identity_pubkey,
-            network: info.chains[0].network.clone(),
-            block_height: info.block_height,
-            block_hash: info.block_hash,
-            send_balance_msat: balance
-                .local_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            receive_balance_msat: balance
-                .remote_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            unsettled_send_balance_msat: balance
-                .unsettled_local_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            unsettled_receive_balance_msat: balance
-                .unsettled_remote_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            pending_open_send_balance: balance
-                .pending_open_local_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            pending_open_receive_balance: balance
-                .pending_open_remote_balance
-                .msat
-                .unwrap_or_default()
-                .parse::<i64>()
-                .unwrap_or_default(),
-            ..Default::default()
-        };
+        // Use shared logic to create NodeInfo
+        let node_info = process_node_info_responses(info, balance);
         Ok(node_info)
     }).join().unwrap()
+}
+
+// Async version following the same pattern as say_after_with_tokio
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_get_info_async(config: LndConfig) -> Result<NodeInfo, ApiError> {
+    // Create HTTP client using the helper function
+    let client = async_client(&config);
+    
+    // Get node info
+    let req_url = format!("{}/v1/getinfo", config.url);
+    let mut info_request = client.get(&req_url);
+    info_request = info_request.header("Grpc-Metadata-macaroon", &config.macaroon);
+    
+    let info_response = info_request.send().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to get node info: {}", e)
+    })?;
+    
+    let info_text = info_response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read node info response: {}", e)
+    })?;
+    
+    let info: GetInfoResponse = serde_json::from_str(&info_text)?;
+    
+    // Get balance info
+    let balance_url = format!("{}/v1/balance/channels", config.url);
+    let mut balance_request = client.get(&balance_url);
+    balance_request = balance_request.header("Grpc-Metadata-macaroon", &config.macaroon);
+    
+    let balance_response = balance_request.send().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to get balance info: {}", e)
+    })?;
+    
+    let balance_text = balance_response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read balance response: {}", e)
+    })?;
+    
+    let balance: BalancesResponse = serde_json::from_str(&balance_text)?;
+
+    // Use shared logic to create NodeInfo
+    let node_info = process_node_info_responses(info, balance);
+    Ok(node_info)
 }
 
 pub fn create_invoice(
@@ -500,6 +557,81 @@ pub fn lookup_invoice(
     })
 }
 
+// Async version of lookup_invoice following the same pattern as lnd_get_info_async
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_lookup_invoice_async(
+    config: LndConfig,
+    payment_hash: Option<String>,
+    _from: Option<i64>,
+    _limit: Option<i64>,
+    _search: Option<String>,
+) -> Result<Transaction, ApiError> {
+    let payment_hash_str = payment_hash.unwrap_or_default();
+    let list_invoices_url = format!("{}/v1/invoice/{}", config.url, payment_hash_str);
+    println!("list_invoices_url {}", &list_invoices_url);
+    
+    // Create HTTP client using the helper function
+    let client = async_client(&config);
+    
+    // Fetch incoming transactions
+    let mut request = client.get(&list_invoices_url);
+    request = request.header("Grpc-Metadata-macaroon", &config.macaroon);
+    
+    let response = request.send().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to lookup invoice: {}", e)
+    })?;
+    
+    let status = response.status();
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Err(ApiError::Json {
+            reason: "Invoice not found".to_string(),
+        });
+    }
+    
+    println!("Status: {}", status);
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read invoice response: {}", e)
+    })?;
+    
+    let inv: ListInvoiceResponse = serde_json::from_str(&response_text)?;
+    
+    Ok(Transaction {
+        type_: "incoming".to_string(),
+        invoice: inv.payment_request.unwrap_or_default(),
+        preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap()),
+        payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap()),
+        amount_msats: inv
+            .amt_paid_msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        fees_paid: inv
+            .value_msat
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        created_at: inv
+            .creation_date
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        expires_at: inv
+            .expiry
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        settled_at: inv
+            .settle_date
+            .unwrap_or_default()
+            .parse::<i64>()
+            .unwrap_or_default(),
+        description: inv.memo.unwrap_or_default(),
+        description_hash: inv.description_hash.unwrap_or_default(), // TODO: what format should hash be in? hex or base64? does anyone care?
+        payer_note: Some("".to_string()),
+        external_id: Some("".to_string()),
+    })
+}
+
 pub fn list_transactions(
     config: &LndConfig,
     from: i64,
@@ -565,12 +697,47 @@ pub fn list_transactions(
     Ok(transactions)
 }
 
-// Core logic shared by both implementations
+// Core shared logic for invoice polling - processes lookup result and determines status
+fn process_invoice_lookup_result(transaction_result: Result<Transaction, ApiError>) -> (String, Option<Transaction>) {
+    match transaction_result {
+        Ok(transaction) => {
+            if transaction.settled_at > 0 {
+                ("settled".to_string(), Some(transaction))
+            } else {
+                ("pending".to_string(), Some(transaction))
+            }
+        }
+        Err(_) => ("error".to_string(), None),
+    }
+}
+
+// Core shared logic for handling poll status - determines if we should continue polling
+fn handle_poll_status<F>(status: &str, transaction: Option<Transaction>, mut callback: F) -> bool
+where
+    F: FnMut(String, Option<Transaction>),
+{
+    match status {
+        "settled" => {
+            callback("success".to_string(), transaction);
+            false // Stop polling
+        }
+        "error" => {
+            callback("failure".to_string(), transaction);
+            true // Continue polling on error
+        }
+        _ => {
+            callback("pending".to_string(), transaction);
+            true // Continue polling
+        }
+    }
+}
+
+// Sync version of polling logic
 pub fn poll_invoice_events<F>(config: &LndConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
 {
-    let mut start_time = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
     loop {
         if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
             // timeout
@@ -578,35 +745,19 @@ where
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(
+        let lookup_result = lookup_invoice(
             config,
             params.payment_hash.clone(),
             None,
             None,
             params.search.clone(),
-        ) {
-            Ok(transaction) => {
-                if transaction.settled_at > 0 {
-                    ("settled".to_string(), Some(transaction))
-                } else {
-                    ("pending".to_string(), Some(transaction))
-                }
-            }
-            Err(_) => ("error".to_string(), None),
-        };
-
-        match status.as_str() {
-            "settled" => {
-                callback("success".to_string(), transaction);
-                break;
-            }
-            "error" => {
-                callback("failure".to_string(), transaction);
-                // break;
-            }
-            _ => {
-                callback("pending".to_string(), transaction);
-            }
+        );
+        
+        let (status, transaction) = process_invoice_lookup_result(lookup_result);
+        let should_continue = handle_poll_status(&status, transaction, &mut callback);
+        
+        if !should_continue {
+            break;
         }
 
         thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
@@ -624,4 +775,55 @@ pub fn on_invoice_events(
         "failure" => callback.failure(tx),
         _ => {}
     });
+}
+
+// Async version of polling logic
+pub async fn poll_invoice_events_async<F>(
+    config: &LndConfig,
+    params: OnInvoiceEventParams,
+    mut callback: F,
+) where
+    F: FnMut(String, Option<Transaction>),
+{
+    let start_time = std::time::Instant::now();
+    loop {
+        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+            // timeout
+            callback("failure".to_string(), None);
+            break;
+        }
+
+        let lookup_result = lnd_lookup_invoice_async(
+            config.clone(),
+            params.payment_hash.clone(),
+            None,
+            None,
+            params.search.clone(),
+        )
+        .await;
+        
+        let (status, transaction) = process_invoice_lookup_result(lookup_result);
+        let should_continue = handle_poll_status(&status, transaction, &mut callback);
+        
+        if !should_continue {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lnd_on_invoice_events_async(
+    config: LndConfig,
+    params: OnInvoiceEventParams,
+    callback: Box<dyn OnInvoiceEventCallback>,
+) {
+    poll_invoice_events_async(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    })
+    .await;
 }

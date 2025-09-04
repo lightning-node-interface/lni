@@ -44,6 +44,12 @@ pub mod lnd {
     pub use lib::{LndConfig, LndNode};
     // Re-export the standalone sync function for uniffi
     pub use api::lnd_get_info_sync;
+    // Re-export the standalone async function for uniffi
+    pub use api::lnd_get_info_async;
+    // Re-export the standalone async lookup_invoice function for uniffi
+    pub use api::lnd_lookup_invoice_async;
+    // Re-export the standalone async on_invoice_events function for uniffi
+    pub use api::lnd_on_invoice_events_async;
 }
 
 pub mod nwc {
@@ -85,6 +91,9 @@ pub use database::{Db, DbError, Payment};
 
 // Re-export standalone functions at crate level for uniffi
 pub use lnd::api::lnd_get_info_sync;
+pub use lnd::api::lnd_get_info_async;
+pub use lnd::api::lnd_lookup_invoice_async;
+pub use lnd::api::lnd_on_invoice_events_async;
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[uniffi::export(async_runtime = "tokio")]

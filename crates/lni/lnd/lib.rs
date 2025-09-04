@@ -114,14 +114,30 @@ impl LndNode {
     /// Async version of get_info that returns a Promise (non-blocking)
     #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub async fn get_info_async(&self) -> Result<NodeInfo, ApiError> {
-        // For now, use the sync version wrapped in tokio::task::spawn_blocking
-        // This provides non-blocking behavior while avoiding the uniffi async issues
-        let config = self.config.clone();
-        tokio::task::spawn_blocking(move || {
-            crate::lnd::api::lnd_get_info_sync(config)
-        }).await.map_err(|e| ApiError::Json { 
-            reason: format!("Failed to run sync task: {}", e) 
-        })?
+        // Use the new async API function that follows the say_after_with_tokio pattern
+        crate::lnd::api::lnd_get_info_async(self.config.clone()).await
+    }
+
+    /// Async version of lookup_invoice that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn lookup_invoice_async(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::lnd::api::lnd_lookup_invoice_async(
+            self.config.clone(), 
+            params.payment_hash,
+            None,
+            None,
+            params.search
+        ).await
+    }
+
+    /// Async version of on_invoice_events that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn on_invoice_events_async(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    ) {
+        crate::lnd::api::lnd_on_invoice_events_async(self.config.clone(), params, callback).await
     }
 }
 
@@ -214,6 +230,22 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to run sync task: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lnd_get_info_async_new() {
+        // Test the new async API function directly
+        match crate::lnd::api::lnd_get_info_async(NODE.config.clone()).await {
+            Ok(info) => {
+                println!("new async info: {:?}", info);
+                assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
+                assert!(!info.alias.is_empty(), "Node alias should not be empty");
+                assert!(info.block_height > 0, "Block height should be greater than 0");
+            }
+            Err(e) => {
+                panic!("Failed to get info with new async function: {:?}", e);
             }
         }
     }
@@ -376,6 +408,29 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_lookup_invoice_async() {
+        match NODE.lookup_invoice_async(LookupInvoiceParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            ..Default::default()
+        }).await {
+            Ok(txn) => {
+                dbg!(&txn);
+                assert!(
+                    txn.amount_msats >= 0,
+                    "Invoice should contain a valid amount"
+                );
+            }
+            Err(e) => {
+                if e.to_string().contains("not found") {
+                    assert!(true, "Invoice not found as expected");
+                } else {
+                    panic!("Failed to lookup invoice async: {:?}", e);
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_list_transactions() {
         let params = ListTransactionsParams {
@@ -458,6 +513,52 @@ mod tests {
         assert!(
             !received_events.is_empty(),
             "Expected to receive at least one invoice event"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_on_invoice_events_async() {
+        struct OnInvoiceEventCallback {
+            events: Arc<Mutex<Vec<String>>>,
+        }
+
+        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+            fn success(&self, transaction: Option<Transaction>) {
+                dbg!(&transaction);
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "success", transaction));
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "pending", transaction));
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                let mut events = self.events.lock().unwrap();
+                events.push(format!("{} - {:?}", "failure", transaction));
+            }
+        }
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let callback = OnInvoiceEventCallback {
+            events: events.clone(),
+        };
+
+        let params = crate::types::OnInvoiceEventParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            polling_delay_sec: 3,
+            max_polling_sec: 10, // Shorter timeout for async test
+            ..Default::default()
+        };
+
+        // Start the async event listener
+        NODE.on_invoice_events_async(params, Box::new(callback)).await;
+
+        // Check if events were received
+        let received_events = events.lock().unwrap();
+        println!("Received async events: {:?}", *received_events);
+        assert!(
+            !received_events.is_empty(),
+            "Expected to receive at least one invoice event from async version"
         );
     }
 }
