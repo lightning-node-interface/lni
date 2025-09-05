@@ -368,9 +368,9 @@ Language Bindings
             ]
         }
     }
-
     ```
-    4. In the remote project re-add the package `lni_react_native` by running:
+    4. Also might need to Undo changes to `LniReactNativeModule.kt` and add back `import com.facebook.fbreact.specs.NativeLniReactNativeSpec`
+    5. In the remote project re-add the package `lni_react_native` by running:
     ```sh
     yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
     
