@@ -14,9 +14,6 @@ import {
   OnInvoiceEventParams,
   nwcStartInvoicePolling,
   type InvoicePollingStateInterface,
-  getInfoAsync,
-  onInvoiceEventsAsync,
-  sayAfterWithTokio,
 } from 'lni_react_native';
 import { LND_URL, LND_MACAROON, LND_TEST_PAYMENT_HASH, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
 
@@ -85,66 +82,13 @@ export default function App() {
         acceptInvalidCerts: true,
       });
 
-      console.log('🔧 Testing LND async functionality with background processing');
-      console.log('🔧 Using LND_URL:', LND_URL);
-      console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
+      const lndNode = new LndNode(config);
 
-      console.log('📋 Calling lndGetInfoAsync() with multiple deferrals...');
-      const startTime = Date.now();
-
-      // Try multiple levels of deferral to force background execution
-      const nodeInfo = await new Promise<any>((resolve, reject) => {
-        // First deferral
-        setTimeout(() => {
-          // Second deferral using requestIdleCallback if available, or setTimeout
-          const deferAgain = () => {
-            setTimeout(async () => {
-              try {
-                console.log('🔧 Executing asynchronous LND call on deferred thread...');
-                const result = await getInfoAsync(config);
-                console.log('🔧 Asynchronous call completed');
-                resolve(result);
-              } catch (error) {
-                console.error('🔧 Asynchronous call failed:', error);
-                reject(error);
-              }
-            }, 0);
-          };
-
-          // Try to use requestIdleCallback for even more deferral
-          deferAgain();
-        }, 0);
-      });
-
-      const endTime = Date.now();
-
-      console.log('✅ LND Async response received:', safetStringify(nodeInfo));
-      console.log(`⏱️ API call took ${endTime - startTime}ms`);
-
-      setResult(`✅ LND Async Success! (${endTime - startTime}ms)
-Node: ${nodeInfo.alias || 'Unknown'}
-Pubkey: ${nodeInfo.pubkey.substring(0, 20)}...
-Network: ${nodeInfo.network}
-Block Height: ${nodeInfo.blockHeight}
-Send Balance: ${nodeInfo.sendBalanceMsat} msat
-Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
-
-🔍 UI Test Results:
-• Counter should have continued incrementing
-• Spinner should have kept spinning
-• Buttons should remain responsive
-• Text input should be editable`);
-
+      const res = await lndNode.getInfoAsync();
     } catch (error) {
-      console.error('❌ LND Async test error:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('connection refused') || errorMessage.includes('timeout')) {
-        setResult(`❌ LND Connection Error: Could not connect to LND at ${LND_URL}. Please check your LND node is running and accessible.`);
-      } else if (errorMessage.includes('authentication') || errorMessage.includes('macaroon')) {
-        setResult(`❌ LND Auth Error: Invalid macaroon. Please check your LND_MACAROON environment variable.`);
-      } else {
-        setResult(`❌ LND Async Error: ${errorMessage}`);
-      }
+      console.error('❌ LND Async Error:', error);
+      setResult(`❌ LND Async Error: ${error}`);
+      return;
     }
   };
 
@@ -219,12 +163,12 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       console.log('📋 Starting LND async invoice events with config:', safetStringify(config));
       console.log('📋 Params:', safetStringify(params));
       console.log('📋 Callback:', callback);
-      console.log('📋 Available onInvoiceEventsAsync:', typeof onInvoiceEventsAsync);
+      console.log('📋 Available onInvoiceEventsAsync:', typeof node.onInvoiceEventsAsync);
 
       // Start the async invoice event monitoring using the direct function
       try {
         console.log('📋 Calling onInvoiceEventsAsync...');
-        const result = await onInvoiceEventsAsync(config, params, callback);
+        const result = await node.onInvoiceEventsAsync(params, callback);
         console.log('🔄 LND async invoice events completed:', result);
         if (isPolling) {
           setResult('🔄 LND async invoice events monitoring completed');
@@ -459,7 +403,7 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
       
       <View style={styles.buttonContainer}>
         <Button
-          title="Test LND Async (15s delay)"
+          title="Test LND Async"
           onPress={testLndAsync}
           color="green"
         />
@@ -499,13 +443,6 @@ Receive Balance: ${nodeInfo.receiveBalanceMsat} msat
         />
       </View>
 
-      <Button
-          title="Say After Tokio"
-          onPress={()=>{
-            const say = sayAfterWithTokio(5000, "World", "https://.onion:8080/v1/getinfo", "socks5h://localhost:9050", "header_key", "header_value").then(setResult);
-          }}
-          color="red"
-        />
       <Button
           title="Say After"
           onPress={()=>{
