@@ -2,6 +2,7 @@
   "name": "lni_react_native-example",
   "version": "0.0.1",
   "private": true,
+  "types": "../lib/typescript/commonjs/src/index.d.ts",
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
