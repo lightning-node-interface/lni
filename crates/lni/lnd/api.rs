@@ -275,7 +275,7 @@ pub fn create_invoice(
                 type_: "incoming".to_string(),
                 invoice: bolt11_resp.payment_request,
                 preimage: "".to_string(),
-                payment_hash: bolt11_resp.r_hash,
+                payment_hash: parse_r_hash(&bolt11_resp.r_hash),
                 amount_msats: invoice_params.amount_msats.unwrap_or(0),
                 fees_paid: 0,
                 created_at: 0,
@@ -496,8 +496,8 @@ pub fn lookup_invoice(
     Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: inv.payment_request.unwrap_or_default(),
-        preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap()),
-        payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap()),
+        preimage: parse_r_preimage(&inv.r_preimage.unwrap_or_default()),
+        payment_hash: parse_r_hash(&inv.r_hash.unwrap_or_default()),
         amount_msats: inv
             .amt_paid_msat
             .unwrap_or_default()
@@ -571,8 +571,8 @@ pub async fn lookup_invoice_async(
     Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: inv.payment_request.unwrap_or_default(),
-        preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap()),
-        payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap()),
+        preimage: parse_r_preimage(&inv.r_preimage.unwrap_or_default()),
+        payment_hash: parse_r_hash(&inv.r_hash.unwrap_or_default()),
         amount_msats: inv
             .amt_paid_msat
             .unwrap_or_default()
@@ -630,8 +630,8 @@ pub fn list_transactions(
         .map(|inv| Transaction {
             type_: "incoming".to_string(),
             invoice: inv.payment_request.unwrap_or_default(),
-            preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap()),
-            payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap()),
+            preimage: parse_r_preimage(&inv.r_preimage.unwrap_or_default()),
+            payment_hash: parse_r_hash(&inv.r_hash.unwrap_or_default()),
             amount_msats: inv
                 .amt_paid_msat
                 .unwrap_or_default()
@@ -845,7 +845,7 @@ pub async fn create_invoice_async(
         type_: "incoming".to_string(),
         invoice: create_response.payment_request,
         preimage: "".to_string(),
-        payment_hash: create_response.r_hash,
+        payment_hash: parse_r_hash(&create_response.r_hash),
         amount_msats: params.amount_msats.unwrap_or(0),
         fees_paid: 0,
         created_at: 0,
@@ -953,8 +953,8 @@ pub async fn list_transactions_async(
         .map(|inv| Transaction {
             type_: "incoming".to_string(),
             invoice: inv.payment_request.unwrap_or_default(),
-            preimage: hex::encode(base64::decode(inv.r_preimage.unwrap_or_default()).unwrap_or_default()),
-            payment_hash: hex::encode(base64::decode(inv.r_hash.unwrap_or_default()).unwrap_or_default()),
+            preimage: parse_r_preimage(&inv.r_preimage.unwrap_or_default()),
+            payment_hash: parse_r_hash(&inv.r_hash.unwrap_or_default()),
             amount_msats: inv
                 .amt_paid_msat
                 .unwrap_or_default()
@@ -989,4 +989,26 @@ pub async fn list_transactions_async(
 
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(transactions)
+}
+
+fn parse_r_hash(r_hash_str: &str) -> String {
+    match base64::decode(r_hash_str) {
+        Ok(decoded_bytes) => hex::encode(decoded_bytes),
+        Err(_) => {
+            // If base64 decoding fails, return the original string or empty string
+            // This handles cases where r_hash might already be in hex format or is invalid
+            r_hash_str.to_string()
+        }
+    }
+}
+
+fn parse_r_preimage(r_preimage_str: &str) -> String {
+    match base64::decode(r_preimage_str) {
+        Ok(decoded_bytes) => hex::encode(decoded_bytes),
+        Err(_) => {
+            // If base64 decoding fails, return the original string or empty string
+            // This handles cases where r_preimage might already be in hex format or is invalid
+            r_preimage_str.to_string()
+        }
+    }
 }

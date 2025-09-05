@@ -389,6 +389,29 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_create_invoice_async() {
+        let amount_msats = 3000;
+
+         // async BOLT11
+        match NODE.create_invoice_async(CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(amount_msats),
+            ..Default::default()
+        }).await {
+            Ok(txn) => {
+                println!("BOLT11 create_invoice_async: {:?}", txn);
+                assert!(
+                    !txn.invoice.is_empty(),
+                    "BOLT11 create_invoice_async Invoice should not be empty"
+                );
+            }
+            Err(e) => {
+                panic!("BOLT11 create_invoice_async Failed to make invoice: {:?}", e);
+            }
+        }
+    }
+
     #[test]
     fn test_pay_invoice() {
         match NODE.pay_invoice(PayInvoiceParams {
