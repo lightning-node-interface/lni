@@ -168,6 +168,66 @@ impl LndNode {
             params.search
         ).await
     }
+
+    /// Async version of get_offer that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn get_offer_async(&self, _search: Option<String>) -> Result<PayCode, ApiError> {
+        // Since BOLT12 is not implemented, we return the same error asynchronously
+        Err(ApiError::Json {
+            reason: "Bolt12 not implemented".to_string(),
+        })
+    }
+
+    /// Async version of list_offers that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn list_offers_async(&self, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        // Since BOLT12 is not implemented, we return the same error asynchronously
+        Err(ApiError::Json {
+            reason: "Bolt12 not implemented".to_string(),
+        })
+    }
+
+    /// Async version of pay_offer that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn pay_offer_async(
+        &self,
+        _offer: String,
+        _amount_msats: i64,
+        _payer_note: Option<String>,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        // Since BOLT12 is not implemented, we return the same error asynchronously
+        Err(ApiError::Json {
+            reason: "Bolt12 not implemented".to_string(),
+        })
+    }
+
+    /// Async version of create_offer that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn create_offer_async(
+        &self,
+        _amount_msats: Option<i64>,
+        _description: Option<String>,
+        _expiry: Option<i64>,
+    ) -> Result<Transaction, ApiError> {
+        // Since BOLT12 is not implemented, we return the same error asynchronously
+        Err(ApiError::Json {
+            reason: "Bolt12 not implemented".to_string(),
+        })
+    }
+
+    /// Async version of fetch_invoice_from_offer that returns a Promise (non-blocking)
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub async fn fetch_invoice_from_offer_async(
+        &self,
+        _offer: String,
+        _amount_msats: i64,
+        _payer_note: Option<String>,
+    ) -> Result<String, ApiError> {
+        // Since BOLT12 is not implemented, we return the same error asynchronously
+        Err(ApiError::Json {
+            reason: "Bolt12 not implemented".to_string(),
+        })
+    }
 }
 
 #[cfg(test)]

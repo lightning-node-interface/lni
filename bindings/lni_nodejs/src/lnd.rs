@@ -120,4 +120,106 @@ impl LndNode {
     });
     Ok(())
   }
+
+  // Async methods
+  #[napi]
+  pub async fn get_info_async(&self) -> napi::Result<lni::NodeInfo> {
+    let info = lni::lnd::api::get_info_async(self.inner.clone()).await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(info)
+  }
+
+  #[napi]
+  pub async fn create_invoice_async(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn = lni::lnd::api::create_invoice_async(self.inner.clone(), params).await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txn)
+  }
+
+  #[napi]
+  pub async fn pay_invoice_async(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::lnd::api::pay_invoice_async(self.inner.clone(), params).await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn lookup_invoice_async(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn = lni::lnd::api::lookup_invoice_async(
+      self.inner.clone(), 
+      params.payment_hash, 
+      None, 
+      None, 
+      params.search
+    ).await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txn)
+  }
+
+  #[napi]
+  pub async fn list_transactions_async(
+    &self,
+    params: lni::types::ListTransactionsParams,
+  ) -> napi::Result<Vec<lni::Transaction>> {
+    let txns = lni::lnd::api::list_transactions_async(
+      self.inner.clone(),
+      Some(params.from),
+      Some(params.limit),
+      params.search
+    ).await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(txns)
+  }
+
+  #[napi]
+  pub async fn decode_async(&self, invoice_str: String) -> Result<String> {
+    let decoded = lni::lnd::api::decode_async(self.inner.clone(), invoice_str).await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub async fn get_offer_async(&self, _search: Option<String>) -> Result<lni::types::PayCode> {
+    // Since BOLT12 is not implemented, we return the same error asynchronously
+    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+  }
+
+  #[napi]
+  pub async fn list_offers_async(&self, _search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+    // Since BOLT12 is not implemented, we return the same error asynchronously
+    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+  }
+
+  #[napi]
+  pub async fn pay_offer_async(
+    &self,
+    _offer: String,
+    _amount_msats: i64,
+    _payer_note: Option<String>,
+  ) -> napi::Result<lni::PayInvoiceResponse> {
+    // Since BOLT12 is not implemented, we return the same error asynchronously
+    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+  }
+
+  #[napi]
+  pub async fn create_offer_async(
+    &self,
+    _amount_msats: Option<i64>,
+    _description: Option<String>,
+    _expiry: Option<i64>,
+  ) -> napi::Result<lni::Transaction> {
+    // Since BOLT12 is not implemented, we return the same error asynchronously
+    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+  }
+
+  #[napi]
+  pub async fn fetch_invoice_from_offer_async(
+    &self,
+    _offer: String,
+    _amount_msats: i64,
+    _payer_note: Option<String>,
+  ) -> Result<String> {
+    // Since BOLT12 is not implemented, we return the same error asynchronously
+    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+  }
 }
