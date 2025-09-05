@@ -89,7 +89,7 @@ export default function App() {
       console.log('🔧 Using LND_URL:', LND_URL);
       console.log('🔧 Using LND_MACAROON:', LND_MACAROON.substring(0, 20) + '...');
 
-      console.log('📋 Calling lndGetInfoSync() with multiple deferrals...');
+      console.log('📋 Calling lndGetInfoAsync() with multiple deferrals...');
       const startTime = Date.now();
 
       // Try multiple levels of deferral to force background execution
