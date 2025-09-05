@@ -73,7 +73,7 @@ export default function App() {
         return;
       }
 
-      setResult('🔄 Testing LND async with background processing (15s delay)...');
+      setResult('🔄 Testing LND async with background processing...');
 
       const config = LndConfig.create({
         url: LND_URL,
@@ -84,11 +84,83 @@ export default function App() {
 
       const lndNode = new LndNode(config);
 
-      const res = await lndNode.getInfoAsync();
+      console.log('📋 Calling LND getInfoAsync...');
+      const nodeInfo = await lndNode.getInfoAsync();
+      console.log('✅ LND getInfoAsync result:', nodeInfo);
+      
+      setResult(`✅ LND Async Success! Node: ${nodeInfo.alias} (${nodeInfo.pubkey.substring(0, 20)}...)`);
+      
     } catch (error) {
       console.error('❌ LND Async Error:', error);
-      setResult(`❌ LND Async Error: ${error}`);
-      return;
+      console.error('❌ Error type:', typeof error);
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
+      console.error('❌ Error message:', errorMessage);
+      if (errorStack) {
+        console.error('❌ Error stack:', errorStack);
+      }
+      
+      setResult(`❌ LND Async Error: ${errorMessage}`);
+    }
+  };
+
+  const testLndAsyncMethods = async () => {
+    try {
+      // Validate environment variables
+      if (!LND_URL || !LND_MACAROON) {
+        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
+        return;
+      }
+
+      setResult('🔄 Testing multiple LND async methods...');
+
+      const config = LndConfig.create({
+        url: LND_URL,
+        macaroon: LND_MACAROON,
+        socks5Proxy: '',
+        acceptInvalidCerts: true,
+      });
+
+      const lndNode = new LndNode(config);
+
+      // Test 1: Get info
+      console.log('📋 Testing getInfoAsync...');
+      const nodeInfo = await lndNode.getInfoAsync();
+      console.log('✅ getInfoAsync result:', nodeInfo);
+
+      // Test 2: Test decode async (with a sample invoice)
+      try {
+        console.log('📋 Testing decodeAsync...');
+        const sampleInvoice = 'lnbc1u1p3xnhl2pp5yp0kcp46kmjkyk9u'; // truncated sample
+        const decoded = await lndNode.decodeAsync(sampleInvoice);
+        console.log('✅ decodeAsync result:', decoded);
+      } catch (decodeError) {
+        console.log('⚠️ decodeAsync failed (expected with invalid invoice):', decodeError);
+      }
+
+      // Test 3: Test list transactions async
+      try {
+        console.log('📋 Testing listTransactionsAsync...');
+        const params = {
+          from: BigInt(0),
+          limit: BigInt(5),
+          paymentHash: undefined,
+          search: undefined,
+        };
+        const transactions = await lndNode.listTransactionsAsync(params);
+        console.log('✅ listTransactionsAsync result:', transactions);
+      } catch (listError) {
+        console.log('⚠️ listTransactionsAsync failed:', listError);
+      }
+
+      setResult(`✅ LND Async Methods Test Complete! Node: ${nodeInfo.alias}`);
+      
+    } catch (error) {
+      console.error('❌ LND Async Methods Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setResult(`❌ LND Async Methods Error: ${errorMessage}`);
     }
   };
 
@@ -408,6 +480,14 @@ export default function App() {
           color="green"
         />
         
+        <Button
+          title="Test LND Methods"
+          onPress={testLndAsyncMethods}
+          color="darkgreen"
+        />
+      </View>
+      
+      <View style={styles.buttonContainer}>
         <Button
           title="UI Test Button 1"
           onPress={() => Alert.alert('Button 1', `Counter: ${uiCounter}`)}
