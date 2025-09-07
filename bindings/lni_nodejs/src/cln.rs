@@ -29,16 +29,16 @@ impl ClnNode {
   }
 
   #[napi]
-  pub fn get_info(&self) -> napi::Result<lni::NodeInfo> {
+  pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
     let info =
-      lni::cln::api::get_info(&self.inner).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      lni::cln::api::get_info(self.inner.clone()).await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::cln::api::create_invoice(
-      &self.inner,
+      self.inner.clone(),
       params.invoice_type,
       params.amount_msats,
       params.offer,
@@ -46,66 +46,66 @@ impl ClnNode {
       params.description_hash,
       params.expiry,
     )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::cln::api::pay_invoice(&self.inner, params)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::cln::api::pay_invoice(self.inner.clone(), params)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
-    let offer = lni::cln::api::get_offer(&self.inner, search)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
+    let offer = lni::cln::api::get_offer(self.inner.clone(), search)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
-    let offers = lni::cln::api::list_offers(&self.inner, search)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+    let offers = lni::cln::api::list_offers(self.inner.clone(), search)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
   #[napi]
-  pub fn pay_offer(
+  pub async fn pay_offer(
     &self,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
-    let offer = lni::cln::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer = lni::cln::api::pay_offer(self.inner.clone(), offer, amount_msats, payer_note)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn =
-      lni::cln::api::lookup_invoice(&self.inner, params.payment_hash, None, None, params.search)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      lni::cln::api::lookup_invoice(self.inner.clone(), params.payment_hash, None, None, params.search)
+        .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub fn list_transactions(
+  pub async fn list_transactions(
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
     let txns =
-      lni::cln::api::list_transactions(&self.inner, params.from, params.limit, params.search)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      lni::cln::api::list_transactions(self.inner.clone(), params.from, params.limit, params.search)
+        .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
   #[napi]
-  pub fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::cln::api::decode(&self.inner, str)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn decode(&self, str: String) -> Result<String> {
+    let decoded = lni::cln::api::decode(self.inner.clone(), str)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
@@ -115,9 +115,15 @@ impl ClnNode {
     params: lni::types::OnInvoiceEventParams,
     callback: T,
   ) -> Result<()> {
-    lni::cln::api::poll_invoice_events(&self.inner, params, move |status, tx| {
-      callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+    let config = self.inner.clone();
+    
+    // Block on the async function in the current thread, similar to LND's sync approach
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+      lni::cln::api::poll_invoice_events(config, params, move |status, tx| {
+        let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+      }).await;
     });
+    
     Ok(())
   }
 }

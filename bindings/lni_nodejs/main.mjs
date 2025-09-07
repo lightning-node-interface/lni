@@ -8,12 +8,12 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
   
   try {
     // Test 1: Get node info
-    console.log(`${nodeName} - Testing getInfo...`);
+    console.log(`(1) ${nodeName} - Testing getInfo...`);
     const info = await node.getInfo();
     console.log(`${nodeName} Node info:`, info);
 
     // Test 2: Create invoice
-    console.log(`${nodeName} - Testing createInvoice...`);
+    console.log(`(2) ${nodeName} - Testing createInvoice...`);
     const invoice = await node.createInvoice({
       amountMsats: 1000,
       // description: `test invoice from ${nodeName}`,
@@ -23,7 +23,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
 
     // Test 3: Lookup invoice (if test hash provided)
     if (testInvoiceHash) {
-      console.log(`${nodeName} - Testing lookupInvoice...`);
+      console.log(`(3) ${nodeName} - Testing lookupInvoice...`);
       try {
         const lookupInvoice = await node.lookupInvoice({
           paymentHash: testInvoiceHash,
@@ -36,7 +36,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
     }
 
     // Test 4: List transactions
-    console.log(`${nodeName} - Testing listTransactions...`);
+    console.log(`(4) ${nodeName} - Testing listTransactions...`);
     const txns = await node.listTransactions({
       from: 0,
       limit: 5,
@@ -45,7 +45,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
 
     // Test 5: Decode invoice (if we have one)
     if (invoice && invoice.invoice) {
-      console.log(`${nodeName} - Testing decode...`);
+      console.log(`(5) ${nodeName} - Testing decode...`);
       try {
         const decoded = await node.decode(invoice.invoice);
         console.log(`${nodeName} Decoded:`, decoded);
@@ -55,13 +55,13 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
     }
 
     // Test 6: Invoice Events (callback-style like lib)
-    console.log(`${nodeName} - Testing onInvoiceEvents...`);
+    console.log(`(6) ${nodeName} - Testing onInvoiceEvents...`);
     try {
       const params = {
         paymentHash: testInvoiceHash || "test",
         search: "",
-        pollingDelaySec: 4,
-        maxPollingSec: 60
+        pollingDelaySec: 2,
+        maxPollingSec: 4
       };
 
       console.log(`${nodeName} - Starting onInvoiceEvents with callback...`);
@@ -75,7 +75,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
     }
 
     // Test 7: BOLT12 functions (these should return "not implemented" errors)
-    console.log(`${nodeName} - Testing BOLT12 functions (should fail with 'not implemented')...`);
+    console.log(`(7) ${nodeName} - Testing BOLT12 functions (should fail with 'not implemented')...`);
     try {
       const offer = await node.getOffer("");
       console.log(`${nodeName} getOffer:`, offer);
@@ -85,7 +85,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
 
     try {
       const offers = await node.listOffers("");
-      console.log(`${nodeName} listOffers:`, offers);
+      console.log(`(8) ${nodeName} listOffers:`, offers);
     } catch (error) {
       console.log(`${nodeName} listOffers failed (expected):`, error.message);
     }
@@ -149,45 +149,15 @@ async function cln() {
     url: process.env.CLN_URL,
     rune: process.env.CLN_RUNE,
   };
+
+  if (!config.url || !config.rune) {
+    console.log("Skipping CLN test - CLN_URL or CLN_RUNE not set");
+    return;
+  }
+
   const node = new ClnNode(config);
-  const info = await node.getInfo();
-  console.log("Node info:", info);
-
-  const invoice = await node.createInvoice({
-    amountMsats: 1000,
-    description: "test invoice",
-    invoiceType: InvoiceType.Bolt11,
-  });
-  console.log("Invoice:", invoice);
-
-  const bolt11Invoice = await node.createInvoice({
-    amountMsats: 3000,
-    description: "test invoice",
-    invoiceType: InvoiceType.Bolt11,
-  });
-  console.log("CLN bolt11 Invoice:", bolt11Invoice);
-
-  const offer = await node.getOffer();
-  console.log("CLN Bolt12 Offer:", offer);
-
-  const lookupInvoice = await node.lookupInvoice(
-    process.env.CLN_TEST_PAYMENT_HASH
-  );
-  console.log("lookupInvoice:", lookupInvoice);
-
-  // TODO not working (cln <=> phoneixd issue?)
-  // const payOffer = await node.payOffer(
-  //   process.env.TEST_RECEIVER_OFFER,
-  //   3000,
-  //   "payment from lni nodejs"
-  // );
-  // console.log("payOffer:", payOffer);
-
-  const txns = await node.listTransactions({
-    from: 0,
-    limit: 10,
-  });
-  console.log("Transactions:", txns);
+  await testAsyncNode("CLN", node, process.env.CLN_TEST_PAYMENT_HASH);
+  
 }
 
 async function lnd() {
@@ -377,14 +347,10 @@ async function main() {
   // Show environment help
   showEnvironmentHelp();
   
-
-  // Test async implementations with shared logic
-  await lnd();
-  await strike();
-  
-  // Uncomment these to test other functionality
+  // await lnd();
+  // await strike();
+  await cln();
   // await phoenixd();
-  // await cln();
   // await nwc();
   // await test();
   

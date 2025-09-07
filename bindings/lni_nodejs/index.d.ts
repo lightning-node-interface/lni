@@ -298,15 +298,15 @@ export declare class ClnNode {
   getUrl(): string
   getRune(): string
   getConfig(): ClnConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class LndNode {
