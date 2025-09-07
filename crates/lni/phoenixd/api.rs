@@ -19,20 +19,38 @@ use std::time::Duration;
 // https://phoenix.acinq.co/server/api
 
 fn client(config: &PhoenixdConfig) -> reqwest::Client {
-    let mut client = reqwest::ClientBuilder::new();
-    if config.socks5_proxy.is_some() {
-        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
-        client = client.proxy(proxy);
+    // Create HTTP client with optional SOCKS5 proxy following LND pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            let mut client_builder = reqwest::Client::builder();
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
+            if let Some(timeout) = config.http_timeout {
+                client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+            }
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    match client_builder.proxy(proxy).build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
     }
-    if config.accept_invalid_certs.is_some() {
-        client = client.danger_accept_invalid_certs(true);
+    
+    // Default client creation
+    let mut client_builder = reqwest::ClientBuilder::new();
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
     }
-    if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
-            config.http_timeout.unwrap_or_default() as u64,
-        ));
+    if let Some(timeout) = config.http_timeout {
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
@@ -50,7 +68,7 @@ pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
-    println!("get node info response: {}", response_text);
+    // println!("get node info response: {}", response_text);
 
     // Get balance info as well
     let balance_url = format!("{}/getbalance", config.url);
@@ -68,7 +86,7 @@ pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
-    println!("balance_response: {}", balance_response_text);
+    // println!("balance_response: {}", balance_response_text);
 
     // Now process the results in  context
     let info: InfoResponse = serde_json::from_str(&response_text)?;
@@ -122,13 +140,13 @@ pub async fn create_invoice(
                     reason: e.to_string(),
                 })?;
 
-            println!("Status: {}", response.status());
+            // println!("Status: {}", response.status());
 
             let invoice_str = response.text().await.map_err(|e| ApiError::Http {
                 reason: e.to_string(),
             })?;
             let invoice_str = invoice_str.as_str();
-            println!("Bolt11 {}", &invoice_str.to_string());
+            // println!("Bolt11 {}", &invoice_str.to_string());
 
             let bolt11_resp: Bolt11Resp =
                 serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
@@ -181,13 +199,13 @@ pub async fn create_invoice(
                     })?;
             }
 
-            println!("Status: {}", response.status());
+            // println!("Status: {}", response.status());
 
             let invoice_str = response.text().await.map_err(|e| ApiError::Http {
                 reason: e.to_string(),
             })?;
             let invoice_str = invoice_str.as_str();
-            println!("Bolt12 {}", &invoice_str.to_string());
+            // println!("Bolt12 {}", &invoice_str.to_string());
 
             Ok(Transaction {
                 type_: "incoming".to_string(),
@@ -231,7 +249,7 @@ pub async fn pay_invoice(
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
-    println!("Status: {}", response.status());
+    // println!("Status: {}", response.status());
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;

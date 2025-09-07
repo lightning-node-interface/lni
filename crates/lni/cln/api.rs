@@ -18,20 +18,39 @@ use tokio::time::sleep;
 fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
-    let mut client = reqwest::ClientBuilder::new().default_headers(headers);
-    if config.socks5_proxy.is_some() {
-        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
-        client = client.proxy(proxy);
+    
+    // Create HTTP client with optional SOCKS5 proxy following LND pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            let mut client_builder = reqwest::Client::builder().default_headers(headers.clone());
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
+            if let Some(timeout) = config.http_timeout {
+                client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+            }
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    match client_builder.proxy(proxy).build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
     }
-    if config.accept_invalid_certs.is_some() {
-        client = client.danger_accept_invalid_certs(true);
+    
+    // Default client creation
+    let mut client_builder = reqwest::ClientBuilder::new().default_headers(headers);
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
     }
-    if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
-            config.http_timeout.unwrap_or_default() as u64,
-        ));
+    if let Some(timeout) = config.http_timeout {
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
@@ -154,12 +173,12 @@ pub async fn create_invoice(
                     reason: format!("Failed to create invoice: {}", e)
                 })?;
 
-            println!("Status: {}", response.status());
+            // println!("Status: {}", response.status());
             let invoice_str = response.text().await.map_err(|e| ApiError::Http {
                 reason: format!("Failed to read invoice response: {}", e)
             })?;
             let invoice_str = invoice_str.as_str();
-            println!("Bolt11 {}", &invoice_str.to_string());
+            // println!("Bolt11 {}", &invoice_str.to_string());
             let bolt11_resp: Bolt11Resp =
                 serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
                     reason: e.to_string(),
@@ -268,7 +287,7 @@ pub async fn pay_invoice(
         .collect::<serde_json::Map<String, _>>()
         .into();
 
-    println!("PayInvoice params: {:?}", &params_json);
+    // println!("PayInvoice params: {:?}", &params_json);
 
     let pay_response = client
         .post(&pay_url)
@@ -450,7 +469,7 @@ async fn fetch_invoice_from_offer(
     let response_text = response_text.as_str();
     let fetch_invoice_resp: FetchInvoiceResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => {
-            println!("fetch_invoice_resp: {:?}", resp);
+            // println!("fetch_invoice_resp: {:?}", resp);
             resp
         }
         Err(_e) => {
