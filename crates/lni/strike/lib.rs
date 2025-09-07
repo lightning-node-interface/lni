@@ -14,11 +14,12 @@ pub struct StrikeConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.strike.me/v1")))]
     pub base_url: Option<String>,
     pub api_key: String,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
-    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
-    pub accept_invalid_certs: Option<bool>,
 }
 
 impl Default for StrikeConfig {
@@ -26,9 +27,9 @@ impl Default for StrikeConfig {
         Self {
             base_url: Some("https://api.strike.me/v1".to_string()),
             api_key: "".to_string(),
-            http_timeout: Some(120),
             socks5_proxy: Some("".to_string()),
             accept_invalid_certs: Some(false),
+            http_timeout: Some(60),
         }
     }
 }

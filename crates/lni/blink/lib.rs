@@ -14,6 +14,9 @@ pub struct BlinkConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.blink.sv/graphql")))]
     pub base_url: Option<String>,
     pub api_key: String,
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
@@ -23,7 +26,9 @@ impl Default for BlinkConfig {
         Self {
             base_url: Some("https://api.blink.sv/graphql".to_string()),
             api_key: "".to_string(),
-            http_timeout: Some(120),
+            socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(true),
+            http_timeout: Some(60),
         }
     }
 }
@@ -88,12 +93,7 @@ impl LightningNode for BlinkNode {
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::blink::api::list_transactions(
-            &self.config,
-            params.from,
-            params.limit,
-            params.search,
-        )
+        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search)
     }
 
     fn decode(&self, str: String) -> Result<String, ApiError> {
@@ -122,7 +122,8 @@ mod tests {
     lazy_static! {
         static ref BASE_URL: String = {
             dotenv().ok();
-            env::var("BLINK_BASE_URL").unwrap_or_else(|_| "https://api.blink.sv/graphql".to_string())
+            env::var("BLINK_BASE_URL")
+                .unwrap_or_else(|_| "https://api.blink.sv/graphql".to_string())
         };
         static ref API_KEY: String = {
             dotenv().ok();
@@ -134,14 +135,14 @@ mod tests {
         };
         static ref TEST_PAYMENT_REQUEST: String = {
             dotenv().ok();
-            env::var("BLINK_TEST_PAYMENT_REQUEST")
-                .expect("BLINK_TEST_PAYMENT_REQUEST must be set")
+            env::var("BLINK_TEST_PAYMENT_REQUEST").expect("BLINK_TEST_PAYMENT_REQUEST must be set")
         };
         static ref NODE: BlinkNode = {
             BlinkNode::new(BlinkConfig {
                 base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(120),
+                ..Default::default()
             })
         };
     }
@@ -247,7 +248,7 @@ mod tests {
             payment_hash: None,
             search: None,
         };
-        
+
         match NODE.list_transactions(params) {
             Ok(txns) => {
                 dbg!(&txns);
@@ -309,7 +310,7 @@ mod tests {
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Blink events captured: {:?}", *events_guard);
-        
+
         // We expect at least one event (even if it's a failure due to invoice not found)
         assert!(
             !events_guard.is_empty(),

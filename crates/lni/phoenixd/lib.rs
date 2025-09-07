@@ -14,8 +14,11 @@ use crate::{CreateInvoiceParams, LookupInvoiceParams, PayCode};
 pub struct PhoenixdConfig {
     pub url: String,
     pub password: String,
-    pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
+   #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
     pub accept_invalid_certs: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
 impl Default for PhoenixdConfig {

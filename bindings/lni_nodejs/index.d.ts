@@ -48,6 +48,7 @@ export interface LndNode {
 export interface NwcConfig {
   nwcUri: string
   socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface NwcNode {
@@ -56,9 +57,9 @@ export interface NwcNode {
 export interface StrikeConfig {
   baseUrl?: string
   apiKey: string
-  httpTimeout?: number
   socks5Proxy?: string
   acceptInvalidCerts?: boolean
+  httpTimeout?: number
 }
 export interface StrikeNode {
   config: StrikeConfig
@@ -66,6 +67,8 @@ export interface StrikeNode {
 export interface BlinkConfig {
   baseUrl?: string
   apiKey: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface BlinkNode {
@@ -74,6 +77,8 @@ export interface BlinkNode {
 export interface SpeedConfig {
   baseUrl?: string
   apiKey: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface SpeedNode {

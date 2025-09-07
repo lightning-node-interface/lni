@@ -14,7 +14,11 @@ pub struct SpeedConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.tryspeed.com")))]
     pub base_url: Option<String>,
     pub api_key: String,
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(30)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
 
@@ -23,7 +27,9 @@ impl Default for SpeedConfig {
         Self {
             base_url: Some("https://api.tryspeed.com".to_string()),
             api_key: "".to_string(),
-            http_timeout: Some(30),
+            socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(true),
+            http_timeout: Some(60),
         }
     }
 }
@@ -40,17 +46,6 @@ pub struct SpeedNode {
 impl SpeedNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: SpeedConfig) -> Self {
-        Self { config }
-    }
-}
-
-impl SpeedNode {
-    pub fn from_credentials(base_url: String, api_key: String) -> Self {
-        let config = SpeedConfig {
-            base_url: Some(base_url),
-            api_key,
-            http_timeout: Some(30),
-        };
         Self { config }
     }
 }
@@ -141,7 +136,7 @@ mod tests {
             SpeedNode::new(SpeedConfig {
                 base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
-                http_timeout: Some(30),
+                ..Default::default()
             })
         };
     }

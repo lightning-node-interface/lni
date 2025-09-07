@@ -14,6 +14,8 @@ pub struct NwcConfig {
     pub nwc_uri: String, // The full NWC URI string like "nostr+walletconnect://pubkey?relay=...&secret=..."
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
@@ -23,6 +25,7 @@ impl Default for NwcConfig {
         Self {
             nwc_uri: "".to_string(),
             socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(true),
             http_timeout: Some(60),
         }
     }
@@ -75,11 +78,7 @@ impl LightningNode for NwcNode {
     }
 
     fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::nwc::api::lookup_invoice_sync(
-            &self.config,
-            params.payment_hash,
-            params.search,
-        )
+        crate::nwc::api::lookup_invoice_sync(&self.config, params.payment_hash, params.search)
     }
 
     fn list_transactions(
@@ -288,9 +287,9 @@ mod tests {
 
         // Start the event listener and get cancellation token
         let cancellation = crate::nwc::api::on_invoice_events_with_cancellation(
-            NODE.config.clone(), 
-            params, 
-            Box::new(callback)
+            NODE.config.clone(),
+            params,
+            Box::new(callback),
         );
 
         // Wait for a few polling cycles
@@ -309,8 +308,11 @@ mod tests {
             !received_events.is_empty(),
             "Expected to receive at least one invoice event"
         );
-        
+
         // Verify cancellation token is working
-        assert!(cancellation.is_cancelled(), "Cancellation token should be marked as cancelled");
+        assert!(
+            cancellation.is_cancelled(),
+            "Cancellation token should be marked as cancelled"
+        );
     }
 }
