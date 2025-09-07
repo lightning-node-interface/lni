@@ -305,7 +305,7 @@ where
 }
 
 // Async version of polling logic
-pub async fn poll_invoice_events_async<F>(
+pub async fn poll_invoice_events<F>(
     config: &LndConfig,
     params: OnInvoiceEventParams,
     mut callback: F,
@@ -346,7 +346,7 @@ pub async fn on_invoice_events(
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    poll_invoice_events_async(&config, params, move |status, tx| match status.as_str() {
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" => callback.failure(tx),

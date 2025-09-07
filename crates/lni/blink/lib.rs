@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
@@ -14,6 +14,7 @@ pub struct BlinkConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.blink.sv/graphql")))]
     pub base_url: Option<String>,
     pub api_key: String,
+   #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
     pub accept_invalid_certs: Option<bool>,
@@ -48,71 +49,71 @@ impl BlinkNode {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl LightningNode for BlinkNode {
-    fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::blink::api::get_info(&self.config)
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+impl BlinkNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::blink::api::get_info(&self.config).await
     }
 
-    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::blink::api::create_invoice(&self.config, params)
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::blink::api::create_invoice(&self.config, params).await
     }
 
-    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::blink::api::pay_invoice(&self.config, params)
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::blink::api::pay_invoice(&self.config, params).await
     }
 
-    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::blink::api::get_offer(&self.config, search)
+    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::blink::api::get_offer(&self.config, search).await
     }
 
-    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::blink::api::list_offers(&self.config, search)
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::blink::api::list_offers(&self.config, search).await
     }
 
-    fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::blink::api::pay_offer(&self.config, offer, amount_msats, payer_note)
+        crate::blink::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::blink::api::lookup_invoice(
             &self.config,
             params.payment_hash,
             None,
             None,
             params.search,
-        )
+        ).await
     }
 
-    fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search)
+        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search).await
     }
 
-    fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::blink::api::decode(&self.config, str)
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::blink::api::decode(&self.config, str).await
     }
 
-    fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::blink::api::on_invoice_events(self.config.clone(), params, callback)
+        crate::blink::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InvoiceType, PayInvoiceParams};
+    use crate::InvoiceType;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
@@ -147,9 +148,9 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_get_info() {
-        match NODE.get_info() {
+   #[tokio::test]
+    async fn test_get_info() {
+        match NODE.get_info().await {
             Ok(info) => {
                 println!("info: {:?}", info);
             }
@@ -159,8 +160,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create_invoice() {
+    #[tokio::test]
+    async fn test_create_invoice() {
         let amount_msats = 21000; // 21 sats
         let description = "Test Blink invoice".to_string();
         let expiry = 3600;
@@ -171,7 +172,7 @@ mod tests {
             description: Some(description.clone()),
             expiry: Some(expiry),
             ..Default::default()
-        }) {
+        }).await {
             Ok(txn) => {
                 println!("Blink create_invoice: {:?}", txn);
                 assert!(
@@ -189,13 +190,13 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_pay_invoice() {
+    // #[tokio::test]
+    // async fn test_pay_invoice() {
     //     match NODE.pay_invoice(PayInvoiceParams {
     //         invoice: TEST_PAYMENT_REQUEST.clone(),
     //         amount_msats: None, // Use amount from invoice
     //         ..Default::default()
-    //     }) {
+    //     }).await {
     //         Ok(response) => {
     //             println!("Blink pay_invoice response: {:?}", response);
     //             assert!(
@@ -214,12 +215,12 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_lookup_invoice() {
+    #[tokio::test]
+    async fn test_lookup_invoice() {
         match NODE.lookup_invoice(LookupInvoiceParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             ..Default::default()
-        }) {
+        }).await {
             Ok(txn) => {
                 println!("Blink lookup invoice: {:?}", txn);
                 assert!(
@@ -240,8 +241,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_list_transactions() {
+    #[tokio::test]
+    async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 100,
@@ -249,7 +250,7 @@ mod tests {
             search: None,
         };
 
-        match NODE.list_transactions(params) {
+        match NODE.list_transactions(params).await {
             Ok(txns) => {
                 dbg!(&txns);
                 // Validate we can parse transactions
@@ -265,8 +266,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_on_invoice_events() {
+    #[tokio::test]
+    async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
@@ -294,19 +295,13 @@ mod tests {
 
         let params = crate::types::OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 60,
+            polling_delay_sec: 2,
+            max_polling_sec: 5,
             ..Default::default()
         };
 
-        // Start the event listener in a separate thread
-        thread::spawn(move || {
-            NODE.on_invoice_events(params, Box::new(callback));
-        });
-
-        // Give it some time to process
-        thread::sleep(std::time::Duration::from_secs(5));
-
+        NODE.on_invoice_events(params, Box::new(callback)).await;
+        
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Blink events captured: {:?}", *events_guard);

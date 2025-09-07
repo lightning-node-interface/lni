@@ -197,12 +197,12 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_pay_invoice() {
+    // #[tokio::test]
+    // async fn test_pay_invoice() {
     //     match NODE.pay_invoice(PayInvoiceParams {
     //         invoice: TEST_PAYMENT_REQUEST.to_string(),
     //         ..Default::default()
-    //     }) {
+    //     }).await {
     //         Ok(invoice_resp) => {
     //             println!("Strike pay invoice resp: {:?}", invoice_resp);
     //         }
@@ -308,7 +308,7 @@ mod tests {
         // Use the real test payment hash from environment
         let params = crate::types::OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 1,
+            polling_delay_sec: 2,
             max_polling_sec: 5, // Short timeout for test
             ..Default::default()
         };

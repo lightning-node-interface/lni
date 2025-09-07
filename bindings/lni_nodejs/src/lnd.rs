@@ -128,7 +128,7 @@ impl LndNode {
     
     // Block on the async function in the current thread, similar to CLN's sync approach
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-      lni::lnd::api::poll_invoice_events_async(&config, params, move |status, tx| {
+      lni::lnd::api::poll_invoice_events(&config, params, move |status, tx| {
         let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
       }).await;
     });

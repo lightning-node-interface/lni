@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::thread;
 use std::time::Duration;
 
 use base64;
@@ -16,7 +15,7 @@ use crate::{
 
 // Docs: https://apidocs.tryspeed.com/
 
-fn client(config: &SpeedConfig) -> reqwest::blocking::Client {
+fn client(config: &SpeedConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
 
     // Speed uses HTTP Basic Auth with API key as username, no password (hence the colon)
@@ -25,49 +24,86 @@ fn client(config: &SpeedConfig) -> reqwest::blocking::Client {
 
     let auth_header = format!("Basic {}", auth_value);
 
-    headers.insert(
-        header::AUTHORIZATION,
-        header::HeaderValue::from_str(&auth_header).unwrap(),
-    );
+    match header::HeaderValue::from_str(&auth_header) {
+        Ok(auth_header_value) => headers.insert(header::AUTHORIZATION, auth_header_value),
+        Err(_) => {
+            eprintln!("Failed to create authorization header");
+            return reqwest::ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+        }
+    };
+    
     headers.insert(
         header::CONTENT_TYPE,
         header::HeaderValue::from_static("application/json"),
     );
 
-    let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
-
+    // Create HTTP client with optional SOCKS5 proxy following Strike pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            // Accept invalid certificates when using SOCKS5 proxy
+            let client_builder = reqwest::Client::builder()
+                .default_headers(headers.clone())
+                .danger_accept_invalid_certs(true);
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    let mut builder = client_builder.proxy(proxy);
+                    if config.http_timeout.is_some() {
+                        builder = builder.timeout(std::time::Duration::from_secs(
+                            config.http_timeout.unwrap_or_default() as u64,
+                        ));
+                    }
+                    match builder.build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
+    }
+    
+    // Default client creation
+    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
+    }
     if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
 fn get_base_url(config: &SpeedConfig) -> &str {
     config.base_url.as_deref().unwrap_or("https://api.tryspeed.com")
 }
 
-pub fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
+pub async fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
     let client = client(config);
 
     // Get balance from Speed API
     let response = client
         .get(&format!("{}/balances", get_base_url(config)))
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("HTTP {} - {}", status, error_text),
         });
     }
 
-    let balance_response: SpeedBalanceResponse = response.json().map_err(|e| ApiError::Json {
+    let balance_response: SpeedBalanceResponse = response.json().await.map_err(|e| ApiError::Json {
         reason: e.to_string(),
     })?;
 
@@ -96,7 +132,7 @@ pub fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
     })
 }
 
-pub fn create_invoice(
+pub async fn create_invoice(
     config: &SpeedConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
@@ -115,20 +151,21 @@ pub fn create_invoice(
                 .post(&format!("{}/payments", get_base_url(config)))
                 .json(&request)
                 .send()
+                .await
                 .map_err(|e| ApiError::Http {
                     reason: e.to_string(),
                 })?;
 
             if !response.status().is_success() {
                 let status = response.status();
-                let error_text = response.text().unwrap_or_default();
+                let error_text = response.text().await.unwrap_or_default();
                 return Err(ApiError::Http {
                     reason: format!("HTTP {} - {}", status, error_text),
                 });
             }
 
             let payment: SpeedCreatePaymentResponse =
-                response.json().map_err(|e| ApiError::Json {
+                response.json().await.map_err(|e| ApiError::Json {
                     reason: e.to_string(),
                 })?;
 
@@ -188,7 +225,7 @@ pub fn create_invoice(
     }
 }
 
-pub fn pay_invoice(
+pub async fn pay_invoice(
     config: &SpeedConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
@@ -231,19 +268,20 @@ pub fn pay_invoice(
         .post(&format!("{}/send", get_base_url(config)))
         .json(&request)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("HTTP {} - {}", status, error_text),
         });
     }
 
-    let send_response: SpeedSendResponse = response.json().map_err(|e| ApiError::Json {
+    let send_response: SpeedSendResponse = response.json().await.map_err(|e| ApiError::Json {
         reason: format!("error decoding response body: {}", e),
     })?;
 
@@ -260,18 +298,18 @@ pub fn pay_invoice(
     })
 }
 
-pub fn decode(_config: &SpeedConfig, str: String) -> Result<String, ApiError> {
+pub async fn decode(_config: &SpeedConfig, str: String) -> Result<String, ApiError> {
     // Speed doesn't have a decode endpoint, return raw string
     Ok(str)
 }
 
-pub fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Speed".to_string(),
     })
 }
 
-pub fn list_offers(
+pub async fn list_offers(
     _config: &SpeedConfig,
     _search: Option<String>,
 ) -> Result<Vec<PayCode>, ApiError> {
@@ -280,7 +318,7 @@ pub fn list_offers(
     })
 }
 
-pub fn create_offer(
+pub async fn create_offer(
     _config: &SpeedConfig,
     _amount_msats: Option<i64>,
     _description: Option<String>,
@@ -291,7 +329,7 @@ pub fn create_offer(
     })
 }
 
-pub fn fetch_invoice_from_offer(
+pub async fn fetch_invoice_from_offer(
     _config: &SpeedConfig,
     _offer: String,
     _amount_msats: i64,
@@ -302,7 +340,7 @@ pub fn fetch_invoice_from_offer(
     })
 }
 
-pub fn pay_offer(
+pub async fn pay_offer(
     _config: &SpeedConfig,
     _offer: String,
     _amount_msats: i64,
@@ -314,7 +352,7 @@ pub fn pay_offer(
 }
 
 // Helper function to fetch send transactions using the /send/filter endpoint
-fn fetch_send_transactions(
+async fn fetch_send_transactions(
     config: &SpeedConfig,
     status_filter: Option<Vec<String>>,
     withdraw_request_filter: Option<String>,
@@ -330,19 +368,20 @@ fn fetch_send_transactions(
         .post(&format!("{}/send/filter", get_base_url(config)))
         .json(&request)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("HTTP {} - {}", status, error_text),
         });
     }
 
-    let filter_response: SpeedSendFilterResponse = response.json().map_err(|e| ApiError::Json {
+    let filter_response: SpeedSendFilterResponse = response.json().await.map_err(|e| ApiError::Json {
         reason: format!("error decoding response body: {}", e),
     })?;
 
@@ -396,7 +435,7 @@ fn convert_send_to_transaction(send_tx: SpeedSendResponse) -> Transaction {
     }
 }
 
-pub fn lookup_invoice(
+pub async fn lookup_invoice(
     config: &SpeedConfig,
     payment_hash: Option<String>,
     _from: Option<i64>,
@@ -426,7 +465,7 @@ pub fn lookup_invoice(
         "failed".to_string(),
     ];
     let send_transactions =
-        fetch_send_transactions(config, Some(statuses), withdraw_request_filter)?;
+        fetch_send_transactions(config, Some(statuses), withdraw_request_filter).await?;
 
     // Convert to Transaction and find the matching one
     let mut transactions = Vec::new();
@@ -456,7 +495,7 @@ pub fn lookup_invoice(
     }
 }
 
-pub fn list_transactions(
+pub async fn list_transactions(
     config: &SpeedConfig,
     _from: i64,
     limit: i64,
@@ -472,7 +511,7 @@ pub fn list_transactions(
         None
     };
 
-    let send_transactions = fetch_send_transactions(config, status_filter, withdraw_request_filter)?;
+    let send_transactions = fetch_send_transactions(config, status_filter, withdraw_request_filter).await?;
 
     dbg!(&send_transactions);
 
@@ -494,7 +533,7 @@ pub fn list_transactions(
 }
 
 // Core logic shared by both implementations
-pub fn poll_invoice_events<F>(config: &SpeedConfig, params: OnInvoiceEventParams, mut callback: F)
+pub async fn poll_invoice_events<F>(config: &SpeedConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
 {
@@ -512,7 +551,7 @@ where
             None,
             None,
             params.search.clone(),
-        ) {
+        ).await {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("success".to_string(), Some(transaction))
@@ -529,11 +568,11 @@ where
             break;
         }
 
-        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+        tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
-pub fn on_invoice_events(
+pub async fn on_invoice_events(
     config: SpeedConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
@@ -542,5 +581,5 @@ pub fn on_invoice_events(
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" | _ => callback.failure(tx),
-    });
+    }).await;
 }
