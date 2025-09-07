@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert } from 'react-native';
+import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch } from 'react-native';
 import {
   LndNode,
   LndConfig,
@@ -13,6 +13,8 @@ import {
   BlinkConfig,
   NwcNode,
   NwcConfig,
+  SpeedConfig,
+  SpeedNode,
   type OnInvoiceEventCallback,
   Transaction,
   OnInvoiceEventParams,
@@ -35,7 +37,9 @@ import {
   NWC_URI,
   NWC_TEST_PAYMENT_HASH,
   BLINK_API_KEY,
-  BLINK_TEST_PAYMENT_HASH
+  BLINK_TEST_PAYMENT_HASH,
+  SPEED_API_KEY,
+  SPEED_TEST_PAYMENT_HASH,
 } from '@env';
 
 type TestResult = {
@@ -50,6 +54,13 @@ export default function App() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [currentTest, setCurrentTest] = useState<string>('');
+  const [socks5ProxyEnabled, setSocks5ProxyEnabled] = useState(false);
+  const [socks5ProxyUrl, setSocks5ProxyUrl] = useState('socks5h://localhost:9050');
+
+  // Get the proxy value to use in configurations
+  const getProxyValue = () => {
+    return socks5ProxyEnabled ? socks5ProxyUrl : '';
+  };
 
   // Helper function to safely serialize objects with BigInt values
   const safeStringify = (obj: any, indent = 2) => {
@@ -191,7 +202,7 @@ export default function App() {
       const config = LndConfig.create({
         url: LND_URL,
         macaroon: LND_MACAROON,
-        socks5Proxy: '',
+        socks5Proxy: getProxyValue(),
         acceptInvalidCerts: true,
         httpTimeout: BigInt(40)
       });
@@ -215,7 +226,7 @@ export default function App() {
       const config = ClnConfig.create({
         url: CLN_URL,
         rune: CLN_RUNE,
-        socks5Proxy: '',
+        socks5Proxy: getProxyValue(),
         acceptInvalidCerts: true,
         httpTimeout: BigInt(40)
       });
@@ -238,7 +249,7 @@ export default function App() {
     try {
       const config = StrikeConfig.create({
         apiKey: STRIKE_API_KEY,
-        socks5Proxy: '',
+        socks5Proxy: getProxyValue(),
       });
 
       const node = new StrikeNode(config);
@@ -260,7 +271,7 @@ export default function App() {
       const config = PhoenixdConfig.create({
         url: PHOENIXD_URL,
         password: PHOENIXD_PASSWORD,
-        socks5Proxy: '',
+        socks5Proxy: getProxyValue(),
         // Phoenixd often needs a bit more time
         acceptInvalidCerts: true,
         httpTimeout: BigInt(60)
@@ -283,12 +294,34 @@ export default function App() {
     try {
       const config = BlinkConfig.create({
         apiKey: BLINK_API_KEY,
+        socks5Proxy: getProxyValue(),
       });
 
       const node = new BlinkNode(config);
       await testAsyncNode(nodeName, node, BLINK_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Blink initialization failed: ${error}`);
+    }
+  };
+
+  const testSpeed = async () => {
+    const nodeName = 'Speed';
+
+    if (!SPEED_API_KEY) {
+      updateTestStatus(nodeName, 'skipped', 'SPEED_API_KEY not configured');
+      return;
+    }
+
+    try {
+      const config = SpeedConfig.create({
+        apiKey: SPEED_API_KEY,
+        socks5Proxy: getProxyValue(),
+      });
+
+      const node = new SpeedNode(config);
+      await testAsyncNode(nodeName, node, SPEED_TEST_PAYMENT_HASH);
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Speed initialization failed: ${error}`);
     }
   };
 
@@ -303,6 +336,7 @@ export default function App() {
     try {
       const config = NwcConfig.create({
         nwcUri: NWC_URI,
+        socks5Proxy: getProxyValue(),
       });
 
       const node = new NwcNode(config);
@@ -415,6 +449,31 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Lightning Node Interface Tests</Text>
       
+      {/* SOCKS5 Proxy Configuration */}
+      <View style={styles.proxyContainer}>
+        <View style={styles.proxyHeader}>
+          <Text style={styles.proxyTitle}>SOCKS5 Proxy</Text>
+          <Switch
+            value={socks5ProxyEnabled}
+            onValueChange={setSocks5ProxyEnabled}
+            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            thumbColor={socks5ProxyEnabled ? '#f5dd4b' : '#f4f3f4'}
+          />
+        </View>
+        <TextInput
+          style={[styles.proxyInput, !socks5ProxyEnabled && styles.proxyInputDisabled]}
+          value={socks5ProxyUrl}
+          onChangeText={setSocks5ProxyUrl}
+          placeholder="socks5h://localhost:9150"
+          editable={socks5ProxyEnabled}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.proxyStatus}>
+          Status: {socks5ProxyEnabled ? `Using proxy: ${socks5ProxyUrl}` : 'Direct connection (no proxy)'}
+        </Text>
+      </View>
+      
       {/* Control Buttons */}
       <View style={styles.controlsContainer}>
         <View style={styles.buttonRow}>
@@ -470,6 +529,12 @@ export default function App() {
             onPress={() => runTest('Blink', testBlink)} 
             disabled={isRunning}
             color="#FFEAA7"
+          />
+          <Button 
+            title="Speed" 
+            onPress={() => runTest('Speed', testSpeed)} 
+            disabled={isRunning}
+            color="pink"
           />
           <Button 
             title="NWC" 
@@ -620,5 +685,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     padding: 12,
     borderRadius: 4,
+  },
+  proxyContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  proxyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  proxyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  proxyInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  proxyInputDisabled: {
+    backgroundColor: '#f5f5f5',
+    color: '#999',
+  },
+  proxyStatus: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
