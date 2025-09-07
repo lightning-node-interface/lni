@@ -57,6 +57,8 @@ export interface StrikeConfig {
   baseUrl?: string
   apiKey: string
   httpTimeout?: number
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
 }
 export interface StrikeNode {
   config: StrikeConfig
@@ -312,17 +314,21 @@ export declare class LndNode {
   getUrl(): string
   getMacaroon(): string
   getConfig(): LndConfig
-  getInfo(): NodeInfo
-  getInfoAsync(): Promise<NodeInfo>
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
   getOffer(search?: string | undefined | null): PayCode
   listOffers(search?: string | undefined | null): Array<PayCode>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(invoiceStr: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
+  getOfferAsync(search?: string | undefined | null): Promise<PayCode>
+  listOffersAsync(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOfferAsync(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  createOfferAsync(amountMsats?: number | undefined | null, description?: string | undefined | null, expiry?: number | undefined | null): Promise<Transaction>
+  fetchInvoiceFromOfferAsync(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<string>
 }
 export declare class BlinkNode {
   constructor(config: BlinkConfig)
@@ -372,14 +378,14 @@ export declare class StrikeNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): StrikeConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   getOffer(search?: string | undefined | null): PayCode
   listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }

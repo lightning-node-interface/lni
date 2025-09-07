@@ -34,27 +34,7 @@ impl LndNode {
     }
   }
 
-  #[napi]
-  pub fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info =
-      lni::lnd::api::get_info(&self.inner).map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(info)
-  }
-
-  #[napi]
-  pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::create_invoice(&self.inner, params)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(txn)
-  }
-
-  #[napi]
-  pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::lnd::api::pay_invoice(&self.inner, params)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(invoice)
-  }
-
+  // These BOLT12 functions are still synchronous
   #[napi]
   pub fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
     let offer = lni::lnd::api::get_offer(&self.inner, search)
@@ -81,71 +61,31 @@ impl LndNode {
     Ok(offer)
   }
 
+  // Async methods - using the actual async API functions
   #[napi]
-  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn =
-      lni::lnd::api::lookup_invoice(&self.inner, params.payment_hash, None, None, params.search)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(txn)
-  }
-
-  #[napi]
-  pub fn list_transactions(
-    &self,
-    params: lni::types::ListTransactionsParams,
-  ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns =
-      lni::lnd::api::list_transactions(&self.inner, params.from, params.limit, params.search)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(txns)
-  }
-
-  #[napi]
-  pub fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::lnd::api::decode(&self.inner, str)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(decoded)
-  }
-
-  #[napi]
-  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
-    &self,
-    params: lni::types::OnInvoiceEventParams,
-    callback: T,
-  ) -> Result<()> {
-    lni::lnd::api::poll_invoice_events(&self.inner, params, move |status, tx| {
-      if let Err(err) = callback(status.clone(), tx.clone()) {
-        eprintln!("Callback error: {}", err);
-      }
-    });
-    Ok(())
-  }
-
-  // Async methods
-  #[napi]
-  pub async fn get_info_async(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::lnd::api::get_info_async(self.inner.clone()).await
+  pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
+    let info = lni::lnd::api::get_info(self.inner.clone()).await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub async fn create_invoice_async(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::create_invoice_async(self.inner.clone(), params).await
+  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn = lni::lnd::api::create_invoice(self.inner.clone(), params).await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_invoice_async(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::lnd::api::pay_invoice_async(self.inner.clone(), params).await
+  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::lnd::api::pay_invoice(self.inner.clone(), params).await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub async fn lookup_invoice_async(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::lookup_invoice_async(
+  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+    let txn = lni::lnd::api::lookup_invoice(
       self.inner.clone(), 
       params.payment_hash, 
       None, 
@@ -157,11 +97,11 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn list_transactions_async(
+  pub async fn list_transactions(
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::lnd::api::list_transactions_async(
+    let txns = lni::lnd::api::list_transactions(
       self.inner.clone(),
       Some(params.from),
       Some(params.limit),
@@ -172,10 +112,28 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn decode_async(&self, invoice_str: String) -> Result<String> {
-    let decoded = lni::lnd::api::decode_async(self.inner.clone(), invoice_str).await
+  pub async fn decode(&self, invoice_str: String) -> Result<String> {
+    let decoded = lni::lnd::api::decode(self.inner.clone(), invoice_str).await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
+  }
+
+  #[napi]
+  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
+    &self,
+    params: lni::types::OnInvoiceEventParams,
+    callback: T,
+  ) -> Result<()> {
+    let config = self.inner.clone();
+    
+    // Block on the async function in the current thread, similar to CLN's sync approach
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+      lni::lnd::api::poll_invoice_events_async(&config, params, move |status, tx| {
+        let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+      }).await;
+    });
+    
+    Ok(())
   }
 
   #[napi]

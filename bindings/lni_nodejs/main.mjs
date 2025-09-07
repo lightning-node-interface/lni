@@ -1,6 +1,101 @@
-import { PhoenixdNode, ClnNode, LndNode, NwcNode, InvoiceType, sayAfterWithTokio } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, StrikeNode, NwcNode, InvoiceType, sayAfterWithTokio } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
+
+// Shared test logic for async node implementations (LND, Strike)
+async function testAsyncNode(nodeName, node, testInvoiceHash) {
+  console.log(`\n=== Testing ${nodeName} ===`);
+  
+  try {
+    // Test 1: Get node info
+    console.log(`${nodeName} - Testing getInfo...`);
+    const info = await node.getInfo();
+    console.log(`${nodeName} Node info:`, info);
+
+    // Test 2: Create invoice
+    console.log(`${nodeName} - Testing createInvoice...`);
+    const invoice = await node.createInvoice({
+      amountMsats: 1000,
+      // description: `test invoice from ${nodeName}`,
+      invoiceType: InvoiceType.Bolt11,
+    });
+    console.log(`${nodeName} Invoice:`, invoice);
+
+    // Test 3: Lookup invoice (if test hash provided)
+    if (testInvoiceHash) {
+      console.log(`${nodeName} - Testing lookupInvoice...`);
+      try {
+        const lookupInvoice = await node.lookupInvoice({
+          paymentHash: testInvoiceHash,
+          search: "",
+        });
+        console.log(`${nodeName} lookupInvoice:`, lookupInvoice);
+      } catch (error) {
+        console.log(`${nodeName} lookupInvoice failed (expected if hash doesn't exist):`, error.message);
+      }
+    }
+
+    // Test 4: List transactions
+    console.log(`${nodeName} - Testing listTransactions...`);
+    const txns = await node.listTransactions({
+      from: 0,
+      limit: 5,
+    });
+    console.log(`${nodeName} Transactions (${txns.length} found):`, txns);
+
+    // Test 5: Decode invoice (if we have one)
+    if (invoice && invoice.invoice) {
+      console.log(`${nodeName} - Testing decode...`);
+      try {
+        const decoded = await node.decode(invoice.invoice);
+        console.log(`${nodeName} Decoded:`, decoded);
+      } catch (error) {
+        console.log(`${nodeName} decode failed:`, error.message);
+      }
+    }
+
+    // Test 6: Invoice Events (callback-style like lib)
+    console.log(`${nodeName} - Testing onInvoiceEvents...`);
+    try {
+      const params = {
+        paymentHash: testInvoiceHash || "test",
+        search: "",
+        pollingDelaySec: 4,
+        maxPollingSec: 60
+      };
+
+      console.log(`${nodeName} - Starting onInvoiceEvents with callback...`);
+      await node.onInvoiceEvents(params, (status, transaction) => {
+        console.log(`${nodeName} - Invoice event: ${status}`, transaction);
+      });
+      console.log(`${nodeName} - onInvoiceEvents started successfully`);
+
+    } catch (error) {
+      console.log(`${nodeName} - onInvoiceEvents test failed:`, error.message);
+    }
+
+    // Test 7: BOLT12 functions (these should return "not implemented" errors)
+    console.log(`${nodeName} - Testing BOLT12 functions (should fail with 'not implemented')...`);
+    try {
+      const offer = await node.getOffer("");
+      console.log(`${nodeName} getOffer:`, offer);
+    } catch (error) {
+      console.log(`${nodeName} getOffer failed (expected):`, error.message);
+    }
+
+    try {
+      const offers = await node.listOffers("");
+      console.log(`${nodeName} listOffers:`, offers);
+    } catch (error) {
+      console.log(`${nodeName} listOffers failed (expected):`, error.message);
+    }
+
+    console.log(`${nodeName} - All tests completed successfully!`);
+
+  } catch (error) {
+    console.error(`${nodeName} - Test error:`, error.message);
+  }
+}
 
 async function phoenixd() {
   const config = {
@@ -99,43 +194,32 @@ async function lnd() {
   const config = {
     url: process.env.LND_URL,
     macaroon: process.env.LND_MACAROON,
-    socks5Proxy: process.env.LND_SOCKS5_PROXY || "",
-    acceptInvalidCerts: true
+    // socks5Proxy: process.env.LND_SOCKS5_PROXY || "",
+    acceptInvalidCerts: true,
+    httpTimeout: 40
   };
-  const node = new LndNode(config);
   
-  // Test both sync and async versions
-  const info = await node.getInfo();
-  console.log("Node info (sync):", info);
+  if (!config.url || !config.macaroon) {
+    console.log("Skipping LND test - LND_URL or LND_MACAROON not set");
+    return;
+  }
 
-  const infoAsync = await node.getInfoAsync();
-  console.log("Node info (async):", infoAsync);
+  const node = new LndNode(config);
+  await testAsyncNode("LND", node, process.env.LND_TEST_PAYMENT_HASH);
+}
 
-  const invoice = await node.createInvoice({
-    amountMsats: 1000,
-    description: "test invoice",
-    invoiceType: InvoiceType.Bolt11,
-  });
-  console.log("LND Invoice:", invoice);
+async function strike() {
+  const config = {
+    apiKey: process.env.STRIKE_API_KEY,
+  };
+  
+  if (!config.apiKey) {
+    console.log("Skipping Strike test - STRIKE_API_KEY not set");
+    return;
+  }
 
-  const bolt11Invoice = await node.createInvoice({
-    amountMsats: 3000,
-    description: "test invoice",
-    invoiceType: InvoiceType.Bolt11,
-  });
-  console.log("LND bolt11 Invoice:", bolt11Invoice);
-
-
-  const lookupInvoice = await node.lookupInvoice(
-    process.env.LND_TEST_PAYMENT_HASH
-  );
-  console.log("lookupInvoice:", lookupInvoice);
-
-  const txns = await node.listTransactions({
-    from: 0,
-    limit: 10,
-  });
-  console.log("LND Transactions:", txns);
+  const node = new StrikeNode(config);
+  await testAsyncNode("Strike", node, process.env.STRIKE_TEST_PAYMENT_HASH);
 }
 
 async function nwc() {
@@ -240,45 +324,6 @@ async function nwc() {
   }
 }
 
-async function testSayAfterWithTokio() {
-  console.log("\n=== Testing sayAfterWithTokio function ===");
-  
-  try {
-    // Test 1: Basic HTTP request without proxy
-    console.log("Test 1: Basic HTTP request to ipify.org");
-    const result1 = await sayAfterWithTokio(
-      1000,                                    // 1 second delay
-      "Nick",                                  // Name
-      "https://api.ipify.org?format=json",     // URL
-      null,                                    // No proxy
-      null,                                    // No header key
-      null                                     // No header value
-    );
-    console.log("Result 1:", result1);
-
-    // Test 2: Request with SOCKS5 proxy (will likely fail unless you have a proxy running)
-    console.log("\nTest 3: Request with SOCKS5 proxy (may fail if no proxy available)");
-    try {
-      const result3 = await sayAfterWithTokio(
-        2000,                                  // 2 second delay
-        "ProxyUser",                           // Name
-        "https://api.ipify.org?format=json",   // URL
-        "socks5h://127.0.0.1:9150",            // SOCKS5 proxy (common default)
-        "X-Test-Header",                       // Header key
-        "proxy-test"                           // Header value
-      );
-      console.log("Result 3:", result3);
-    } catch (proxyError) {
-      console.log("Result 3: Proxy test failed (expected if no proxy running):", proxyError.message);
-    }
-
-    console.log("\n=== sayAfterWithTokio tests completed ===\n");
-
-  } catch (error) {
-    console.error("Test error:", error.message);
-  }
-}
-
 async function test() {
   const config = {
     url: process.env.PHOENIXD_URL,
@@ -309,16 +354,41 @@ async function test() {
   // );
 }
 
+// Helper function to show required environment variables
+function showEnvironmentHelp() {
+  console.log("\n=== Environment Variables Required ===");
+  console.log("For LND testing:");
+  console.log("  LND_URL=https://your-lnd-node:8080");
+  console.log("  LND_MACAROON=your_base64_macaroon");
+  console.log("  LND_SOCKS5_PROXY=socks5h://127.0.0.1:9150 (optional)");
+  console.log("  LND_TEST_PAYMENT_HASH=existing_payment_hash (optional)");
+  console.log("");
+  console.log("For Strike testing:");
+  console.log("  STRIKE_API_KEY=your_strike_api_key");
+  console.log("  STRIKE_BASE_URL=https://api.strike.me (optional, defaults to this)");
+  console.log("  STRIKE_SOCKS5_PROXY=socks5h://127.0.0.1:9150 (optional)");
+  console.log("  STRIKE_TEST_PAYMENT_HASH=existing_payment_hash (optional)");
+  console.log("=======================================\n");
+}
+
 async function main() {
-  // Test the HTTP function
-  await testSayAfterWithTokio();
+  console.log("=== Lightning Node Interface (LNI) Tests ===");
+  
+  // Show environment help
+  showEnvironmentHelp();
+  
+
+  // Test async implementations with shared logic
+  await lnd();
+  await strike();
   
   // Uncomment these to test other functionality
-  // phoenixd();
-  // cln();
-  // await lnd();
+  // await phoenixd();
+  // await cln();
   // await nwc();
-  // test();
+  // await test();
+  
+  console.log("\n=== All tests completed ===");
 }
 
 main();
