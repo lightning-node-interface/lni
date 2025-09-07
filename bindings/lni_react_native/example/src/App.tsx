@@ -1,62 +1,59 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, Alert, TextInput, Animated, InteractionManager } from 'react-native';
-import { DeviceEventEmitter } from 'react-native';
+import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert } from 'react-native';
 import {
   LndNode,
   LndConfig,
   PhoenixdNode,
   PhoenixdConfig,
+  ClnNode,
+  ClnConfig,
+  StrikeNode,
+  StrikeConfig,
+  BlinkNode,
+  BlinkConfig,
+  NwcNode,
+  NwcConfig,
   type OnInvoiceEventCallback,
   Transaction,
-  BlinkConfig,
-  BlinkNode,
-  NwcConfig,
   OnInvoiceEventParams,
-  nwcStartInvoicePolling,
-  type InvoicePollingStateInterface,
+  InvoiceType,
+  CreateInvoiceParams,
+  LookupInvoiceParams,
 } from 'lni_react_native';
-import { LND_URL, LND_MACAROON, LND_TEST_PAYMENT_HASH, NWC_URI, NWC_TEST_PAYMENT_HASH } from '@env';
+import { 
+  LND_URL, 
+  LND_MACAROON, 
+  LND_TEST_PAYMENT_HASH,
+  CLN_URL,
+  CLN_RUNE,
+  CLN_TEST_PAYMENT_HASH,
+  PHOENIXD_URL,
+  PHOENIXD_PASSWORD,
+  PHOENIXD_TEST_PAYMENT_HASH,
+  STRIKE_API_KEY,
+  STRIKE_TEST_PAYMENT_REQUEST,
+  STRIKE_TEST_PAYMENT_HASH,
+  NWC_URI,
+  NWC_TEST_PAYMENT_HASH,
+  BLINK_API_KEY,
+  BLINK_TEST_PAYMENT_HASH
+} from '@env';
+
+type TestResult = {
+  implementation: string;
+  status: 'running' | 'success' | 'error' | 'skipped';
+  output: string[];
+  startTime: number;
+  endTime?: number;
+};
 
 export default function App() {
-  const [result, setResult] = useState<string>('Ready to test UI thread blocking...');
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollCount, setPollCount] = useState(0);
-  const [uiCounter, setUiCounter] = useState(0);
-  const [spinnerRotation] = useState(new Animated.Value(0));
-  const [textInput, setTextInput] = useState('Type here to test UI responsiveness');
-  const pollingStateRef = useRef<InvoicePollingStateInterface | null>(null);
-  const lndNodeRef = useRef<LndNode | null>(null);
-  const counterIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // UI responsiveness test - counter that increments every second
-  useEffect(() => {
-    counterIntervalRef.current = setInterval(() => {
-      setUiCounter(prev => prev + 1);
-    }, 1000);
-
-    // Start spinning animation
-    Animated.loop(
-      Animated.timing(spinnerRotation, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      })
-    ).start();
-
-    return () => {
-      if (counterIntervalRef.current) {
-        clearInterval(counterIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const spin = spinnerRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [currentTest, setCurrentTest] = useState<string>('');
 
   // Helper function to safely serialize objects with BigInt values
-  const safetStringify = (obj: any, indent = 2) => {
+  const safeStringify = (obj: any, indent = 2) => {
     return JSON.stringify(obj, (key, value) => {
       if (typeof value === 'bigint') {
         return value.toString();
@@ -65,560 +62,605 @@ export default function App() {
     }, indent);
   };
 
-  const testLndAsync = async () => {
+  // Add output to current test result
+  const addOutput = (implementation: string, message: string) => {
+    setTestResults(prev => 
+      prev.map(result => 
+        result.implementation === implementation 
+          ? { ...result, output: [...result.output, `[${new Date().toLocaleTimeString()}] ${message}`] }
+          : result
+      )
+    );
+  };
+
+  // Update test status
+  const updateTestStatus = (implementation: string, status: 'running' | 'success' | 'error' | 'skipped', endMessage?: string) => {
+    setTestResults(prev => 
+      prev.map(result => 
+        result.implementation === implementation 
+          ? { 
+              ...result, 
+              status, 
+              endTime: status !== 'running' ? Date.now() : result.endTime,
+              output: endMessage ? [...result.output, `[${new Date().toLocaleTimeString()}] ${endMessage}`] : result.output
+            }
+          : result
+      )
+    );
+  };
+
+  // Shared test logic for async node implementations
+  const testAsyncNode = async (nodeName: string, node: any, testInvoiceHash?: string) => {
     try {
-      // Validate environment variables
-      if (!LND_URL || !LND_MACAROON) {
-        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
-        return;
-      }
+      addOutput(nodeName, `Testing ${nodeName}...`);
+      
+      // Test 1: Get node info
+      addOutput(nodeName, '(1) Testing getInfo...');
+      const info = await node.getInfo();
+      addOutput(nodeName, `Node info: ${info.alias} (${info.pubkey?.substring(0, 20)}...)`);
 
-      setResult('🔄 Testing LND async with background processing...');
-
-      const config = LndConfig.create({
-        url: LND_URL,
-        macaroon: LND_MACAROON,
-        socks5Proxy: '', // empty string instead of undefined
-        acceptInvalidCerts: true,
+      // Test 2: Create invoice
+      addOutput(nodeName, '(2) Testing createInvoice...');
+      const invoice = await node.createInvoice({
+        amountMsats: BigInt(1000),
+        description: `test invoice from ${nodeName}`,
+        invoiceType: InvoiceType.Bolt11,
       });
+      addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
 
-      const lndNode = new LndNode(config);
-
-      console.log('📋 Calling LND getInfoAsync...');
-      const nodeInfo = await lndNode.getInfoAsync();
-      console.log('✅ LND getInfoAsync result:', nodeInfo);
-      
-      setResult(`✅ LND Async Success! Node: ${nodeInfo.alias} (${nodeInfo.pubkey.substring(0, 20)}...)`);
-      
-    } catch (error) {
-      console.error('❌ LND Async Error:', error);
-      console.error('❌ Error type:', typeof error);
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      
-      console.error('❌ Error message:', errorMessage);
-      if (errorStack) {
-        console.error('❌ Error stack:', errorStack);
+      // Test 3: Lookup invoice (if test hash provided)
+      if (testInvoiceHash) {
+        addOutput(nodeName, '(3) Testing lookupInvoice...');
+        try {
+          const lookupInvoice = await node.lookupInvoice({
+            paymentHash: testInvoiceHash,
+            search: '',
+          });
+          addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
+        } catch (error) {
+          addOutput(nodeName, `Lookup failed (expected if hash doesn't exist): ${error}`);
+        }
       }
-      
-      setResult(`❌ LND Async Error: ${errorMessage}`);
+
+      // Test 4: List transactions
+      addOutput(nodeName, '(4) Testing listTransactions...');
+      const txns = await node.listTransactions({
+        from: BigInt(0),
+        limit: BigInt(3),
+      });
+      addOutput(nodeName, `Found ${txns.length} transactions`);
+
+      // Test 5: Decode invoice (if we have one)
+      if (invoice?.invoice) {
+        addOutput(nodeName, '(5) Testing decode...');
+        try {
+          const decoded = await node.decode(invoice.invoice);
+          addOutput(nodeName, `Decode success: ${decoded.substring(0, 50)}...`);
+        } catch (error) {
+          addOutput(nodeName, `Decode failed: ${error}`);
+        }
+      }
+
+      // Test 6: Invoice Events (callback-style)
+      if (testInvoiceHash) {
+        addOutput(nodeName, '(6) Testing onInvoiceEvents...');
+        try {
+          const params = OnInvoiceEventParams.create({
+            paymentHash: testInvoiceHash,
+            search: '',
+            pollingDelaySec: BigInt(2),
+            maxPollingSec: BigInt(10)
+          });
+
+          const callback: OnInvoiceEventCallback = {
+            success: (transaction) => {
+              addOutput(nodeName, `Invoice event SUCCESS: ${transaction?.paymentHash?.substring(0, 20)}...`);
+            },
+            pending: (transaction) => {
+              addOutput(nodeName, `Invoice event PENDING: ${transaction ? 'transaction found' : 'no transaction'}`);
+            },
+            failure: (transaction) => {
+              addOutput(nodeName, `Invoice event FAILURE: ${transaction?.paymentHash?.substring(0, 20) || 'no transaction'}`);
+            }
+          };
+
+          await node.onInvoiceEvents(params, callback);
+          addOutput(nodeName, 'Invoice events test completed');
+        } catch (error) {
+          addOutput(nodeName, `Invoice events failed: ${error}`);
+        }
+      }
+
+      updateTestStatus(nodeName, 'success', `${nodeName} tests completed successfully!`);
+
+    } catch (error) {
+      console.error(`${nodeName} test error:`, error);
+      updateTestStatus(nodeName, 'error', `${nodeName} test failed: ${error}`);
     }
   };
 
-  const testLndAsyncMethods = async () => {
+  // Individual test implementations
+  const testLnd = async () => {
+    const nodeName = 'LND';
+    
+    if (!LND_URL || !LND_MACAROON) {
+      updateTestStatus(nodeName, 'skipped', 'LND_URL or LND_MACAROON not configured');
+      return;
+    }
+
     try {
-      // Validate environment variables
-      if (!LND_URL || !LND_MACAROON) {
-        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
-        return;
-      }
-
-      setResult('🔄 Testing multiple LND async methods...');
-
       const config = LndConfig.create({
         url: LND_URL,
         macaroon: LND_MACAROON,
         socks5Proxy: '',
         acceptInvalidCerts: true,
-      });
-
-      const lndNode = new LndNode(config);
-
-      // Test 1: Get info
-      console.log('📋 Testing getInfoAsync...');
-      const nodeInfo = await lndNode.getInfoAsync();
-      console.log('✅ getInfoAsync result:', nodeInfo);
-
-      // Test 2: Test decode async (with a sample invoice)
-      try {
-        console.log('📋 Testing decodeAsync...');
-        const sampleInvoice = 'lnbc1u1p3xnhl2pp5yp0kcp46kmjkyk9u'; // truncated sample
-        const decoded = await lndNode.decodeAsync(sampleInvoice);
-        console.log('✅ decodeAsync result:', decoded);
-      } catch (decodeError) {
-        console.log('⚠️ decodeAsync failed (expected with invalid invoice):', decodeError);
-      }
-
-      // Test 3: Test list transactions async
-      try {
-        console.log('📋 Testing listTransactionsAsync...');
-        const params = {
-          from: BigInt(0),
-          limit: BigInt(5),
-          paymentHash: undefined,
-          search: undefined,
-        };
-        const transactions = await lndNode.listTransactionsAsync(params);
-        console.log('✅ listTransactionsAsync result:', transactions);
-      } catch (listError) {
-        console.log('⚠️ listTransactionsAsync failed:', listError);
-      }
-
-      setResult(`✅ LND Async Methods Test Complete! Node: ${nodeInfo.alias}`);
-      
-    } catch (error) {
-      console.error('❌ LND Async Methods Error:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setResult(`❌ LND Async Methods Error: ${errorMessage}`);
-    }
-  };
-
-  const testLndInvoiceEvents = async () => {
-    try {
-      // Validate environment variables
-      if (!LND_URL || !LND_MACAROON) {
-        setResult('❌ Error: LND_URL or LND_MACAROON not found in environment variables');
-        return;
-      }
-      if (!LND_TEST_PAYMENT_HASH) {
-        setResult('❌ Error: LND_TEST_PAYMENT_HASH not found in environment variables');
-        return;
-      }
-
-      setResult('🔄 Testing LND async invoice events...');
-      setIsPolling(true);
-      setPollCount(0);
-      
-      // Clear any NWC reference
-      pollingStateRef.current = null;
-
-      const config = LndConfig.create({
-        url: LND_URL,
-        macaroon: LND_MACAROON,
-        socks5Proxy: '', // empty string instead of undefined
-        acceptInvalidCerts: true,
+        httpTimeout: BigInt(40)
       });
 
       const node = new LndNode(config);
-      lndNodeRef.current = node; // Store reference for potential cancellation
-
-      const params = OnInvoiceEventParams.create({
-        paymentHash: LND_TEST_PAYMENT_HASH,
-        search: undefined,
-        pollingDelaySec: BigInt(3),
-        maxPollingSec: BigInt(20),
-      });
-
-      console.log('🔧 Starting LND async invoice events test');
-      console.log('🔧 Using LND_URL:', LND_URL);
-      console.log('🔧 Using payment hash:', LND_TEST_PAYMENT_HASH);
-
-      // Create callback to handle events with simpler structure
-      const handleSuccess = (transaction: Transaction | undefined) => {
-        console.log('✅ LND Success callback:', transaction);
-        setResult(`✅ LND Invoice Event Success! Transaction: ${transaction ? safetStringify(transaction).substring(0, 200) + '...' : 'No transaction data'}`);
-        setIsPolling(false);
-        lndNodeRef.current = null;
-      };
-
-      const handlePending = (transaction: Transaction | undefined) => {
-        const count = pollCount + 1;
-        setPollCount(count);
-        console.log(`🔄 LND Pending callback #${count}:`, transaction);
-        setResult(`🔄 LND Poll #${count}: Invoice pending... ${transaction ? 'Transaction found' : 'No transaction yet'}`);
-      };
-
-      const handleFailure = (transaction: Transaction | undefined) => {
-        console.log(`❌ LND Failure callback ${Date.now()}:`, transaction);
-        //setResult(`❌ LND Invoice Event Failed. ${transaction ? 'Transaction: ' + safetStringify(transaction).substring(0, 100) + '...' : 'No transaction data'}`);
-        //setIsPolling(false);
-        lndNodeRef.current = null;
-      };
-
-      const callback: OnInvoiceEventCallback = {
-        success: handleSuccess,
-        pending: handlePending,
-        failure: handleFailure,
-      };
-
-      console.log('📋 Starting LND async invoice events with config:', safetStringify(config));
-      console.log('📋 Params:', safetStringify(params));
-      console.log('📋 Callback:', callback);
-      console.log('📋 Available onInvoiceEventsAsync:', typeof node.onInvoiceEventsAsync);
-
-      // Start the async invoice event monitoring using the direct function
-      try {
-        console.log('📋 Calling onInvoiceEventsAsync...');
-        const result = await node.onInvoiceEventsAsync(params, callback);
-        console.log('🔄 LND async invoice events completed:', result);
-        if (isPolling) {
-          setResult('🔄 LND async invoice events monitoring completed');
-          setIsPolling(false);
-          lndNodeRef.current = null;
-        }
-      } catch (error) {
-        console.error('❌ LND async invoice events error:', error);
-        console.error('❌ Error type:', typeof error);
-        console.error('❌ Error constructor:', error?.constructor?.name);
-        setResult(`❌ LND Async Invoice Events Error: ${error}`);
-        setIsPolling(false);
-        lndNodeRef.current = null;
-      }
-
-      // Set a timeout to cancel if it takes too long
-      setTimeout(() => {
-        if (isPolling) {
-          setResult('⏰ LND async invoice events test timeout (25s)');
-          setIsPolling(false);
-          lndNodeRef.current = null;
-        }
-      }, 25000);
-
+      await testAsyncNode(nodeName, node, LND_TEST_PAYMENT_HASH);
     } catch (error) {
-      console.error('❌ Error starting LND invoice events test:', error);
-      setResult(`❌ LND Test Error: ${error}`);
-      setIsPolling(false);
-      lndNodeRef.current = null;
+      updateTestStatus(nodeName, 'error', `LND initialization failed: ${error}`);
     }
   };
 
-  const testNwcPolling = async () => {
+  const testCln = async () => {
+    const nodeName = 'CLN';
+    
+    if (!CLN_URL || !CLN_RUNE) {
+      updateTestStatus(nodeName, 'skipped', 'CLN_URL or CLN_RUNE not configured');
+      return;
+    }
+
     try {
-      // Validate environment variables
-      if (!NWC_URI) {
-        setResult('❌ Error: NWC_URI not found in environment variables');
-        return;
-      }
-      if (!NWC_TEST_PAYMENT_HASH) {
-        setResult('❌ Error: NWC_TEST_PAYMENT_HASH not found in environment variables');
-        return;
-      }
+      const config = ClnConfig.create({
+        url: CLN_URL,
+        rune: CLN_RUNE,
+        socks5Proxy: '',
+        acceptInvalidCerts: true,
+        httpTimeout: BigInt(40)
+      });
 
-      setResult('Starting InvoicePollingState-based NWC polling...');
-      setIsPolling(true);
-      setPollCount(0);
+      const node = new ClnNode(config);
+      await testAsyncNode(nodeName, node, CLN_TEST_PAYMENT_HASH);
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `CLN initialization failed: ${error}`);
+    }
+  };
+
+  const testStrike = async () => {
+    const nodeName = 'Strike';
+    
+    if (!STRIKE_API_KEY) {
+      updateTestStatus(nodeName, 'skipped', 'STRIKE_API_KEY not configured');
+      return;
+    }
+
+    try {
+      const config = StrikeConfig.create({
+        apiKey: STRIKE_API_KEY,
+        socks5Proxy: '',
+      });
+
+      const node = new StrikeNode(config);
+      await testAsyncNode(nodeName, node, STRIKE_TEST_PAYMENT_HASH); // No STRIKE_TEST_PAYMENT_HASH available
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Strike initialization failed: ${error}`);
+    }
+  };
+
+  const testPhoenixd = async () => {
+    const nodeName = 'Phoenixd';
+    
+    if (!PHOENIXD_URL || !PHOENIXD_PASSWORD) {
+      updateTestStatus(nodeName, 'skipped', 'PHOENIXD_URL or PHOENIXD_PASSWORD not configured');
+      return;
+    }
+
+    try {
+      const config = PhoenixdConfig.create({
+        url: PHOENIXD_URL,
+        password: PHOENIXD_PASSWORD,
+        socks5Proxy: '',
+        acceptInvalidCerts: true,
+        httpTimeout: BigInt(40)
+      });
+
+      const node = new PhoenixdNode(config);
       
-      // Clear any LND reference 
-      lndNodeRef.current = null;
+      // Phoenixd has slightly different method names, so we'll do a custom test
+      addOutput(nodeName, 'Testing Phoenixd...');
+      
+      addOutput(nodeName, 'Testing getInfo...');
+      const info = await node.getInfo();
+      addOutput(nodeName, `Node info: ${info.alias} (${info.pubkey?.substring(0, 20)}...)`);
 
+      addOutput(nodeName, 'Testing createInvoice...');
+      const invoice = await node.createInvoice(
+        CreateInvoiceParams.create({
+          invoiceType: InvoiceType.Bolt11,
+          amountMsats: BigInt(1000),
+          offer: undefined,
+          description: 'test invoice from Phoenixd',
+          descriptionHash: undefined,
+          expiry: undefined,
+          rPreimage: undefined,
+          isBlinded: undefined,
+          isKeysend: undefined,
+          isAmp: undefined,
+          isPrivate: undefined,
+        })
+      );
+      addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
+
+      if (PHOENIXD_TEST_PAYMENT_HASH) {
+        addOutput(nodeName, 'Testing lookupInvoice...');
+        try {
+          const lookupInvoice = await node.lookupInvoice(
+            LookupInvoiceParams.create({
+              paymentHash: PHOENIXD_TEST_PAYMENT_HASH,
+              search: undefined,
+            })
+          );
+          addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
+        } catch (error) {
+          addOutput(nodeName, `Lookup failed: ${error}`);
+        }
+      }
+
+      updateTestStatus(nodeName, 'success', 'Phoenixd tests completed successfully!');
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Phoenixd test failed: ${error}`);
+    }
+  };
+
+  const testBlink = async () => {
+    const nodeName = 'Blink';
+    
+    if (!BLINK_API_KEY) {
+      updateTestStatus(nodeName, 'skipped', 'BLINK_API_KEY not configured');
+      return;
+    }
+
+    try {
+      const config = BlinkConfig.create({
+        apiKey: BLINK_API_KEY,
+      });
+
+      const node = new BlinkNode(config);
+      await testAsyncNode(nodeName, node, BLINK_TEST_PAYMENT_HASH);
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Blink initialization failed: ${error}`);
+    }
+  };
+
+  const testNwc = async () => {
+    const nodeName = 'NWC';
+    
+    if (!NWC_URI) {
+      updateTestStatus(nodeName, 'skipped', 'NWC_URI not configured');
+      return;
+    }
+
+    try {
       const config = NwcConfig.create({
         nwcUri: NWC_URI,
       });
 
-      const params = OnInvoiceEventParams.create({
-        paymentHash: NWC_TEST_PAYMENT_HASH,
-        search: undefined,
-        pollingDelaySec: BigInt(2),
-        maxPollingSec: BigInt(15),
-      });
-
-      console.log('🔧 Starting InvoicePollingState-based NWC polling');
-      console.log('🔧 Using NWC_URI from env:', NWC_URI.substring(0, 50) + '...');
-      console.log('🔧 Using payment hash from env:', NWC_TEST_PAYMENT_HASH);
-
-      // Start the polling using the new function
-      console.log('📋 Config:', safetStringify(config));
-      console.log('📋 Params:', safetStringify(params));
-      const pollingState = nwcStartInvoicePolling(config, params);
-      console.log('📋 PollingState created:', safetStringify(pollingState));
-      pollingStateRef.current = pollingState;
-
-      // Check initial state
-      console.log(`📋 Initial poll count: ${pollingState.getPollCount()}`);
-      console.log(`📋 Initial status: ${pollingState.getLastStatus()}`);
-      console.log(`📋 Initial transaction: ${pollingState.getLastTransaction() ? 'present' : 'null'}`);
-      console.log(`📋 Initial cancelled: ${pollingState.isCancelled()}`);
-
-      // Give it a moment to start
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Monitor the polling state
-      const monitorPolling = async () => {
-        const startTime = Date.now();
-
-        while (!pollingState.isCancelled()) {
-          const currentCount = pollingState.getPollCount();
-          const currentStatus = pollingState.getLastStatus();
-          const lastTransaction = pollingState.getLastTransaction();
-
-          setPollCount(currentCount);
-
-          console.log(`📊 Poll #${currentCount}: Status: ${currentStatus}`);
-          console.log(`📊 Poll #${currentCount}: Transaction: ${lastTransaction ? 'present' : 'null'}`);
-          console.log(`📊 Poll #${currentCount}: Is cancelled: ${pollingState.isCancelled()}`);
-          
-          // Print detailed transaction info if present
-          if (lastTransaction) {
-            console.log(`📊 Poll #${currentCount}: Transaction details:`, safetStringify(lastTransaction));
-          }
-
-          if (currentStatus === 'success' && lastTransaction) {
-            console.log(`✅ Poll #${currentCount}: SUCCESS - Payment settled!`);
-            setResult(`✅ Poll #${currentCount}: Payment settled! Transaction: ${safetStringify(lastTransaction).substring(0, 100)}...`);
-            setIsPolling(false);
-            pollingStateRef.current = null;
-            return;
-          } else if (currentStatus === 'failure') {
-            console.log(`❌ Poll #${currentCount}: FAILURE - Polling failed`);
-            setResult(`❌ Poll #${currentCount}: Polling failed with status: ${currentStatus}`);
-            //setIsPolling(false);
-            //pollingStateRef.current = null;
-          } else {
-            console.log(`🔄 Poll #${currentCount}: CONTINUING - Status: ${currentStatus || 'pending'}`);
-            setResult(`🔄 Poll #${currentCount}: Status: ${currentStatus || 'pending'} - ${lastTransaction ? 'Transaction found' : 'No transaction yet'}`);
-          }
-
-          // Check timeout
-          const elapsed = Date.now() - startTime;
-          if (elapsed > 35000) { // Give a bit more time than the Rust timeout
-            setResult(`⏰ Monitoring timeout after ${currentCount} polls`);
-            setIsPolling(false);
-            pollingStateRef.current = null;
-            return;
-          }
-
-          // Wait 1 second before checking again
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-
-        if (pollingState.isCancelled()) {
-          const finalCount = pollingState.getPollCount();
-          setResult(`🛑 Cancelled after ${finalCount} polls`);
-          setIsPolling(false);
-          pollingStateRef.current = null;
-        }
-      };
-
-      // Start monitoring the polling state
-      monitorPolling().catch((error) => {
-        console.error('❌ Monitoring Error:', error);
-        if (error.toString().includes('BigInt')) {
-          setResult(`❌ Monitoring Error: BigInt serialization issue - ${error}`);
-        } else {
-          setResult(`❌ Monitoring Error: ${error}`);
-        }
-        setIsPolling(false);
-        pollingStateRef.current = null;
-      });
-
+      const node = new NwcNode(config);
+      await testAsyncNode(nodeName, node, NWC_TEST_PAYMENT_HASH);
     } catch (error) {
-      console.log('❌ Error starting NWC polling:', error);
-      setResult(`❌ Error: ${error}`);
-      setIsPolling(false);
-      pollingStateRef.current = null;
+      updateTestStatus(nodeName, 'error', `NWC initialization failed: ${error}`);
     }
   };
 
-  const cancelPolling = () => {
-    console.log('🛑 Cancel button clicked...');
-    
-    let cancelledSomething = false;
-    
-    // Cancel NWC polling if active
-    if (pollingStateRef.current && !pollingStateRef.current.isCancelled()) {
-      console.log('🛑 Cancelling NWC polling...');
-      pollingStateRef.current.cancel();
-      cancelledSomething = true;
-    }
-    
-    // Cancel LND polling if active 
-    if (lndNodeRef.current) {
-      console.log('🛑 Cancelling LND polling...');
-      lndNodeRef.current = null; // Clear reference to signal cancellation intent
-      cancelledSomething = true;
-    }
-    
-    if (cancelledSomething) {
-      setResult('🛑 Cancel requested!');
-      setIsPolling(false);
-    } else {
-      Alert.alert('No Active Polling', 'There is no active polling to cancel.');
-    }
-  };
-
-  useEffect(() => {
-    const runRustCode = async () => {
-      try {
-        // Test basic functionality first
-        const node = new LndNode(
-          LndConfig.create({
-            url: '',
-            macaroon: '',
-            socks5Proxy: '', // empty string instead of undefined
-          })
+  // Initialize test result for an implementation
+  const initializeTest = (implementation: string) => {
+    setTestResults(prev => {
+      const existing = prev.find(r => r.implementation === implementation);
+      if (existing) {
+        return prev.map(r => 
+          r.implementation === implementation 
+            ? { ...r, status: 'running' as const, output: [], startTime: Date.now(), endTime: undefined }
+            : r
         );
-
-        // Don't try to connect to LND since we don't have valid credentials
-        // Just test that the library loads correctly
-        setResult('✅ LNI library loaded successfully! Ready to test InvoicePollingState approach.');
-      } catch (error) {
-        console.error('Error initializing LNI library:', error);
-        setResult(`⚠️ Library loaded, but LND connection failed (expected): ${error}`);
+      } else {
+        return [...prev, {
+          implementation,
+          status: 'running' as const,
+          output: [],
+          startTime: Date.now()
+        }];
       }
-    };
-    runRustCode();
-  }, []);
+    });
+  };
+
+  // Run individual test
+  const runTest = async (implementation: string, testFn: () => Promise<void>) => {
+    if (isRunning) return;
+    
+    setIsRunning(true);
+    setCurrentTest(implementation);
+    initializeTest(implementation);
+    
+    try {
+      await testFn();
+    } catch (error) {
+      updateTestStatus(implementation, 'error', `Unexpected error: ${error}`);
+    } finally {
+      setIsRunning(false);
+      setCurrentTest('');
+    }
+  };
+
+  // Run all tests
+  const runAllTests = async () => {
+    if (isRunning) return;
+    
+    setIsRunning(true);
+    setTestResults([]);
+    
+    const tests = [
+      { name: 'LND', fn: testLnd },
+      { name: 'CLN', fn: testCln },
+      { name: 'Strike', fn: testStrike },
+      { name: 'Phoenixd', fn: testPhoenixd },
+      { name: 'Blink', fn: testBlink },
+      { name: 'NWC', fn: testNwc },
+    ];
+
+    for (const test of tests) {
+      setCurrentTest(test.name);
+      initializeTest(test.name);
+      
+      try {
+        await test.fn();
+        // Small delay between tests
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        updateTestStatus(test.name, 'error', `Unexpected error: ${error}`);
+      }
+    }
+    
+    setIsRunning(false);
+    setCurrentTest('');
+  };
+
+  // Clear results
+  const clearResults = () => {
+    setTestResults([]);
+  };
+
+  // Get status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running': return '#FFA500';
+      case 'success': return '#008000';
+      case 'error': return '#FF0000';
+      case 'skipped': return '#808080';
+      default: return '#000000';
+    }
+  };
+
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'running': return '🔄';
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'skipped': return '⏭️';
+      default: return '⏸️';
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>UI Thread Blocking Test</Text>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Lightning Node Interface Tests</Text>
       
-      {/* UI Responsiveness Indicators */}
-      <View style={styles.indicatorsContainer}>
-        <View style={styles.indicator}>
-          <Animated.Text style={[styles.spinner, { transform: [{ rotate: spin }] }]}>
-            🔄
-          </Animated.Text>
-          <Text style={styles.indicatorText}>Spinner: {uiCounter}</Text>
+      {/* Control Buttons */}
+      <View style={styles.controlsContainer}>
+        <View style={styles.buttonRow}>
+          <Button 
+            title="Run All Tests" 
+            onPress={runAllTests} 
+            disabled={isRunning}
+            color="#4CAF50"
+          />
+          <Button 
+            title="Clear Results" 
+            onPress={clearResults} 
+            disabled={isRunning}
+            color="#FF9800"
+          />
+           <Button 
+            title="UX Test" 
+            onPress={() => Alert.alert('Button pressed')} 
+            color="blue"
+          />
         </View>
         
-        <TextInput
-          style={styles.textInput}
-          value={textInput}
-          onChangeText={setTextInput}
-          placeholder="Type here during API call..."
-        />
+        <View style={styles.buttonRow}>
+          <Button 
+            title="LND" 
+            onPress={() => runTest('LND', testLnd)} 
+            disabled={isRunning}
+            color="#FF6B6B"
+          />
+          <Button 
+            title="CLN" 
+            onPress={() => runTest('CLN', testCln)} 
+            disabled={isRunning}
+            color="#4ECDC4"
+          />
+          <Button 
+            title="Strike" 
+            onPress={() => runTest('Strike', testStrike)} 
+            disabled={isRunning}
+            color="#45B7D1"
+          />
+        </View>
+        
+        <View style={styles.buttonRow}>
+          <Button 
+            title="Phoenixd" 
+            onPress={() => runTest('Phoenixd', testPhoenixd)} 
+            disabled={isRunning}
+            color="#96CEB4"
+          />
+          <Button 
+            title="Blink" 
+            onPress={() => runTest('Blink', testBlink)} 
+            disabled={isRunning}
+            color="#FFEAA7"
+          />
+          <Button 
+            title="NWC" 
+            onPress={() => runTest('NWC', testNwc)} 
+            disabled={isRunning}
+            color="#DDA0DD"
+          />
+        </View>
       </View>
 
-      <Text style={styles.result}>{result}</Text>
-      
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Test LND Async"
-          onPress={testLndAsync}
-          color="green"
-        />
-        
-        <Button
-          title="Test LND Methods"
-          onPress={testLndAsyncMethods}
-          color="darkgreen"
-        />
-      </View>
-      
-      <View style={styles.buttonContainer}>
-        <Button
-          title="UI Test Button 1"
-          onPress={() => Alert.alert('Button 1', `Counter: ${uiCounter}`)}
-          color="blue"
-        />
-        
-        <Button
-          title="UI Test Button 2" 
-          onPress={() => Alert.alert('Button 2', `Text: ${textInput}`)}
-          color="orange"
-        />
-      </View>
-      
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Start NWC Polling"
-          onPress={testNwcPolling}
-          disabled={isPolling}
-        />
-        
-        <Button
-          title="Test LND Async Events"
-          onPress={testLndInvoiceEvents}
-          disabled={isPolling}
-          color="purple"
-        />
-        
-        <Button
-          title="Cancel Polling"
-          onPress={cancelPolling}
-          disabled={!isPolling}
-          color="red"
-        />
-      </View>
+      {/* Current Test Indicator */}
+      {isRunning && (
+        <Text style={styles.currentTest}>
+          Currently running: {currentTest}
+        </Text>
+      )}
 
-      <Button
-          title="Say After"
-          onPress={()=>{
-            Alert.alert('Say After', 'Hello, World!');
-          }}
-          color="pink"
-        />
-      
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusText}>
-          Status: {isPolling ? `🔄 Polling... (${pollCount} attempts)` : '⏸️ Stopped'}
-        </Text>
-        <Text style={styles.helperText}>
-          {isPolling 
-            ? "🔥 UI should remain responsive! Try tapping buttons." 
-            : "Test async functions to see non-blocking behavior."
-          }
-        </Text>
-        <Text style={styles.helperText}>
-          Watch the spinner and counter - they should keep moving if UI thread is not blocked!
-        </Text>
-        <Text style={styles.helperText}>
-          Active polling: {pollingStateRef.current ? 'NWC' : lndNodeRef.current ? 'LND' : 'None'}
-        </Text>
-      </View>
-    </View>
+      {/* Results */}
+      <ScrollView style={styles.resultsContainer} showsVerticalScrollIndicator={true}>
+        {testResults.map((result) => (
+          <View key={result.implementation} style={styles.resultItem}>
+            <View style={styles.resultHeader}>
+              <Text style={[styles.resultTitle, { color: getStatusColor(result.status) }]}>
+                {getStatusIcon(result.status)} {result.implementation}
+              </Text>
+              <Text style={styles.resultTime}>
+                {result.endTime && result.startTime ? 
+                  `${((result.endTime - result.startTime) / 1000).toFixed(1)}s` : 
+                  'Running...'}
+              </Text>
+            </View>
+            
+            <ScrollView style={styles.outputContainer} nestedScrollEnabled={true}>
+              {result.output.map((line, index) => (
+                <Text key={index} style={styles.outputLine}>
+                  {line}
+                </Text>
+              ))}
+            </ScrollView>
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Instructions */}
+      {testResults.length === 0 && !isRunning && (
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsText}>
+            Configure environment variables in your .env file:
+          </Text>
+          <Text style={styles.envText}>
+            LND_URL, LND_MACAROON{'\n'}
+            CLN_URL, CLN_RUNE{'\n'}
+            STRIKE_API_KEY{'\n'}
+            PHOENIXD_URL, PHOENIXD_PASSWORD{'\n'}
+            And test payment hashes for each implementation
+          </Text>
+        </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
-  },
-  indicatorsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 20,
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
+    color: '#333',
   },
-  indicator: {
-    alignItems: 'center',
-    marginHorizontal: 20,
+  controlsContainer: {
+    marginBottom: 20,
   },
-  spinner: {
-    fontSize: 30,
-    marginBottom: 5,
-  },
-  indicatorText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    padding: 10,
-    marginLeft: 10,
-    backgroundColor: 'white',
-  },
-  result: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginVertical: 20,
-    paddingHorizontal: 10,
-  },
-  buttonContainer: {
+  buttonRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginVertical: 20,
+    justifyContent: 'space-around',
+    marginVertical: 8,
   },
-  statusContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  statusText: {
+  currentTest: {
     fontSize: 16,
-    marginVertical: 5,
-  },
-  helperText: {
-    fontSize: 12,
-    fontStyle: 'italic',
+    fontWeight: 'bold',
     textAlign: 'center',
-    marginTop: 10,
+    color: '#FF6B00',
+    marginBottom: 10,
+  },
+  resultsContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+  },
+  resultItem: {
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fafafa',
+  },
+  resultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  resultTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  resultTime: {
+    fontSize: 14,
     color: '#666',
-    paddingHorizontal: 20,
+  },
+  outputContainer: {
+    maxHeight: 500,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 4,
+    padding: 8,
+  },
+  outputLine: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: '#333',
+    marginBottom: 2,
+  },
+  instructionsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  instructionsText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#666',
+    marginBottom: 12,
+  },
+  envText: {
+    fontSize: 14,
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    color: '#888',
+    backgroundColor: '#f0f0f0',
+    padding: 12,
+    borderRadius: 4,
   },
 });

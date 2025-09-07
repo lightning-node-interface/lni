@@ -20,6 +20,7 @@ declare module '@env' {
 
   export const STRIKE_API_KEY: string;
   export const STRIKE_TEST_INVOICE_ID: string;
+  export const STRIKE_TEST_PAYMENT_HASH: string;
   export const STRIKE_TEST_PAYMENT_REQUEST: string;
   export const ALBY_HUB_OFFER: string;
 
