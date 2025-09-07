@@ -49,19 +49,19 @@ impl LndNode {
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl LndNode {
 
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::lnd::api::get_info(self.config.clone()).await
     }
 
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::lnd::api::create_invoice(self.config.clone(), params).await
     }
 
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::lnd::api::pay_invoice(self.config.clone(), params).await
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::lnd::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
@@ -71,7 +71,7 @@ impl LndNode {
         ).await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
@@ -83,76 +83,16 @@ impl LndNode {
         ).await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::lnd::api::decode(self.config.clone(), str).await
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::lnd::api::on_invoice_events(self.config.clone(), params, callback).await
-    }
-
-    /// Async version of get_offer that returns a Promise (non-blocking)
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn get_offer_async(&self, _search: Option<String>) -> Result<PayCode, ApiError> {
-        // Since BOLT12 is not implemented, we return the same error asynchronously
-        Err(ApiError::Json {
-            reason: "Bolt12 not implemented".to_string(),
-        })
-    }
-
-    /// Async version of list_offers that returns a Promise (non-blocking)
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn list_offers_async(&self, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        // Since BOLT12 is not implemented, we return the same error asynchronously
-        Err(ApiError::Json {
-            reason: "Bolt12 not implemented".to_string(),
-        })
-    }
-
-    /// Async version of pay_offer that returns a Promise (non-blocking)
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn pay_offer_async(
-        &self,
-        _offer: String,
-        _amount_msats: i64,
-        _payer_note: Option<String>,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        // Since BOLT12 is not implemented, we return the same error asynchronously
-        Err(ApiError::Json {
-            reason: "Bolt12 not implemented".to_string(),
-        })
-    }
-
-    /// Async version of create_offer that returns a Promise (non-blocking)
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn create_offer_async(
-        &self,
-        _amount_msats: Option<i64>,
-        _description: Option<String>,
-        _expiry: Option<i64>,
-    ) -> Result<Transaction, ApiError> {
-        // Since BOLT12 is not implemented, we return the same error asynchronously
-        Err(ApiError::Json {
-            reason: "Bolt12 not implemented".to_string(),
-        })
-    }
-
-    /// Async version of fetch_invoice_from_offer that returns a Promise (non-blocking)
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub async fn fetch_invoice_from_offer_async(
-        &self,
-        _offer: String,
-        _amount_msats: i64,
-        _payer_note: Option<String>,
-    ) -> Result<String, ApiError> {
-        // Since BOLT12 is not implemented, we return the same error asynchronously
-        Err(ApiError::Json {
-            reason: "Bolt12 not implemented".to_string(),
-        })
     }
 }
 

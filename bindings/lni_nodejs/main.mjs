@@ -316,10 +316,10 @@ async function main() {
   // Show environment help
   showEnvironmentHelp();
   
-  // await lnd();
+  await lnd();
   // await strike();
   // await cln();
-  await phoenixd();
+  // await phoenixd();
   // await nwc();
   // await test();
   

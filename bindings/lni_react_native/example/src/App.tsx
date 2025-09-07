@@ -242,7 +242,7 @@ export default function App() {
       });
 
       const node = new StrikeNode(config);
-      await testAsyncNode(nodeName, node, STRIKE_TEST_PAYMENT_HASH); // No STRIKE_TEST_PAYMENT_HASH available
+      await testAsyncNode(nodeName, node, STRIKE_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Strike initialization failed: ${error}`);
     }
@@ -261,55 +261,14 @@ export default function App() {
         url: PHOENIXD_URL,
         password: PHOENIXD_PASSWORD,
         socks5Proxy: '',
+        // Phoenixd often needs a bit more time
         acceptInvalidCerts: true,
-        httpTimeout: BigInt(40)
+        httpTimeout: BigInt(60)
       });
-
       const node = new PhoenixdNode(config);
-      
-      // Phoenixd has slightly different method names, so we'll do a custom test
-      addOutput(nodeName, 'Testing Phoenixd...');
-      
-      addOutput(nodeName, 'Testing getInfo...');
-      const info = await node.getInfo();
-      addOutput(nodeName, `Node info: ${info.alias} (${info.pubkey?.substring(0, 20)}...)`);
-
-      addOutput(nodeName, 'Testing createInvoice...');
-      const invoice = await node.createInvoice(
-        CreateInvoiceParams.create({
-          invoiceType: InvoiceType.Bolt11,
-          amountMsats: BigInt(1000),
-          offer: undefined,
-          description: 'test invoice from Phoenixd',
-          descriptionHash: undefined,
-          expiry: undefined,
-          rPreimage: undefined,
-          isBlinded: undefined,
-          isKeysend: undefined,
-          isAmp: undefined,
-          isPrivate: undefined,
-        })
-      );
-      addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
-
-      if (PHOENIXD_TEST_PAYMENT_HASH) {
-        addOutput(nodeName, 'Testing lookupInvoice...');
-        try {
-          const lookupInvoice = await node.lookupInvoice(
-            LookupInvoiceParams.create({
-              paymentHash: PHOENIXD_TEST_PAYMENT_HASH,
-              search: undefined,
-            })
-          );
-          addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
-        } catch (error) {
-          addOutput(nodeName, `Lookup failed: ${error}`);
-        }
-      }
-
-      updateTestStatus(nodeName, 'success', 'Phoenixd tests completed successfully!');
+      await testAsyncNode(nodeName, node, PHOENIXD_TEST_PAYMENT_HASH);
     } catch (error) {
-      updateTestStatus(nodeName, 'error', `Phoenixd test failed: ${error}`);
+      updateTestStatus(nodeName, 'error', `Phoenixd initialization failed: ${error}`);
     }
   };
 

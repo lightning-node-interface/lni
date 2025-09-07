@@ -50,19 +50,19 @@ impl StrikeNode {
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl StrikeNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::strike::api::get_info(self.config.clone()).await
     }
 
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::strike::api::create_invoice(self.config.clone(), params).await
     }
 
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::strike::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
@@ -72,7 +72,7 @@ impl StrikeNode {
         ).await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
@@ -84,11 +84,11 @@ impl StrikeNode {
         ).await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::strike::api::decode(&self.config, str)
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -96,15 +96,15 @@ impl StrikeNode {
         crate::strike::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::strike::api::get_offer(&self.config, search)
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::strike::api::list_offers(&self.config, search)
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
