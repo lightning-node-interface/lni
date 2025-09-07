@@ -32,72 +32,72 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::phoenixd::api::get_info(&self.inner)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
+    let info = lni::phoenixd::api::get_info(self.inner.clone())
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::create_invoice(
-      &self.inner,
+      self.inner.clone(),
       params.invoice_type,
       params.amount_msats,
       params.description,
       params.description_hash,
       params.expiry,
     )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::phoenixd::api::pay_invoice(&self.inner, params)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::phoenixd::api::pay_invoice(self.inner.clone(), params)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub fn get_offer(&self) -> Result<lni::PayCode> {
-    let paycode = lni::phoenixd::api::get_offer(&self.inner)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn get_offer(&self) -> Result<lni::PayCode> {
+    let paycode = lni::phoenixd::api::get_offer(self.inner.clone())
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(paycode)
   }
 
   #[napi]
-  pub fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::lookup_invoice(
-      &self.inner,
+      self.inner.clone(),
       params.payment_hash,
       None,
       None,
       params.search,
     )
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub fn pay_offer(
+  pub async fn pay_offer(
     &self,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
-    let offer = lni::phoenixd::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let offer = lni::phoenixd::api::pay_offer(self.inner.clone(), offer, amount_msats, payer_note)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub fn list_transactions(
+  pub async fn list_transactions(
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::phoenixd::api::list_transactions(&self.inner, params)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::phoenixd::api::list_transactions(self.inner.clone(), params)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
@@ -107,9 +107,15 @@ impl PhoenixdNode {
     params: lni::types::OnInvoiceEventParams,
     callback: T,
   ) -> Result<()> {
-    lni::phoenixd::api::poll_invoice_events(&self.inner, params, move |status, tx| {
-      callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+    let config = self.inner.clone();
+    
+    // Block on the async function in the current thread, similar to LND's sync approach
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+      lni::phoenixd::api::poll_invoice_events(config, params, move |status, tx| {
+        let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
+      }).await;
     });
+    
     Ok(())
   }
 }
@@ -140,9 +146,9 @@ mod tests {
     };
   }
 
-  #[test]
-  fn test_get_info() {
-    match NODE.get_info() {
+  #[tokio::test]
+  async fn test_get_info() {
+    match NODE.get_info().await {
       Ok(info) => {
         println!("info: {:?}", info.pubkey);
         assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");

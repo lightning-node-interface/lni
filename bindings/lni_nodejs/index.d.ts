@@ -284,13 +284,13 @@ export declare class PhoenixdNode {
   getUrl(): string
   getPassword(): string
   getConfig(): PhoenixdConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(): PayCode
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(): Promise<PayCode>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class ClnNode {

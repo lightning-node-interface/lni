@@ -16,7 +16,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
     console.log(`(2) ${nodeName} - Testing createInvoice...`);
     const invoice = await node.createInvoice({
       amountMsats: 1000,
-      // description: `test invoice from ${nodeName}`,
+      description: `test invoice from ${nodeName}`,
       invoiceType: InvoiceType.Bolt11,
     });
     console.log(`${nodeName} Invoice:`, invoice);
@@ -101,47 +101,16 @@ async function phoenixd() {
   const config = {
     url: process.env.PHOENIXD_URL,
     password: process.env.PHOENIXD_PASSWORD,
-    test_hash: process.env.PHOENIXD_TEST_PAYMENT_HASH,
   };
+
+  if (!config.url || !config.password) {
+    console.log("Skipping PhoenixD test - PHOENIXD_URL or PHOENIXD_PASSWORD not set");
+    return;
+  }
+
   const node = new PhoenixdNode(config);
-  const info = await node.getInfo();
-  console.log("Node info:", info);
+  await testAsyncNode("PhoenixD", node, process.env.PHOENIXD_TEST_PAYMENT_HASH);
 
-  const configRes = await node.getConfig();
-  console.log("Config:", configRes.url);
-
-  const invoice = await node.createInvoice({
-    amountMsats: 1000,
-    description: "test invoice",
-    invoiceType: InvoiceType.Bolt11,
-  });
-  console.log("Invoice:", invoice);
-
-  const lookupInvoice = await node.lookupInvoice(
-    process.env.PHOENIXD_TEST_PAYMENT_HASH
-  );
-  console.log("lookupInvoice:", lookupInvoice);
-
-  const payOffer = await node.payOffer(
-    process.env.TEST_RECEIVER_OFFER,
-    3000,
-    "payment from lni nodejs"
-  );
-  console.log("payOffer:", payOffer);
-
-  const txns = await node.listTransactions({
-    from: 0,
-    limit: 10,
-  });
-  console.log("Transactions:", txns);
-
-  const offer = await node.getOffer();
-  console.log("Get Offer:", offer);
-
-  // const pay_invoice_resp = await node.payInvoice({
-  //   invoice: ""
-  // })
-  // console.log("pay_invoice_resp:", pay_invoice_resp);
 }
 
 async function cln() {
@@ -349,8 +318,8 @@ async function main() {
   
   // await lnd();
   // await strike();
-  await cln();
-  // await phoenixd();
+  // await cln();
+  await phoenixd();
   // await nwc();
   // await test();
   
