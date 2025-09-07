@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
@@ -16,6 +16,9 @@ pub struct StrikeConfig {
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
+    pub accept_invalid_certs: Option<bool>,
 }
 
 impl Default for StrikeConfig {
@@ -24,6 +27,8 @@ impl Default for StrikeConfig {
             base_url: Some("https://api.strike.me/v1".to_string()),
             api_key: "".to_string(),
             http_timeout: Some(120),
+            socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(false),
         }
     }
 }
@@ -43,29 +48,63 @@ impl StrikeNode {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl LightningNode for StrikeNode {
-    fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::strike::api::get_info(&self.config)
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+impl StrikeNode {
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::strike::api::get_info(self.config.clone()).await
     }
 
-    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::strike::api::create_invoice(&self.config, params)
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::strike::api::create_invoice(self.config.clone(), params).await
     }
 
-    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::strike::api::pay_invoice(&self.config, params)
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
-    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+        crate::strike::api::lookup_invoice(
+            self.config.clone(),
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        ).await
+    }
+
+    async fn list_transactions(
+        &self,
+        params: ListTransactionsParams,
+    ) -> Result<Vec<crate::Transaction>, ApiError> {
+        crate::strike::api::list_transactions(
+            self.config.clone(),
+            params.from,
+            params.limit,
+            params.search,
+        ).await
+    }
+
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::strike::api::decode(&self.config, str)
+    }
+
+    async fn on_invoice_events(
+        &self,
+        params: crate::types::OnInvoiceEventParams,
+        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    ) {
+        crate::strike::api::on_invoice_events(self.config.clone(), params, callback).await
+    }
+
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::strike::api::get_offer(&self.config, search)
     }
 
-    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::strike::api::list_offers(&self.config, search)
     }
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -73,51 +112,18 @@ impl LightningNode for StrikeNode {
     ) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
-
-    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::strike::api::lookup_invoice(
-            &self.config,
-            params.payment_hash,
-            None,
-            None,
-            params.search,
-        )
-    }
-
-    fn list_transactions(
-        &self,
-        params: ListTransactionsParams,
-    ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::strike::api::list_transactions(
-            &self.config,
-            params.from,
-            params.limit,
-            params.search,
-        )
-    }
-
-    fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::strike::api::decode(&self.config, str)
-    }
-
-    fn on_invoice_events(
-        &self,
-        params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
-    ) {
-        crate::strike::api::on_invoice_events(self.config.clone(), params, callback)
-    }
 }
+
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InvoiceType, PayInvoiceParams};
+    use crate::InvoiceType;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
-    use std::thread;
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -142,15 +148,17 @@ mod tests {
                 base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(120),
+                socks5_proxy: Some("".to_string()),
+                accept_invalid_certs: Some(false),
             })
         };
     }
 
-    #[test]
-    fn test_get_info() {
-        match NODE.get_info() {
+    #[tokio::test]
+    async fn test_get_info() {
+        match NODE.get_info().await {
             Ok(info) => {
-                println!("info: {:?}", info);
+                dbg!("info: {:?}", info);
             }
             Err(e) => {
                 panic!("Failed to get info: {:?}", e);
@@ -158,9 +166,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create_invoice() {
-        let amount_msats = 10000; // 10 sats
+    #[tokio::test]
+    async fn test_create_invoice() {
+        let amount_msats = 5000; // 5 sats
         let description = "Test Strike invoice".to_string();
         let expiry = 3600;
 
@@ -170,7 +178,7 @@ mod tests {
             description: Some(description.clone()),
             expiry: Some(expiry),
             ..Default::default()
-        }) {
+        }).await {
             Ok(txn) => {
                 println!("Strike create_invoice: {:?}", txn);
                 assert!(
@@ -207,12 +215,12 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_lookup_invoice() {
+    #[tokio::test]
+    async fn test_lookup_invoice() {
         match NODE.lookup_invoice(LookupInvoiceParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             ..Default::default()
-        }) {
+        }).await {
             Ok(txn) => {
                 println!("Strike lookup invoice: {:?}", txn);
                 assert!(
@@ -233,18 +241,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_list_transactions() {
+    #[tokio::test]
+    async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 10,
             payment_hash: None,
             search: None,
         };
-        match NODE.list_transactions(params) {
+        match NODE.list_transactions(params).await {
             Ok(txns) => {
                 println!("Strike transactions: {:?}", txns);
-                assert!(txns.len() >= 0, "Should contain at least zero transactions");
+                assert!(true, "Should be able to list transactions");
             }
             Err(e) => {
                 println!(
@@ -269,8 +277,8 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_on_invoice_events() {
+    #[tokio::test]
+    async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
@@ -296,20 +304,16 @@ mod tests {
             events: events.clone(),
         };
 
+        // Use the real test payment hash from environment
         let params = crate::types::OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 60,
+            polling_delay_sec: 1,
+            max_polling_sec: 5, // Short timeout for test
             ..Default::default()
         };
 
-        // Start the event listener in a separate thread
-        thread::spawn(move || {
-            NODE.on_invoice_events(params, Box::new(callback));
-        });
-
-        // Give it some time to process
-        thread::sleep(std::time::Duration::from_secs(5));
+        // Start the event listener
+        NODE.on_invoice_events(params, Box::new(callback)).await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
@@ -320,5 +324,33 @@ mod tests {
             !events_guard.is_empty(),
             "Should capture at least one event"
         );
+    }
+
+    #[tokio::test]
+    async fn test_socks5_proxy_config() {
+        // Test that Strike config can be created with SOCKS5 proxy settings
+        let config_with_proxy = StrikeConfig {
+            base_url: Some(BASE_URL.clone()),
+            api_key: API_KEY.clone(),
+            http_timeout: Some(120),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor proxy example
+            accept_invalid_certs: Some(true),
+        };
+        
+        let node_with_proxy = StrikeNode::new(config_with_proxy);
+        
+        // Test that the config is set correctly
+        assert_eq!(
+            node_with_proxy.config.socks5_proxy, 
+            Some("socks5h://127.0.0.1:9150".to_string())
+        );
+        assert_eq!(node_with_proxy.config.accept_invalid_certs, Some(true));
+        
+        // Note: We don't actually test the network connection as that would require
+        // a running Tor proxy or similar setup. This test just verifies the config
+        // structure is working correctly.
+        println!("SOCKS5 proxy config test passed - proxy: {:?}, accept_invalid_certs: {:?}", 
+                 node_with_proxy.config.socks5_proxy, 
+                 node_with_proxy.config.accept_invalid_certs);
     }
 }
