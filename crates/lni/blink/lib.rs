@@ -4,7 +4,7 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction, LightningNode,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -50,28 +50,28 @@ impl BlinkNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-impl BlinkNode {
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl LightningNode for BlinkNode {
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::blink::api::get_info(&self.config).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::blink::api::create_invoice(&self.config, params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::blink::api::pay_invoice(&self.config, params).await
     }
 
-    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::blink::api::get_offer(&self.config, search).await
     }
 
-    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::blink::api::list_offers(&self.config, search).await
     }
 
-    pub async fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -80,7 +80,7 @@ impl BlinkNode {
         crate::blink::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::blink::api::lookup_invoice(
             &self.config,
             params.payment_hash,
@@ -90,18 +90,18 @@ impl BlinkNode {
         ).await
     }
 
-    pub async fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search).await
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::blink::api::decode(&self.config, str).await
     }
 
-    pub async fn on_invoice_events(
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,

@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use crate::{
     phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceParams, PayInvoiceResponse,
-    Transaction,
+    Transaction, LightningNode
 };
 
 use crate::{CreateInvoiceParams, LookupInvoiceParams, PayCode};
@@ -39,18 +39,22 @@ pub struct PhoenixdNode {
     pub config: PhoenixdConfig,
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+// Constructor is inherent, not part of the trait
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl PhoenixdNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    pub fn new(config: PhoenixdConfig) -> Self {
+    fn new(config: PhoenixdConfig) -> Self {
         Self { config }
     }
+}
 
-    pub async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+impl LightningNode for PhoenixdNode {
+    async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
         crate::phoenixd::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         create_invoice(
             self.config.clone(),
             params.invoice_type,
@@ -61,19 +65,19 @@ impl PhoenixdNode {
         ).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         pay_invoice(self.config.clone(), params).await
     }
 
-    pub async fn get_offer(&self, _search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, _search: Option<String>) -> Result<PayCode, ApiError> {
         crate::phoenixd::api::get_offer(self.config.clone()).await
     }
 
-    pub async fn list_offers(&self, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::phoenixd::api::list_offers()
     }
 
-    pub async fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -82,7 +86,7 @@ impl PhoenixdNode {
         crate::phoenixd::api::pay_offer(self.config.clone(), offer, amount_msats, payer_note).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::phoenixd::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
@@ -92,18 +96,18 @@ impl PhoenixdNode {
         ).await
     }
 
-    pub async fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::phoenixd::api::list_transactions(self.config.clone(), params).await
     }
 
-    pub async fn decode(&self, _str: String) -> Result<String, ApiError> {
+    async fn decode(&self, _str: String) -> Result<String, ApiError> {
         Ok("".to_string())
     }
 
-    pub async fn on_invoice_events(
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,

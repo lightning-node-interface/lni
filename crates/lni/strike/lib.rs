@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
+    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
@@ -50,30 +50,34 @@ impl StrikeNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-impl StrikeNode {
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl LightningNode for StrikeNode {
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::strike::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::strike::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, ApiError> {
         crate::strike::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
             None,
             None,
             params.search,
-        ).await
+        )
+        .await
     }
 
-    pub async fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
@@ -82,14 +86,15 @@ impl StrikeNode {
             params.from,
             params.limit,
             params.search,
-        ).await
+        )
+        .await
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::strike::api::decode(&self.config, str)
     }
 
-    pub async fn on_invoice_events(
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -97,15 +102,15 @@ impl StrikeNode {
         crate::strike::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 
-    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::strike::api::get_offer(&self.config, search)
     }
 
-    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::strike::api::list_offers(&self.config, search)
     }
 
-    pub async fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -114,8 +119,6 @@ impl StrikeNode {
         crate::strike::api::pay_offer(&self.config, offer, amount_msats, payer_note)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -173,13 +176,16 @@ mod tests {
         let description = "Test Strike invoice".to_string();
         let expiry = 3600;
 
-        match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            expiry: Some(expiry),
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: Some(amount_msats),
+                description: Some(description.clone()),
+                expiry: Some(expiry),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("Strike create_invoice: {:?}", txn);
                 assert!(
@@ -218,10 +224,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            ..Default::default()
-        }).await {
+        match NODE
+            .lookup_invoice(LookupInvoiceParams {
+                payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("Strike lookup invoice: {:?}", txn);
                 assert!(
@@ -319,7 +328,7 @@ mod tests {
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Strike events captured: {:?}", *events_guard);
-        
+
         // We expect at least one event (even if it's a failure due to invoice not found)
         assert!(
             !events_guard.is_empty(),
@@ -337,21 +346,22 @@ mod tests {
             socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor proxy example
             accept_invalid_certs: Some(true),
         };
-        
+
         let node_with_proxy = StrikeNode::new(config_with_proxy);
-        
+
         // Test that the config is set correctly
         assert_eq!(
-            node_with_proxy.config.socks5_proxy, 
+            node_with_proxy.config.socks5_proxy,
             Some("socks5h://127.0.0.1:9150".to_string())
         );
         assert_eq!(node_with_proxy.config.accept_invalid_certs, Some(true));
-        
+
         // Note: We don't actually test the network connection as that would require
         // a running Tor proxy or similar setup. This test just verifies the config
         // structure is working correctly.
-        println!("SOCKS5 proxy config test passed - proxy: {:?}, accept_invalid_certs: {:?}", 
-                 node_with_proxy.config.socks5_proxy, 
-                 node_with_proxy.config.accept_invalid_certs);
+        println!(
+            "SOCKS5 proxy config test passed - proxy: {:?}, accept_invalid_certs: {:?}",
+            node_with_proxy.config.socks5_proxy, node_with_proxy.config.accept_invalid_certs
+        );
     }
 }

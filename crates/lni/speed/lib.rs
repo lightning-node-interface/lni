@@ -1,9 +1,9 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::types::{NodeInfo, ListTransactionsParams, LookupInvoiceParams};
+use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo};
 use crate::{
-    ApiError, CreateInvoiceParams, OnInvoiceEventCallback, OnInvoiceEventParams,
+    ApiError, CreateInvoiceParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
@@ -51,46 +51,57 @@ impl SpeedNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-impl SpeedNode {
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl LightningNode for SpeedNode {
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config).await
     }
 
-    pub async fn create_invoice(&self, invoice_params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    async fn create_invoice(
+        &self,
+        invoice_params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::speed::api::create_invoice(&self.config, invoice_params).await
     }
 
-    pub async fn pay_invoice(&self, invoice_params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    async fn pay_invoice(
+        &self,
+        invoice_params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::speed::api::pay_invoice(&self.config, invoice_params).await
     }
 
-    pub async fn lookup_invoice(
-        &self,
-        params: LookupInvoiceParams,
-    ) -> Result<Transaction, ApiError> {
-        crate::speed::api::lookup_invoice(&self.config, params.payment_hash, None, None, params.search).await
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::speed::api::lookup_invoice(
+            &self.config,
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        )
+        .await
     }
 
-    pub async fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<Transaction>, ApiError> {
-        crate::speed::api::list_transactions(&self.config, params.from, params.limit, params.search).await
+        crate::speed::api::list_transactions(&self.config, params.from, params.limit, params.search)
+            .await
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::speed::api::decode(&self.config, str).await
     }
 
-    pub async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
         crate::speed::api::get_offer(&self.config, search).await
     }
 
-    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
         crate::speed::api::list_offers(&self.config, search).await
     }
 
-    pub async fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -99,7 +110,11 @@ impl SpeedNode {
         crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    pub async fn on_invoice_events(&self, params: OnInvoiceEventParams, callback: Box<dyn OnInvoiceEventCallback>) {
+    async fn on_invoice_events(
+        &self,
+        params: OnInvoiceEventParams,
+        callback: Box<dyn OnInvoiceEventCallback>,
+    ) {
         crate::speed::api::on_invoice_events(self.config.clone(), params, callback).await;
     }
 }
@@ -109,11 +124,10 @@ mod tests {
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
-    use std::env;
-    use std::thread;
-    use std::sync::{Arc, Mutex};
     use lightning_invoice::Bolt11Invoice;
+    use std::env;
     use std::str::FromStr;
+    use std::sync::{Arc, Mutex};
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -198,7 +212,7 @@ mod tests {
     //         allow_self_payment: None,
     //         is_amp: None,
     //     };
-        
+
     //     match NODE.pay_invoice(params) {
     //         Ok(response) => {
     //             dbg!(&response);
@@ -284,25 +298,24 @@ mod tests {
             events: events.clone(),
         };
 
-        // Use the payment hash from the environment variable  
+        // Use the payment hash from the environment variable
         let params = OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 2,
             max_polling_sec: 5,
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
-        
+
         NODE.on_invoice_events(params, Box::new(callback)).await;
-        
+
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Speed events captured: {:?}", *events_guard);
-        
+
         // We expect at least one event (even if it's a failure due to invoice not found)
         assert!(
             !events_guard.is_empty(),
             "Should capture at least one event"
         );
-
     }
 }
