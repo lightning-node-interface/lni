@@ -1,6 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 
 use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
 
@@ -11,6 +12,7 @@ pub enum LightningNodeEnum {
     Nwc(NwcNode),
 }
 
+#[async_trait]
 pub trait LightningNode {
     async fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;

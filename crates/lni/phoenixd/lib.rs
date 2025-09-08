@@ -35,6 +35,7 @@ impl Default for PhoenixdConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct PhoenixdNode {
     pub config: PhoenixdConfig,
 }
@@ -43,12 +44,13 @@ pub struct PhoenixdNode {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl PhoenixdNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    fn new(config: PhoenixdConfig) -> Self {
+    pub fn new(config: PhoenixdConfig) -> Self {
         Self { config }
     }
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for PhoenixdNode {
     async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
         crate::phoenixd::api::get_info(self.config.clone()).await

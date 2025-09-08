@@ -36,6 +36,7 @@ impl Default for StrikeConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct StrikeNode {
     pub config: StrikeConfig,
 }
@@ -50,6 +51,7 @@ impl StrikeNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for StrikeNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::strike::api::get_info(self.config.clone()).await

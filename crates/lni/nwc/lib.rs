@@ -33,6 +33,7 @@ impl Default for NwcConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct NwcNode {
     pub config: NwcConfig,
 }
@@ -47,6 +48,7 @@ impl NwcNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
+#[async_trait::async_trait]
 impl LightningNode for NwcNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::nwc::api::get_info(self.config.clone()).await

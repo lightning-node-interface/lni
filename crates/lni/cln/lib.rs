@@ -34,6 +34,7 @@ impl Default for ClnConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct ClnNode {
     pub config: ClnConfig,
 }
@@ -48,6 +49,7 @@ impl ClnNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for ClnNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::cln::api::get_info(self.config.clone()).await

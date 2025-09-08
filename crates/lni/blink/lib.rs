@@ -36,6 +36,7 @@ impl Default for BlinkConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct BlinkNode {
     pub config: BlinkConfig,
 }
@@ -50,6 +51,7 @@ impl BlinkNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for BlinkNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::blink::api::get_info(&self.config).await

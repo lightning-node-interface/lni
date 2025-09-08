@@ -51,6 +51,7 @@ impl SpeedNode {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for SpeedNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config).await

@@ -34,6 +34,7 @@ impl Default for LndConfig {
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
 pub struct LndNode {
     pub config: LndConfig,
 }
@@ -47,6 +48,7 @@ impl LndNode {
     }
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[async_trait::async_trait]
 impl LightningNode for LndNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::lnd::api::get_info(self.config.clone()).await
