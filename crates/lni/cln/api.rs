@@ -18,7 +18,7 @@ use tokio::time::sleep;
 fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
-    
+
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
         if !proxy_url.is_empty() {
@@ -27,9 +27,10 @@ fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
                 client_builder = client_builder.danger_accept_invalid_certs(true);
             }
             if let Some(timeout) = config.http_timeout {
-                client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+                client_builder =
+                    client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
             }
-            
+
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
                     match client_builder.proxy(proxy).build() {
@@ -41,7 +42,7 @@ fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
             }
         }
     }
-    
+
     // Default client creation
     let mut client_builder = reqwest::ClientBuilder::new().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
@@ -50,12 +51,13 @@ fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    client_builder
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
-    println!("Constructed URL: {} rune {}", req_url, config.rune);
     let client = clnrest_client(&config);
     let response = client
         .post(&req_url)
@@ -63,12 +65,11 @@ pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to get node info: {}", e)
+            reason: format!("Failed to get node info: {}", e),
         })?;
     let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read node info response: {}", e)
+        reason: format!("Failed to read node info response: {}", e),
     })?;
-    // println!("Raw response: {}", response_text);
     let info: InfoResponse = serde_json::from_str(&response_text)?;
 
     // https://github.com/ZeusLN/zeus/blob/master/backends/CoreLightningRequestHandler.ts#L28
@@ -79,12 +80,11 @@ pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to get funds info: {}", e)
+            reason: format!("Failed to get funds info: {}", e),
         })?;
     let funds_response_text = funds_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read funds response: {}", e)
+        reason: format!("Failed to read funds response: {}", e),
     })?;
-    // println!("funds_response_text: {}", funds_response_text);
     let channels: ChannelWrapper = serde_json::from_str(&funds_response_text)?;
 
     let mut local_balance: i64 = 0;
@@ -170,15 +170,13 @@ pub async fn create_invoice(
                 .send()
                 .await
                 .map_err(|e| ApiError::Http {
-                    reason: format!("Failed to create invoice: {}", e)
+                    reason: format!("Failed to create invoice: {}", e),
                 })?;
 
-            // println!("Status: {}", response.status());
             let invoice_str = response.text().await.map_err(|e| ApiError::Http {
-                reason: format!("Failed to read invoice response: {}", e)
+                reason: format!("Failed to read invoice response: {}", e),
             })?;
             let invoice_str = invoice_str.as_str();
-            // println!("Bolt11 {}", &invoice_str.to_string());
             let bolt11_resp: Bolt11Resp =
                 serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
                     reason: e.to_string(),
@@ -287,8 +285,6 @@ pub async fn pay_invoice(
         .collect::<serde_json::Map<String, _>>()
         .into();
 
-    // println!("PayInvoice params: {:?}", &params_json);
-
     let pay_response = client
         .post(&pay_url)
         .header("Content-Type", "application/json")
@@ -296,10 +292,10 @@ pub async fn pay_invoice(
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to pay invoice: {}", e)
+            reason: format!("Failed to pay invoice: {}", e),
         })?;
     let pay_response_text = pay_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read pay response: {}", e)
+        reason: format!("Failed to read pay response: {}", e),
     })?;
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
@@ -331,11 +327,11 @@ pub async fn decode(config: ClnConfig, str: String) -> Result<String, ApiError> 
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to decode: {}", e)
+            reason: format!("Failed to decode: {}", e),
         })?;
     // TODO parse JSON response
     let decoded = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read decode response: {}", e)
+        reason: format!("Failed to read decode response: {}", e),
     })?;
     Ok(decoded)
 }
@@ -356,7 +352,10 @@ pub async fn get_offer(config: ClnConfig, search: Option<String>) -> Result<PayC
     Ok(offers.first().unwrap().clone())
 }
 
-pub async fn list_offers(config: ClnConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+pub async fn list_offers(
+    config: ClnConfig,
+    search: Option<String>,
+) -> Result<Vec<PayCode>, ApiError> {
     let client = clnrest_client(&config);
     let req_url = format!("{}/v1/listoffers", config.url);
     let mut params = vec![];
@@ -373,10 +372,10 @@ pub async fn list_offers(config: ClnConfig, search: Option<String>) -> Result<Ve
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to list offers: {}", e)
+            reason: format!("Failed to list offers: {}", e),
         })?;
     let offers = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read offers response: {}", e)
+        reason: format!("Failed to read offers response: {}", e),
     })?;
     let offers_str = offers.as_str();
     let offers_list: ListOffersResponse =
@@ -414,10 +413,10 @@ pub async fn create_offer(
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to create offer: {}", e)
+            reason: format!("Failed to create offer: {}", e),
         })?;
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read offer response: {}", e)
+        reason: format!("Failed to read offer response: {}", e),
     })?;
     let offer_str = offer_str.as_str();
     let bolt12resp: Bolt12Resp =
@@ -461,17 +460,14 @@ async fn fetch_invoice_from_offer(
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to fetch invoice: {}", e)
+            reason: format!("Failed to fetch invoice: {}", e),
         })?;
     let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read fetch invoice response: {}", e)
+        reason: format!("Failed to read fetch invoice response: {}", e),
     })?;
     let response_text = response_text.as_str();
     let fetch_invoice_resp: FetchInvoiceResponse = match serde_json::from_str(&response_text) {
-        Ok(resp) => {
-            // println!("fetch_invoice_resp: {:?}", resp);
-            resp
-        }
+        Ok(resp) => resp,
         Err(_e) => {
             return Err(ApiError::Json {
                 reason: response_text.to_string(),
@@ -509,10 +505,10 @@ pub async fn pay_offer(
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to pay offer: {}", e)
+            reason: format!("Failed to pay offer: {}", e),
         })?;
     let pay_response_text = pay_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read pay offer response: {}", e)
+        reason: format!("Failed to read pay offer response: {}", e),
     })?;
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
@@ -589,15 +585,16 @@ async fn lookup_invoices(
             .send()
             .await
             .map_err(|e| ApiError::Http {
-                reason: format!("Failed to query invoices: {}", e)
+                reason: format!("Failed to query invoices: {}", e),
             })?;
         let response_text = response.text().await.map_err(|e| ApiError::Http {
-            reason: format!("Failed to read invoices response: {}", e)
+            reason: format!("Failed to read invoices response: {}", e),
         })?;
         let response_text = response_text.as_str();
         dbg!(&response_text);
 
-        if response_text.len() > 25 { // i.e not blank resp like "[rows: []]"
+        if response_text.len() > 25 {
+            // i.e not blank resp like "[rows: []]"
             // Parse the SQL response into InvoicesResponse
             #[derive(serde::Deserialize)]
             struct SqlResponse {
@@ -701,13 +698,16 @@ async fn lookup_invoices(
         .send()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to list invoices: {}", e)
+            reason: format!("Failed to list invoices: {}", e),
         })?;
     let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read list invoices response: {}", e)
+        reason: format!("Failed to read list invoices response: {}", e),
     })?;
     let response_text = response_text.as_str();
-    let incoming_payments: InvoicesResponse = serde_json::from_str(&response_text).unwrap();
+    let incoming_payments: InvoicesResponse =
+        serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
+            reason: e.to_string(),
+        })?;
 
     // Convert incoming payments into "incoming" Transaction
     let mut transactions: Vec<Transaction> = incoming_payments
@@ -751,8 +751,11 @@ pub async fn list_transactions(
 }
 
 // Core logic shared by both implementations
-pub async fn poll_invoice_events<F>(config: ClnConfig, params: OnInvoiceEventParams, mut callback: F)
-where
+pub async fn poll_invoice_events<F>(
+    config: ClnConfig,
+    params: OnInvoiceEventParams,
+    mut callback: F,
+) where
     F: FnMut(String, Option<Transaction>),
 {
     let start_time = std::time::Instant::now();
@@ -769,7 +772,9 @@ where
             None,
             None,
             params.search.clone(),
-        ).await {
+        )
+        .await
+        {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -809,6 +814,7 @@ pub fn on_invoice_events(
             "pending" => callback.pending(tx),
             "failure" => callback.failure(tx),
             _ => {}
-        }).await;
+        })
+        .await;
     });
 }

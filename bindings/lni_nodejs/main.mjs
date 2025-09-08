@@ -190,6 +190,20 @@ async function speed() {
   await testAsyncNode("Speed", node, process.env.SPEED_TEST_PAYMENT_HASH);
 }
 
+async function nwc() {
+  const config = {
+    nwcUri: process.env.NWC_URI,
+  };
+
+  if (!config.nwcUri) {
+    console.log("Skipping Nwc test - NWC_URI not set");
+    return;
+  }
+
+  const node = new NwcNode(config);
+  await testAsyncNode("Nwc", node, process.env.NWC_TEST_PAYMENT_HASH);
+}
+
 
 
 // Helper function to show required environment variables
@@ -220,8 +234,8 @@ async function main() {
   // await cln();
   // await phoenixd();
   // await blink();
-  await speed();
-  // await nwc();
+  // await speed();
+  await nwc();
   
   console.log("\n=== All tests completed ===");
 }

@@ -1,13 +1,10 @@
 use crate::{ApiError, CreateInvoiceParams, PayInvoiceParams, PayCode, Transaction, PayInvoiceResponse, NodeInfo, ListTransactionsParams};
 use crate::nwc::NwcConfig;
-use crate::types::OnInvoiceEventParams;
+use crate::types::{OnInvoiceEventParams, OnInvoiceEventCallback};
 use nwc::prelude::*;
 use std::str::FromStr;
-use std::thread;
 use std::time::Duration;
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 // Helper function to create NWC client
 async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
@@ -20,8 +17,8 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
     Ok(nwc)
 }
 
-pub async fn get_info(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
-        let nwc = create_nwc_client(config).await?;
+pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
+        let nwc = create_nwc_client(&config).await?;
         
         // Get balance first
         let balance = nwc.get_balance().await
@@ -80,8 +77,8 @@ pub async fn get_info(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
         }
 }
 
-pub async fn create_invoice(config: &NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-    let nwc = create_nwc_client(config).await?;
+pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    let nwc = create_nwc_client(&config).await?;
     
     let request = MakeInvoiceRequest {
         amount: params.amount_msats.unwrap_or(0) as u64,
@@ -110,8 +107,8 @@ pub async fn create_invoice(config: &NwcConfig, params: CreateInvoiceParams) -> 
     })
 }
 
-pub async fn pay_invoice(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-    let nwc = create_nwc_client(config).await?;
+pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    let nwc = create_nwc_client(&config).await?;
     
     let request = PayInvoiceRequest::new(params.invoice);
     
@@ -136,17 +133,17 @@ pub async fn pay_invoice(config: &NwcConfig, params: PayInvoiceParams) -> Result
     })
 }
 
-pub fn get_offer(_config: &NwcConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &NwcConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
     Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
 }
 
-pub fn list_offers(_config: &NwcConfig, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+pub async fn list_offers(_config: &NwcConfig, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
     Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
 }
 
-pub fn pay_offer(
+pub async fn pay_offer(
     _config: &NwcConfig,
     _offer: String,
     _amount_msats: i64,
@@ -157,11 +154,11 @@ pub fn pay_offer(
 }
 
 pub async fn lookup_invoice(
-    config: &NwcConfig,
+    config: NwcConfig,
     payment_hash: Option<String>,
     invoice: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let nwc = create_nwc_client(config).await?;
+    let nwc = create_nwc_client(&config).await?;
     
     let request = LookupInvoiceRequest {
         payment_hash: payment_hash.clone(),
@@ -191,8 +188,8 @@ pub async fn lookup_invoice(
     })
 }
 
-pub async fn list_transactions(config: &NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
-    let nwc = create_nwc_client(config).await?;
+pub async fn list_transactions(config: NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
+    let nwc = create_nwc_client(&config).await?;
     
     let request = ListTransactionsRequest {
         from: Some(Timestamp::from(params.from as u64)),
@@ -231,383 +228,52 @@ pub async fn list_transactions(config: &NwcConfig, params: ListTransactionsParam
     Ok(transactions)
 }
 
-// Sync wrappers for trait compatibility (internal use only)
-pub fn get_info_sync(config: &NwcConfig) -> Result<NodeInfo, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    rt.block_on(get_info(config))
-}
-
-pub fn create_invoice_sync(config: &NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    rt.block_on(create_invoice(config, params))
-}
-
-pub fn pay_invoice_sync(config: &NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    rt.block_on(pay_invoice(config, params))
-}
-
-pub fn lookup_invoice_sync(
-    config: &NwcConfig,
-    payment_hash: Option<String>,
-    invoice: Option<String>,
-) -> Result<Transaction, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    rt.block_on(lookup_invoice(config, payment_hash, invoice))
-}
-
-pub fn list_transactions_sync(config: &NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create runtime: {}", e) })?;
-    rt.block_on(list_transactions(config, params))
-}
-
-pub fn decode(_config: &NwcConfig, str: String) -> Result<String, ApiError> {
+pub async fn decode(_config: NwcConfig, str: String) -> Result<String, ApiError> {
     // NWC doesn't have a decode method, just return the input
     Ok(str)
 }
 
-// Simple cancellation token that's uniffi-compatible
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
-pub struct InvoiceEventsCancellation {
-    cancelled: Arc<AtomicBool>,
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl InvoiceEventsCancellation {
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
-    }
-    
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
+// Core logic shared with other implementations - processes lookup result and determines status
+fn process_invoice_lookup_result(transaction_result: Result<Transaction, ApiError>) -> (String, Option<Transaction>) {
+    match transaction_result {
+        Ok(transaction) => {
+            if transaction.settled_at > 0 {
+                ("settled".to_string(), Some(transaction))
+            } else {
+                ("pending".to_string(), Some(transaction))
+            }
+        }
+        Err(_) => ("error".to_string(), None),
     }
 }
 
-// Modified polling function that checks for cancellation
-pub async fn poll_invoice_events_with_cancellation<F>(
-    config: &NwcConfig, 
-    params: OnInvoiceEventParams, 
-    cancellation: Arc<InvoiceEventsCancellation>,
-    mut callback: F
-) where
+// Core logic shared with other implementations - determines if we should continue polling
+fn handle_poll_status<F>(status: &str, transaction: Option<Transaction>, mut callback: F) -> bool
+where
     F: FnMut(String, Option<Transaction>),
 {
-    let start_time = std::time::Instant::now();
-    
-    loop {
-        // Check for cancellation first
-        if cancellation.is_cancelled() {
-            callback("cancelled".to_string(), None);
-            break;
+    match status {
+        "settled" => {
+            callback("success".to_string(), transaction);
+            false // Stop polling
         }
-        
-        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
-            callback("failure".to_string(), None);
-            break;
+        "error" => {
+            callback("failure".to_string(), transaction);
+            true // Continue polling on error
         }
-
-        let (status, transaction) =
-            match lookup_invoice(config, params.payment_hash.clone(), params.search.clone()).await {
-                Ok(transaction) => {
-                    if transaction.settled_at > 0 {
-                        ("settled".to_string(), Some(transaction))
-                    } else {
-                        ("pending".to_string(), Some(transaction))
-                    }
-                }
-                Err(_) => ("error".to_string(), None),
-            };
-
-        match status.as_str() {
-            "settled" => {
-                callback("success".to_string(), transaction);
-                break;
-            }
-            "error" => {
-                callback("failure".to_string(), transaction);
-                // Don't break on error, keep polling
-            }
-            _ => {
-                callback("pending".to_string(), transaction);
-            }
-        }
-
-        // Sleep in small increments to check cancellation more frequently
-        let delay_secs = params.polling_delay_sec as u64;
-        for _ in 0..delay_secs {
-            if cancellation.is_cancelled() {
-                callback("cancelled".to_string(), None);
-                return;
-            }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+        _ => {
+            callback("pending".to_string(), transaction);
+            true // Continue polling
         }
     }
 }
 
-// Updated function that returns a cancellation token
-pub fn on_invoice_events_with_cancellation(
-    config: NwcConfig,
+// Async polling logic following the same pattern as LND and Phoenix
+pub async fn poll_invoice_events<F>(
+    config: &NwcConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn crate::types::OnInvoiceEventCallback + Send>,
-) -> Arc<InvoiceEventsCancellation> {
-    let cancellation = Arc::new(InvoiceEventsCancellation {
-        cancelled: Arc::new(AtomicBool::new(false)),
-    });
-    
-    let cancellation_clone = cancellation.clone();
-    
-    // Spawn on a thread pool to avoid blocking
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            poll_invoice_events_with_cancellation(&config, params, cancellation_clone, move |status, tx| {
-                match status.as_str() {
-                    "success" => callback.success(tx),
-                    "pending" => callback.pending(tx),
-                    "failure" | "cancelled" => callback.failure(tx),
-                    _ => {}
-                }
-            }).await;
-        });
-    });
-    
-    cancellation
-}
-
-// Simple async lookup function
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-pub async fn nwc_lookup_invoice_async(
-    config: NwcConfig,
-    payment_hash: Option<String>,
-    invoice: Option<String>,
-) -> Result<Transaction, ApiError> {
-    let nwc = create_nwc_client(&config).await?;
-    
-    let request = LookupInvoiceRequest {
-        payment_hash: payment_hash.clone(),
-        invoice: invoice.clone(),
-    };
-    
-    let response = nwc.lookup_invoice(request).await
-        .map_err(|e| ApiError::Api { reason: format!("Failed to lookup invoice: {}", e) })?;
-    
-    Ok(Transaction {
-        type_: match response.transaction_type {
-            Some(t) => format!("{:?}", t).to_lowercase(),
-            None => "unknown".to_string(),
-        },
-        invoice: response.invoice.unwrap_or_default(),
-        description: response.description.unwrap_or_default(),
-        description_hash: "".to_string(),
-        preimage: response.preimage.unwrap_or_default(),
-        payment_hash: payment_hash.unwrap_or_default(),
-        amount_msats: response.amount as i64,
-        fees_paid: response.fees_paid as i64,
-        created_at: response.created_at.as_u64() as i64,
-        expires_at: response.expires_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-        settled_at: response.settled_at.map(|t| t.as_u64() as i64).unwrap_or(0),
-        payer_note: None,
-        external_id: None,
-    })
-}
-
-// Polling state tracker for main-thread querying
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
-pub struct InvoicePollingState {
-    cancelled: Arc<AtomicBool>,
-    poll_count: Arc<std::sync::atomic::AtomicU32>,
-    last_status: Arc<std::sync::Mutex<String>>,
-    last_transaction: Arc<std::sync::Mutex<Option<Transaction>>>,
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl InvoicePollingState {
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
-    }
-    
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
-    }
-    
-    pub fn get_poll_count(&self) -> u32 {
-        self.poll_count.load(Ordering::Relaxed)
-    }
-    
-    pub fn get_last_status(&self) -> String {
-        self.last_status.lock().unwrap().clone()
-    }
-    
-    pub fn get_last_transaction(&self) -> Option<Transaction> {
-        self.last_transaction.lock().unwrap().clone()
-    }
-}
-
-// UniFFI-compatible version using state polling instead of callbacks
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn nwc_start_invoice_polling(
-    config: NwcConfig,
-    params: OnInvoiceEventParams,
-) -> Arc<InvoicePollingState> {
-    let polling_state = Arc::new(InvoicePollingState {
-        cancelled: Arc::new(AtomicBool::new(false)),
-        poll_count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
-        last_status: Arc::new(std::sync::Mutex::new("starting".to_string())),
-        last_transaction: Arc::new(std::sync::Mutex::new(None)),
-    });
-    
-    let state_clone = polling_state.clone();
-    let config_clone = config.clone();
-    let params_clone = params.clone();
-    
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let start_time = std::time::Instant::now();
-            
-            eprintln!("🔧 NWC: Starting polling loop...");
-            
-            loop {
-                let poll_count = state_clone.poll_count.fetch_add(1, Ordering::Relaxed) + 1;
-                eprintln!("🔄 NWC: Poll attempt #{}", poll_count);
-                
-                // Check for cancellation first
-                if state_clone.cancelled.load(Ordering::Relaxed) {
-                    eprintln!("🛑 NWC: Cancellation detected");
-                    *state_clone.last_status.lock().unwrap() = "cancelled".to_string();
-                    break;
-                }
-                
-                if start_time.elapsed() > Duration::from_secs(params_clone.max_polling_sec as u64) {
-                    eprintln!("⏰ NWC: Timeout reached");
-                    *state_clone.last_status.lock().unwrap() = "timeout".to_string();
-                    break;
-                }
-
-                eprintln!("🔍 NWC: Looking up invoice with hash: {:?}", params_clone.payment_hash);
-                
-                // Use async lookup with timeout wrapper
-                let lookup_result = tokio::time::timeout(
-                    tokio::time::Duration::from_secs(10), // 10 second timeout per lookup
-                    nwc_lookup_invoice_async(
-                        config_clone.clone(), 
-                        params_clone.payment_hash.clone(), 
-                        params_clone.search.clone()
-                    )
-                ).await;
-
-                match lookup_result {
-                    Ok(Ok(transaction)) => {
-                        eprintln!("✅ NWC: lookup_invoice succeeded, settled_at: {}", transaction.settled_at);
-                        if transaction.settled_at > 0 {
-                            *state_clone.last_status.lock().unwrap() = "success".to_string();
-                            *state_clone.last_transaction.lock().unwrap() = Some(transaction);
-                            break;
-                        } else {
-                            *state_clone.last_status.lock().unwrap() = "pending".to_string();
-                            *state_clone.last_transaction.lock().unwrap() = Some(transaction);
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        eprintln!("❌ NWC: lookup_invoice failed: {:?}", e);
-                        *state_clone.last_status.lock().unwrap() = "failure".to_string();
-                        *state_clone.last_transaction.lock().unwrap() = None;
-                        // Don't break on error, keep polling
-                    }
-                    Err(_timeout) => {
-                        eprintln!("⏰ NWC: lookup_invoice timed out (10s)");
-                        *state_clone.last_status.lock().unwrap() = "pending".to_string();
-                        // Continue polling on timeout - treat as pending
-                    }
-                };
-
-                eprintln!("� NWC: Sleeping for {} seconds...", params_clone.polling_delay_sec);
-                // Sleep in small increments to check cancellation more frequently
-                let delay_secs = params_clone.polling_delay_sec as u64;
-                for i in 0..delay_secs {
-                    if state_clone.cancelled.load(Ordering::Relaxed) {
-                        eprintln!("🛑 NWC: Cancellation detected during sleep ({}s into {}s)", i, delay_secs);
-                        *state_clone.last_status.lock().unwrap() = "cancelled".to_string();
-                        return;
-                    }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
-            }
-            
-            eprintln!("🏁 NWC: Polling loop finished");
-        });
-    });
-    
-    polling_state
-}
-
-// Legacy callback-based version for compatibility
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn nwc_on_invoice_events_with_cancellation(
-    config: NwcConfig,
-    params: OnInvoiceEventParams,
-    callback: Box<dyn crate::types::OnInvoiceEventCallback>,
-) -> Arc<InvoiceEventsCancellation> {
-    let cancellation = Arc::new(InvoiceEventsCancellation {
-        cancelled: Arc::new(AtomicBool::new(false)),
-    });
-    
-    // Start polling using the new state-based approach
-    let polling_state = nwc_start_invoice_polling(config, params.clone());
-    let cancellation_clone = cancellation.clone();
-    
-    // Monitor the polling state and trigger callbacks on the main thread
-    std::thread::spawn(move || {
-        let mut last_count = 0;
-        let mut last_status = "starting".to_string();
-        
-        loop {
-            if cancellation_clone.is_cancelled() {
-                polling_state.cancel();
-                callback.failure(None);
-                break;
-            }
-            
-            let current_count = polling_state.get_poll_count();
-            let current_status = polling_state.get_last_status();
-            
-            // If count changed or status changed, trigger callback
-            if current_count != last_count || current_status != last_status {
-                let transaction = polling_state.get_last_transaction();
-                
-                match current_status.as_str() {
-                    "success" => {
-                        callback.success(transaction);
-                        break;
-                    }
-                    "pending" => callback.pending(transaction),
-                    "failure" => callback.failure(transaction),
-                    "cancelled" | "timeout" => {
-                        callback.failure(transaction);
-                        break;
-                    }
-                    _ => {}
-                }
-                
-                last_count = current_count;
-                last_status = current_status;
-            }
-            
-            // Check every 100ms
-            thread::sleep(Duration::from_millis(100));
-        }
-    });
-    
-    cancellation
-}
-
-pub async fn poll_invoice_events<F>(config: &NwcConfig, params: OnInvoiceEventParams, mut callback: F)
-where
+    mut callback: F,
+) where
     F: FnMut(String, Option<Transaction>),
 {
     let start_time = std::time::Instant::now();
@@ -618,53 +284,36 @@ where
             break;
         }
 
-        let (status, transaction) = match lookup_invoice(
-            config,
+        let lookup_result = lookup_invoice(
+            config.clone(),
             params.payment_hash.clone(),
             params.search.clone(),
-        ).await {
-            Ok(transaction) => {
-                if transaction.settled_at > 0 {
-                    ("settled".to_string(), Some(transaction))
-                } else {
-                    ("pending".to_string(), Some(transaction))
-                }
-            }
-            Err(_) => ("error".to_string(), None),
-        };
-
-        match status.as_str() {
-            "settled" => {
-                callback("success".to_string(), transaction);
-                break;
-            }
-            "error" => {
-                callback("failure".to_string(), transaction);
-                // Don't break on error, keep polling
-            }
-            _ => {
-                callback("pending".to_string(), transaction);
-            }
+        )
+        .await;
+        
+        let (status, transaction) = process_invoice_lookup_result(lookup_result);
+        let should_continue = handle_poll_status(&status, transaction, &mut callback);
+        
+        if !should_continue {
+            break;
         }
 
         tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
-pub fn on_invoice_events(
+// Async version for direct async use
+pub async fn on_invoice_events(
     config: NwcConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+    callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
-                "success" => callback.success(tx),
-                "pending" => callback.pending(tx),
-                "failure" => callback.failure(tx),
-                _ => {}
-            }).await;
-        });
-    });
+    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    })
+    .await;
 }
+

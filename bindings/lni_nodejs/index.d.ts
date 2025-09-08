@@ -279,10 +279,6 @@ export interface Payment {
   updatedAt: number
   amountMsats: number
 }
-export interface InvoiceEvent {
-  status: string
-  transaction?: Transaction
-}
 export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
@@ -356,27 +352,16 @@ export declare class NwcNode {
   getNwcUri(): string
   getSocks5Proxy(): string | null
   getConfig(): NwcConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
-  onInvoiceEventsCancel(params: OnInvoiceEventParams): InvoiceEventsHandle
-}
-export declare class InvoiceEventsHandle {
-  cancel(): void
-  isCancelled(): boolean
-  pollEvent(): InvoiceEvent | null
-  waitForEvent(timeoutMs: number): InvoiceEvent | null
-}
-export declare class InvoiceEventsCancellation {
-  cancel(): void
-  isCancelled(): boolean
 }
 export declare class StrikeNode {
   constructor(config: StrikeConfig)
