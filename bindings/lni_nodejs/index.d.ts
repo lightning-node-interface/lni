@@ -315,9 +315,9 @@ export declare class LndNode {
   getUrl(): string
   getMacaroon(): string
   getConfig(): LndConfig
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>

@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
+    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
@@ -47,31 +47,51 @@ impl LndNode {
     }
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-impl LndNode {
-
-    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl LightningNode for LndNode {
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::lnd::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::lnd::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::lnd::api::pay_invoice(self.config.clone(), params).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::lnd::api::get_offer(&self.config, search).await
+    }
+
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::lnd::api::list_offers(&self.config, search).await
+    }
+
+    async fn pay_offer(
+        &self,
+        offer: String,
+        amount_msats: i64,
+        payer_note: Option<String>,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::lnd::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
+    }
+
+    async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, ApiError> {
         crate::lnd::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
             None,
             None,
             params.search,
-        ).await
+        )
+        .await
     }
 
-    pub async fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
@@ -79,15 +99,16 @@ impl LndNode {
             self.config.clone(),
             Some(params.from),
             Some(params.limit),
-            params.search
-        ).await
+            params.search,
+        )
+        .await
     }
 
-    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::lnd::api::decode(self.config.clone(), str).await
     }
 
-    pub async fn on_invoice_events(
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -177,15 +198,18 @@ mod tests {
         println!("Generated payment_hash: {:?}", payment_hash);
 
         // BOLT11
-        match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            description_hash: Some(description_hash.clone()),
-            expiry: Some(expiry),
-            r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: Some(amount_msats),
+                description: Some(description.clone()),
+                description_hash: Some(description_hash.clone()),
+                expiry: Some(expiry),
+                r_preimage: Some(base64::encode(preimage_bytes)), // LND expects the base64 encoded preimage bytes via the docs if you generate your own preimage+payment for your invoice
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 dbg!(&txn);
                 assert!(
@@ -199,15 +223,18 @@ mod tests {
         }
 
         // BOLT 11 with blinded paths
-        match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            description_hash: Some(description_hash.clone()),
-            expiry: Some(expiry),
-            is_blinded: Some(true),
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: Some(amount_msats),
+                description: Some(description.clone()),
+                description_hash: Some(description_hash.clone()),
+                expiry: Some(expiry),
+                is_blinded: Some(true),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("BOLT11 with blinded create_invoice: {:?}", txn);
                 assert!(
@@ -224,11 +251,14 @@ mod tests {
         }
 
         // Simple BOLT11 test
-        match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
-            amount_msats: Some(amount_msats),
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: InvoiceType::Bolt11,
+                amount_msats: Some(amount_msats),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("Simple BOLT11 create_invoice: {:?}", txn);
                 assert!(
@@ -237,19 +267,25 @@ mod tests {
                 );
             }
             Err(e) => {
-                panic!("Simple BOLT11 create_invoice Failed to make invoice: {:?}", e);
+                panic!(
+                    "Simple BOLT11 create_invoice Failed to make invoice: {:?}",
+                    e
+                );
             }
         }
     }
 
     #[tokio::test]
     async fn test_pay_invoice() {
-        match NODE.pay_invoice(PayInvoiceParams {
-            invoice: LND_TEST_PAYMENT_REQUEST.to_string(),
-            fee_limit_percentage: Some(1.0), // 1% fee limit
-            allow_self_payment: Some(true),
-            ..Default::default()
-        }).await {
+        match NODE
+            .pay_invoice(PayInvoiceParams {
+                invoice: LND_TEST_PAYMENT_REQUEST.to_string(),
+                fee_limit_percentage: Some(1.0), // 1% fee limit
+                allow_self_payment: Some(true),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(invoice_resp) => {
                 // Payment succeeded
                 dbg!("Pay invoice resp: {:?}", &invoice_resp);
@@ -262,15 +298,16 @@ mod tests {
                 // Payment failed - this is expected in test environment
                 let error_msg = e.to_string();
                 println!("Payment failed as expected: {}", error_msg);
-                
+
                 // Ensure we're getting proper error messages from LND
                 assert!(
-                    error_msg.contains("FAILURE_REASON") || 
-                    error_msg.contains("no route") || 
-                    error_msg.contains("timeout") ||
-                    error_msg.contains("insufficient") ||
-                    error_msg.contains("Payment failed"),
-                    "Should receive a proper LND payment failure reason, got: {}", error_msg
+                    error_msg.contains("FAILURE_REASON")
+                        || error_msg.contains("no route")
+                        || error_msg.contains("timeout")
+                        || error_msg.contains("insufficient")
+                        || error_msg.contains("Payment failed"),
+                    "Should receive a proper LND payment failure reason, got: {}",
+                    error_msg
                 );
             }
         }
@@ -321,10 +358,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            search: None,
-        }).await {
+        match NODE
+            .lookup_invoice(LookupInvoiceParams {
+                payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+                search: None,
+            })
+            .await
+        {
             Ok(txn) => {
                 dbg!(&txn);
                 assert!(

@@ -149,13 +149,13 @@ pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
-pub fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
 }
 
-pub fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+pub async fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
@@ -183,7 +183,7 @@ pub fn fetch_invoice_from_offer(
     });
 }
 
-pub fn pay_offer(
+pub async fn pay_offer(
     config: &LndConfig,
     offer: String,
     amount_msats: i64,
@@ -412,7 +412,6 @@ pub async fn create_invoice(
     })
 }
 
-// Async version of pay_invoice
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn pay_invoice(
     config: LndConfig,

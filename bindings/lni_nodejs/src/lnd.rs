@@ -1,4 +1,6 @@
-use lni::{lnd::lib::LndConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{
+  lnd::lib::LndConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -36,27 +38,30 @@ impl LndNode {
 
   // These BOLT12 functions are still synchronous
   #[napi]
-  pub fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
     let offer = lni::lnd::api::get_offer(&self.inner, search)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
     let offers = lni::lnd::api::list_offers(&self.inner, search)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
   #[napi]
-  pub fn pay_offer(
+  pub async fn pay_offer(
     &self,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
     let offer = lni::lnd::api::pay_offer(&self.inner, offer, amount_msats, payer_note)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
@@ -64,34 +69,47 @@ impl LndNode {
   // Async methods - using the actual async API functions
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::lnd::api::get_info(self.inner.clone()).await
+    let info = lni::lnd::api::get_info(self.inner.clone())
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::lnd::api::create_invoice(self.inner.clone(), params).await
+  pub async fn create_invoice(
+    &self,
+    params: CreateInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let txn = lni::lnd::api::create_invoice(self.inner.clone(), params)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::lnd::api::pay_invoice(self.inner.clone(), params).await
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::lnd::api::pay_invoice(self.inner.clone(), params)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn lookup_invoice(
+    &self,
+    params: LookupInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
     let txn = lni::lnd::api::lookup_invoice(
-      self.inner.clone(), 
-      params.payment_hash, 
-      None, 
-      None, 
-      params.search
-    ).await
+      self.inner.clone(),
+      params.payment_hash,
+      None,
+      None,
+      params.search,
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
@@ -105,15 +123,17 @@ impl LndNode {
       self.inner.clone(),
       Some(params.from),
       Some(params.limit),
-      params.search
-    ).await
+      params.search,
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
   #[napi]
   pub async fn decode(&self, invoice_str: String) -> Result<String> {
-    let decoded = lni::lnd::api::decode(self.inner.clone(), invoice_str).await
+    let decoded = lni::lnd::api::decode(self.inner.clone(), invoice_str)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
@@ -125,27 +145,36 @@ impl LndNode {
     callback: T,
   ) -> Result<()> {
     let config = self.inner.clone();
-    
+
     // Block on the async function in the current thread, similar to CLN's sync approach
     tokio::runtime::Runtime::new().unwrap().block_on(async {
       lni::lnd::api::poll_invoice_events(&config, params, move |status, tx| {
-        let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
-      }).await;
+        let _ = callback(status.clone(), tx.clone())
+          .map_err(|err| napi::Error::from_reason(err.to_string()));
+      })
+      .await;
     });
-    
+
     Ok(())
   }
 
   #[napi]
   pub async fn get_offer_async(&self, _search: Option<String>) -> Result<lni::types::PayCode> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
-    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented".to_string(),
+    ))
   }
 
   #[napi]
-  pub async fn list_offers_async(&self, _search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+  pub async fn list_offers_async(
+    &self,
+    _search: Option<String>,
+  ) -> Result<Vec<lni::types::PayCode>> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
-    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented".to_string(),
+    ))
   }
 
   #[napi]
@@ -156,7 +185,9 @@ impl LndNode {
     _payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
-    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented".to_string(),
+    ))
   }
 
   #[napi]
@@ -167,7 +198,9 @@ impl LndNode {
     _expiry: Option<i64>,
   ) -> napi::Result<lni::Transaction> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
-    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented".to_string(),
+    ))
   }
 
   #[napi]
@@ -178,6 +211,8 @@ impl LndNode {
     _payer_note: Option<String>,
   ) -> Result<String> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
-    Err(napi::Error::from_reason("Bolt12 not implemented".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented".to_string(),
+    ))
   }
 }
