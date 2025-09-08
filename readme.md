@@ -368,9 +368,9 @@ Language Bindings
             ]
         }
     }
-
     ```
-    4. In the remote project re-add the package `lni_react_native` by running:
+    4. Also might need to Undo changes to `LniReactNativeModule.kt` and add back `import com.facebook.fbreact.specs.NativeLniReactNativeSpec`
+    5. In the remote project re-add the package `lni_react_native` by running:
     ```sh
     yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
     
@@ -422,6 +422,24 @@ LndNode::new(LndConfig {
     ..Default::default()
 })
 ```
+
+**Strike with SOCKS5 Proxy Support:**
+Strike now supports the same SOCKS5 proxy and invalid certificate settings as LND:
+
+```rust
+StrikeNode::new(StrikeConfig {
+    base_url: Some("https://api.strike.me/v1".to_string()),
+    api_key: "YOUR_API_KEY".to_string(),
+    http_timeout: Some(120),
+    socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor proxy
+    accept_invalid_certs: Some(true), // Accept self-signed certificates
+})
+```
+
+This is useful for:
+- Connecting through Tor for privacy
+- Testing with self-signed certificates in development
+- Connecting through corporate proxies that use invalid certificates
 
 
 Inspiration

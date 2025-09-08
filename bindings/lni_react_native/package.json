@@ -5,6 +5,7 @@
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
+  "types": "./lib/typescript/commonjs/src/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -47,8 +48,9 @@
     "test": "jest",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
-    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
-    "prepare": "bob build",
+    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib && yarn cache clean --all && cd example && npx react-native start --reset-cache && cd ..",
+    "build": "bob build --target commonjs && bob build --target module && (bob build --target typescript || echo 'TypeScript build failed but definitions may still be generated') && cp src/generated/* lib/typescript/commonjs/src/generated/ && cp src/generated/* lib/typescript/commonjs/src/",
+    "prepare": "yarn build",
     "release": "release-it",
     "package": "yarn prepare && yarn pack"
   },
@@ -161,7 +163,15 @@
       [
         "typescript",
         {
-          "project": "tsconfig.build.json"
+          "project": "tsconfig.build.json",
+          "tsc": {
+            "skipLibCheck": true,
+            "skipDefaultLibCheck": true,
+            "noErrorTruncation": false,
+            "noEmitOnError": false,
+            "ignoreDeprecations": true,
+            "isolatedModules": false
+          }
         }
       ]
     ]

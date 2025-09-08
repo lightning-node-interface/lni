@@ -1,7 +1,7 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::types::{NodeInfo, ListTransactionsParams, LookupInvoiceParams};
+use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo};
 use crate::{
     ApiError, CreateInvoiceParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
     PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
@@ -14,7 +14,11 @@ pub struct SpeedConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.tryspeed.com")))]
     pub base_url: Option<String>,
     pub api_key: String,
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(30)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
 
@@ -23,7 +27,9 @@ impl Default for SpeedConfig {
         Self {
             base_url: Some("https://api.tryspeed.com".to_string()),
             api_key: "".to_string(),
-            http_timeout: Some(30),
+            socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(true),
+            http_timeout: Some(60),
         }
     }
 }
@@ -44,68 +50,72 @@ impl SpeedNode {
     }
 }
 
-impl SpeedNode {
-    pub fn from_credentials(base_url: String, api_key: String) -> Self {
-        let config = SpeedConfig {
-            base_url: Some(base_url),
-            api_key,
-            http_timeout: Some(30),
-        };
-        Self { config }
-    }
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl LightningNode for SpeedNode {
-    fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::speed::api::get_info(&self.config)
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::speed::api::get_info(&self.config).await
     }
 
-    fn create_invoice(&self, invoice_params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::speed::api::create_invoice(&self.config, invoice_params)
-    }
-
-    fn pay_invoice(&self, invoice_params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_invoice(&self.config, invoice_params)
-    }
-
-    fn lookup_invoice(
+    async fn create_invoice(
         &self,
-        params: LookupInvoiceParams,
+        invoice_params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
-        crate::speed::api::lookup_invoice(&self.config, params.payment_hash, None, None, params.search)
+        crate::speed::api::create_invoice(&self.config, invoice_params).await
     }
 
-    fn list_transactions(
+    async fn pay_invoice(
+        &self,
+        invoice_params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::speed::api::pay_invoice(&self.config, invoice_params).await
+    }
+
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::speed::api::lookup_invoice(
+            &self.config,
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        )
+        .await
+    }
+
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<Transaction>, ApiError> {
         crate::speed::api::list_transactions(&self.config, params.from, params.limit, params.search)
+            .await
     }
 
-    fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::speed::api::decode(&self.config, str)
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::speed::api::decode(&self.config, str).await
     }
 
-    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::speed::api::get_offer(&self.config, search)
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::speed::api::get_offer(&self.config, search).await
     }
 
-    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::speed::api::list_offers(&self.config, search)
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::speed::api::list_offers(&self.config, search).await
     }
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note)
+        crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    fn on_invoice_events(&self, params: OnInvoiceEventParams, callback: Box<dyn OnInvoiceEventCallback>) {
-        crate::speed::api::on_invoice_events(self.config.clone(), params, callback);
+    async fn on_invoice_events(
+        &self,
+        params: OnInvoiceEventParams,
+        callback: Box<dyn OnInvoiceEventCallback>,
+    ) {
+        crate::speed::api::on_invoice_events(self.config.clone(), params, callback).await;
     }
 }
 
@@ -114,11 +124,10 @@ mod tests {
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
-    use std::env;
-    use std::thread;
-    use std::sync::{Arc, Mutex};
     use lightning_invoice::Bolt11Invoice;
+    use std::env;
     use std::str::FromStr;
+    use std::sync::{Arc, Mutex};
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -141,14 +150,14 @@ mod tests {
             SpeedNode::new(SpeedConfig {
                 base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
-                http_timeout: Some(30),
+                ..Default::default()
             })
         };
     }
 
-    #[test]
-    fn test_get_info() {
-        match NODE.get_info() {
+    #[tokio::test]
+    async fn test_get_info() {
+        match NODE.get_info().await {
             Ok(node_info) => {
                 dbg!(&node_info);
                 assert_eq!(node_info.alias, "Speed Node");
@@ -160,8 +169,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create_invoice() {
+    #[tokio::test]
+    async fn test_create_invoice() {
         let params = CreateInvoiceParams {
             invoice_type: crate::InvoiceType::Bolt11,
             amount_msats: Some(1000), // 1 sat
@@ -175,8 +184,8 @@ mod tests {
             is_amp: Some(false),
             is_private: Some(false),
         };
-        
-        match NODE.create_invoice(params) {
+
+        match NODE.create_invoice(params).await {
             Ok(transaction) => {
                 dbg!(&transaction);
                 assert_eq!(transaction.type_, "incoming");
@@ -203,7 +212,7 @@ mod tests {
     //         allow_self_payment: None,
     //         is_amp: None,
     //     };
-        
+
     //     match NODE.pay_invoice(params) {
     //         Ok(response) => {
     //             dbg!(&response);
@@ -218,16 +227,16 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_list_transactions() {
+    #[tokio::test]
+    async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 100,
             payment_hash: None,
             search: None,
         };
-        
-        match NODE.list_transactions(params) {
+
+        match NODE.list_transactions(params).await {
             Ok(transactions) => {
                 dbg!(&transactions);
             }
@@ -238,8 +247,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_payment_hash_computation() {
+    #[tokio::test]
+    async fn test_payment_hash_computation() {
         // First, let's verify that our stored SPEED_TEST_PAYMENT_HASH matches the one computed from the withdraw_request
         let withdraw_request = &*TEST_PAYMENT_REQUEST;
         let stored_payment_hash = &*TEST_PAYMENT_HASH;
@@ -262,8 +271,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_on_invoice_events() {
+    #[tokio::test]
+    async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
@@ -289,47 +298,24 @@ mod tests {
             events: events.clone(),
         };
 
-        // Use the payment hash from the environment variable  
+        // Use the payment hash from the environment variable
         let params = OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 15, // Shorter timeout for testing
+            polling_delay_sec: 2,
+            max_polling_sec: 5,
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
 
-        // Start the event listener in a separate thread
-        thread::spawn(move || {
-            NODE.on_invoice_events(params, Box::new(callback));
-        });
-
-        // Give it some time to process
-        thread::sleep(std::time::Duration::from_secs(6));
+        NODE.on_invoice_events(params, Box::new(callback)).await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Speed events captured: {:?}", *events_guard);
-        
+
         // We expect at least one event (even if it's a failure due to invoice not found)
         assert!(
             !events_guard.is_empty(),
             "Should capture at least one event"
         );
-
-        // Verify payment hash computation matches what's in the environment
-        match Bolt11Invoice::from_str(&*TEST_PAYMENT_REQUEST) {
-            Ok(bolt11) => {
-                let computed_hash = format!("{:x}", bolt11.payment_hash());
-                println!("Expected payment hash: {}", *TEST_PAYMENT_HASH);
-                println!("Computed payment hash: {}", computed_hash);
-                assert_eq!(
-                    *TEST_PAYMENT_HASH,
-                    computed_hash,
-                    "Environment payment hash should match computed hash from withdraw_request"
-                );
-            }
-            Err(e) => {
-                println!("Warning: Could not parse BOLT11 invoice for verification: {}", e);
-            }
-        }
     }
 }

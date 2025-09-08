@@ -48,31 +48,41 @@ export interface LndNode {
 export interface NwcConfig {
   nwcUri: string
   socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface NwcNode {
   config: NwcConfig
 }
 export interface StrikeConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface StrikeNode {
   config: StrikeConfig
 }
 export interface BlinkConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
 }
 export interface BlinkNode {
   config: BlinkConfig
 }
 export interface SpeedConfig {
-  baseUrl: string
+  baseUrl?: string
   apiKey: string
+  socks5Proxy?: string
+  acceptInvalidCerts?: boolean
   httpTimeout?: number
+}
+export interface SpeedNode {
+  config: SpeedConfig
 }
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
@@ -269,18 +279,19 @@ export interface Payment {
   updatedAt: number
   amountMsats: number
 }
+export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
   getPassword(): string
   getConfig(): PhoenixdConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(): PayCode
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(): Promise<PayCode>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class ClnNode {
@@ -288,15 +299,15 @@ export declare class ClnNode {
   getUrl(): string
   getRune(): string
   getConfig(): ClnConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class LndNode {
@@ -304,31 +315,36 @@ export declare class LndNode {
   getUrl(): string
   getMacaroon(): string
   getConfig(): LndConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(invoiceStr: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
+  getOfferAsync(search?: string | undefined | null): Promise<PayCode>
+  listOffersAsync(search?: string | undefined | null): Promise<Array<PayCode>>
+  payOfferAsync(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  createOfferAsync(amountMsats?: number | undefined | null, description?: string | undefined | null, expiry?: number | undefined | null): Promise<Transaction>
+  fetchInvoiceFromOfferAsync(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<string>
 }
 export declare class BlinkNode {
   constructor(config: BlinkConfig)
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): BlinkConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class NwcNode {
@@ -336,15 +352,15 @@ export declare class NwcNode {
   getNwcUri(): string
   getSocks5Proxy(): string | null
   getConfig(): NwcConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 export declare class StrikeNode {
@@ -352,14 +368,14 @@ export declare class StrikeNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): StrikeConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   getOffer(search?: string | undefined | null): PayCode
   listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
   decode(str: string): string
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
@@ -368,14 +384,14 @@ export declare class SpeedNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): SpeedConfig
-  getInfo(): NodeInfo
-  createInvoice(params: CreateInvoiceParams): Transaction
-  payInvoice(params: PayInvoiceParams): PayInvoiceResponse
-  getOffer(search?: string | undefined | null): PayCode
-  listOffers(search?: string | undefined | null): Array<PayCode>
-  lookupInvoice(params: LookupInvoiceParams): Transaction
-  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
-  listTransactions(params: ListTransactionsParams): Array<Transaction>
-  decode(str: string): string
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  getOffer(search?: string | undefined | null): Promise<PayCode>
+  listOffers(search?: string | undefined | null): Promise<Array<PayCode>>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }

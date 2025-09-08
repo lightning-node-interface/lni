@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::thread;
 use std::time::Duration;
 
 use lightning_invoice::Bolt11Invoice;
@@ -15,28 +14,65 @@ use reqwest::header;
 
 // Docs: https://dev.blink.sv/
 
-fn client(config: &BlinkConfig) -> reqwest::blocking::Client {
+fn client(config: &BlinkConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        "X-API-KEY",
-        header::HeaderValue::from_str(&config.api_key).unwrap(),
-    );
+    
+    match header::HeaderValue::from_str(&config.api_key) {
+        Ok(api_key_header) => headers.insert("X-API-KEY", api_key_header),
+        Err(_) => {
+            eprintln!("Failed to create API key header");
+            return reqwest::ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+        }
+    };
+    
     headers.insert(
         "Content-Type",
         header::HeaderValue::from_static("application/json"),
     );
 
-    let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
-
+    // Create HTTP client with optional SOCKS5 proxy following Strike pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            // Accept invalid certificates when using SOCKS5 proxy
+            let client_builder = reqwest::Client::builder()
+                .default_headers(headers.clone())
+                .danger_accept_invalid_certs(true);
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    let mut builder = client_builder.proxy(proxy);
+                    if config.http_timeout.is_some() {
+                        builder = builder.timeout(std::time::Duration::from_secs(
+                            config.http_timeout.unwrap_or_default() as u64,
+                        ));
+                    }
+                    match builder.build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
+    }
+    
+    // Default client creation
+    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
+    }
     if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-fn execute_graphql_query<T>(
+async fn execute_graphql_query<T>(
     config: &BlinkConfig,
     query: &str,
     variables: Option<serde_json::Value>,
@@ -54,19 +90,20 @@ where
         .post(config.base_url.as_deref().unwrap_or("https://api.blink.sv/graphql"))
         .json(&request)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("HTTP {} - {}", status, error_text),
         });
     }
 
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     let graphql_response: GraphQLResponse<T> = serde_json::from_str(&response_text)
         .map_err(|e| ApiError::Json {
             reason: format!("Failed to parse GraphQL response: {} - Response: {}", e, response_text),
@@ -90,7 +127,7 @@ where
     })
 }
 
-fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
+async fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
     let query = r#"
         query Me {
             me {
@@ -105,7 +142,7 @@ fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
         }
     "#;
 
-    let response: MeQuery = execute_graphql_query(config, query, None)?;
+    let response: MeQuery = execute_graphql_query(config, query, None).await?;
     
     let btc_wallet = response
         .me
@@ -120,7 +157,7 @@ fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
     Ok(btc_wallet.id)
 }
 
-pub fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
+pub async fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
     let query = r#"
         query Me {
             me {
@@ -135,7 +172,7 @@ pub fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
         }
     "#;
 
-    let response: MeQuery = execute_graphql_query(config, query, None)?;
+    let response: MeQuery = execute_graphql_query(config, query, None).await?;
     
     let btc_wallet = response
         .me
@@ -164,13 +201,13 @@ pub fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
     })
 }
 
-pub fn create_invoice(
+pub async fn create_invoice(
     config: &BlinkConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
     match invoice_params.invoice_type {
         InvoiceType::Bolt11 => {
-            let wallet_id = get_btc_wallet_id(config)?;
+            let wallet_id = get_btc_wallet_id(config).await?;
             
             let amount_sats = invoice_params.amount_msats.unwrap_or(0) / 1000;
             
@@ -198,7 +235,7 @@ pub fn create_invoice(
                 }
             });
 
-            let response: LnInvoiceCreateResponse = execute_graphql_query(config, query, Some(variables))?;
+            let response: LnInvoiceCreateResponse = execute_graphql_query(config, query, Some(variables)).await?;
 
             if let Some(errors) = &response.ln_invoice_create.errors {
                 if !errors.is_empty() {
@@ -249,11 +286,11 @@ pub fn create_invoice(
     }
 }
 
-pub fn pay_invoice(
+pub async fn pay_invoice(
     config: &BlinkConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let wallet_id = get_btc_wallet_id(config)?;
+    let wallet_id = get_btc_wallet_id(config).await?;
 
     // First probe the fee
     let fee_probe_query = r#"
@@ -274,7 +311,7 @@ pub fn pay_invoice(
         }
     });
 
-    let fee_response: LnInvoiceFeeProbeResponse = execute_graphql_query(config, fee_probe_query, Some(fee_probe_variables))?;
+    let fee_response: LnInvoiceFeeProbeResponse = execute_graphql_query(config, fee_probe_query, Some(fee_probe_variables)).await?;
 
     let fee_msats = if let Some(errors) = &fee_response.ln_invoice_fee_probe.errors {
         if !errors.is_empty() {
@@ -316,7 +353,7 @@ pub fn pay_invoice(
         }
     });
 
-    let payment_response: LnInvoicePaymentSendResponse = execute_graphql_query(config, payment_query, Some(payment_variables))?;
+    let payment_response: LnInvoicePaymentSendResponse = execute_graphql_query(config, payment_query, Some(payment_variables)).await?;
 
     if let Some(errors) = &payment_response.ln_invoice_payment_send.errors {
         if !errors.is_empty() {
@@ -355,18 +392,18 @@ pub fn pay_invoice(
     })
 }
 
-pub fn decode(_config: &BlinkConfig, str: String) -> Result<String, ApiError> {
+pub async fn decode(_config: &BlinkConfig, str: String) -> Result<String, ApiError> {
     // Blink doesn't have a decode endpoint, return raw string
     Ok(str)
 }
 
-pub fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Blink".to_string(),
     })
 }
 
-pub fn list_offers(
+pub async fn list_offers(
     _config: &BlinkConfig,
     _search: Option<String>,
 ) -> Result<Vec<PayCode>, ApiError> {
@@ -375,7 +412,7 @@ pub fn list_offers(
     })
 }
 
-pub fn create_offer(
+pub async fn create_offer(
     _config: &BlinkConfig,
     _amount_msats: Option<i64>,
     _description: Option<String>,
@@ -386,7 +423,7 @@ pub fn create_offer(
     })
 }
 
-pub fn fetch_invoice_from_offer(
+pub async fn fetch_invoice_from_offer(
     _config: &BlinkConfig,
     _offer: String,
     _amount_msats: i64,
@@ -397,7 +434,7 @@ pub fn fetch_invoice_from_offer(
     })
 }
 
-pub fn pay_offer(
+pub async fn pay_offer(
     _config: &BlinkConfig,
     _offer: String,
     _amount_msats: i64,
@@ -408,7 +445,7 @@ pub fn pay_offer(
     })
 }
 
-pub fn lookup_invoice(
+pub async fn lookup_invoice(
     config: &BlinkConfig,
     payment_hash: Option<String>,
     from: Option<i64>,
@@ -423,7 +460,7 @@ pub fn lookup_invoice(
         from.unwrap_or(0), 
         limit.unwrap_or(100), 
         search
-    )?;
+    ).await?;
     
     let transaction = transactions
         .into_iter()
@@ -435,7 +472,7 @@ pub fn lookup_invoice(
     Ok(transaction)
 }
 
-pub fn list_transactions(
+pub async fn list_transactions(
     config: &BlinkConfig,
     from: i64,
     limit: i64,
@@ -500,7 +537,7 @@ pub fn list_transactions(
         "before": serde_json::Value::Null
     });
 
-    let response: TransactionsQuery = execute_graphql_query(config, query, Some(variables))?;
+    let response: TransactionsQuery = execute_graphql_query(config, query, Some(variables)).await?;
     
     let mut all_transactions = Vec::new();
     
@@ -589,7 +626,7 @@ pub fn list_transactions(
 }
 
 // Core logic shared by both implementations  
-pub fn poll_invoice_events<F>(config: &BlinkConfig, params: OnInvoiceEventParams, mut callback: F)
+pub async fn poll_invoice_events<F>(config: &BlinkConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
 {
@@ -607,7 +644,7 @@ where
             None,
             None,
             params.search.clone(),
-        ) {
+        ).await {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("success".to_string(), Some(transaction))
@@ -624,11 +661,11 @@ where
             break;
         }
 
-        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+        tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
-pub fn on_invoice_events(
+pub async fn on_invoice_events(
     config: BlinkConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
@@ -637,5 +674,5 @@ pub fn on_invoice_events(
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" | _ => callback.failure(tx),
-    });
+    }).await;
 }

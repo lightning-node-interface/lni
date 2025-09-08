@@ -14,6 +14,8 @@ pub struct NwcConfig {
     pub nwc_uri: String, // The full NWC URI string like "nostr+walletconnect://pubkey?relay=...&secret=..."
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
@@ -23,6 +25,7 @@ impl Default for NwcConfig {
         Self {
             nwc_uri: "".to_string(),
             socks5_proxy: Some("".to_string()),
+            accept_invalid_certs: Some(true),
             http_timeout: Some(60),
         }
     }
@@ -45,74 +48,68 @@ impl NwcNode {
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LightningNode for NwcNode {
-    fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::nwc::api::get_info(&self.config)
+    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::nwc::api::get_info(self.config.clone()).await
     }
 
-    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::nwc::api::create_invoice(&self.config, params)
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+        crate::nwc::api::create_invoice(self.config.clone(), params).await
     }
 
-    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::nwc::api::pay_invoice(&self.config, params)
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+        crate::nwc::api::pay_invoice(self.config.clone(), params).await
     }
 
-    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
-        crate::nwc::api::get_offer(&self.config, search)
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+        crate::nwc::api::get_offer(&self.config, search).await
     }
 
-    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
-        crate::nwc::api::list_offers(&self.config, search)
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+        crate::nwc::api::list_offers(&self.config, search).await
     }
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::nwc::api::pay_offer(&self.config, offer, amount_msats, payer_note)
+        crate::nwc::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::nwc::api::lookup_invoice(
-            &self.config,
-            params.payment_hash,
-            params.search,
-        )
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+        crate::nwc::api::lookup_invoice(self.config.clone(), params.payment_hash, params.search).await
     }
 
-    fn list_transactions(
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::nwc::api::list_transactions(&self.config, params)
+        crate::nwc::api::list_transactions(self.config.clone(), params).await
     }
 
-    fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::nwc::api::decode(&self.config, str)
+    async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::nwc::api::decode(self.config.clone(), str).await
     }
 
-    fn on_invoice_events(
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::nwc::api::on_invoice_events(self.config.clone(), params, callback)
+        crate::nwc::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{InvoiceType, PayInvoiceParams};
+    use crate::InvoiceType;
 
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
-    use std::thread;
-    use std::time::Duration;
 
     lazy_static! {
         static ref NWC_URI: String = {
@@ -136,9 +133,9 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_get_info() {
-        match NODE.get_info() {
+    #[tokio::test]
+    async fn test_get_info() {
+        match NODE.get_info().await {
             Ok(info) => {
                 println!("info: {:?}", info);
                 assert!(!info.pubkey.is_empty(), "Node pubkey should not be empty");
@@ -149,8 +146,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create_invoice() {
+    #[tokio::test]
+    async fn test_create_invoice() {
         let amount_msats = 3000;
         let description = "Test NWC invoice".to_string();
         let expiry = 3600;
@@ -161,7 +158,7 @@ mod tests {
             description: Some(description.clone()),
             expiry: Some(expiry),
             ..Default::default()
-        }) {
+        }).await {
             Ok(txn) => {
                 println!("BOLT11 create_invoice: {:?}", txn);
                 assert!(
@@ -175,13 +172,13 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_pay_invoice() {
+    // #[tokio::test]
+    // async fn test_pay_invoice() {
     //     match NODE.pay_invoice(PayInvoiceParams {
     //         invoice: TEST_PAYMENT_REQUEST.clone(),
     //         fee_limit_percentage: Some(1.0), // 1% fee limit
     //         ..Default::default()
-    //     }) {
+    //     }).await {
     //         Ok(invoice_resp) => {
     //             println!("Pay invoice resp: {:?}", invoice_resp);
     //             assert!(
@@ -195,12 +192,12 @@ mod tests {
     //     }
     // }
 
-    // #[test]
-    // fn test_lookup_invoice() {
+    // #[tokio::test]
+    // async fn test_lookup_invoice() {
     //     match NODE.lookup_invoice(LookupInvoiceParams {
     //         payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
     //         ..Default::default()
-    //     }) {
+    //     }).await {
     //         Ok(txn) => {
     //             dbg!(&txn);
     //             assert!(
@@ -218,15 +215,15 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_list_transactions() {
+    #[tokio::test]
+    async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
             limit: 10,
             payment_hash: None,
             search: None,
         };
-        match NODE.list_transactions(params) {
+        match NODE.list_transactions(params).await {
             Ok(txns) => {
                 dbg!(&txns);
                 assert!(
@@ -240,9 +237,9 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_decode() {
-    //     match NODE.decode(TEST_PAYMENT_REQUEST.to_string()) {
+    // #[tokio::test]
+    // async fn test_decode() {
+    //     match NODE.decode(TEST_PAYMENT_REQUEST.to_string()).await {
     //         Ok(decoded) => {
     //             println!("decode: {:?}", decoded);
     //         }
@@ -252,13 +249,13 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_on_invoice_events() {
-        struct OnInvoiceEventCallback {
+    #[tokio::test]
+    async fn test_on_invoice_events() {
+        struct TestCallback {
             events: Arc<Mutex<Vec<String>>>,
         }
 
-        impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
+        impl crate::types::OnInvoiceEventCallback for TestCallback {
             fn success(&self, transaction: Option<Transaction>) {
                 dbg!(&transaction);
                 let mut events = self.events.lock().unwrap();
@@ -275,24 +272,19 @@ mod tests {
         }
 
         let events = Arc::new(Mutex::new(Vec::new()));
-        let callback = OnInvoiceEventCallback {
+        let callback = TestCallback {
             events: events.clone(),
         };
 
         let params = crate::types::OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 60,
+            polling_delay_sec: 2,
+            max_polling_sec: 10,
             ..Default::default()
         };
 
-        // Start the event listener in a separate thread
-        thread::spawn(move || {
-            NODE.on_invoice_events(params, Box::new(callback));
-        });
-
-        // Wait for some time to allow events to be collected
-        thread::sleep(Duration::from_secs(10));
+        // Start the event listener
+        NODE.on_invoice_events(params, Box::new(callback)).await;
 
         // Check if events were received
         let received_events = events.lock().unwrap();

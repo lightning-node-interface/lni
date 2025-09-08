@@ -5,7 +5,7 @@ yarn ubrn:checkout
 
 #### android
 yarn ubrn:android
-yarn prepare
+# yarn prepare
 # cd example && yarn clean:android && yarn && yarn build:android && yarn android
 # troubleshooting yarn react-native doctor 
 # yarn package

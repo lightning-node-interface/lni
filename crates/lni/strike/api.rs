@@ -1,4 +1,3 @@
-use std::thread;
 use std::time::Duration;
 use std::str::FromStr;
 
@@ -20,7 +19,7 @@ use reqwest::header;
 // Docs
 // https://docs.strike.me/api/
 
-fn client(config: &StrikeConfig) -> reqwest::blocking::Client {
+fn async_client(config: &StrikeConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     let auth_header = format!("Bearer {}", config.api_key);
     headers.insert(
@@ -32,40 +31,70 @@ fn client(config: &StrikeConfig) -> reqwest::blocking::Client {
         header::HeaderValue::from_static("application/json"),
     );
 
-    let mut client = reqwest::blocking::ClientBuilder::new().default_headers(headers);
-
+    // Create HTTP client with optional SOCKS5 proxy following LND pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            // Accept invalid certificates when using SOCKS5 proxy
+            let client_builder = reqwest::Client::builder()
+                .default_headers(headers.clone())
+                .danger_accept_invalid_certs(true);
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    let mut builder = client_builder.proxy(proxy);
+                    if config.http_timeout.is_some() {
+                        builder = builder.timeout(std::time::Duration::from_secs(
+                            config.http_timeout.unwrap_or_default() as u64,
+                        ));
+                    }
+                    match builder.build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
+    }
+    
+    // Default client creation
+    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
+    }
     if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
 fn get_base_url(config: &StrikeConfig) -> &str {
     config.base_url.as_deref().unwrap_or("https://api.strike.me/v1")
 }
 
-pub fn get_info(config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
-    let client = client(config);
+pub async fn get_info(config: StrikeConfig) -> Result<NodeInfo, ApiError> {
+    let client = async_client(&config);
 
     // Get balance from Strike API
     let response = client
-        .get(&format!("{}/balances", get_base_url(config)))
+        .get(&format!("{}/balances", get_base_url(&config)))
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("HTTP {} - {}", status, error_text),
         });
     }
 
-    let balances: Vec<super::types::StrikeBalance> = response.json().map_err(|e| ApiError::Json {
+    let balances: Vec<super::types::StrikeBalance> = response.json().await.map_err(|e| ApiError::Json {
         reason: e.to_string(),
     })?;
 
@@ -96,16 +125,16 @@ pub fn get_info(config: &StrikeConfig) -> Result<NodeInfo, ApiError> {
     })
 }
 
-pub fn create_invoice(
-    config: &StrikeConfig,
+pub async fn create_invoice(
+    config: StrikeConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    let client = client(config);
+    let client = async_client(&config);
 
     match invoice_params.invoice_type {
         InvoiceType::Bolt11 => {
             // Create a receive request with bolt11 configuration
-            let req_url = format!("{}/receive-requests", get_base_url(config));
+            let req_url = format!("{}/receive-requests", get_base_url(&config));
 
             let amount = invoice_params.amount_msats.map(|amt| {
                 // Convert msats to BTC (Strike expects BTC amounts)
@@ -131,13 +160,14 @@ pub fn create_invoice(
                 .post(&req_url)
                 .json(&create_request)
                 .send()
+                .await
                 .map_err(|e| ApiError::Http {
                     reason: e.to_string(),
                 })?;
 
             if !response.status().is_success() {
                 let status = response.status();
-                let error_text = response.text().unwrap_or_default();
+                let error_text = response.text().await.unwrap_or_default();
                 return Err(ApiError::Http {
                     reason: format!(
                         "Failed to create receive request: {} - {}",
@@ -146,7 +176,7 @@ pub fn create_invoice(
                 });
             }
 
-            let response_text = response.text().unwrap();
+            let response_text = response.text().await.unwrap();
 
             // Try to parse as Strike's actual receive request response format
             let receive_request_resp: StrikeReceiveRequestResponse =
@@ -188,14 +218,14 @@ pub fn create_invoice(
     }
 }
 
-pub fn pay_invoice(
-    config: &StrikeConfig,
+pub async fn pay_invoice(
+    config: StrikeConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = client(config);
+    let client = async_client(&config);
 
     // Create payment quote first
-    let quote_url = format!("{}/payment-quotes/lightning", get_base_url(config));
+    let quote_url = format!("{}/payment-quotes/lightning", get_base_url(&config));
     let quote_request = PaymentQuoteRequest {
         ln_invoice: invoice_params.invoice.clone(),
         source_currency: "BTC".to_string(),
@@ -211,13 +241,14 @@ pub fn pay_invoice(
         .post(&quote_url)
         .json(&quote_request)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !quote_response.status().is_success() {
         let status = quote_response.status();
-        let error_text = quote_response.text().unwrap_or_default();
+        let error_text = quote_response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!(
                 "Failed to create payment quote: {} - {}",
@@ -226,30 +257,31 @@ pub fn pay_invoice(
         });
     }
 
-    let quote_text = quote_response.text().unwrap();
+    let quote_text = quote_response.text().await.unwrap();
     let quote_resp: PaymentQuoteResponse = serde_json::from_str(&quote_text)?;
 
     // Execute the payment quote
     let execute_url = format!(
         "{}/payment-quotes/{}/execute",
-        get_base_url(config), quote_resp.payment_quote_id
+        get_base_url(&config), quote_resp.payment_quote_id
     );
     let execute_response = client
         .patch(&execute_url)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !execute_response.status().is_success() {
         let status = execute_response.status();
-        let error_text = execute_response.text().unwrap_or_default();
+        let error_text = execute_response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("Failed to execute payment: {} - {}", status, error_text),
         });
     }
 
-    let execute_text = execute_response.text().unwrap();
+    let execute_text = execute_response.text().await.unwrap();
     let execute_resp: PaymentExecutionResponse = serde_json::from_str(&execute_text)?;
 
     // Get payment details
@@ -257,24 +289,25 @@ pub fn pay_invoice(
     
     let payment_url = format!(
         "{}/payments/{}",
-        get_base_url(config), payment_id
+        get_base_url(&config), payment_id
     );
     let payment_response = client
         .get(&payment_url)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if !payment_response.status().is_success() {
         let status = payment_response.status();
-        let error_text = payment_response.text().unwrap_or_default();
+        let error_text = payment_response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("Failed to get payment details: {} - {}", status, error_text),
         });
     }
 
-    let payment_text = payment_response.text().unwrap();
+    let payment_text = payment_response.text().await.unwrap();
     let payment_resp: PaymentExecutionResponse = serde_json::from_str(&payment_text)?;
 
     let fee_msats = if let Some(lightning) = &payment_resp.lightning {
@@ -356,25 +389,26 @@ pub fn pay_offer(
     })
 }
 
-pub fn lookup_invoice(
-    config: &StrikeConfig,
+pub async fn lookup_invoice(
+    config: StrikeConfig,
     payment_hash: Option<String>,
     _from: Option<i64>,
     _limit: Option<i64>,
     _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let client = client(config);
+    let client = async_client(&config);
 
     let target_payment_hash = payment_hash.unwrap_or_default();
     
     // Use the receive-requests/receives endpoint with payment hash query parameter
     let receives_url = format!(
         "{}/receive-requests/receives?$paymentHash={}",
-        get_base_url(config), target_payment_hash
+        get_base_url(&config), target_payment_hash
     );
     let response = client
         .get(&receives_url)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
@@ -387,13 +421,13 @@ pub fn lookup_invoice(
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().unwrap_or_default();
+        let error_text = response.text().await.unwrap_or_default();
         return Err(ApiError::Http {
             reason: format!("Failed to get receives: {} - {}", status, error_text),
         });
     }
 
-    let response_text = response.text().unwrap();
+    let response_text = response.text().await.unwrap();
     
     // Try to parse as Strike's receives response format with count
     let receives_resp: StrikeReceivesWithCountResponse =
@@ -449,23 +483,24 @@ pub fn lookup_invoice(
     })
 }
 
-pub fn list_transactions(
-    config: &StrikeConfig,
+pub async fn list_transactions(
+    config: StrikeConfig,
     from: i64,
     limit: i64,
     _search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = client(config);
+    let client = async_client(&config);
 
     // Get receives (incoming) using the receives endpoint similar to lookup_invoice
     let receives_url = format!(
         "{}/receive-requests/receives?$skip={}&$top={}",
-        get_base_url(config), from, limit
+        get_base_url(&config), from, limit
     );
     let receives_response =
         client
             .get(&receives_url)
             .send()
+            .await
             .map_err(|e| ApiError::Http {
                 reason: e.to_string(),
             })?;
@@ -473,7 +508,7 @@ pub fn list_transactions(
     let mut transactions: Vec<Transaction> = Vec::new();
 
     if receives_response.status().is_success() {
-        let receives_text = receives_response.text().unwrap();
+        let receives_text = receives_response.text().await.unwrap();
         let receives_resp: StrikeReceivesWithCountResponse =
             serde_json::from_str(&receives_text).map_err(|e| ApiError::Json {
                 reason: format!("Failed to parse receives response: {} - Response: {}", e, receives_text),
@@ -522,16 +557,17 @@ pub fn list_transactions(
     }
 
     // Get payments (outgoing)
-    let payments_url = format!("{}/payments?skip={}&top={}", get_base_url(config), from, limit);
+    let payments_url = format!("{}/payments?skip={}&top={}", get_base_url(&config), from, limit);
     let payments_response = client
         .get(&payments_url)
         .send()
+        .await
         .map_err(|e| ApiError::Http {
             reason: e.to_string(),
         })?;
 
     if payments_response.status().is_success() {
-        let payments_text = payments_response.text().unwrap();
+        let payments_text = payments_response.text().await.unwrap();
         let payments_resp: PaymentsResponse = serde_json::from_str(&payments_text)?;
 
         for payment in payments_resp.data {
@@ -601,7 +637,7 @@ pub fn list_transactions(
 }
 
 // Core logic shared by both implementations
-pub fn poll_invoice_events<F>(config: &StrikeConfig, params: OnInvoiceEventParams, mut callback: F)
+pub async fn poll_invoice_events<F>(config: StrikeConfig, params: OnInvoiceEventParams, mut callback: F)
 where
     F: FnMut(String, Option<Transaction>),
 {
@@ -614,12 +650,12 @@ where
         }
 
         let (status, transaction) = match lookup_invoice(
-            config,
+            config.clone(),
             params.payment_hash.clone(),
             None,
             None,
             params.search.clone(),
-        ) {
+        ).await {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("settled".to_string(), Some(transaction))
@@ -643,19 +679,19 @@ where
             }
         }
 
-        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+        tokio::time::sleep(tokio::time::Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
-pub fn on_invoice_events(
+pub async fn on_invoice_events(
     config: StrikeConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+    poll_invoice_events(config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" => callback.failure(tx),
         _ => {}
-    });
+    }).await;
 }

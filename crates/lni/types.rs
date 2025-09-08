@@ -12,24 +12,24 @@ pub enum LightningNodeEnum {
 }
 
 pub trait LightningNode {
-    fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
-    fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
-    fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
-    fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError>;
-    fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError>;
-    fn pay_offer(
+    async fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
+    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError>;
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError>;
+    async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError>;
-    fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError>;
-    fn list_transactions(
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError>;
+    async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError>;
-    fn decode(&self, str: String) -> Result<String, ApiError>;
-    fn on_invoice_events(
+    async fn decode(&self, str: String) -> Result<String, ApiError>;
+    async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -391,7 +391,7 @@ impl Default for PayInvoiceParams {
 
 // Define the callback trait for UniFFI
 #[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
-pub trait OnInvoiceEventCallback {
+pub trait OnInvoiceEventCallback: Send + Sync {
     fn success(&self, transaction: Option<Transaction>);
     fn pending(&self, transaction: Option<Transaction>);
     fn failure(&self, transaction: Option<Transaction>);
@@ -399,6 +399,7 @@ pub trait OnInvoiceEventCallback {
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Debug, Clone)]
 pub struct OnInvoiceEventParams {
     pub payment_hash: Option<String>,
     pub search: Option<String>,

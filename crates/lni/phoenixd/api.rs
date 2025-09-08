@@ -9,7 +9,7 @@ use crate::{
     OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use serde_urlencoded;
-use std::thread;
+use tokio::time::sleep;
 use std::time::Duration;
 
 // TODO
@@ -18,50 +18,75 @@ use std::time::Duration;
 
 // https://phoenix.acinq.co/server/api
 
-fn client(config: &PhoenixdConfig) -> reqwest::blocking::Client {
-    let mut client = reqwest::blocking::ClientBuilder::new();
-    if config.socks5_proxy.is_some() {
-        let proxy = reqwest::Proxy::all(&config.socks5_proxy.clone().unwrap_or_default()).unwrap();
-        client = client.proxy(proxy);
+fn client(config: &PhoenixdConfig) -> reqwest::Client {
+    // Create HTTP client with optional SOCKS5 proxy following LND pattern
+    if let Some(proxy_url) = config.socks5_proxy.clone() {
+        if !proxy_url.is_empty() {
+            let mut client_builder = reqwest::Client::builder();
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
+            if let Some(timeout) = config.http_timeout {
+                client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+            }
+            
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    match client_builder.proxy(proxy).build() {
+                        Ok(client) => return client,
+                        Err(_) => {} // Fall through to default client creation
+                    }
+                }
+                Err(_) => {} // Fall through to default client creation
+            }
+        }
     }
-    if config.accept_invalid_certs.is_some() {
-        client = client.danger_accept_invalid_certs(true);
+    
+    // Default client creation
+    let mut client_builder = reqwest::ClientBuilder::new();
+    if config.accept_invalid_certs.unwrap_or(false) {
+        client_builder = client_builder.danger_accept_invalid_certs(true);
     }
-    if config.http_timeout.is_some() {
-        client = client.timeout(std::time::Duration::from_secs(
-            config.http_timeout.unwrap_or_default() as u64,
-        ));
+    if let Some(timeout) = config.http_timeout {
+        client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client.build().unwrap()
+    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
-    // Clone config for use in the blocking task
-    let config_clone = config.clone();
-
-    // Run blocking code in a separate thread
-    let info_url = format!("{}/getinfo", config_clone.url);
-    let client = client(&config_clone);
+pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
+    let info_url = format!("{}/getinfo", config.url);
+    let client = client(&config);
 
     let response = client
         .get(&info_url)
-        .basic_auth("", Some(config_clone.password.clone()))
+        .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("Failed to get node info");
-    let response_text = response.text().unwrap();
-    println!("get node info response: {}", response_text);
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
+    // println!("get node info response: {}", response_text);
 
     // Get balance info as well
-    let balance_url = format!("{}/getbalance", config_clone.url);
+    let balance_url = format!("{}/getbalance", config.url);
     let balance_response = client
         .get(&balance_url)
-        .basic_auth("", Some(config_clone.password.clone()))
+        .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("Failed to get balance");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
     let balance_response_text = balance_response
         .text()
-        .expect("Failed to parse get balance");
-    println!("balance_response: {}", balance_response_text);
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    // println!("balance_response: {}", balance_response_text);
 
     // Now process the results in  context
     let info: InfoResponse = serde_json::from_str(&response_text)?;
@@ -84,15 +109,15 @@ pub fn get_info(config: &PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
-pub fn create_invoice(
-    config: &PhoenixdConfig,
+pub async fn create_invoice(
+    config: PhoenixdConfig,
     invoice_type: InvoiceType,
     amount_msats: Option<i64>,
     description: Option<String>,
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = client(config);
+    let client = client(&config);
     match invoice_type {
         InvoiceType::Bolt11 => {
             let req_url = format!("{}/createinvoice", config.url);
@@ -110,13 +135,18 @@ pub fn create_invoice(
                 .basic_auth("", Some(config.password.clone()))
                 .form(&bolt11_req)
                 .send()
-                .expect("Failed to create invoice");
+                .await
+                .map_err(|e| ApiError::Http {
+                    reason: e.to_string(),
+                })?;
 
-            println!("Status: {}", response.status());
+            // println!("Status: {}", response.status());
 
-            let invoice_str = response.text().expect("Failed to parse get invoice");
+            let invoice_str = response.text().await.map_err(|e| ApiError::Http {
+                reason: e.to_string(),
+            })?;
             let invoice_str = invoice_str.as_str();
-            println!("Bolt11 {}", &invoice_str.to_string());
+            // println!("Bolt11 {}", &invoice_str.to_string());
 
             let bolt11_resp: Bolt11Resp =
                 serde_json::from_str(&invoice_str).map_err(|e| crate::ApiError::Json {
@@ -148,7 +178,10 @@ pub fn create_invoice(
                     .post(&req_url)
                     .basic_auth("", Some(config.password.clone()))
                     .send()
-                    .expect("Failed to create invoice");
+                    .await
+                    .map_err(|e| ApiError::Http {
+                        reason: e.to_string(),
+                    })?;
             } else {
                 let bolt12_req = Bolt12Req {
                     description: description.clone(),
@@ -160,14 +193,19 @@ pub fn create_invoice(
                     .basic_auth("", Some(config.password.clone()))
                     .form(&bolt12_req)
                     .send()
-                    .expect("Failed to create invoice");
+                    .await
+                    .map_err(|e| ApiError::Http {
+                        reason: e.to_string(),
+                    })?;
             }
 
-            println!("Status: {}", response.status());
+            // println!("Status: {}", response.status());
 
-            let invoice_str = response.text().expect("Failed to parse get invoice");
+            let invoice_str = response.text().await.map_err(|e| ApiError::Http {
+                reason: e.to_string(),
+            })?;
             let invoice_str = invoice_str.as_str();
-            println!("Bolt12 {}", &invoice_str.to_string());
+            // println!("Bolt12 {}", &invoice_str.to_string());
 
             Ok(Transaction {
                 type_: "incoming".to_string(),
@@ -188,11 +226,11 @@ pub fn create_invoice(
     }
 }
 
-pub fn pay_invoice(
-    config: &PhoenixdConfig,
+pub async fn pay_invoice(
+    config: PhoenixdConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = client(config);
+    let client = client(&config);
     let req_url = format!("{}/payinvoice", config.url);
     let mut params = vec![];
     if invoice_params.amount_msats.is_some() {
@@ -207,9 +245,14 @@ pub fn pay_invoice(
         .basic_auth("", Some(config.password.clone()))
         .form(&params)
         .send()
-        .expect("Failed to pay invoice");
-    println!("Status: {}", response.status());
-    let response_text = response.text().expect("Failed to parse pay invoice");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    // println!("Status: {}", response.status());
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     let pay_invoice_resp: PhoenixPayInvoiceResp =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
             reason: format!("Failed to parse pay_invoice response: {}", e),
@@ -231,15 +274,20 @@ pub fn decode(str: String) -> Result<String, ApiError> {
 // TODO On Phoenixd there is not currenly a way to create a new BOLT 12 offer
 
 // Get latest BOLT12 offer
-pub fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
+pub async fn get_offer(config: PhoenixdConfig) -> Result<PayCode, ApiError> {
     let req_url = format!("{}/getoffer", config.url);
-    let client = client(config);
+    let client = client(&config);
     let response = client
         .get(&req_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("Failed to get offer");
-    let offer_str = response.text().expect("Failed to parse get offer");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    let offer_str = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     Ok(PayCode {
         offer_id: "".to_string(),
         bolt12: offer_str.to_string(),
@@ -250,14 +298,14 @@ pub fn get_offer(config: &PhoenixdConfig) -> Result<PayCode, ApiError> {
     })
 }
 
-pub fn pay_offer(
-    config: &PhoenixdConfig,
+pub async fn pay_offer(
+    config: PhoenixdConfig,
     offer: String,
     amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
     let req_url = format!("{}/payoffer", config.url);
-    let client = client(config);
+    let client = client(&config);
     let response = client
         .post(&req_url)
         .basic_auth("", Some(config.password.clone()))
@@ -267,12 +315,17 @@ pub fn pay_offer(
             ("message", payer_note.unwrap_or_default()),
         ])
         .send()
-        .expect("Failed to pay offer");
-    let response_text = response.text().expect("Failed to parse pay offer");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
-        Err(e) => {
+        Err(_e) => {
             return Err(ApiError::Json {
                 reason: response_text.to_string(),
             })
@@ -290,21 +343,26 @@ pub fn list_offers() -> Result<Vec<PayCode>, ApiError> {
     Ok(vec![])
 }
 
-pub fn lookup_invoice(
-    config: &PhoenixdConfig,
+pub async fn lookup_invoice(
+    config: PhoenixdConfig,
     payment_hash: Option<String>,
-    from: Option<i64>,
-    limit: Option<i64>,
-    search: Option<String>,
+    _from: Option<i64>,
+    _limit: Option<i64>,
+    _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let url = format!("{}/payments/incoming/{}", config.url, payment_hash.unwrap());
-    let client = client(config);
+    let client = client(&config);
     let response = client
         .get(&url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("failed to lookup invoice");
-    let response_text = response.text().expect("failed to parse lookup invoice");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     let response_text = response_text.as_str();
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
 
@@ -326,11 +384,11 @@ pub fn lookup_invoice(
     Ok(txn)
 }
 
-pub fn list_transactions(
-    config: &PhoenixdConfig,
+pub async fn list_transactions(
+    config: PhoenixdConfig,
     params: ListTransactionsParams,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = client(config);
+    let client = client(&config);
 
     // 1) Build query for incoming transactions
     let mut incoming_params = vec![];
@@ -351,10 +409,16 @@ pub fn list_transactions(
         .get(&incoming_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("Failed to get incoming payments");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
     let incoming_text = incoming_resp
         .text()
-        .expect("Failed to parse incoming payments");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
     let incoming_text = incoming_text.as_str();
     let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
 
@@ -418,10 +482,16 @@ pub fn list_transactions(
         .get(&outgoing_url)
         .basic_auth("", Some(config.password.clone()))
         .send()
-        .expect("Failed to get outgoing payments");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
     let outgoing_text = outgoing_resp
         .text()
-        .expect("failed to parse outgoing payments");
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
     let outgoing_text = outgoing_text.as_str();
     let outgoing_payments: Vec<OutgoingPaymentResponse> =
         serde_json::from_str(&outgoing_text).unwrap();
@@ -474,14 +544,14 @@ pub fn list_transactions(
 }
 
 // Core logic shared by both implementations
-pub fn poll_invoice_events<F>(
-    config: &PhoenixdConfig,
+pub async fn poll_invoice_events<F>(
+    config: PhoenixdConfig,
     params: OnInvoiceEventParams,
     mut callback: F,
 ) where
     F: FnMut(String, Option<Transaction>),
 {
-    let mut start_time = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
     loop {
         if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
             // timeout
@@ -490,14 +560,14 @@ pub fn poll_invoice_events<F>(
         }
 
         let (status, transaction) = match list_transactions(
-            config,
+            config.clone(),
             ListTransactionsParams {
                 from: 0,
                 limit: 1000, // TODO remove hardcoded limit
                 payment_hash: params.payment_hash.clone(),
                 search: params.search.clone(),
             },
-        ) {
+        ).await {
             Ok(transactions) => {
                 if transactions.is_empty() {
                     ("pending".to_string(), None)
@@ -527,19 +597,19 @@ pub fn poll_invoice_events<F>(
             }
         }
 
-        thread::sleep(Duration::from_secs(params.polling_delay_sec as u64));
+        sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
     }
 }
 
-pub fn on_invoice_events(
+pub async fn on_invoice_events(
     config: PhoenixdConfig,
     params: OnInvoiceEventParams,
     callback: Box<dyn OnInvoiceEventCallback>,
 ) {
-    poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
+    poll_invoice_events(config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" => callback.failure(tx),
         _ => {}
-    });
+    }).await;
 }
