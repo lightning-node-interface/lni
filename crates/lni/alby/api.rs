@@ -107,41 +107,29 @@ pub async fn get_info(config: AlbyConfig) -> Result<NodeInfo, ApiError> {
         reason: e.to_string(),
     })?;
 
-    // Get balance from Alby Hub API
+    // Get balance from Alby Hub API (this is optional, as balance might not be available)
     let balance_response = client
         .get(&format!("{}/balances", get_base_url(&config)))
         .send()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .await;
 
-    if !balance_response.status().is_success() {
-        let status = balance_response.status();
-        let error_text = balance_response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("HTTP {} - {}", status, error_text),
-        });
-    }
-
-    let balances: AlbyBalancesResponse = balance_response.json().await.map_err(|e| ApiError::Json {
-        reason: e.to_string(),
-    })?;
-
-    // Convert Alby balance to msat (assuming it's in sats)
-    let balance_msat = balances.balances
-        .iter()
-        .find(|b| b.currency == "btc" || b.currency == "sats")
-        .map(|b| b.balance * 1000)
-        .unwrap_or(0);
+    let balance_msat = match balance_response {
+        Ok(response) if response.status().is_success() => {
+            match response.json::<AlbyBalancesResponse>().await {
+                Ok(balances) => balances.balance.unwrap_or(0) * 1000, // Convert sats to msats
+                Err(_) => 0, // If parsing fails, default to 0
+            }
+        }
+        _ => 0, // If request fails, default to 0
+    };
 
     Ok(NodeInfo {
-        alias: info.alias,
-        color: info.color,
-        pubkey: info.pubkey,
+        alias: info.node_alias.unwrap_or_else(|| "Alby Hub".to_string()),
+        color: "".to_string(), // Alby Hub doesn't provide color
+        pubkey: "".to_string(), // Alby Hub doesn't provide pubkey in info endpoint
         network: info.network,
-        block_height: info.block_height,
-        block_hash: info.block_hash,
+        block_height: 0, // Alby Hub doesn't provide block height in info endpoint
+        block_hash: "".to_string(), // Alby Hub doesn't provide block hash in info endpoint
         send_balance_msat: balance_msat,
         receive_balance_msat: 0, // Alby Hub doesn't distinguish send/receive balance
         ..Default::default()

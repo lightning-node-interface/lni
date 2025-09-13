@@ -2,24 +2,59 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct AlbyInfoResponse {
-    pub alias: String,
-    pub color: String,
-    pub pubkey: String,
-    pub network: String,
-    pub block_height: i64,
-    pub block_hash: String,
+    #[serde(rename = "backendType")]
+    pub backend_type: String,
+    #[serde(rename = "setupCompleted")]
+    pub setup_completed: bool,
+    #[serde(rename = "oauthRedirect")]
+    pub oauth_redirect: bool,
+    pub running: bool,
+    pub unlocked: bool,
+    #[serde(rename = "albyAuthUrl")]
+    pub alby_auth_url: String,
+    #[serde(rename = "nextBackupReminder")]
+    pub next_backup_reminder: String,
+    #[serde(rename = "albyUserIdentifier")]
+    pub alby_user_identifier: String,
+    #[serde(rename = "albyAccountConnected")]
+    pub alby_account_connected: bool,
     pub version: String,
+    pub network: String,
+    #[serde(rename = "enableAdvancedSetup")]
+    pub enable_advanced_setup: bool,
+    #[serde(rename = "ldkVssEnabled")]
+    pub ldk_vss_enabled: bool,
+    #[serde(rename = "vssSupported")]
+    pub vss_supported: bool,
+    #[serde(rename = "startupState")]
+    pub startup_state: String,
+    #[serde(rename = "startupError")]
+    pub startup_error: String,
+    #[serde(rename = "startupErrorTime")]
+    pub startup_error_time: String,
+    #[serde(rename = "autoUnlockPasswordSupported")]
+    pub auto_unlock_password_supported: bool,
+    #[serde(rename = "autoUnlockPasswordEnabled")]
+    pub auto_unlock_password_enabled: bool,
+    pub currency: String,
+    pub relay: String,
+    #[serde(rename = "nodeAlias")]
+    pub node_alias: Option<String>, // This can be empty/missing, so using Option
+    #[serde(rename = "mempoolUrl")]
+    pub mempool_url: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AlbyBalance {
     pub balance: i64,
-    pub currency: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AlbyBalancesResponse {
-    pub balances: Vec<AlbyBalance>,
+    #[serde(rename = "balance")]
+    pub balance: Option<i64>,
+    #[serde(rename = "unit")]
+    pub unit: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
