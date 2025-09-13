@@ -72,6 +72,13 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
+pub mod alby {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{AlbyConfig, AlbyNode};
+}
+
 pub mod types;
 pub use types::*;
 
