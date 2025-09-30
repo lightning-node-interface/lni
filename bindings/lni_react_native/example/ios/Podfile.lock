@@ -8,7 +8,7 @@ PODS:
   - hermes-engine (0.78.1):
     - hermes-engine/Pre-built (= 0.78.1)
   - hermes-engine/Pre-built (0.78.1)
-  - LniReactNative (0.1.1):
+  - lni-react-native (0.1.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -28,6 +28,7 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
+    - uniffi-bindgen-react-native (= 0.29.0-0)
     - Yoga
   - RCT-Folly (2024.11.18.00):
     - boost
@@ -1547,6 +1548,8 @@ PODS:
     - React-perflogger (= 0.78.1)
     - React-utils (= 0.78.1)
   - SocketRocket (0.7.1)
+  - uniffi-bindgen-react-native (0.29.0-0):
+    - React-Core
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -1557,7 +1560,7 @@ DEPENDENCIES:
   - fmt (from `../node_modules/react-native/third-party-podspecs/fmt.podspec`)
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
-  - LniReactNative (from `../..`)
+  - lni-react-native (from `../..`)
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCT-Folly/Fabric (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -1623,6 +1626,7 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - SocketRocket
+    - uniffi-bindgen-react-native
 
 EXTERNAL SOURCES:
   boost:
@@ -1640,7 +1644,7 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-01-13-RNv0.78.0-a942ef374897d85da38e9c8904574f8376555388
-  LniReactNative:
+  lni-react-native:
     :path: "../.."
   RCT-Folly:
     :podspec: "../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
@@ -1769,7 +1773,7 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: eb93e2f488219332457c3c4eafd2738ddc7e80b8
   hermes-engine: f493b0a600aed5dc06532141603688a30a5b2f61
-  LniReactNative: 04f2f72daf16f925be2e91aba34c24bf7782f571
+  lni-react-native: 354d440d31e0b5d700050a6495caabd031682d00
   RCT-Folly: e78785aa9ba2ed998ea4151e314036f6c49e6d82
   RCTDeprecation: 082fbc90409015eac1366795a0b90f8b5cb28efe
   RCTRequired: ca966f4da75b62ce3ea8c538d82cb5ecbb06f12a
@@ -1829,6 +1833,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 82d5bc3e3ad2c8496848554cb2d3b64b03b53420
   ReactCommon: 269d0d36423fad044eaea49900e88684ac670a16
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  uniffi-bindgen-react-native: ae8f59486efef1c9dd2d0febea3485a388e60fc0
   Yoga: b94ff2d7559cb66837c97a3f394ddb817faad4d6
 
 PODFILE CHECKSUM: a13b226fa3ac66107738ce02d06163d115b327c1

@@ -324,6 +324,11 @@ Language Bindings
 
     **To include it in your react-native project:**
 
+    ### NEW WAY
+    1. `yarn add ./lni.tgz --legacy-peer-deps`
+
+    ### OLD WAY
+
     1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
     2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
     extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
@@ -369,7 +374,7 @@ Language Bindings
         }
     }
     ```
-    4. Also might need to Undo changes to `LniReactNativeModule.kt` and add back `import com.facebook.fbreact.specs.NativeLniReactNativeSpec`
+    4. Also might need to Undo changes to `LniReactNativeModule.kt`, `LniReactNativePackage.kt`   (maybe add back `import com.facebook.fbreact.specs.NativeLniReactNativeSpec`)
     5. In the remote project re-add the package `lni_react_native` by running:
     ```sh
     yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
