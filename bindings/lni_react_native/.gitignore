@@ -91,3 +91,11 @@ rust_modules/
 **/generated/**
 
 **.env**
+
+
+# dont ignore build.gradle files
+!**/build.gradle
+!build.gradle
+!android/build.gradle
+!example/android/build.gradle
+!example/android/app/build.gradle
