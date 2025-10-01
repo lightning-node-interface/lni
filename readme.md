@@ -325,7 +325,9 @@ Language Bindings
     **To include it in your react-native project:**
 
     ### NEW WAY
-    1. `yarn add ./lni.tgz --legacy-peer-deps`
+    1. `cd bindings/lni_react_native && ./build.sh && yarn package --out lni.tgz`
+    2. This creates a `lni.tgz`. Copy this to the root of your target React Native project
+    3. `yarn add ./lni.tgz --legacy-peer-deps`
 
     ### OLD WAY
 
