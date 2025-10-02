@@ -1,5 +1,7 @@
 ---
 rust:
-  repo: https://github.com/lightning-node-interface/lni
-  branch: master
+  # repo: https://github.com/lightning-node-interface/lni
+  repo: ../../
+  # branch: master
+  branch: fix-iox
   manifestPath: crates/lni/Cargo.toml
