@@ -1,5 +1,9 @@
 ---
+# rust:
+#   repo: https://github.com/lightning-node-interface/lni
+#   branch: master
+#   manifestPath: crates/lni/Cargo.toml
+
 rust:
-  repo: https://github.com/lightning-node-interface/lni
-  branch: master
+  directory: ../../
   manifestPath: crates/lni/Cargo.toml

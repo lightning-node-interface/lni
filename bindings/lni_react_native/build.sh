@@ -11,6 +11,6 @@ yarn ubrn:android
 # yarn package
 
 #### ios
-# yarn ubrn:ios
+yarn ubrn:ios
 # cd example/ios && pod install --repo-update && cd ../     <-- run this if you get errors to updates the pods
 # cd example && yarn ios
