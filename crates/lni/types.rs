@@ -3,13 +3,14 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 
-use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
+use crate::{alby::AlbyNode, cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
 
 pub enum LightningNodeEnum {
     Phoenixd(PhoenixdNode),
     Lnd(LndNode),
     Cln(ClnNode),
     Nwc(NwcNode),
+    Alby(AlbyNode),
 }
 
 #[async_trait]
