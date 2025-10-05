@@ -375,7 +375,7 @@ pub async fn lookup_invoice(
         fees_paid: inv.fees * 1000,
         created_at: inv.created_at,
         expires_at: 0, // TODO
-        settled_at: inv.completed_at,
+        settled_at: if inv.is_paid { inv.completed_at } else { 0 },
         description: inv.description.unwrap_or_default(),
         description_hash: "".to_string(), // TODO
         payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
@@ -425,7 +425,7 @@ pub async fn list_transactions(
     let mut transactions: Vec<Transaction> = vec![];
 
     for inc_payment in incoming_payments {
-        let settled_at = if inc_payment.completed_at != 0 {
+        let settled_at = if inc_payment.completed_at != 0 && inc_payment.is_paid {
             Some((inc_payment.completed_at / 1000) as i64)
         } else {
             None

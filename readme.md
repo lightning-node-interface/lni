@@ -297,94 +297,115 @@ SPEED_TEST_PAYMENT_REQUEST=""
 Language Bindings
 =================
 
-- #### nodejs 
+- ## nodejs 
     - napi_rs
     - https://napi.rs/docs/introduction/simple-package
     - `cd bindings/lni_nodejs && cargo clean && cargo build --release && yarn && yarn build`
     - test `node main.mjs`
-
-- #### nodejs - native modules (electron, vercel etc..)
-    - if you want to use the native node module (maybe for an electron app) you can reference the file `bindings/lni_nodejs/lni_js.${platform}-${arch}.node`. It would look something like in your project:
-        ```typescript
-        const path = require("path");
-        const os = require("os");
-        const platform = os.platform();
-        const arch = os.arch();
-        const nativeModulePath = path.join(
-        __dirname,
-        `../../code/lni/bindings/lni_nodejs/lni_js.${platform}-${arch}.node`
-        );
-        const { PhoenixdNode } = require(nativeModulePath);
-        ```
-- #### react-native 
+    - ### native modules (electron, vercel etc..)
+        - if you want to use the native node module (maybe for an electron app) you can reference the file `bindings/lni_nodejs/lni_js.${platform}-${arch}.node`. It would look something like in your project:
+            ```typescript
+            const path = require("path");
+            const os = require("os");
+            const platform = os.platform();
+            const arch = os.arch();
+            const nativeModulePath = path.join(
+            __dirname,
+            `../../code/lni/bindings/lni_nodejs/lni_js.${platform}-${arch}.node`
+            );
+            const { PhoenixdNode } = require(nativeModulePath);
+            ```
+- ## react-native 
     - `uniffi-bindgen-react-native` lib
     - https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html
     - sample https://github.com/ianthetechie/uniffi-starter  
     - `cd bindings/lni_react_native && ./build.sh`
 
     **To include it in your react-native project:**
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni.tgz`
+    2. This creates a `lni.tgz`. Copy this to your target React Native project in the root.
+    3. Prereq: In the React Native project that you want to include `lni`, make sure the new architecure is enabled. And include `lni` in the podfile
+        - android 
+        
+            `build.gradle`
+            ```gradle
+            defaultConfig {
+                // Explicitly set New Architecture flag
+                buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", (findProperty("newArchEnabled") ?: "false")
+                buildConfigField "boolean", "IS_HERMES_ENABLED", (findProperty("hermesEnabled") ?: "true")
+            }
+            ```
 
-    ### NEW WAY
-    1. `yarn add ./lni.tgz --legacy-peer-deps`
+            `gradle.properties`
+            ```
+            newArchEnabled=true
+            hermesEnabled=true
+            ```
 
-    ### OLD WAY
+            `MainApplication.kt`
+            ```kt
+            override fun onCreate() {
+                super.onCreate()
+                SoLoader.init(this, OpenSourceMergedSoMapping)
+                if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+                    // If you opted-in for the New Architecture, we load the native entry point for this app.
+                    load(bridgelessEnabled = true)
+                }
+            }
+            ```
 
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
-    2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
-    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
-    3. Install deps: `yarn add uniffi-bindgen-react-native@0.29.0-0 react-native-builder-bob@0.39.0`
-    4. Install lni: `yarn add "lni_react_native@link:./modules/lni_react_native"`
-    5. `yarn cache clean && yarn clean:android && yarn`
-    6. import it in your RN component:
-    ```
-    import {
-        LndNode,
-        LndConfig,
-        ClnNode,
-        ClnConfig,
-        PhoenixdNode,
-        PhoenixdConfig,
-        StrikeNode,
-        StrikeConfig,
-        Transaction,
-        ListTransactionsParams,
-    } from 'lni_react_native';
-    ```
-    7. troubleshooting `npx react-native start --reset-cache` or if you have build error try symbolic links from node_modules to modules folder like this: `yarn remove lni_react_native && rm -f node_modules/lni_react_native && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"`
-    if the app has build failures on android, undo the diff for build.gradle, i.e like the gradle version might be wrong 8.8.0 vs 7.2.1 etc..
+        - ios
+            
+            podfile
+            ```
+            ENV['RCT_NEW_ARCH_ENABLED'] = '1'
 
-    **To Update the package:** if you updated the lni source code
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni_react_native.tgz`
-    2. This creates a `lni_react_native.tgz`. Copy this to your target React Native project and
-    extract it into a folder called `modules` in the root of your RN project. Make sure it extracts to the `modules/lni_react_native` folder
-    3. Undo gradle changes to `modules/lni_react_native/android/build.gradle` to avoid version mismatches. you might need to update the following build.gradle config:
-    ```gradle
-    dependencies {
-        classpath "com.android.tools.build:gradle:8.8.0"
-        // noinspection DifferentKotlinGradleVersion
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-    }
 
-    sourceSets {
-        main {
-            java.srcDirs += [
-                "generated/java",
-                "generated/jni"
-            ]
-        }
-    }
-    ```
-    4. Also might need to Undo changes to `LniReactNativeModule.kt`, `LniReactNativePackage.kt`   (maybe add back `import com.facebook.fbreact.specs.NativeLniReactNativeSpec`)
-    5. In the remote project re-add the package `lni_react_native` by running:
-    ```sh
-    yarn remove lni_react_native && yarn clean && ln -sf ../modules/lni_react_native node_modules/lni_react_native && yarn add "lni_react_native@link:./modules/lni_react_native"
+            pod 'lni-react-native', :path => '../node_modules/lni_react_native'
+
+            # Fix for New Architecture - remove compiler overrides that conflict with -index-store-path
+            installer.pods_project.targets.each do |target|
+                target.build_configurations.each do |config|
+                    # Remove custom compiler settings that interfere with New Architecture
+                    config.build_settings.delete("CC")
+                    config.build_settings.delete("LD")
+                    config.build_settings.delete("CXX")
+                    config.build_settings.delete("LDPLUSPLUS")
+                    
+                    # Disable index store path for New Architecture compatibility
+                    config.build_settings["COMPILER_INDEX_STORE_ENABLE"] = "NO"
+                end
+            end
+            ```
+    4. `yarn add ./lni.tgz`
+    5. `cd ios && pod install`
+    6. `yarn clean`
+        package.json
+        ```
+            "clean": "yarn clean:rn && yarn clean:ios && yarn clean:android",
+            "clean:rn": "watchman watch-del-all && npx del-cli node_modules && yarn",
+            "clean:android": "cd android && npx del-cli build app/build app/release",
+            "clean:ios": "cd ios && npx del-cli Pods build && pod install", 
+        ```
     
-    yarn android
-    ```
+        ***Troubleshooting (clean)***
+            ```
+            rm -rf node_modules/.cache ios/build ios/Pods ios/Podfile.lock android/build android/app/build 
+
+            rm -rf ~/Library/Developer/Xcode/DerivedData/YOUR_APP_NAME-* 2>/dev/null;
+
+            cd ios && pod install && cd ..
+
+            cd android && ./gradlew clean && cd ..
+
+            npx react-native start --reset-cache
+
+            yarn
+            ```
+            ios open xcworkspace in xcode and `Product > Clean` and build project
 
 
-
-- #### uniffi (kotlin, swift) 
+- ## uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
     - Uses decorators like `#[cfg_attr(feature = "uniffi", uniffi::export)]` to foreign codegen 
 
@@ -530,7 +551,7 @@ Todo
     - [X] nwc
     - [X] blink
     - [X] speed
-
+- [ ] test zero amount invoices
 
 To Research
 ============

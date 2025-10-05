@@ -142,7 +142,7 @@ pub async fn create_invoice(
 
             let request = SpeedCreatePaymentRequest {
                 amount: (invoice_params.amount_msats.unwrap_or(0) as f64) / 1000.0, // Convert msats to sats
-                currency: "BTC".to_string(),
+                currency: "SATS".to_string(),
                 memo: invoice_params.description.clone(),
                 external_id: None,
             };
