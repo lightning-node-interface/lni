@@ -97,5 +97,10 @@ rust_modules/
 !**/build.gradle
 !build.gradle
 !android/build.gradle
+!android/gradle.properties
+!example/android/gradle.properties
 !example/android/build.gradle
 !example/android/app/build.gradle
+
+
+lni.tgz

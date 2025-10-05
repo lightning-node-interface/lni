@@ -8,9 +8,11 @@ use crate::{
     phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, OnInvoiceEventCallback,
     OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+use lightning_invoice::Bolt11Invoice;
 use serde_urlencoded;
-use tokio::time::sleep;
+use std::str::FromStr;
 use std::time::Duration;
+use tokio::time::sleep;
 
 // TODO
 // list_channels
@@ -364,18 +366,40 @@ pub async fn lookup_invoice(
         reason: e.to_string(),
     })?;
     let response_text = response_text.as_str();
+    dbg!(response_text);
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
+
+    let settled_at = if inv.completed_at.is_some() && inv.is_paid {
+            (inv.completed_at.unwrap_or(0) / 1000) as i64
+        } else {
+            0
+        };
+
+    // Determine the amount: use received_sat if paid, otherwise decode from invoice
+    let amount_msats = if inv.received_sat > 0 {
+        inv.received_sat * 1000
+    } else if let Some(invoice_str) = &inv.invoice {
+        // Try to decode the invoice to get the amount
+        match Bolt11Invoice::from_str(invoice_str) {
+            Ok(decoded_invoice) => {
+                decoded_invoice.amount_milli_satoshis().unwrap_or(0) as i64
+            }
+            Err(_) => 0
+        }
+    } else {
+        0
+    };
 
     let txn = Transaction {
         type_: "incoming".to_string(),
         invoice: inv.invoice.unwrap_or_default(),
         preimage: inv.preimage,
         payment_hash: inv.payment_hash,
-        amount_msats: inv.received_sat * 1000,
+        amount_msats,
         fees_paid: inv.fees * 1000,
         created_at: inv.created_at,
         expires_at: 0, // TODO
-        settled_at: if inv.is_paid { inv.completed_at } else { 0 },
+        settled_at,
         description: inv.description.unwrap_or_default(),
         description_hash: "".to_string(), // TODO
         payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
@@ -425,8 +449,8 @@ pub async fn list_transactions(
     let mut transactions: Vec<Transaction> = vec![];
 
     for inc_payment in incoming_payments {
-        let settled_at = if inc_payment.completed_at != 0 && inc_payment.is_paid {
-            Some((inc_payment.completed_at / 1000) as i64)
+        let settled_at = if inc_payment.completed_at.unwrap_or(0) != 0 && inc_payment.is_paid {
+            Some((inc_payment.completed_at.unwrap_or(0) / 1000) as i64)
         } else {
             None
         };
@@ -563,7 +587,7 @@ pub async fn poll_invoice_events<F>(
             config.clone(),
             ListTransactionsParams {
                 from: 0,
-                limit: 1000, // TODO remove hardcoded limit
+                limit: 2500, // TODO remove hardcoded limit
                 payment_hash: params.payment_hash.clone(),
                 search: params.search.clone(),
             },

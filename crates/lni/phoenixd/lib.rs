@@ -297,8 +297,8 @@ mod tests {
         }
         let params = crate::types::OnInvoiceEventParams {
             search: Some(TEST_PAYMENT_HASH.to_string()),
-            polling_delay_sec: 3,
-            max_polling_sec: 5,
+            polling_delay_sec: 2,
+            max_polling_sec: 6,
             ..Default::default()
         };
         let callback = OnInvoiceEventCallback {};

@@ -69,7 +69,7 @@ pub struct InvoiceResponse {
     #[serde(rename = "fees")]
     pub fees: i64,
     #[serde(rename = "completedAt")]
-    pub completed_at: i64,
+    pub completed_at: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "isPaid")]

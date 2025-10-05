@@ -107,7 +107,7 @@ pub struct Transaction {
     pub fees_paid: i64,
     pub created_at: i64,
     pub expires_at: i64,
-    pub settled_at: i64,
+    pub settled_at: i64, // 0 means not paid yet TODO maybe add status field
     pub payer_note: Option<String>,  // used in bolt12 (on phoenixd)
     pub external_id: Option<String>, // used in bolt11 (on phoenixd)
 }

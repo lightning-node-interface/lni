@@ -401,6 +401,10 @@ Language Bindings
             npx react-native start --reset-cache
 
             yarn
+
+            # if the app does not recognize change try deleting the lni node module
+            rm node_modules/lni_react_native
+
             ```
             ios open xcworkspace in xcode and `Product > Clean` and build project
 
@@ -552,6 +556,7 @@ Todo
     - [X] blink
     - [X] speed
 - [ ] test zero amount invoices
+- [ ] add status to global Transaction type to help with custodial wallets (status = "PENDING", "FAILED", "PAID")
 
 To Research
 ============
