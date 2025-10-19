@@ -6,8 +6,8 @@ use super::ClnConfig;
 use crate::cln::types::Invoice;
 use crate::types::NodeInfo;
 use crate::{
-    calculate_fee_msats, ApiError, InvoiceType, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    calculate_fee_msats, ApiError, CreateOfferParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 use std::time::Duration;
@@ -336,17 +336,18 @@ pub async fn decode(config: ClnConfig, str: String) -> Result<String, ApiError> 
     Ok(decoded)
 }
 
-// get the one with the offer_id or label or get the first offer in the list or
-pub async fn get_offer(config: ClnConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+// get the one with the offer_id or label or get the first offer in the list
+pub async fn get_offer(config: ClnConfig, search: Option<String>) -> Result<Offer, ApiError> {
     let offers = list_offers(config, search.clone()).await?;
     if offers.is_empty() {
-        return Ok(PayCode {
+        return Ok(Offer {
             offer_id: "".to_string(),
             bolt12: "".to_string(),
             label: None,
             active: None,
             single_use: None,
             used: None,
+            amount_msats: None,
         });
     }
     Ok(offers.first().unwrap().clone())
@@ -355,7 +356,7 @@ pub async fn get_offer(config: ClnConfig, search: Option<String>) -> Result<PayC
 pub async fn list_offers(
     config: ClnConfig,
     search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+) -> Result<Vec<Offer>, ApiError> {
     let client = clnrest_client(&config);
     let req_url = format!("{}/v1/listoffers", config.url);
     let mut params = vec![];
@@ -385,58 +386,56 @@ pub async fn list_offers(
     Ok(offers_list.offers)
 }
 
+// Create a BOLT12 offer and return Offer
+// https://docs.corelightning.org/reference/offer
 pub async fn create_offer(
     config: ClnConfig,
-    amount_msats: Option<i64>,
-    description: Option<String>,
-    expiry: Option<i64>,
-) -> Result<Transaction, ApiError> {
+    params: CreateOfferParams,
+) -> Result<Offer, ApiError> {
     let client = clnrest_client(&config);
     let req_url = format!("{}/v1/offer", config.url);
-    let mut params: Vec<(&str, Option<String>)> = vec![];
-    if let Some(amount_msats) = amount_msats {
-        params.push(("amount", Some(format!("{}msat", amount_msats))))
+    
+    let mut json_params = serde_json::Map::new();
+    
+    // Handle amount - if not specified, create a reusable offer with "any" amount
+    if let Some(amount_msats) = params.amount_msats {
+        json_params.insert("amount".to_string(), serde_json::json!(format!("{}msat", amount_msats)));
     } else {
-        params.push(("amount", Some("any".to_string())))
+        json_params.insert("amount".to_string(), serde_json::json!("any"));
     }
-    let description_clone = description.clone();
-    if let Some(description) = description_clone {
-        params.push(("description", Some(description)))
+    
+    // Add description if provided
+    if let Some(description) = params.description.clone() {
+        json_params.insert("description".to_string(), serde_json::json!(description));
     }
+    
     let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!(params
-            .into_iter()
-            .filter_map(|(k, v)| v.map(|v| (k, v)))
-            .collect::<serde_json::Value>()))
+        .json(&json_params)
         .send()
         .await
         .map_err(|e| ApiError::Http {
             reason: format!("Failed to create offer: {}", e),
         })?;
+        
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read offer response: {}", e),
     })?;
-    let offer_str = offer_str.as_str();
+    
     let bolt12resp: Bolt12Resp =
         serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
             reason: e.to_string(),
         })?;
-    Ok(Transaction {
-        type_: "incoming".to_string(),
-        invoice: bolt12resp.bolt12,
-        preimage: "".to_string(),
-        payment_hash: "".to_string(),
-        amount_msats: amount_msats.unwrap_or(0),
-        fees_paid: 0,
-        created_at: 0,
-        expires_at: expiry.unwrap_or_default(),
-        settled_at: 0,
-        description: description.unwrap_or_default(),
-        description_hash: "".to_string(),
-        payer_note: Some("".to_string()),
-        external_id: Some(bolt12resp.offer_id.unwrap_or_default()),
+    
+    Ok(Offer {
+        offer_id: bolt12resp.offer_id.unwrap_or_default(),
+        bolt12: bolt12resp.bolt12,
+        label: params.description.clone(),
+        active: Some(bolt12resp.active),
+        single_use: Some(bolt12resp.single_use),
+        used: Some(bolt12resp.used),
+        amount_msats: params.amount_msats,
     })
 }
 

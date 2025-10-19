@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -65,6 +65,10 @@ impl LightningNode for StrikeNode {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
+    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+        Err(ApiError::Api { reason: "create_offer not implemented for StrikeNode".to_string() })
+    }
+
     async fn lookup_invoice(
         &self,
         params: LookupInvoiceParams,
@@ -104,11 +108,11 @@ impl LightningNode for StrikeNode {
         crate::strike::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::strike::api::get_offer(&self.config, search)
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::strike::api::list_offers(&self.config, search)
     }
 

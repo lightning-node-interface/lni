@@ -1,4 +1,4 @@
-use lni::{blink::lib::BlinkConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{blink::lib::BlinkConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -60,19 +60,24 @@ impl BlinkNode {
   }
 
   #[napi]
-  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::PayCode> {
-    let paycode = lni::blink::api::get_offer(&self.inner, search)
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycode)
+  pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
+    Err(napi::Error::from_reason("Bolt12 not implemented for Blink".to_string()))
   }
 
   #[napi]
-  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::PayCode>> {
-    let paycodes = lni::blink::api::list_offers(&self.inner, search)
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::Offer> {
+    let offer = lni::blink::api::get_offer(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycodes)
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::Offer>> {
+    let offers = lni::blink::api::list_offers(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offers)
   }
 
   #[napi]

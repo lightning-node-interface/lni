@@ -1,6 +1,7 @@
 use lni::{
   strike::lib::StrikeConfig,
   CreateInvoiceParams,
+  CreateOfferParams,
   LookupInvoiceParams,
   PayInvoiceParams,
 };
@@ -56,6 +57,11 @@ impl StrikeNode {
   }
 
   #[napi]
+  pub fn create_offer(&self, _params: CreateOfferParams) -> napi::Result<lni::Offer> {
+    Err(napi::Error::from_reason("Bolt12 not implemented for Strike".to_string()))
+  }
+
+  #[napi]
   pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::strike::api::lookup_invoice(
       self.inner.clone(),
@@ -79,17 +85,17 @@ impl StrikeNode {
   }
 
   #[napi]
-  pub fn get_offer(&self, search: Option<String>) -> napi::Result<lni::PayCode> {
-    let paycode = lni::strike::api::get_offer(&self.inner, search)
+  pub fn get_offer(&self, search: Option<String>) -> napi::Result<lni::Offer> {
+    let offer = lni::strike::api::get_offer(&self.inner, search)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycode)
+    Ok(offer)
   }
 
   #[napi]
-  pub fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::PayCode>> {
-    let paycodes = lni::strike::api::list_offers(&self.inner, search)
+  pub fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
+    let offers = lni::strike::api::list_offers(&self.inner, search)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycodes)
+    Ok(offers)
   }
 
   #[napi]

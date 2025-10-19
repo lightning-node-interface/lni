@@ -1,5 +1,5 @@
 use lni::{
-  phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams,
+  phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -60,10 +60,17 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub async fn get_offer(&self) -> Result<lni::PayCode> {
-    let paycode = lni::phoenixd::api::get_offer(self.inner.clone())
+  pub async fn create_offer(&self, params: CreateOfferParams) -> Result<lni::Offer> {
+    let offer = lni::phoenixd::api::create_offer(self.inner.clone(), params)
       .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycode)
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn get_offer(&self) -> Result<lni::Offer> {
+    let offer = lni::phoenixd::api::get_offer(self.inner.clone())
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offer)
   }
 
   #[napi]

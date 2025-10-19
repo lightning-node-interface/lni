@@ -1,5 +1,5 @@
 use lni::{
-  nwc::lib::NwcConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams,
+  nwc::lib::NwcConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -62,19 +62,24 @@ impl NwcNode {
   }
 
   #[napi]
-  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::PayCode> {
-    let paycode = lni::nwc::api::get_offer(&self.inner, search)
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycode)
+  pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
+    Err(napi::Error::from_reason("NWC does not support offers (BOLT12) yet".to_string()))
   }
 
   #[napi]
-  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::PayCode>> {
-    let paycodes = lni::nwc::api::list_offers(&self.inner, search)
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::Offer> {
+    let offer = lni::nwc::api::get_offer(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycodes)
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::Offer>> {
+    let offers = lni::nwc::api::list_offers(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offers)
   }
 
   #[napi]

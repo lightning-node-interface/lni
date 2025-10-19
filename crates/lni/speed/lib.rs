@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo};
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -71,6 +71,10 @@ impl LightningNode for SpeedNode {
         crate::speed::api::pay_invoice(&self.config, invoice_params).await
     }
 
+    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+        Err(ApiError::Api { reason: "create_offer not implemented for SpeedNode".to_string() })
+    }
+
     async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
         crate::speed::api::lookup_invoice(
             &self.config,
@@ -94,11 +98,11 @@ impl LightningNode for SpeedNode {
         crate::speed::api::decode(&self.config, str).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::speed::api::get_offer(&self.config, search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::speed::api::list_offers(&self.config, search).await
     }
 
@@ -280,15 +284,18 @@ mod tests {
 
         impl crate::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn success(&self, transaction: Option<Transaction>) {
+                dbg!("Success speed paid");
                 dbg!(&transaction);
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "success", transaction));
             }
             fn pending(&self, transaction: Option<Transaction>) {
+                dbg!("pending speed payment");
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "pending", transaction));
             }
             fn failure(&self, transaction: Option<Transaction>) {
+                dbg!("failure speed payment");
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "failure", transaction));
             }
@@ -303,7 +310,7 @@ mod tests {
         let params = OnInvoiceEventParams {
             payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
             polling_delay_sec: 2,
-            max_polling_sec: 5,
+            max_polling_sec: 6,
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
 

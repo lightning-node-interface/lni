@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -62,11 +62,15 @@ impl LightningNode for NwcNode {
         crate::nwc::api::pay_invoice(self.config.clone(), params).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+        Err(ApiError::Api { reason: "create_offer not implemented for NwcNode".to_string() })
+    }
+
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::nwc::api::get_offer(&self.config, search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::nwc::api::list_offers(&self.config, search).await
     }
 

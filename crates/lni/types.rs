@@ -17,8 +17,9 @@ pub trait LightningNode {
     async fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
     async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError>;
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError>;
+    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError>;
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError>;
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError>;
     async fn pay_offer(
         &self,
         offer: String,
@@ -344,17 +345,34 @@ impl Default for CreateInvoiceParams {
     }
 }
 
-// Pay Code aka BOLT12 Offer
+// Offer aka BOLT12 Offer
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PayCode {
+pub struct Offer {
     pub offer_id: String,
     pub bolt12: String,
     pub label: Option<String>,
     pub active: Option<bool>,
     pub single_use: Option<bool>,
     pub used: Option<bool>,
+    pub amount_msats: Option<i64>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateOfferParams {
+    pub description: Option<String>,
+    pub amount_msats: Option<i64>,
+}
+impl Default for CreateOfferParams {
+    fn default() -> Self {
+        Self {
+            description: None,
+            amount_msats: None,
+        }
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]

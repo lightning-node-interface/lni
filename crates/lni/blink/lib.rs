@@ -3,8 +3,8 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, ListTransactionsParams, LookupInvoiceParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction, LightningNode,
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction, LightningNode,
 };
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -65,11 +65,15 @@ impl LightningNode for BlinkNode {
         crate::blink::api::pay_invoice(&self.config, params).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+        Err(ApiError::Api { reason: "create_offer not implemented for BlinkNode".to_string() })
+    }
+
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::blink::api::get_offer(&self.config, search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::blink::api::list_offers(&self.config, search).await
     }
 
@@ -276,15 +280,18 @@ mod tests {
 
         impl crate::types::OnInvoiceEventCallback for OnInvoiceEventCallback {
             fn success(&self, transaction: Option<Transaction>) {
+                dbg!("Success blink paid");
                 dbg!(&transaction);
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "success", transaction));
             }
             fn pending(&self, transaction: Option<Transaction>) {
+                dbg!("Pending blink payment");
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "pending", transaction));
             }
             fn failure(&self, transaction: Option<Transaction>) {
+                dbg!("Failure blink payment");
                 let mut events = self.events.lock().unwrap();
                 events.push(format!("{} - {:?}", "failure", transaction));
             }

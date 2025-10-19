@@ -51,9 +51,9 @@ pub struct Bolt11Req {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bolt12Req {
-    #[serde(rename = "amountSat")]
-    pub amount_sat: i64,
-    #[serde(rename = "description")]
+    #[serde(rename = "amountSat", skip_serializing_if = "Option::is_none")]
+    pub amount_sat: Option<i64>,
+    #[serde(rename = "description", skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
