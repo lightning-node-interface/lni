@@ -7,6 +7,7 @@ pub use lni::ApiError;
 pub use lni::types::*;
 pub use lni::utils::*;
 pub use lni::types::{Transaction, InvoiceType, ListTransactionsParams, PayInvoiceResponse};
+pub use lni::lnbits::lib::{LnBitsConfig};
 
 mod phoenixd;
 pub use phoenixd::PhoenixdNode;
@@ -28,6 +29,9 @@ pub use strike::StrikeNode;
 
 mod speed;
 pub use speed::SpeedNode;
+
+mod lnbits;
+pub use lnbits::LnBitsNode;
 
 use std::time::Duration;
 
