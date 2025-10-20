@@ -7,8 +7,8 @@ use super::types::{
 use super::LndConfig;
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, OnInvoiceEventCallback,
-    OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, Offer, OnInvoiceEventCallback,
+    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
     DEFAULT_INVOICE_EXPIRY,
 };
 use reqwest::header;
@@ -149,13 +149,13 @@ pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
-pub async fn get_offer(config: &LndConfig, search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(config: &LndConfig, search: Option<String>) -> Result<Offer, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });
 }
 
-pub async fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+pub async fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
     return Err(ApiError::Json {
         reason: "Bolt12 not implemented".to_string(),
     });

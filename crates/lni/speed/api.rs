@@ -9,8 +9,8 @@ use super::types::*;
 use super::SpeedConfig;
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, InvoiceType, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
 // Docs: https://apidocs.tryspeed.com/
@@ -303,7 +303,7 @@ pub async fn decode(_config: &SpeedConfig, str: String) -> Result<String, ApiErr
     Ok(str)
 }
 
-pub async fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result<Offer, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Speed".to_string(),
     })
@@ -312,7 +312,7 @@ pub async fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result
 pub async fn list_offers(
     _config: &SpeedConfig,
     _search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+) -> Result<Vec<Offer>, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Speed".to_string(),
     })

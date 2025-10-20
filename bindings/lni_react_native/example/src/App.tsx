@@ -21,6 +21,8 @@ import {
   InvoiceType,
   CreateInvoiceParams,
   LookupInvoiceParams,
+  CreateOfferParams,
+  Offer
 } from 'lni_react_native';
 import { 
   LND_URL, 
@@ -151,9 +153,26 @@ export default function App() {
         }
       }
 
-      // Test 6: Invoice Events (callback-style)
+      // Test 6: Create BOLT12 Offer (if supported)      
+      if (typeof node.createOffer === 'function') {
+        addOutput(nodeName, '(6) Testing createOffer...');
+        try {          
+          // Test without amount (reusable offer)
+          const reusableOffer = await node.createOffer({
+            description: `BOLT12 reusable offer from ${nodeName}`,
+          });
+          addOutput(nodeName, `Reusable offer created: ${reusableOffer.bolt12?.substring(0, 30)}...`);
+        } catch (error) {
+          addOutput(nodeName, `createOffer failed (may not be supported): ${error}`);
+        }
+      } else {
+        addOutput(nodeName, '(6) createOffer not supported by this implementation');
+      }
+      
+
+      // Test 7: Invoice Events (callback-style)
       if (testInvoiceHash) {
-        addOutput(nodeName, '(6) Testing onInvoiceEvents...');
+        addOutput(nodeName, '(7) Testing onInvoiceEvents...');
         try {
           const params = OnInvoiceEventParams.create({
             paymentHash: testInvoiceHash,

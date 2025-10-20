@@ -1,5 +1,5 @@
 use lni::{
-  lnd::lib::LndConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams,
+  lnd::lib::LndConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -38,7 +38,13 @@ impl LndNode {
 
   // These BOLT12 functions are still synchronous
   #[napi]
-  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
+  pub fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::types::Offer> {
+    // LND doesn't support BOLT12 offers yet
+    Err(napi::Error::from_reason("Bolt12 not implemented for LND".to_string()))
+  }
+
+  #[napi]
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::Offer> {
     let offer = lni::lnd::api::get_offer(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -46,7 +52,7 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::Offer>> {
     let offers = lni::lnd::api::list_offers(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -159,7 +165,7 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn get_offer_async(&self, _search: Option<String>) -> Result<lni::types::PayCode> {
+  pub async fn get_offer_async(&self, _search: Option<String>) -> Result<lni::types::Offer> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
     Err(napi::Error::from_reason(
       "Bolt12 not implemented".to_string(),
@@ -170,7 +176,7 @@ impl LndNode {
   pub async fn list_offers_async(
     &self,
     _search: Option<String>,
-  ) -> Result<Vec<lni::types::PayCode>> {
+  ) -> Result<Vec<lni::types::Offer>> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
     Err(napi::Error::from_reason(
       "Bolt12 not implemented".to_string(),

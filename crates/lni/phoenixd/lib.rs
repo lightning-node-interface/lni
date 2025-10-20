@@ -3,10 +3,10 @@ use napi_derive::napi;
 
 use crate::{
     phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceParams, PayInvoiceResponse,
-    Transaction, LightningNode
+    Transaction, LightningNode, CreateOfferParams
 };
 
-use crate::{CreateInvoiceParams, LookupInvoiceParams, PayCode};
+use crate::{CreateInvoiceParams, LookupInvoiceParams, Offer};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -71,11 +71,15 @@ impl LightningNode for PhoenixdNode {
         pay_invoice(self.config.clone(), params).await
     }
 
-    async fn get_offer(&self, _search: Option<String>) -> Result<PayCode, ApiError> {
+    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
+        crate::phoenixd::api::create_offer(self.config.clone(), params).await
+    }
+
+    async fn get_offer(&self, _search: Option<String>) -> Result<Offer, ApiError> {
         crate::phoenixd::api::get_offer(self.config.clone()).await
     }
 
-    async fn list_offers(&self, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+    async fn list_offers(&self, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::phoenixd::api::list_offers()
     }
 
@@ -223,6 +227,53 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to get offer: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_offer() {
+        use crate::CreateOfferParams;
+        
+        // Test 1: Create offer with no amount (reusable)
+        match NODE.create_offer(CreateOfferParams {
+            description: Some("Test offer from LNI".to_string()),
+            amount_msats: None,
+        }).await {
+            Ok(resp) => {
+                println!("Create Offer (no amount) resp: {:?}", resp);
+                assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
+                assert!(resp.bolt12.starts_with("lno"), "Should be a BOLT12 offer");
+            }
+            Err(e) => {
+                panic!("Failed to create offer (no amount): {:?}", e);
+            }
+        }
+
+        // Test 2: Create offer with specific amount
+        match NODE.create_offer(CreateOfferParams {
+            description: Some("5000 sat offer".to_string()),
+            amount_msats: Some(5_000_000), // 5000 sats
+        }).await {
+            Ok(resp) => {
+                println!("Create Offer (with amount) resp: {:?}", resp);
+                assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
+                assert!(resp.bolt12.starts_with("lno"), "Should be a BOLT12 offer");
+            }
+            Err(e) => {
+                panic!("Failed to create offer (with amount): {:?}", e);
+            }
+        }
+
+        // Test 3: Create offer with no parameters at all
+        match NODE.create_offer(CreateOfferParams::default()).await {
+            Ok(resp) => {
+                println!("Create Offer (default) resp: {:?}", resp);
+                assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
+                assert!(resp.bolt12.starts_with("lno"), "Should be a BOLT12 offer");
+            }
+            Err(e) => {
+                panic!("Failed to create offer (default): {:?}", e);
             }
         }
     }

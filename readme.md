@@ -109,9 +109,11 @@ node.create_invoice(CreateInvoiceParams) -> Result<Transaction, ApiError>
 node.pay_invoice(PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>
 
 // BOLT 12
-node.get_offer(search: Option<String>) -> Result<PayCode, ApiError> // return the first offer or by search id
+node.create_offer(params: CreateOfferParams)  -> Result<Offer, ApiError> 
+
+node.get_offer(search: Option<String>) -> Result<Offer, ApiError> // return the first offer or by search id
 node.pay_offer(offer: String, amount_msats: i64, payer_note: Option<String>) -> Result<PayInvoiceResponse, ApiError> 
-node.list_offers(search: Option<String>) -> Result<Vec<PayCode>, ApiError>
+node.list_offers(search: Option<String>) -> Result<Vec<Offer>, ApiError>
 
 // Lookup
 node.decode(str: String) -> Result<String, ApiError> 
@@ -536,7 +538,7 @@ sequenceDiagram
 
 Todo
 ====
-- [] bug in fees (bad conversion? msats)
+- [ ] bug in fees (bad conversion? msats)
 - [X] make interface
 - [X] napi-rs for nodejs
 - [X] uniffi bindings for Android and IOS
@@ -557,6 +559,9 @@ Todo
     - [X] speed
 - [ ] test zero amount invoices
 - [ ] add status to global Transaction type to help with custodial wallets (status = "PENDING", "FAILED", "PAID")
+- [X] add create_offer and remove the logic from get_offer. this should take in params like description and amount (or zero)
+    - [X] Phoenix https://phoenix.acinq.co/server/api#create-bolt12-offer 
+    - [X] CLN https://docs.corelightning.org/reference/offer 
 
 To Research
 ============

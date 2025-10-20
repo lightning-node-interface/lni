@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, LndNode, StrikeNode, InvoiceType, BlinkNode, SpeedNode, NwcNode } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, StrikeNode, BlinkNode, SpeedNode, NwcNode } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -17,7 +17,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
     const invoice = await node.createInvoice({
       amountMsats: 1000,
       description: `test invoice from ${nodeName}`,
-      invoiceType: InvoiceType.Bolt11,
+      invoiceType: 'Bolt11',
     });
     console.log(`${nodeName} Invoice:`, invoice);
 
@@ -75,8 +75,21 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
       console.log(`${nodeName} - onInvoiceEvents test failed:`, error.message);
     }
 
-    // Test 7: BOLT12 functions (these should return "not implemented" errors)
-    console.log(`(7) ${nodeName} - Testing BOLT12 functions (should fail with 'not implemented')...`);
+    // Test 7: Create Offer (BOLT12)
+    console.log(`(7) ${nodeName} - Testing createOffer...`);
+    
+    try {
+      // Test without amount (reusable offer)
+      const reusableOffer = await node.createOffer({
+        description: `Reusable offer from ${nodeName}`
+      });
+      console.log(`${nodeName} createOffer (reusable):`, reusableOffer);
+    } catch (error) {
+      console.log(`${nodeName} createOffer (reusable) failed:`, error.message);
+    }
+
+    // Test 8: BOLT12 functions (these should return "not implemented" errors for most nodes)
+    console.log(`(8) ${nodeName} - Testing BOLT12 get/list functions...`);
     try {
       const offer = await node.getOffer("");
       console.log(`${nodeName} getOffer:`, offer);
@@ -86,7 +99,7 @@ async function testAsyncNode(nodeName, node, testInvoiceHash) {
 
     try {
       const offers = await node.listOffers("");
-      console.log(`(8) ${nodeName} listOffers:`, offers);
+      console.log(`(9) ${nodeName} listOffers:`, offers);
     } catch (error) {
       console.log(`${nodeName} listOffers failed (expected):`, error.message);
     }
@@ -229,11 +242,11 @@ async function main() {
   // Show environment help
   showEnvironmentHelp();
   
-  await lnd();
+  // await lnd();
   // await strike();
   // await cln();
-  // await phoenixd();
-  await blink();
+  await phoenixd();
+  // await blink();
   // await speed();
   // await nwc();
   

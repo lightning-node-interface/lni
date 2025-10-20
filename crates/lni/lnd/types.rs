@@ -1,4 +1,4 @@
-use crate::PayCode;
+use crate::Offer;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -100,7 +100,7 @@ pub struct Bolt12Resp {
 
 #[derive(Debug, Deserialize)]
 pub struct ListOffersResponse {
-    pub offers: Vec<PayCode>,
+    pub offers: Vec<Offer>,
 }
 
 #[derive(Debug, Deserialize)]

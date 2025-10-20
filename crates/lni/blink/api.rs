@@ -7,8 +7,8 @@ use super::types::*;
 use super::BlinkConfig;
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, InvoiceType, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 
@@ -397,7 +397,7 @@ pub async fn decode(_config: &BlinkConfig, str: String) -> Result<String, ApiErr
     Ok(str)
 }
 
-pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<Offer, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Blink".to_string(),
     })
@@ -406,7 +406,7 @@ pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result
 pub async fn list_offers(
     _config: &BlinkConfig,
     _search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+) -> Result<Vec<Offer>, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Blink".to_string(),
     })

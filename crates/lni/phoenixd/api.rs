@@ -5,8 +5,8 @@ use super::types::{
 use super::PhoenixdConfig;
 use crate::ListTransactionsParams;
 use crate::{
-    phoenixd::types::GetBalanceResponse, ApiError, InvoiceType, NodeInfo, OnInvoiceEventCallback,
-    OnInvoiceEventParams, PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    phoenixd::types::GetBalanceResponse, ApiError, CreateOfferParams, InvoiceType, NodeInfo, Offer, OnInvoiceEventCallback,
+    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use lightning_invoice::Bolt11Invoice;
 use serde_urlencoded;
@@ -174,32 +174,20 @@ pub async fn create_invoice(
         InvoiceType::Bolt12 => {
             let req_url = format!("{}/createoffer", config.url);
 
-            let response;
-            if amount_msats.is_none() {
-                response = client
-                    .post(&req_url)
-                    .basic_auth("", Some(config.password.clone()))
-                    .send()
-                    .await
-                    .map_err(|e| ApiError::Http {
-                        reason: e.to_string(),
-                    })?;
-            } else {
-                let bolt12_req = Bolt12Req {
-                    description: description.clone(),
-                    amount_sat: amount_msats.unwrap_or_default() / 1000,
-                };
+            let bolt12_req = Bolt12Req {
+                description: description.clone(),
+                amount_sat: amount_msats.map(|a| a / 1000),
+            };
 
-                response = client
-                    .post(&req_url)
-                    .basic_auth("", Some(config.password.clone()))
-                    .form(&bolt12_req)
-                    .send()
-                    .await
-                    .map_err(|e| ApiError::Http {
-                        reason: e.to_string(),
-                    })?;
-            }
+            let response = client
+                .post(&req_url)
+                .basic_auth("", Some(config.password.clone()))
+                .form(&bolt12_req)
+                .send()
+                .await
+                .map_err(|e| ApiError::Http {
+                    reason: e.to_string(),
+                })?;
 
             // println!("Status: {}", response.status());
 
@@ -273,10 +261,48 @@ pub fn decode(str: String) -> Result<String, ApiError> {
     Ok(str)
 }
 
-// TODO On Phoenixd there is not currenly a way to create a new BOLT 12 offer
+// Create a new BOLT12 offer
+// https://phoenix.acinq.co/server/api#create-bolt12-offer
+pub async fn create_offer(
+    config: PhoenixdConfig,
+    params: CreateOfferParams,
+) -> Result<Offer, ApiError> {
+    let req_url = format!("{}/createoffer", config.url);
+    let client = client(&config);
+
+    // Always use form data with optional fields
+    let bolt12_req = Bolt12Req {
+        description: params.description.clone(),
+        amount_sat: params.amount_msats.map(|a| a / 1000),
+    };
+
+    let response = client
+        .post(&req_url)
+        .basic_auth("", Some(config.password.clone()))
+        .form(&bolt12_req)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: e.to_string(),
+        })?;
+
+    let offer_str = response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
+
+    Ok(Offer {
+        offer_id: "".to_string(),
+        bolt12: offer_str.trim().to_string(),
+        label: params.description.clone(),
+        active: Some(true),
+        single_use: Some(false),
+        used: Some(false),
+        amount_msats: params.amount_msats,
+    })
+}
 
 // Get latest BOLT12 offer
-pub async fn get_offer(config: PhoenixdConfig) -> Result<PayCode, ApiError> {
+pub async fn get_offer(config: PhoenixdConfig) -> Result<Offer, ApiError> {
     let req_url = format!("{}/getoffer", config.url);
     let client = client(&config);
     let response = client
@@ -290,13 +316,14 @@ pub async fn get_offer(config: PhoenixdConfig) -> Result<PayCode, ApiError> {
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
-    Ok(PayCode {
+    Ok(Offer {
         offer_id: "".to_string(),
         bolt12: offer_str.to_string(),
         label: None,
         active: None,
         single_use: None,
         used: None,
+        amount_msats: None,
     })
 }
 
@@ -341,7 +368,7 @@ pub async fn pay_offer(
 }
 
 // TODO implement list_offers, currently just one is returned by Phoenixd
-pub fn list_offers() -> Result<Vec<PayCode>, ApiError> {
+pub fn list_offers() -> Result<Vec<Offer>, ApiError> {
     Ok(vec![])
 }
 

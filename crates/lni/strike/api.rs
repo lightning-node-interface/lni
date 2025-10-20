@@ -11,8 +11,8 @@ use super::types::{
 use super::StrikeConfig;
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, InvoiceType, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayCode, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 
@@ -341,7 +341,7 @@ pub fn decode(_config: &StrikeConfig, str: String) -> Result<String, ApiError> {
     Ok(str)
 }
 
-pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<Offer, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Strike".to_string(),
     })
@@ -350,7 +350,7 @@ pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<PayC
 pub fn list_offers(
     _config: &StrikeConfig,
     _search: Option<String>,
-) -> Result<Vec<PayCode>, ApiError> {
+) -> Result<Vec<Offer>, ApiError> {
     Err(ApiError::Json {
         reason: "Bolt12 not implemented for Strike".to_string(),
     })

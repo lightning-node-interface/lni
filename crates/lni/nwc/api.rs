@@ -1,4 +1,4 @@
-use crate::{ApiError, CreateInvoiceParams, PayInvoiceParams, PayCode, Transaction, PayInvoiceResponse, NodeInfo, ListTransactionsParams};
+use crate::{ApiError, CreateInvoiceParams, PayInvoiceParams, Offer, Transaction, PayInvoiceResponse, NodeInfo, ListTransactionsParams};
 use crate::nwc::NwcConfig;
 use crate::types::{OnInvoiceEventParams, OnInvoiceEventCallback};
 use nwc::prelude::*;
@@ -133,12 +133,12 @@ pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<
     })
 }
 
-pub async fn get_offer(_config: &NwcConfig, _search: Option<String>) -> Result<PayCode, ApiError> {
+pub async fn get_offer(_config: &NwcConfig, _search: Option<String>) -> Result<Offer, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
     Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
 }
 
-pub async fn list_offers(_config: &NwcConfig, _search: Option<String>) -> Result<Vec<PayCode>, ApiError> {
+pub async fn list_offers(_config: &NwcConfig, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
     Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
 }

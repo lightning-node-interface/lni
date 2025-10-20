@@ -1,4 +1,4 @@
-use lni::{speed::lib::SpeedConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{speed::lib::SpeedConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -60,19 +60,24 @@ impl SpeedNode {
   }
 
   #[napi]
-  pub async fn get_offer(&self, search: Option<String>) -> napi::Result<lni::PayCode> {
-    let paycode = lni::speed::api::get_offer(&self.inner, search)
-      .await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycode)
+  pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
+    Err(napi::Error::from_reason("Bolt12 not implemented for Speed".to_string()))
   }
 
   #[napi]
-  pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::PayCode>> {
-    let paycodes = lni::speed::api::list_offers(&self.inner, search)
+  pub async fn get_offer(&self, search: Option<String>) -> napi::Result<lni::Offer> {
+    let offer = lni::speed::api::get_offer(&self.inner, search)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    Ok(paycodes)
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
+    let offers = lni::speed::api::list_offers(&self.inner, search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offers)
   }
 
   #[napi]

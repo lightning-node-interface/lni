@@ -1,4 +1,4 @@
-use lni::{cln::lib::ClnConfig, CreateInvoiceParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{cln::lib::ClnConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -58,14 +58,21 @@ impl ClnNode {
   }
 
   #[napi]
-  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::PayCode> {
+  pub async fn create_offer(&self, params: CreateOfferParams) -> Result<lni::Offer> {
+    let offer = lni::cln::api::create_offer(self.inner.clone(), params)
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(offer)
+  }
+
+  #[napi]
+  pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::Offer> {
     let offer = lni::cln::api::get_offer(self.inner.clone(), search)
       .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::PayCode>> {
+  pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::Offer>> {
     let offers = lni::cln::api::list_offers(self.inner.clone(), search)
       .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
