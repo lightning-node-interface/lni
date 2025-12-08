@@ -13,10 +13,13 @@ This guide explains how to build and publish the `react-native-lni` package to n
 
 ## Build Process
 
-The package requires a multi-step build process because it combines Rust native code with React Native bindings:
+The package requires a multi-step build process because it combines Rust native code with React Native bindings.
+
+> **Note**: The package directory is located at `bindings/lni_react_native` in the repository, but the published npm package name is `react-native-lni`.
 
 ### 1. Clean Previous Builds (Optional)
 
+From the repository root:
 ```bash
 cd bindings/lni_react_native
 yarn ubrn:clean
