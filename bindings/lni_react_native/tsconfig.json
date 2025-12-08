@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "lni_react_native": ["./src/index"]
+      "react-native-lni": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

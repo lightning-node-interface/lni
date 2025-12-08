@@ -324,8 +324,17 @@ Language Bindings
     - `cd bindings/lni_react_native && ./build.sh`
 
     **To include it in your react-native project:**
-    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out lni.tgz`
-    2. This creates a `lni.tgz`. Copy this to your target React Native project in the root.
+    
+    **Option 1: Install from npm (recommended)**
+    ```bash
+    npm install react-native-lni
+    # or
+    yarn add react-native-lni
+    ```
+
+    **Option 2: Install from local build**
+    1. In this project run `cd bindings/lni_react_native && ./build.sh && yarn package --out react-native-lni.tgz`
+    2. This creates a `react-native-lni.tgz`. Copy this to your target React Native project in the root.
     3. Prereq: In the React Native project that you want to include `lni`, make sure the new architecure is enabled. And include `lni` in the podfile
         - android 
         
@@ -363,7 +372,7 @@ Language Bindings
             ENV['RCT_NEW_ARCH_ENABLED'] = '1'
 
 
-            pod 'lni-react-native', :path => '../node_modules/lni_react_native'
+            pod 'lni-react-native', :path => '../node_modules/react-native-lni'
 
             # Fix for New Architecture - remove compiler overrides that conflict with -index-store-path
             installer.pods_project.targets.each do |target|
@@ -379,7 +388,7 @@ Language Bindings
                 end
             end
             ```
-    4. `yarn add ./lni.tgz`
+    4. `yarn add ./react-native-lni.tgz`
     5. `cd ios && pod install`
     6. `yarn clean`
         package.json
@@ -405,7 +414,7 @@ Language Bindings
             yarn
 
             # if the app does not recognize change try deleting the lni node module
-            rm node_modules/lni_react_native
+            rm node_modules/react-native-lni
 
             ```
             ios open xcworkspace in xcode and `Product > Clean` and build project
@@ -483,7 +492,7 @@ Inspiration
 Project Structure
 ==================
 This project structure was inpired by this https://github.com/ianthetechie/uniffi-starter/ with the intention of 
-automating the creation of `lni_react_native` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
+automating the creation of `react-native-lni` https://jhugman.github.io/uniffi-bindgen-react-native/guides/getting-started.html 
 
 LNI Sequence Diagram
 ==================

@@ -1,11 +1,11 @@
-# lni_react_native
+# react-native-lni
 
-lni_react_native
+React Native bindings for LNI (Lightning Node Interface)
 
 ## Installation
 
 ```sh
-npm install lni_react_native
+npm install react-native-lni
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ import {
   Transaction,
   BlinkConfig,
   BlinkNode,
-} from 'lni_react_native';
+} from 'react-native-lni';
 
 // ...
 

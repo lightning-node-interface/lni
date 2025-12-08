@@ -1,7 +1,7 @@
 {
-  "name": "lni_react_native",
+  "name": "react-native-lni",
   "version": "0.1.1",
-  "description": "lni_react_native",
+  "description": "React Native bindings for LNI (Lightning Node Interface)",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
@@ -52,7 +52,7 @@
     "ubrn:android": "ubrn build android --config ubrn.config.yaml --release --and-generate",
     "ubrn:checkout": "ubrn checkout --config ubrn.config.yaml",
     "ubrn:clean": "rm -Rf cpp/ android/src/main/java ios/ src/Native* src/generated/ src/index.ts*",
-    "example": "yarn workspace lni_react_native-example",
+    "example": "yarn workspace react-native-lni-example",
     "test": "jest",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
