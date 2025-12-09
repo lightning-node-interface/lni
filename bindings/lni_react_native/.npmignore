@@ -1,0 +1,71 @@
+# Development and testing files
+example/
+__tests__/
+__fixtures__/
+__mocks__/
+*.test.ts
+*.test.tsx
+*.test.js
+
+# Build artifacts that shouldn't be published
+android/build/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+ios/build/
+rust_modules/
+
+# Configuration files
+.editorconfig
+.eslintrc
+.eslintrc.js
+.eslintrc.json
+.prettierrc
+.prettierrc.js
+.watchmanconfig
+.nvmrc
+lefthook.yml
+tsconfig.json
+babel.config.js
+eslint.config.mjs
+turbo.json
+
+# CI/CD files
+.github/
+
+# Documentation for development (keep PUBLISHING.md out of package)
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+PUBLISHING.md
+
+# Build scripts (keep build.sh out since it's for development)
+build.sh
+ubrn.config.yaml
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Package manager
+yarn.lock
+package.tgz
+*.tgz
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*

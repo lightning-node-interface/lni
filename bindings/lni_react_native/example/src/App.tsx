@@ -23,7 +23,7 @@ import {
   LookupInvoiceParams,
   CreateOfferParams,
   Offer
-} from 'lni_react_native';
+} from 'react-native-lni';
 import { 
   LND_URL, 
   LND_MACAROON, 

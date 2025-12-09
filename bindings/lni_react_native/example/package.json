@@ -1,5 +1,5 @@
 {
-  "name": "lni_react_native-example",
+  "name": "react-native-lni-example",
   "version": "0.0.1",
   "private": true,
   "types": "../lib/typescript/commonjs/src/index.d.ts",
