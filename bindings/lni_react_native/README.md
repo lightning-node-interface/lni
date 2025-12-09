@@ -19,6 +19,18 @@ npm install react-native-lni
 yarn add react-native-lni
 ```
 
+### Compatibility
+
+- ✅ **React Native**: Fully supported (requires New Architecture)
+- ✅ **Expo (Development Builds)**: Supported with custom dev client
+- ❌ **Expo Go**: Not supported (contains native code)
+
+This package contains native Rust code compiled via UniFFI and requires React Native's New Architecture. It works with:
+- Standard React Native CLI projects
+- Expo projects using [EAS Build](https://docs.expo.dev/develop/development-builds/introduction/) with development builds
+
+It does **not** work with Expo Go since it includes custom native modules that aren't pre-built into Expo Go.
+
 ### Prerequisites
 
 This package requires React Native's New Architecture to be enabled:
@@ -38,6 +50,50 @@ Then install iOS dependencies:
 ```sh
 cd ios && pod install && cd ..
 ```
+
+### Expo Setup (Development Builds)
+
+If you're using Expo, you'll need to create a [development build](https://docs.expo.dev/develop/development-builds/introduction/) since this package includes custom native code:
+
+1. **Install the package**:
+   ```sh
+   npx expo install react-native-lni
+   ```
+
+2. **Create a development build**:
+   ```sh
+   # For iOS simulator
+   npx expo run:ios
+   
+   # For Android emulator
+   npx expo run:android
+   
+   # Or use EAS Build for production
+   eas build --profile development --platform all
+   ```
+
+3. **Enable New Architecture** - Add to `app.json`:
+   ```json
+   {
+     "expo": {
+       "plugins": [
+         [
+           "expo-build-properties",
+           {
+             "ios": {
+               "newArchEnabled": true
+             },
+             "android": {
+               "newArchEnabled": true
+             }
+           }
+         ]
+       ]
+     }
+   }
+   ```
+
+Note: After adding the package, you'll need to rebuild your development build since native code has changed.
 
 ## Usage
 
