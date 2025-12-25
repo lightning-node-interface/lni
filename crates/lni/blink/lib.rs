@@ -52,7 +52,8 @@ impl BlinkNode {
     }
 }
 
-// UniFFI exported methods (inherent impl for FFI compatibility)
+// UniFFI exported methods - inherent impl required for UniFFI binding generation
+// (UniFFI cannot export trait impl blocks, only inherent impl blocks)
 #[cfg(feature = "uniffi")]
 #[uniffi::export(async_runtime = "tokio")]
 impl BlinkNode {
