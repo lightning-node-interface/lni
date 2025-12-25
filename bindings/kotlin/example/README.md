@@ -32,6 +32,8 @@ example/
    ```bash
    # Example for arm64-v8a
    cargo build --package lni --features uniffi --release --target aarch64-linux-android
+   # Example Mac Apple Silicon
+   cargo build --package lni --features uniffi --release --target aarch64-linux-android
    cp ../../target/aarch64-linux-android/release/liblni.so app/src/main/jniLibs/arm64-v8a/
    ```
 

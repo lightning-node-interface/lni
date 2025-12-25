@@ -91,7 +91,7 @@ suspend fun strikeExample() {
         val transactions = node.listTransactions(listParams)
         println("  Found ${transactions.size} transactions")
         for (tx in transactions.take(3)) {
-            println("    - ${tx.type_}: ${tx.amountMsats} msat (${tx.paymentHash.take(16)}...)")
+            println("    - ${tx.type}: ${tx.amountMsats} msat (${tx.paymentHash.take(16)}...)")
         }
         
     } catch (e: ApiException) {
@@ -235,7 +235,7 @@ suspend fun lookupInvoiceExample(node: StrikeNode, paymentHash: String) {
     )
     
     val transaction = node.lookupInvoice(lookupParams)
-    println("  Type: ${transaction.type_}")
+    println("  Type: ${transaction.type}")
     println("  Amount (msat): ${transaction.amountMsats}")
     println("  Settled: ${if (transaction.settledAt > 0) "Yes" else "No"}")
     if (transaction.settledAt > 0) {
