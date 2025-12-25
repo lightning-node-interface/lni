@@ -4,8 +4,10 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams, Offer,
-    PayInvoiceParams, PayInvoiceResponse, Transaction, LightningNode,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -48,7 +50,92 @@ impl ClnNode {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+// UniFFI exported methods (inherent impl for FFI compatibility)
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+impl ClnNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+        crate::cln::api::get_info(self.config.clone()).await
+    }
+
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
+        crate::cln::api::create_invoice(
+            self.config.clone(),
+            params.invoice_type,
+            params.amount_msats,
+            params.offer.clone(),
+            params.description,
+            params.description_hash,
+            params.expiry,
+        )
+        .await
+    }
+
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::cln::api::pay_invoice(self.config.clone(), params).await
+    }
+
+    pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
+        crate::cln::api::create_offer(self.config.clone(), params).await
+    }
+
+    pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
+        crate::cln::api::get_offer(self.config.clone(), search).await
+    }
+
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+        crate::cln::api::list_offers(self.config.clone(), search).await
+    }
+
+    pub async fn pay_offer(
+        &self,
+        offer: String,
+        amount_msats: i64,
+        payer_note: Option<String>,
+    ) -> Result<PayInvoiceResponse, ApiError> {
+        crate::cln::api::pay_offer(self.config.clone(), offer, amount_msats, payer_note).await
+    }
+
+    pub async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, ApiError> {
+        crate::cln::api::lookup_invoice(
+            self.config.clone(),
+            params.payment_hash,
+            None,
+            None,
+            params.search,
+        )
+        .await
+    }
+
+    pub async fn list_transactions(
+        &self,
+        params: ListTransactionsParams,
+    ) -> Result<Vec<crate::Transaction>, ApiError> {
+        crate::cln::api::list_transactions(
+            self.config.clone(),
+            params.from,
+            params.limit,
+            params.search,
+        )
+        .await
+    }
+
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::cln::api::decode(self.config.clone(), str).await
+    }
+}
+
+// Trait implementation for Rust consumers (non-UniFFI)
+#[cfg(not(feature = "uniffi"))]
 #[async_trait::async_trait]
 impl LightningNode for ClnNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {

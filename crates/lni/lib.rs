@@ -82,7 +82,7 @@ pub mod database;
 pub use database::{Db, DbError, Payment};
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_proxy: Option<String>, header_key: Option<String>, header_value: Option<String>) -> String {
     // Create HTTP client with optional SOCKS5 proxy
     let client = if let Some(proxy_url) = socks5_proxy {

@@ -1,0 +1,39 @@
+# Generated Kotlin bindings
+src/main/kotlin/uniffi/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+bin/
+
+# Build outputs
+target/
+out/
+
+# Local configuration
+local.properties
+
+# Native libraries (generated)
+*.so
+*.dylib
+*.dll

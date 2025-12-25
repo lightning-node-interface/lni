@@ -108,7 +108,7 @@ fn process_node_info_responses(
 }
 
 // Async version following the same pattern as say_after_with_tokio
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
     // Create HTTP client using the helper function
     let client = async_client(&config);
@@ -195,7 +195,7 @@ pub async fn pay_offer(
 }
 
 // Async version of lookup_invoice following the same pattern as get_info_async
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn lookup_invoice(
     config: LndConfig,
     payment_hash: Option<String>,
@@ -340,7 +340,7 @@ pub async fn poll_invoice_events<F>(
     }
 }
 
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn on_invoice_events(
     config: LndConfig,
     params: OnInvoiceEventParams,
@@ -356,7 +356,7 @@ pub async fn on_invoice_events(
 }
 
 // Async version of create_invoice
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn create_invoice(
     config: LndConfig,
     params: CreateInvoiceParams,
@@ -412,7 +412,7 @@ pub async fn create_invoice(
     })
 }
 
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn pay_invoice(
     config: LndConfig,
     params: PayInvoiceParams,
@@ -500,7 +500,7 @@ pub async fn pay_invoice(
 }
 
 // Async version of decode
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn decode(config: LndConfig, invoice_str: String) -> Result<String, ApiError> {
     let client = async_client(&config);
     
@@ -522,7 +522,7 @@ pub async fn decode(config: LndConfig, invoice_str: String) -> Result<String, Ap
 }
 
 // Async version of list_transactions
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn list_transactions(
     config: LndConfig,
     _from: Option<i64>,

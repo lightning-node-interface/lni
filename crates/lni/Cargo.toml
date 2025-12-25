@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 name = "lni"
 path = "lib.rs"
-crate-type = ["staticlib", "lib"] # *NOTE - this is needed for uniffi to generate the correct bindings in react native, comment this out when building for napi_rs
+crate-type = ["staticlib", "cdylib", "lib"] # staticlib for iOS, cdylib for Android/uniffi bindgen, lib for Rust consumers
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = [

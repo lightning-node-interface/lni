@@ -1,10 +1,13 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
+#[cfg(not(feature = "uniffi"))]
 use async_trait::async_trait;
 
+#[cfg(not(feature = "uniffi"))]
 use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
 
+#[cfg(not(feature = "uniffi"))]
 pub enum LightningNodeEnum {
     Phoenixd(PhoenixdNode),
     Lnd(LndNode),
@@ -12,26 +15,27 @@ pub enum LightningNodeEnum {
     Nwc(NwcNode),
 }
 
+#[cfg(not(feature = "uniffi"))]
 #[async_trait]
 pub trait LightningNode {
-    async fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
-    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError>;
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError>;
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError>;
+    async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;
+    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, crate::ApiError>;
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, crate::ApiError>;
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, crate::ApiError>;
     async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
-    ) -> Result<PayInvoiceResponse, ApiError>;
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError>;
+    ) -> Result<PayInvoiceResponse, crate::ApiError>;
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, crate::ApiError>;
     async fn list_transactions(
         &self,
         params: ListTransactionsParams,
-    ) -> Result<Vec<crate::Transaction>, ApiError>;
-    async fn decode(&self, str: String) -> Result<String, ApiError>;
+    ) -> Result<Vec<crate::Transaction>, crate::ApiError>;
+    async fn decode(&self, str: String) -> Result<String, crate::ApiError>;
     async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
