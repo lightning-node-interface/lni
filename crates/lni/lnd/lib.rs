@@ -433,6 +433,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "uniffi"))]
     #[tokio::test]
     async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
