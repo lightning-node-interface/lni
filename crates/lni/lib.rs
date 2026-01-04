@@ -72,7 +72,6 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
-#[cfg(feature = "spark")]
 pub mod spark {
     pub mod api;
     pub mod lib;

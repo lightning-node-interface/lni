@@ -53,7 +53,8 @@ impl SparkConfig {
     }
 }
 
-#[cfg_attr(feature = "napi_rs", napi(object))]
+// Note: SparkNode cannot use napi(object) because BreezSdk has private fields
+// #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct SparkNode {
     pub config: SparkConfig,
@@ -212,16 +213,18 @@ impl LightningNode for SparkNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{CreateInvoiceParams, InvoiceType, ListTransactionsParams, LookupInvoiceParams, PayInvoiceParams};
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
 
     lazy_static! {
         static ref MNEMONIC: String = {
             dotenv().ok();
-            env::var("SPARK_MNEMONIC").unwrap_or_else(|_| {
-                "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string()
-            })
+            env::var("SPARK_MNEMONIC").unwrap_or_default()
         };
         static ref API_KEY: String = {
             dotenv().ok();
@@ -235,10 +238,28 @@ mod tests {
             dotenv().ok();
             env::var("SPARK_TEST_PAYMENT_HASH").unwrap_or_default()
         };
+        static ref TEST_RECEIVER_OFFER: String = {
+            dotenv().ok();
+            env::var("TEST_RECEIVER_OFFER").unwrap_or_default()
+        };
     }
 
-    // Note: These tests require a valid Spark configuration to run
-    // They are skipped if the environment variables are not set
+    fn should_skip() -> bool {
+        MNEMONIC.is_empty() || API_KEY.is_empty()
+    }
+
+    async fn get_node() -> Result<SparkNode, ApiError> {
+        let config = SparkConfig {
+            mnemonic: MNEMONIC.clone(),
+            api_key: Some(API_KEY.clone()),
+            storage_dir: STORAGE_DIR.clone(),
+            network: Some("mainnet".to_string()),
+            passphrase: None,
+        };
+        SparkNode::new(config).await
+    }
+
+    // Unit tests - no credentials required
 
     #[tokio::test]
     async fn test_spark_config_default() {
@@ -263,39 +284,222 @@ mod tests {
     }
 
     // Integration tests - require valid credentials
-    // Uncomment and set environment variables to run
+    // Set SPARK_MNEMONIC and SPARK_API_KEY environment variables to run
+    #[tokio::test]
+    async fn test_get_info() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
 
-    // #[tokio::test]
-    // async fn test_get_info() {
-    //     if MNEMONIC.is_empty() || API_KEY.is_empty() {
-    //         println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
-    //         return;
-    //     }
-    //
-    //     let config = SparkConfig {
-    //         mnemonic: MNEMONIC.clone(),
-    //         api_key: Some(API_KEY.clone()),
-    //         storage_dir: STORAGE_DIR.clone(),
-    //         network: Some("mainnet".to_string()),
-    //         passphrase: None,
-    //     };
-    //
-    //     match SparkNode::new(config).await {
-    //         Ok(node) => {
-    //             match node.get_info().await {
-    //                 Ok(info) => {
-    //                     println!("Spark node info: {:?}", info);
-    //                     assert_eq!(info.alias, "Spark Node");
-    //                 }
-    //                 Err(e) => {
-    //                     println!("Failed to get info: {:?}", e);
-    //                 }
-    //             }
-    //             let _ = node.disconnect().await;
-    //         }
-    //         Err(e) => {
-    //             println!("Failed to connect: {:?}", e);
-    //         }
-    //     }
-    // }
+        let node = get_node().await.expect("Failed to connect");
+        match node.get_info().await {
+            Ok(info) => {
+                println!("info: {:?}", info);
+            }
+            Err(e) => {
+                panic!("Failed to get info: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_create_invoice() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        let params = CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt11,
+            amount_msats: Some(1000),
+            offer: None,
+            description: Some("Test invoice".to_string()),
+            description_hash: None,
+            expiry: Some(3600),
+            ..Default::default()
+        };
+
+        match node.create_invoice(params).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.invoice.is_empty(), "Invoice should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to make invoice: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_pay_invoice() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        // Note: This test requires a valid invoice to pay
+        // For now we'll just test that the function exists and handles errors
+        match node.pay_invoice(PayInvoiceParams {
+            invoice: "lnbc1***".to_string(), // Invalid invoice for testing
+            ..Default::default()
+        }).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(!txn.payment_hash.is_empty(), "Payment hash should not be empty");
+            }
+            Err(e) => {
+                println!("Expected error for invalid invoice: {:?}", e);
+                // This is expected to fail with an invalid invoice
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_list_transactions() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        let params = ListTransactionsParams {
+            from: 0,
+            limit: 10,
+            payment_hash: None,
+            search: None,
+        };
+
+        match node.list_transactions(params).await {
+            Ok(txns) => {
+                println!("transactions: {:?}", txns);
+                assert!(true, "Successfully fetched transactions");
+            }
+            Err(e) => {
+                panic!("Failed to list transactions: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_lookup_invoice() {
+        if should_skip() || TEST_PAYMENT_HASH.is_empty() {
+            println!("Skipping test: credentials or SPARK_TEST_PAYMENT_HASH not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        match node.lookup_invoice(LookupInvoiceParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            ..Default::default()
+        }).await {
+            Ok(txn) => {
+                println!("txn: {:?}", txn);
+                assert!(txn.amount_msats > 0, "Invoice should contain an amount");
+            }
+            Err(e) => {
+                panic!("Failed to lookup invoice: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_spark_address() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        match node.get_spark_address().await {
+            Ok(address) => {
+                println!("Spark address: {}", address);
+                assert!(!address.is_empty(), "Spark address should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to get Spark address: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_deposit_address() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        match node.get_deposit_address().await {
+            Ok(address) => {
+                println!("Bitcoin deposit address: {}", address);
+                assert!(!address.is_empty(), "Deposit address should not be empty");
+            }
+            Err(e) => {
+                panic!("Failed to get deposit address: {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_decode() {
+        if should_skip() {
+            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+            return;
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        // Test decoding a BOLT11 invoice
+        let test_invoice = "lnbc1..."; // You can put a valid invoice here for testing
+        match node.decode(test_invoice.to_string()).await {
+            Ok(decoded) => {
+                println!("Decoded: {}", decoded);
+            }
+            Err(e) => {
+                println!("Decode error (may be expected for invalid input): {:?}", e);
+            }
+        }
+        let _ = node.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn test_on_invoice_events() {
+        if should_skip() || TEST_PAYMENT_HASH.is_empty() {
+            println!("Skipping test: credentials or SPARK_TEST_PAYMENT_HASH not set");
+            return;
+        }
+
+        struct TestInvoiceEventCallback;
+        impl crate::types::OnInvoiceEventCallback for TestInvoiceEventCallback {
+            fn success(&self, transaction: Option<Transaction>) {
+                println!("success: {:?}", transaction);
+            }
+            fn pending(&self, transaction: Option<Transaction>) {
+                println!("pending: {:?}", transaction);
+            }
+            fn failure(&self, transaction: Option<Transaction>) {
+                println!("failure: {:?}", transaction);
+            }
+        }
+
+        let node = get_node().await.expect("Failed to connect");
+        let params = crate::types::OnInvoiceEventParams {
+            search: Some(TEST_PAYMENT_HASH.to_string()),
+            polling_delay_sec: 2,
+            max_polling_sec: 6,
+            ..Default::default()
+        };
+        let callback = TestInvoiceEventCallback;
+        node.on_invoice_events(params, Box::new(callback)).await;
+        let _ = node.disconnect().await;
+    }
 }
