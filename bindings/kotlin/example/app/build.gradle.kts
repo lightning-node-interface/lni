@@ -48,6 +48,12 @@ android {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
 
+    lint {
+        // UniFFI-generated code uses java.lang.ref.Cleaner which requires API 33+
+        // but it has fallback mechanisms for older APIs at runtime
+        disable += "NewApi"
+    }
+
     sourceSets {
         getByName("main") {
             kotlin.srcDir("../../src/main/kotlin")

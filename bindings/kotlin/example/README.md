@@ -52,6 +52,10 @@ For JVM-based execution (testing on desktop):
 For Android:
 1. Import the project into Android Studio
 2. Build and run on an emulator or device
+3. `open -a "Android Studio" /Users/nick/code/lni/bindings/kotlin/example`
+4. File → Sync Project with Gradle Files
+5. `cd /Users/nick/code/lni/bindings/kotlin && ./build.sh --release --android 2>&1`
+6. Build → Clean Project
 
 ## Usage Examples
 

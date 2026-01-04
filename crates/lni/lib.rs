@@ -23,6 +23,73 @@ impl From<serde_json::Error> for ApiError {
     }
 }
 
+/// Macro to implement LightningNode trait by delegating to inherent methods.
+/// This avoids code duplication between UniFFI exports and trait implementations.
+#[cfg(not(feature = "uniffi"))]
+#[macro_export]
+macro_rules! impl_lightning_node {
+    ($node_type:ty) => {
+        #[async_trait::async_trait]
+        impl crate::LightningNode for $node_type {
+            async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError> {
+                Self::get_info(self).await
+            }
+
+            async fn create_invoice(&self, params: crate::CreateInvoiceParams) -> Result<crate::Transaction, crate::ApiError> {
+                Self::create_invoice(self, params).await
+            }
+
+            async fn pay_invoice(&self, params: crate::PayInvoiceParams) -> Result<crate::PayInvoiceResponse, crate::ApiError> {
+                Self::pay_invoice(self, params).await
+            }
+
+            async fn create_offer(&self, params: crate::CreateOfferParams) -> Result<crate::Offer, crate::ApiError> {
+                Self::create_offer(self, params).await
+            }
+
+            async fn get_offer(&self, search: Option<String>) -> Result<crate::Offer, crate::ApiError> {
+                Self::get_offer(self, search).await
+            }
+
+            async fn list_offers(&self, search: Option<String>) -> Result<Vec<crate::Offer>, crate::ApiError> {
+                Self::list_offers(self, search).await
+            }
+
+            async fn pay_offer(
+                &self,
+                offer: String,
+                amount_msats: i64,
+                payer_note: Option<String>,
+            ) -> Result<crate::PayInvoiceResponse, crate::ApiError> {
+                Self::pay_offer(self, offer, amount_msats, payer_note).await
+            }
+
+            async fn lookup_invoice(&self, params: crate::LookupInvoiceParams) -> Result<crate::Transaction, crate::ApiError> {
+                Self::lookup_invoice(self, params).await
+            }
+
+            async fn list_transactions(
+                &self,
+                params: crate::ListTransactionsParams,
+            ) -> Result<Vec<crate::Transaction>, crate::ApiError> {
+                Self::list_transactions(self, params).await
+            }
+
+            async fn decode(&self, str: String) -> Result<String, crate::ApiError> {
+                Self::decode(self, str).await
+            }
+
+            async fn on_invoice_events(
+                &self,
+                params: crate::types::OnInvoiceEventParams,
+                callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+            ) {
+                Self::on_invoice_events(self, params, callback).await
+            }
+        }
+    };
+}
+
 pub mod phoenixd {
     pub mod api;
     pub mod lib;

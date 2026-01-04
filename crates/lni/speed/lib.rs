@@ -51,10 +51,8 @@ impl SpeedNode {
     }
 }
 
-// UniFFI exported methods - inherent impl required for UniFFI binding generation
-// (UniFFI cannot export trait impl blocks, only inherent impl blocks)
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
+// All node methods - UniFFI exports these directly when the feature is enabled
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl SpeedNode {
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config).await
@@ -62,16 +60,16 @@ impl SpeedNode {
 
     pub async fn create_invoice(
         &self,
-        invoice_params: CreateInvoiceParams,
+        params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
-        crate::speed::api::create_invoice(&self.config, invoice_params).await
+        crate::speed::api::create_invoice(&self.config, params).await
     }
 
     pub async fn pay_invoice(
         &self,
-        invoice_params: PayInvoiceParams,
+        params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_invoice(&self.config, invoice_params).await
+        crate::speed::api::pay_invoice(&self.config, params).await
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
@@ -119,73 +117,10 @@ impl SpeedNode {
     }
 }
 
-// Trait implementation for Rust consumers (non-UniFFI)
+// Methods not supported by UniFFI (callbacks)
 #[cfg(not(feature = "uniffi"))]
-#[async_trait::async_trait]
-impl LightningNode for SpeedNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::speed::api::get_info(&self.config).await
-    }
-
-    async fn create_invoice(
-        &self,
-        invoice_params: CreateInvoiceParams,
-    ) -> Result<Transaction, ApiError> {
-        crate::speed::api::create_invoice(&self.config, invoice_params).await
-    }
-
-    async fn pay_invoice(
-        &self,
-        invoice_params: PayInvoiceParams,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_invoice(&self.config, invoice_params).await
-    }
-
-    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for SpeedNode".to_string() })
-    }
-
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::speed::api::lookup_invoice(
-            &self.config,
-            params.payment_hash,
-            None,
-            None,
-            params.search,
-        )
-        .await
-    }
-
-    async fn list_transactions(
-        &self,
-        params: ListTransactionsParams,
-    ) -> Result<Vec<Transaction>, ApiError> {
-        crate::speed::api::list_transactions(&self.config, params.from, params.limit, params.search)
-            .await
-    }
-
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::speed::api::decode(&self.config, str).await
-    }
-
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
-        crate::speed::api::get_offer(&self.config, search).await
-    }
-
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::speed::api::list_offers(&self.config, search).await
-    }
-
-    async fn pay_offer(
-        &self,
-        offer: String,
-        amount_msats: i64,
-        payer_note: Option<String>,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
-    }
-
-    async fn on_invoice_events(
+impl SpeedNode {
+    pub async fn on_invoice_events(
         &self,
         params: OnInvoiceEventParams,
         callback: Box<dyn OnInvoiceEventCallback>,
@@ -193,6 +128,10 @@ impl LightningNode for SpeedNode {
         crate::speed::api::on_invoice_events(self.config.clone(), params, callback).await;
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+#[cfg(not(feature = "uniffi"))]
+crate::impl_lightning_node!(SpeedNode);
 
 #[cfg(test)]
 mod tests {

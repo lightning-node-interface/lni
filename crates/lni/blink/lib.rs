@@ -52,10 +52,8 @@ impl BlinkNode {
     }
 }
 
-// UniFFI exported methods - inherent impl required for UniFFI binding generation
-// (UniFFI cannot export trait impl blocks, only inherent impl blocks)
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
+// All node methods - UniFFI exports these directly when the feature is enabled
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl BlinkNode {
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::blink::api::get_info(&self.config).await
@@ -112,65 +110,10 @@ impl BlinkNode {
     }
 }
 
-// Trait implementation for Rust consumers (non-UniFFI)
+// Methods not supported by UniFFI (callbacks)
 #[cfg(not(feature = "uniffi"))]
-#[async_trait::async_trait]
-impl LightningNode for BlinkNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::blink::api::get_info(&self.config).await
-    }
-
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
-        crate::blink::api::create_invoice(&self.config, params).await
-    }
-
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
-        crate::blink::api::pay_invoice(&self.config, params).await
-    }
-
-    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for BlinkNode".to_string() })
-    }
-
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
-        crate::blink::api::get_offer(&self.config, search).await
-    }
-
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::blink::api::list_offers(&self.config, search).await
-    }
-
-    async fn pay_offer(
-        &self,
-        offer: String,
-        amount_msats: i64,
-        payer_note: Option<String>,
-    ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::blink::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
-    }
-
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::blink::api::lookup_invoice(
-            &self.config,
-            params.payment_hash,
-            None,
-            None,
-            params.search,
-        ).await
-    }
-
-    async fn list_transactions(
-        &self,
-        params: ListTransactionsParams,
-    ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search).await
-    }
-
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::blink::api::decode(&self.config, str).await
-    }
-
-    async fn on_invoice_events(
+impl BlinkNode {
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
         callback: Box<dyn crate::types::OnInvoiceEventCallback>,
@@ -178,6 +121,10 @@ impl LightningNode for BlinkNode {
         crate::blink::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+#[cfg(not(feature = "uniffi"))]
+crate::impl_lightning_node!(BlinkNode);
 
 #[cfg(test)]
 mod tests {
