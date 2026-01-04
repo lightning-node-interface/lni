@@ -1,12 +1,12 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo};
+use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo, OnInvoiceEventCallback, OnInvoiceEventParams};
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 #[cfg(not(feature = "uniffi"))]
-use crate::{LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams};
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -115,15 +115,11 @@ impl SpeedNode {
     ) -> Result<PayInvoiceResponse, ApiError> {
         crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
-}
 
-// Methods not supported by UniFFI (callbacks)
-#[cfg(not(feature = "uniffi"))]
-impl SpeedNode {
     pub async fn on_invoice_events(
         &self,
         params: OnInvoiceEventParams,
-        callback: Box<dyn OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
     ) {
         crate::speed::api::on_invoice_events(self.config.clone(), params, callback).await;
     }
@@ -285,7 +281,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "uniffi"))]
     #[tokio::test]
     async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
@@ -324,7 +319,7 @@ mod tests {
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
 
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();

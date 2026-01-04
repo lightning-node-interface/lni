@@ -200,7 +200,7 @@ let params = crate::types::OnInvoiceEventParams {
     max_polling_sec: 60,
 };
 let callback = OnInvoiceEventCallback {};
-NODE.on_invoice_events(params, Box::new(callback));
+NODE.on_invoice_events(params, Arc::new(callback));
 ```
 
 

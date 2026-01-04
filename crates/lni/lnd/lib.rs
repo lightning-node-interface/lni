@@ -116,15 +116,11 @@ impl LndNode {
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::lnd::api::decode(self.config.clone(), str).await
     }
-}
 
-// Methods not supported by UniFFI (callbacks)
-#[cfg(not(feature = "uniffi"))]
-impl LndNode {
     pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::lnd::api::on_invoice_events(self.config.clone(), params, callback).await
     }
@@ -433,7 +429,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "uniffi"))]
     #[tokio::test]
     async fn test_on_invoice_events() {
         struct OnInvoiceEventCallback {
@@ -469,7 +464,7 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
 
         // Check if events were received
         let received_events = events.lock().unwrap();

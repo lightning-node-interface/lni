@@ -82,7 +82,7 @@ macro_rules! impl_lightning_node {
             async fn on_invoice_events(
                 &self,
                 params: crate::types::OnInvoiceEventParams,
-                callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+                callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
             ) {
                 Self::on_invoice_events(self, params, callback).await
             }

@@ -39,7 +39,7 @@ pub trait LightningNode {
     async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     );
 }
 
@@ -414,7 +414,9 @@ impl Default for PayInvoiceParams {
 }
 
 // Define the callback trait for UniFFI
-#[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
+// Using with_foreign allows foreign languages (Kotlin/Swift) to implement this trait
+// and pass it to Rust. This is the newer approach vs callback_interface.
+#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait OnInvoiceEventCallback: Send + Sync {
     fn success(&self, transaction: Option<Transaction>);
     fn pending(&self, transaction: Option<Transaction>);
