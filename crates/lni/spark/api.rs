@@ -6,7 +6,6 @@ use breez_sdk_spark::{
     PrepareSendPaymentRequest, ReceivePaymentMethod, ReceivePaymentRequest, SendPaymentRequest,
 };
 
-use super::SparkConfig;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
@@ -14,7 +13,7 @@ use crate::{
 };
 
 /// Get node info from Spark SDK
-pub async fn get_info(sdk: Arc<BreezSdk>) -> Result<NodeInfo, ApiError> {
+pub async fn get_info(sdk: Arc<BreezSdk>, network: &str) -> Result<NodeInfo, ApiError> {
     let info = sdk
         .get_info(GetInfoRequest {
             ensure_synced: Some(true),
@@ -28,7 +27,7 @@ pub async fn get_info(sdk: Arc<BreezSdk>) -> Result<NodeInfo, ApiError> {
         alias: "Spark Node".to_string(),
         color: "".to_string(),
         pubkey: "".to_string(),
-        network: "mainnet".to_string(),
+        network: network.to_string(),
         block_height: 0,
         block_hash: "".to_string(),
         send_balance_msat: (info.balance_sats as i64) * 1000,
@@ -147,6 +146,16 @@ pub async fn lookup_invoice(
     _limit: Option<i64>,
     _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
+    let target_hash = payment_hash.ok_or_else(|| ApiError::Api {
+        reason: "Payment hash is required for lookup".to_string(),
+    })?;
+
+    if target_hash.is_empty() {
+        return Err(ApiError::Api {
+            reason: "Payment hash cannot be empty".to_string(),
+        });
+    }
+
     let payments = sdk
         .list_payments(ListPaymentsRequest {
             limit: Some(100),
@@ -156,8 +165,6 @@ pub async fn lookup_invoice(
         .map_err(|e| ApiError::Api {
             reason: e.to_string(),
         })?;
-
-    let target_hash = payment_hash.unwrap_or_default();
 
     for payment in payments.payments {
         let (invoice, p_hash, preimage, description) = match &payment.details {
@@ -196,7 +203,7 @@ pub async fn lookup_invoice(
             _ => continue,
         };
 
-        if p_hash == target_hash || (target_hash.is_empty() && !p_hash.is_empty()) {
+        if p_hash == target_hash {
             return Ok(Transaction {
                 type_: match payment.payment_type {
                     PaymentType::Send => "outgoing".to_string(),
@@ -320,21 +327,29 @@ pub async fn list_transactions(
     Ok(transactions)
 }
 
-/// Decode a payment request (not fully implemented for Spark yet)
-pub fn decode(_config: &SparkConfig, str: String) -> Result<String, ApiError> {
-    // Spark SDK uses parse_input for decoding
-    Ok(str)
+/// Decode a payment request using the SDK's parse functionality
+pub async fn decode(sdk: Arc<BreezSdk>, input: String) -> Result<String, ApiError> {
+    // Use the SDK's parse method to decode the input
+    match sdk.parse(&input).await {
+        Ok(parsed) => {
+            // Return a JSON representation of the parsed input
+            Ok(format!("{:?}", parsed))
+        }
+        Err(e) => Err(ApiError::Api {
+            reason: format!("Failed to decode input: {}", e),
+        }),
+    }
 }
 
 /// Get offer (not implemented for Spark yet)
-pub fn get_offer(_config: &SparkConfig, _search: Option<String>) -> Result<Offer, ApiError> {
+pub fn get_offer(_search: Option<String>) -> Result<Offer, ApiError> {
     Err(ApiError::Api {
         reason: "Bolt12 offers not yet implemented for Spark".to_string(),
     })
 }
 
 /// List offers (not implemented for Spark yet)
-pub fn list_offers(_config: &SparkConfig, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+pub fn list_offers(_search: Option<String>) -> Result<Vec<Offer>, ApiError> {
     Err(ApiError::Api {
         reason: "Bolt12 offers not yet implemented for Spark".to_string(),
     })
@@ -342,7 +357,6 @@ pub fn list_offers(_config: &SparkConfig, _search: Option<String>) -> Result<Vec
 
 /// Pay offer (not implemented for Spark yet)
 pub fn pay_offer(
-    _config: &SparkConfig,
     _offer: String,
     _amount_msats: i64,
     _payer_note: Option<String>,

@@ -137,7 +137,8 @@ impl SparkNode {
 #[async_trait::async_trait]
 impl LightningNode for SparkNode {
     async fn get_info(&self) -> Result<NodeInfo, ApiError> {
-        crate::spark::api::get_info(self.sdk.clone()).await
+        let network = self.config.network.as_deref().unwrap_or("mainnet");
+        crate::spark::api::get_info(self.sdk.clone(), network).await
     }
 
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
@@ -179,7 +180,7 @@ impl LightningNode for SparkNode {
     }
 
     async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::spark::api::decode(&self.config, str)
+        crate::spark::api::decode(self.sdk.clone(), str).await
     }
 
     async fn on_invoice_events(
@@ -191,11 +192,11 @@ impl LightningNode for SparkNode {
     }
 
     async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
-        crate::spark::api::get_offer(&self.config, search)
+        crate::spark::api::get_offer(search)
     }
 
     async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::spark::api::list_offers(&self.config, search)
+        crate::spark::api::list_offers(search)
     }
 
     async fn pay_offer(
@@ -204,7 +205,7 @@ impl LightningNode for SparkNode {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::spark::api::pay_offer(&self.config, offer, amount_msats, payer_note)
+        crate::spark::api::pay_offer(offer, amount_msats, payer_note)
     }
 }
 
