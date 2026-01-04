@@ -94,6 +94,11 @@ suspend fun strikeExample() {
             println("    - ${tx.type}: ${tx.amountMsats} msat (${tx.paymentHash.take(16)}...)")
         }
         
+        // Test on_invoice_events callback
+        println()
+        println("Testing invoice event callback...")
+        onInvoiceEventsExample(node, transaction.paymentHash)
+        
     } catch (e: ApiException) {
         println("  API Error: ${e.message}")
         println("  (This is expected if you don't have a valid API key)")
@@ -220,11 +225,51 @@ suspend fun payInvoiceExample(node: StrikeNode, invoice: String) {
 
 /**
  * Example showing callback interface usage for invoice events
- * 
- * Note: The OnInvoiceEventCallback interface is available for Rust consumers
- * but not currently exported to Kotlin via UniFFI due to the complexity of
- * callback interfaces. For polling-based invoice status checks, use 
- * lookupInvoice() instead.
+ */
+suspend fun onInvoiceEventsExample(node: StrikeNode, paymentHash: String) {
+    println("Listening for invoice events...")
+    
+    // Create a callback implementation
+    val callback = object : OnInvoiceEventCallback {
+        override fun success(transaction: Transaction?) {
+            println("  ✓ Invoice SUCCESS!")
+            transaction?.let {
+                println("    Payment Hash: ${it.paymentHash}")
+                println("    Amount (msat): ${it.amountMsats}")
+                println("    Settled At: ${it.settledAt}")
+            }
+        }
+        
+        override fun pending(transaction: Transaction?) {
+            println("  ⏳ Invoice PENDING...")
+            transaction?.let {
+                println("    Payment Hash: ${it.paymentHash}")
+                println("    Amount (msat): ${it.amountMsats}")
+            }
+        }
+        
+        override fun failure(transaction: Transaction?) {
+            println("  ✗ Invoice FAILURE")
+            transaction?.let {
+                println("    Payment Hash: ${it.paymentHash}")
+            }
+        }
+    }
+    
+    val params = OnInvoiceEventParams(
+        paymentHash = paymentHash,
+        search = null,
+        pollingDelaySec = 2L,
+        maxPollingSec = 10L
+    )
+    
+    // This will poll for invoice status and call the appropriate callback method
+    node.onInvoiceEvents(params, callback)
+    println("  Invoice event monitoring complete.")
+}
+
+/**
+ * Example showing how to lookup an invoice by payment hash
  */
 suspend fun lookupInvoiceExample(node: StrikeNode, paymentHash: String) {
     println("Looking up invoice...")
