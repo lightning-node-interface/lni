@@ -3,6 +3,11 @@ Sources/LNI/lni.swift
 Sources/LNI/lniFFI.h
 Sources/LNI/lniFFI.modulemap
 
+# Generated iOS libraries and headers
+libs/
+include/
+LNI.xcframework/
+
 # Xcode
 *.xcuserdata
 *.xcworkspace

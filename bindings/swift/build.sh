@@ -102,20 +102,15 @@ if [ "$BUILD_IOS" = true ]; then
     fi
     echo "  Created $LIBS_DIR/liblni-ios-device.a"
     
-    # Create XCFramework
-    echo ""
-    echo "Creating XCFramework..."
-    XCFRAMEWORK_DIR="$SCRIPT_DIR/LNI.xcframework"
-    rm -rf "$XCFRAMEWORK_DIR"
+    # Create headers directory for XCFramework
+    HEADERS_DIR="$SCRIPT_DIR/include"
+    mkdir -p "$HEADERS_DIR"
     
-    xcodebuild -create-xcframework \
-        -library "$LIBS_DIR/liblni-ios-sim.a" \
-        -library "$LIBS_DIR/liblni-ios-device.a" \
-        -output "$XCFRAMEWORK_DIR"
-    echo "  Created $XCFRAMEWORK_DIR"
-    
+    # Note: Headers will be generated after running uniffi-bindgen below
+    # The XCFramework creation needs to happen after bindings are generated
     echo ""
     echo "iOS builds complete!"
+    echo "Note: Run the full build to generate Swift bindings and create XCFramework."
 fi
 
 # Find the shared library (Linux: .so, macOS: .dylib)
@@ -146,3 +141,34 @@ echo "Swift bindings generated successfully in: $OUTPUT_DIR"
 echo ""
 echo "Generated files:"
 ls -la "$OUTPUT_DIR"
+
+# Create XCFramework if iOS builds were requested
+if [ "$BUILD_IOS" = true ]; then
+    LIBS_DIR="$SCRIPT_DIR/libs"
+    HEADERS_DIR="$SCRIPT_DIR/include"
+    
+    # Copy headers for XCFramework
+    mkdir -p "$HEADERS_DIR"
+    cp "$OUTPUT_DIR/lniFFI.h" "$HEADERS_DIR/"
+    cp "$OUTPUT_DIR/lniFFI.modulemap" "$HEADERS_DIR/module.modulemap"
+    
+    echo ""
+    echo "Creating XCFramework..."
+    XCFRAMEWORK_DIR="$SCRIPT_DIR/LNI.xcframework"
+    rm -rf "$XCFRAMEWORK_DIR"
+    
+    xcodebuild -create-xcframework \
+        -library "$LIBS_DIR/liblni-ios-sim.a" \
+        -headers "$HEADERS_DIR" \
+        -library "$LIBS_DIR/liblni-ios-device.a" \
+        -headers "$HEADERS_DIR" \
+        -output "$XCFRAMEWORK_DIR"
+    
+    echo "  Created $XCFRAMEWORK_DIR"
+    echo ""
+    echo "XCFramework created successfully!"
+    echo "To use in your iOS project:"
+    echo "  1. Drag LNI.xcframework into your Xcode project"
+    echo "  2. Add Sources/LNI/lni.swift to your project"
+    echo "  3. Import and use the LNI types"
+fi
