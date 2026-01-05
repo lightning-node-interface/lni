@@ -12,7 +12,7 @@ import SwiftUI
 // MARK: - Main Content View
 
 struct ContentView: View {
-    @State private var output: String = "LNI Swift iOS Example\n\nThis app demonstrates the Lightning Node Interface (LNI) Swift bindings.\n\nOnce the LNI library is built and linked, you can test various Lightning node implementations."
+    @State private var output: String = "LNI Swift iOS Example\n\nThis app demonstrates the Lightning Node Interface (LNI) Swift bindings.\n\nEnter your Strike API key above and tap 'Get Balance' to test."
     @State private var isLoading: Bool = false
     @State private var strikeApiKey: String = ""
     @State private var showApiKey: Bool = false
@@ -125,15 +125,9 @@ struct ContentView: View {
         isLoading = true
         output = "=== Strike Balance ===\n\n"
         
-        // Note: When the LNI library is linked, uncomment and use the actual implementation:
-        /*
         do {
             let config = StrikeConfig(
-                apiKey: strikeApiKey,
-                baseUrl: nil,
-                httpTimeout: nil,
-                socks5Proxy: nil,
-                acceptInvalidCerts: nil
+                apiKey: strikeApiKey
             )
             
             // Use factory function for polymorphic access
@@ -150,15 +144,8 @@ struct ContentView: View {
             output += "Network: \(info.network)\n"
             output += "Alias: \(info.alias)\n"
         } catch {
-            output += "✗ Error: \(error.localizedDescription)\n"
+            output += "✗ Error: \(error)\n"
         }
-        */
-        
-        // Placeholder until library is linked
-        output += "Note: LNI library not yet linked.\n"
-        output += "Run ./build.sh --ios to build for iOS.\n"
-        output += "Then link the XCFramework to the project.\n"
-        output += "\nAPI Key entered: \(strikeApiKey.prefix(4))****\n"
         
         isLoading = false
     }

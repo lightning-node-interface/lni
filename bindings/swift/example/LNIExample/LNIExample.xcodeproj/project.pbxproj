@@ -7,12 +7,31 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		012FCA932F0B78E000B7CE2F /* lni.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012FCA922F0B78E000B7CE2F /* lni.swift */; };
+		012FCA942F0B78F600B7CE2F /* LNI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012FCA902F0B78B200B7CE2F /* LNI.xcframework */; };
+		012FCA952F0B78F600B7CE2F /* LNI.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 012FCA902F0B78B200B7CE2F /* LNI.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		2A1B3D012B0E0001000A0001 /* LNIExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1B3D002B0E0001000A0001 /* LNIExampleApp.swift */; };
 		2A1B3D032B0E0001000A0002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1B3D022B0E0001000A0002 /* ContentView.swift */; };
 		2A1B3D052B0E0001000A0003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2A1B3D042B0E0001000A0003 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		012FCA962F0B78F600B7CE2F /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				012FCA952F0B78F600B7CE2F /* LNI.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		012FCA902F0B78B200B7CE2F /* LNI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = LNI.xcframework; sourceTree = "<group>"; };
+		012FCA922F0B78E000B7CE2F /* lni.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = lni.swift; sourceTree = "<group>"; };
 		2A1B3CFD2B0E0001000A0001 /* LNIExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LNIExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A1B3D002B0E0001000A0001 /* LNIExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LNIExampleApp.swift; sourceTree = "<group>"; };
 		2A1B3D022B0E0001000A0002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -24,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				012FCA942F0B78F600B7CE2F /* LNI.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -35,6 +55,8 @@
 			children = (
 				2A1B3CFF2B0E0001000A0001 /* LNIExample */,
 				2A1B3CFE2B0E0001000A0001 /* Products */,
+				012FCA902F0B78B200B7CE2F /* LNI.xcframework */,
+				012FCA922F0B78E000B7CE2F /* lni.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -66,6 +88,7 @@
 				2A1B3CF92B0E0001000A0001 /* Sources */,
 				2A1B3CFA2B0E0001000A0001 /* Frameworks */,
 				2A1B3CFB2B0E0001000A0001 /* Resources */,
+				012FCA962F0B78F600B7CE2F /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -126,6 +149,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2A1B3D032B0E0001000A0002 /* ContentView.swift in Sources */,
+				012FCA932F0B78E000B7CE2F /* lni.swift in Sources */,
 				2A1B3D012B0E0001000A0001 /* LNIExampleApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -185,7 +209,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -242,7 +266,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
