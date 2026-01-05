@@ -1,5 +1,4 @@
 # Generated Swift bindings
-Sources/LNI/lni.swift
 Sources/LNI/lniFFI.h
 Sources/LNI/lniFFI.modulemap
 
