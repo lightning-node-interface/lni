@@ -48,6 +48,7 @@ pub trait LightningNode: Send + Sync {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
 pub enum InvoiceType {
     Bolt11,
     Bolt12,
@@ -320,23 +321,35 @@ impl Default for LookupInvoiceParams {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateInvoiceParams {
-    pub invoice_type: InvoiceType,
+    /// Defaults to Bolt11 if not specified
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub invoice_type: Option<InvoiceType>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub offer: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub description: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub description_hash: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub expiry: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub r_preimage: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_blinded: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_keysend: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_amp: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_private: Option<bool>,
     // pub route_hints: Option<Vec<HopHint>>, TODO
 }
 impl Default for CreateInvoiceParams {
     fn default() -> Self {
         Self {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11), // Defaults to Bolt11 when used
             amount_msats: None,
             offer: None,
             description: None,
@@ -348,6 +361,13 @@ impl Default for CreateInvoiceParams {
             is_amp: Some(false),
             is_private: Some(false),
         }
+    }
+}
+
+impl CreateInvoiceParams {
+    /// Get the invoice type, defaulting to Bolt11 if not specified
+    pub fn get_invoice_type(&self) -> InvoiceType {
+        self.invoice_type.clone().unwrap_or(InvoiceType::Bolt11)
     }
 }
 

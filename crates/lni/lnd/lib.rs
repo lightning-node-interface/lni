@@ -213,7 +213,7 @@ mod tests {
         // BOLT11
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 description: Some(description.clone()),
                 description_hash: Some(description_hash.clone()),
@@ -238,7 +238,7 @@ mod tests {
         // BOLT 11 with blinded paths
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 description: Some(description.clone()),
                 description_hash: Some(description_hash.clone()),
@@ -266,7 +266,7 @@ mod tests {
         // Simple BOLT11 test
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 ..Default::default()
             })

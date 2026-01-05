@@ -61,7 +61,7 @@ impl PhoenixdNode {
     pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         create_invoice(
             self.config.clone(),
-            params.invoice_type,
+            params.get_invoice_type(),
             Some(params.amount_msats.unwrap_or_default()),
             params.description,
             params.description_hash,
@@ -185,7 +185,7 @@ mod tests {
         let description_hash = "".to_string();
         let expiry = 3600;
         let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11),
             amount_msats: Some(amount_msats),
             offer: None,
             description: Some(description),

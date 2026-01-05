@@ -205,7 +205,7 @@ pub async fn create_invoice(
     config: &BlinkConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             let wallet_id = get_btc_wallet_id(config).await?;
             

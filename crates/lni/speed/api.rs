@@ -136,7 +136,7 @@ pub async fn create_invoice(
     config: &SpeedConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             let client = client(config);
 

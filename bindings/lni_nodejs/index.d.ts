@@ -233,7 +233,8 @@ export interface LookupInvoiceParams {
   search?: string
 }
 export interface CreateInvoiceParams {
-  invoiceType: InvoiceType
+  /** Defaults to Bolt11 if not specified */
+  invoiceType?: InvoiceType
   amountMsats?: number
   offer?: string
   description?: string

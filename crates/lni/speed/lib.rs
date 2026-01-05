@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_invoice() {
         let params = CreateInvoiceParams {
-            invoice_type: crate::InvoiceType::Bolt11,
+            invoice_type: Some(crate::InvoiceType::Bolt11),
             amount_msats: Some(1000), // 1 sat
             description: Some("Test invoice".to_string()),
             description_hash: None,

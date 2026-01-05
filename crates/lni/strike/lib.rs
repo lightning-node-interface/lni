@@ -189,7 +189,7 @@ mod tests {
 
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 description: Some(description.clone()),
                 expiry: Some(expiry),

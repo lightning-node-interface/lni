@@ -131,7 +131,7 @@ pub async fn create_invoice(
 ) -> Result<Transaction, ApiError> {
     let client = async_client(&config);
 
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             // Create a receive request with bolt11 configuration
             let req_url = format!("{}/receive-requests", get_base_url(&config));

@@ -1,28 +1,31 @@
 import { useEffect, useState, useRef } from 'react';
 import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch } from 'react-native';
 import {
-  LndNode,
   LndConfig,
-  PhoenixdNode,
   PhoenixdConfig,
-  ClnNode,
   ClnConfig,
-  StrikeNode,
   StrikeConfig,
-  BlinkNode,
   BlinkConfig,
-  NwcNode,
   NwcConfig,
   SpeedConfig,
-  SpeedNode,
   type OnInvoiceEventCallback,
   Transaction,
   OnInvoiceEventParams,
   InvoiceType,
   CreateInvoiceParams,
   LookupInvoiceParams,
+  ListTransactionsParams,
   CreateOfferParams,
-  Offer
+  Offer,
+  // Polymorphic interface and factory functions
+  type LightningNode,
+  createLndNode,
+  createClnNode,
+  createStrikeNode,
+  createPhoenixdNode,
+  createBlinkNode,
+  createNwcNode,
+  createSpeedNode,
 } from 'lni_react_native';
 import { 
   LND_URL, 
@@ -101,8 +104,8 @@ export default function App() {
     );
   };
 
-  // Shared test logic for async node implementations
-  const testAsyncNode = async (nodeName: string, node: any, testInvoiceHash?: string) => {
+  // Shared test logic for any LightningNode implementation (polymorphic!)
+  const testAsyncNode = async (nodeName: string, node: LightningNode, testInvoiceHash?: string) => {
     try {
       addOutput(nodeName, `Testing ${nodeName}...`);
       
@@ -113,21 +116,23 @@ export default function App() {
 
       // Test 2: Create invoice
       addOutput(nodeName, '(2) Testing createInvoice...');
-      const invoice = await node.createInvoice({
+      const invoiceParams = CreateInvoiceParams.create({
         amountMsats: BigInt(1000),
         description: `test invoice from ${nodeName}`,
-        invoiceType: InvoiceType.Bolt11,
+        expiry: BigInt(3600),
       });
+      const invoice = await node.createInvoice(invoiceParams);
       addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
 
       // Test 3: Lookup invoice (if test hash provided)
       if (testInvoiceHash) {
         addOutput(nodeName, '(3) Testing lookupInvoice...');
         try {
-          const lookupInvoice = await node.lookupInvoice({
+          const lookupParams = LookupInvoiceParams.create({
             paymentHash: testInvoiceHash,
-            search: '',
+            search: undefined,
           });
+          const lookupInvoice = await node.lookupInvoice(lookupParams);
           addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
         } catch (error) {
           addOutput(nodeName, `Lookup failed (expected if hash doesn't exist): ${error}`);
@@ -136,10 +141,13 @@ export default function App() {
 
       // Test 4: List transactions
       addOutput(nodeName, '(4) Testing listTransactions...');
-      const txns = await node.listTransactions({
+      const listParams = ListTransactionsParams.create({
         from: BigInt(0),
         limit: BigInt(3),
+        paymentHash: undefined,
+        search: undefined,
       });
+      const txns = await node.listTransactions(listParams);
       addOutput(nodeName, `Found ${txns.length} transactions`);
 
       // Test 5: Decode invoice (if we have one)
@@ -158,9 +166,11 @@ export default function App() {
         addOutput(nodeName, '(6) Testing createOffer...');
         try {          
           // Test without amount (reusable offer)
-          const reusableOffer = await node.createOffer({
+          const offerParams = CreateOfferParams.create({
             description: `BOLT12 reusable offer from ${nodeName}`,
+            amountMsats: undefined,
           });
+          const reusableOffer = await node.createOffer(offerParams);
           addOutput(nodeName, `Reusable offer created: ${reusableOffer.bolt12?.substring(0, 30)}...`);
         } catch (error) {
           addOutput(nodeName, `createOffer failed (may not be supported): ${error}`);
@@ -226,7 +236,8 @@ export default function App() {
         httpTimeout: BigInt(40)
       });
 
-      const node = new LndNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createLndNode(config);
       await testAsyncNode(nodeName, node, LND_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `LND initialization failed: ${error}`);
@@ -250,7 +261,8 @@ export default function App() {
         httpTimeout: BigInt(40)
       });
 
-      const node = new ClnNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createClnNode(config);
       await testAsyncNode(nodeName, node, CLN_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `CLN initialization failed: ${error}`);
@@ -271,7 +283,8 @@ export default function App() {
         socks5Proxy: getProxyValue(),
       });
 
-      const node = new StrikeNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createStrikeNode(config);
       await testAsyncNode(nodeName, node, STRIKE_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Strike initialization failed: ${error}`);
@@ -295,7 +308,9 @@ export default function App() {
         acceptInvalidCerts: true,
         httpTimeout: BigInt(60)
       });
-      const node = new PhoenixdNode(config);
+      
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createPhoenixdNode(config);
       await testAsyncNode(nodeName, node, PHOENIXD_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Phoenixd initialization failed: ${error}`);
@@ -316,7 +331,8 @@ export default function App() {
         socks5Proxy: getProxyValue(),
       });
 
-      const node = new BlinkNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createBlinkNode(config);
       await testAsyncNode(nodeName, node, BLINK_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Blink initialization failed: ${error}`);
@@ -337,7 +353,8 @@ export default function App() {
         socks5Proxy: getProxyValue(),
       });
 
-      const node = new SpeedNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createSpeedNode(config);
       await testAsyncNode(nodeName, node, SPEED_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `Speed initialization failed: ${error}`);
@@ -358,7 +375,8 @@ export default function App() {
         socks5Proxy: getProxyValue(),
       });
 
-      const node = new NwcNode(config);
+      // Use factory function for polymorphic LightningNode
+      const node: LightningNode = createNwcNode(config);
       await testAsyncNode(nodeName, node, NWC_TEST_PAYMENT_HASH);
     } catch (error) {
       updateTestStatus(nodeName, 'error', `NWC initialization failed: ${error}`);

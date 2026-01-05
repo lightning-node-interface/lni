@@ -63,7 +63,7 @@ impl ClnNode {
     ) -> Result<Transaction, ApiError> {
         crate::cln::api::create_invoice(
             self.config.clone(),
-            params.invoice_type,
+            params.get_invoice_type(),
             params.amount_msats,
             params.offer.clone(),
             params.description,
@@ -213,7 +213,7 @@ mod tests {
         // BOLT11
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 description: Some(description.clone()),
                 description_hash: Some(description_hash.clone()),
@@ -237,7 +237,7 @@ mod tests {
         // BOLT11 - Zero amount
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 expiry: Some(expiry),
                 ..Default::default()
             })
@@ -258,7 +258,7 @@ mod tests {
         // BOLT12
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt12,
+                invoice_type: Some(InvoiceType::Bolt12),
                 amount_msats: Some(amount_msats),
                 offer: Some(PHOENIX_MOBILE_OFFER.to_string()),
                 description: Some(description.clone()),
