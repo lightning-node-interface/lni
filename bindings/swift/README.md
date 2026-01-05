@@ -132,15 +132,64 @@ for node in [strikeNode, blinkNode, nwcNode] {
 
 See the `example/` directory for a complete iOS example project that runs on the iOS Simulator.
 
-### Adding to your iOS project
+### Using Swift Package Manager
+
+Add LNI to your project using Swift Package Manager:
+
+1. In Xcode, go to **File > Add Package Dependencies...**
+2. Enter the repository URL: `https://github.com/lightning-node-interface/lni`
+3. Select the version you want to use
+4. Click **Add Package**
+
+Or add it to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/lightning-node-interface/lni", from: "0.1.0")
+]
+```
+
+And add it to your target:
+
+```swift
+.target(
+    name: "YourTarget",
+    dependencies: [
+        .product(name: "LNI", package: "lni")
+    ]
+)
+```
+
+### Local Development with SPM
+
+For local development, you can build and use the XCFramework locally:
+
+1. Build the iOS targets:
+   ```bash
+   cd bindings/swift
+   ./build.sh --release --ios
+   ```
+
+2. Create the `lniFFI.xcframework` for SPM:
+   ```bash
+   # The build.sh script creates LNI.xcframework
+   # For SPM, we need it named lniFFI.xcframework
+   cp -R LNI.xcframework lniFFI.xcframework
+   ```
+
+3. Modify `Package.swift` to use the local binary:
+   ```swift
+   // Replace the .binaryTarget with url/checksum with:
+   .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
+   ```
+
+### Manual Integration (without SPM)
+
+If you prefer not to use SPM:
 
 1. Copy the generated Swift files from `Sources/LNI/` to your project
 2. Add the static library or XCFramework to your project
 3. Link against the library in your build settings
-
-### Using Swift Package Manager (future)
-
-We plan to add SPM support in a future release.
 
 ## License
 
