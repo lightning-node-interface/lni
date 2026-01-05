@@ -23,7 +23,16 @@ let package = Package(
             path: "Sources/LNI"
         ),
         // Binary XCFramework containing the native library
-        // To use a local build, replace this with:
+        // 
+        // NOTE: The checksum below is a placeholder. When creating a new release:
+        // 1. Build the XCFramework: ./build.sh --release --ios
+        // 2. Rename to lniFFI.xcframework
+        // 3. Create zip: zip -r lniFFI.xcframework.zip lniFFI.xcframework
+        // 4. Calculate checksum: swift package compute-checksum lniFFI.xcframework.zip
+        // 5. Upload the zip to the GitHub release
+        // 6. Update the URL version and checksum below
+        //
+        // For local development, replace this with:
         // .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
         .binaryTarget(
             name: "lniFFI",

@@ -170,16 +170,21 @@ For local development, you can build and use the XCFramework locally:
    ./build.sh --release --ios
    ```
 
-2. Create the `lniFFI.xcframework` for SPM:
+2. Rename the XCFramework for SPM (SPM requires it to match the binary target name `lniFFI`):
    ```bash
-   # The build.sh script creates LNI.xcframework
-   # For SPM, we need it named lniFFI.xcframework
-   cp -R LNI.xcframework lniFFI.xcframework
+   mv LNI.xcframework lniFFI.xcframework
    ```
 
-3. Modify `Package.swift` to use the local binary:
+3. Modify `Package.swift` to use the local binary target instead of the remote URL:
    ```swift
-   // Replace the .binaryTarget with url/checksum with:
+   // Comment out the remote binary target:
+   // .binaryTarget(
+   //     name: "lniFFI",
+   //     url: "https://github.com/lightning-node-interface/lni/releases/download/v0.1.0/lniFFI.xcframework.zip",
+   //     checksum: "SHA256_CHECKSUM_HERE"
+   // )
+   
+   // Add local binary target:
    .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
    ```
 
