@@ -36,8 +36,8 @@ let package = Package(
         // .binaryTarget(name: "lniFFI", path: "bindings/swift/lniFFI.xcframework")
         .binaryTarget(
             name: "lniFFI",
-            url: "https://github.com/lightning-node-interface/lni/releases/download/v0.1.3/lniFFI.xcframework.zip",
-            checksum: "bd31af9c6e7744a87d8e5283d87be241acd6693dd72d5a2c47104503ccbaaa9e"
+            url: "https://github.com/lightning-node-interface/lni/releases/download/v0.1.2/lniFFI.xcframework.zip",
+            checksum: "e81ffafc663c45626b2ea5fffb93f724beb28ac94b860b3732c59b8c99e49c6d"
         )
     ]
 )
