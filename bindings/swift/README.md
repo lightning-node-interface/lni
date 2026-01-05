@@ -132,15 +132,116 @@ for node in [strikeNode, blinkNode, nwcNode] {
 
 See the `example/` directory for a complete iOS example project that runs on the iOS Simulator.
 
-### Adding to your iOS project
+### Using Swift Package Manager
+
+Add LNI to your project using Swift Package Manager:
+
+1. In Xcode, go to **File > Add Package Dependencies...**
+2. Enter the repository URL: `https://github.com/lightning-node-interface/lni`
+3. Select the version you want to use
+4. Click **Add Package**
+
+Or add it to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/lightning-node-interface/lni", from: "0.1.0")
+]
+```
+
+And add it to your target:
+
+```swift
+.target(
+    name: "YourTarget",
+    dependencies: [
+        .product(name: "LNI", package: "lni")
+    ]
+)
+```
+
+### Local Development with SPM
+
+For local development, you can build and use the XCFramework locally:
+
+1. Build the iOS targets:
+   ```bash
+   cd bindings/swift
+   ./build.sh --release --ios
+   ```
+
+2. Rename the XCFramework for SPM (SPM requires it to match the binary target name `lniFFI`):
+   ```bash
+   mv LNI.xcframework lniFFI.xcframework
+   ```
+
+3. Modify `Package.swift` to use the local binary target instead of the remote URL:
+   ```swift
+   // Comment out the remote binary target:
+   // .binaryTarget(
+   //     name: "lniFFI",
+   //     url: "https://github.com/lightning-node-interface/lni/releases/download/v0.1.0/lniFFI.xcframework.zip",
+   //     checksum: "SHA256_CHECKSUM_HERE"
+   // )
+   
+   // Add local binary target:
+   .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
+   ```
+
+## Publishing a Release
+
+To publish a new release for SPM distribution:
+
+### 1. Build and Package
+
+```bash
+cd bindings/swift
+./build.sh --release --ios --package
+```
+
+This will:
+- Build the XCFramework for iOS devices and simulators
+- Create `lniFFI.xcframework.zip`
+- Calculate the SHA256 checksum
+- Automatically update `Package.swift` with the new checksum
+
+### 2. Update Version (if needed)
+
+If releasing a new version, update the URL in `Package.swift`:
+
+```swift
+.binaryTarget(
+    name: "lniFFI",
+    url: "https://github.com/lightning-node-interface/lni/releases/download/vX.Y.Z/lniFFI.xcframework.zip",
+    checksum: "..."
+)
+```
+
+### 3. Create GitHub Release and Upload
+
+```bash
+# Create a new release and upload the zip file
+gh release create vX.Y.Z lniFFI.xcframework.zip --title "vX.Y.Z" --notes "Release notes here"
+
+# Or upload to an existing release
+gh release upload vX.Y.Z lniFFI.xcframework.zip
+```
+
+### 4. Commit and Push
+
+```bash
+git add Package.swift
+git commit -m "Release vX.Y.Z"
+git push
+```
+
+### Manual Integration (without SPM)
+
+If you prefer not to use SPM:
 
 1. Copy the generated Swift files from `Sources/LNI/` to your project
 2. Add the static library or XCFramework to your project
 3. Link against the library in your build settings
-
-### Using Swift Package Manager (future)
-
-We plan to add SPM support in a future release.
 
 ## License
 

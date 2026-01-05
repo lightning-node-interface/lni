@@ -6,9 +6,11 @@
 # 1. Builds the lni library with uniffi feature
 # 2. Uses uniffi-bindgen to generate Swift bindings from the shared library
 # 3. Optionally builds for iOS simulator targets
+# 4. Optionally packages XCFramework for SPM distribution
 #
-# Usage: ./build.sh [--release] [--ios]
-#        ./build.sh --release --ios   # Build for iOS in release mode
+# Usage: ./build.sh [--release] [--ios] [--package]
+#        ./build.sh --release --ios            # Build for iOS in release mode
+#        ./build.sh --release --ios --package  # Build and package for SPM release
 
 set -e
 
@@ -19,6 +21,7 @@ EXAMPLE_DIR="$SCRIPT_DIR/example"
 # Parse arguments
 BUILD_TYPE="debug"
 BUILD_IOS=false
+PACKAGE_RELEASE=false
 
 for arg in "$@"; do
     case $arg in
@@ -27,6 +30,9 @@ for arg in "$@"; do
             ;;
         --ios)
             BUILD_IOS=true
+            ;;
+        --package)
+            PACKAGE_RELEASE=true
             ;;
     esac
 done
@@ -167,8 +173,54 @@ if [ "$BUILD_IOS" = true ]; then
     echo "  Created $XCFRAMEWORK_DIR"
     echo ""
     echo "XCFramework created successfully!"
-    echo "To use in your iOS project:"
-    echo "  1. Drag LNI.xcframework into your Xcode project"
-    echo "  2. Add Sources/LNI/lni.swift to your project"
-    echo "  3. Import and use the LNI types"
+    
+    # Package for release if requested
+    if [ "$PACKAGE_RELEASE" = true ]; then
+        echo ""
+        echo "Packaging XCFramework for release..."
+        
+        # Rename to lniFFI.xcframework (required name for SPM binary target)
+        RELEASE_XCFRAMEWORK="$SCRIPT_DIR/lniFFI.xcframework"
+        rm -rf "$RELEASE_XCFRAMEWORK"
+        cp -R "$XCFRAMEWORK_DIR" "$RELEASE_XCFRAMEWORK"
+        echo "  Renamed to lniFFI.xcframework"
+        
+        # Create zip file
+        ZIP_FILE="$SCRIPT_DIR/lniFFI.xcframework.zip"
+        rm -f "$ZIP_FILE"
+        cd "$SCRIPT_DIR"
+        zip -r "lniFFI.xcframework.zip" "lniFFI.xcframework"
+        echo "  Created lniFFI.xcframework.zip"
+        
+        # Calculate checksum
+        CHECKSUM=$(swift package compute-checksum "$ZIP_FILE")
+        echo "  Checksum: $CHECKSUM"
+        
+        # Update Package.swift with the new checksum
+        PACKAGE_SWIFT="$SCRIPT_DIR/Package.swift"
+        if [ -f "$PACKAGE_SWIFT" ]; then
+            # Use sed to replace the checksum line
+            sed -i '' "s/checksum: \"[a-f0-9]*\"/checksum: \"$CHECKSUM\"/" "$PACKAGE_SWIFT"
+            echo "  Updated Package.swift with new checksum"
+        fi
+        
+        echo ""
+        echo "Release package ready!"
+        echo "  - lniFFI.xcframework.zip: $(du -h "$ZIP_FILE" | cut -f1)"
+        echo "  - Checksum: $CHECKSUM"
+        echo ""
+        echo "Next steps:"
+        echo "  1. Create a GitHub release with the desired version tag"
+        echo "  2. Upload lniFFI.xcframework.zip to the release"
+        echo "  3. Update the version in Package.swift URL if needed"
+        
+        cd "$ROOT_DIR"
+    else
+        echo "To use in your iOS project:"
+        echo "  1. Drag LNI.xcframework into your Xcode project"
+        echo "  2. Add Sources/LNI/lni.swift to your project"
+        echo "  3. Import and use the LNI types"
+        echo ""
+        echo "To package for release, run: ./build.sh --release --ios --package"
+    fi
 fi

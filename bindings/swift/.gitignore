@@ -7,6 +7,8 @@ Sources/LNI/lniFFI.modulemap
 libs/
 include/
 LNI.xcframework/
+lniFFI.xcframework/
+lniFFI.xcframework.zip
 
 # Xcode
 *.xcuserdata
