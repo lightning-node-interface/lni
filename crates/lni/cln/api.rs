@@ -802,18 +802,16 @@ pub async fn poll_invoice_events<F>(
     }
 }
 
-pub fn on_invoice_events(
+pub async fn on_invoice_events(
     config: ClnConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
-    tokio::task::spawn(async move {
-        poll_invoice_events(config, params, move |status, tx| match status.as_str() {
-            "success" => callback.success(tx),
-            "pending" => callback.pending(tx),
-            "failure" => callback.failure(tx),
-            _ => {}
-        })
-        .await;
-    });
+    poll_invoice_events(config, params, move |status, tx| match status.as_str() {
+        "success" => callback.success(tx),
+        "pending" => callback.pending(tx),
+        "failure" => callback.failure(tx),
+        _ => {}
+    })
+    .await;
 }

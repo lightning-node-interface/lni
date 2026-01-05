@@ -3,8 +3,10 @@ use napi_derive::napi;
 
 use crate::{
     phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceParams, PayInvoiceResponse,
-    Transaction, LightningNode, CreateOfferParams
+    Transaction, CreateOfferParams
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 use crate::{CreateInvoiceParams, LookupInvoiceParams, Offer};
 
@@ -49,17 +51,17 @@ impl PhoenixdNode {
     }
 }
 
+// All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-#[async_trait::async_trait]
-impl LightningNode for PhoenixdNode {
-    async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
+impl PhoenixdNode {
+    pub async fn get_info(&self) -> Result<crate::NodeInfo, ApiError> {
         crate::phoenixd::api::get_info(self.config.clone()).await
     }
 
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         create_invoice(
             self.config.clone(),
-            params.invoice_type,
+            params.get_invoice_type(),
             Some(params.amount_msats.unwrap_or_default()),
             params.description,
             params.description_hash,
@@ -67,23 +69,23 @@ impl LightningNode for PhoenixdNode {
         ).await
     }
 
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         pay_invoice(self.config.clone(), params).await
     }
 
-    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
+    pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
         crate::phoenixd::api::create_offer(self.config.clone(), params).await
     }
 
-    async fn get_offer(&self, _search: Option<String>) -> Result<Offer, ApiError> {
+    pub async fn get_offer(&self, _search: Option<String>) -> Result<Offer, ApiError> {
         crate::phoenixd::api::get_offer(self.config.clone()).await
     }
 
-    async fn list_offers(&self, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::phoenixd::api::list_offers()
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+        crate::phoenixd::api::list_offers(self.config.clone(), search).await
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -92,7 +94,7 @@ impl LightningNode for PhoenixdNode {
         crate::phoenixd::api::pay_offer(self.config.clone(), offer, amount_msats, payer_note).await
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::phoenixd::api::lookup_invoice(
             self.config.clone(),
             params.payment_hash,
@@ -102,25 +104,29 @@ impl LightningNode for PhoenixdNode {
         ).await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::phoenixd::api::list_transactions(self.config.clone(), params).await
     }
 
-    async fn decode(&self, _str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, _str: String) -> Result<String, ApiError> {
         Ok("".to_string())
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::phoenixd::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
+crate::impl_lightning_node!(PhoenixdNode);
 
 #[cfg(test)]
 mod tests {
@@ -179,7 +185,7 @@ mod tests {
         let description_hash = "".to_string();
         let expiry = 3600;
         let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11),
             amount_msats: Some(amount_msats),
             offer: None,
             description: Some(description),
@@ -279,6 +285,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_list_offers() {
+        match NODE.list_offers(None).await {
+            Ok(offers) => {
+                println!("List offers resp: {:?}", offers);
+            }
+            Err(e) => {
+                panic!("Failed to list offers: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_pay_offer() {
         match NODE.pay_offer(
             TEST_RECEIVER_OFFER.to_string(),
@@ -353,6 +371,6 @@ mod tests {
             ..Default::default()
         };
         let callback = OnInvoiceEventCallback {};
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
     }
 }

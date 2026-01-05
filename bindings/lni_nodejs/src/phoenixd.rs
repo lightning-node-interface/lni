@@ -42,7 +42,7 @@ impl PhoenixdNode {
   pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::phoenixd::api::create_invoice(
       self.inner.clone(),
-      params.invoice_type,
+      params.invoice_type.unwrap_or(lni::InvoiceType::Bolt11),
       params.amount_msats,
       params.description,
       params.description_hash,

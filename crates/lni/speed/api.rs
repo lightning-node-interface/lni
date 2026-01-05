@@ -136,7 +136,7 @@ pub async fn create_invoice(
     config: &SpeedConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             let client = client(config);
 
@@ -575,7 +575,7 @@ where
 pub async fn on_invoice_events(
     config: SpeedConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),

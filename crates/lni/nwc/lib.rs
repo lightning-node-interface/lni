@@ -3,9 +3,11 @@ use napi_derive::napi;
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, ListTransactionsParams, LookupInvoiceParams,
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
     Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -47,34 +49,34 @@ impl NwcNode {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-#[async_trait::async_trait]
-impl LightningNode for NwcNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+// All node methods - UniFFI exports these directly when the feature is enabled
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+impl NwcNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::nwc::api::get_info(self.config.clone()).await
     }
 
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::nwc::api::create_invoice(self.config.clone(), params).await
     }
 
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::nwc::api::pay_invoice(self.config.clone(), params).await
     }
 
-    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+    pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
         Err(ApiError::Api { reason: "create_offer not implemented for NwcNode".to_string() })
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
+    pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::nwc::api::get_offer(&self.config, search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::nwc::api::list_offers(&self.config, search).await
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -83,29 +85,33 @@ impl LightningNode for NwcNode {
         crate::nwc::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
         crate::nwc::api::lookup_invoice(self.config.clone(), params.payment_hash, params.search).await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
         crate::nwc::api::list_transactions(self.config.clone(), params).await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::nwc::api::decode(self.config.clone(), str).await
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::nwc::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
+crate::impl_lightning_node!(NwcNode);
 
 #[cfg(test)]
 mod tests {
@@ -159,7 +165,6 @@ mod tests {
         let expiry = 3600;
 
         match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
             amount_msats: Some(amount_msats),
             description: Some(description.clone()),
             expiry: Some(expiry),
@@ -290,7 +295,7 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
 
         // Check if events were received
         let received_events = events.lock().unwrap();

@@ -1,11 +1,12 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo};
+use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo, OnInvoiceEventCallback, OnInvoiceEventParams};
 use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, OnInvoiceEventCallback, OnInvoiceEventParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    ApiError, CreateInvoiceParams, CreateOfferParams, Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -50,32 +51,32 @@ impl SpeedNode {
     }
 }
 
+// All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-#[async_trait::async_trait]
-impl LightningNode for SpeedNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl SpeedNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config).await
     }
 
-    async fn create_invoice(
+    pub async fn create_invoice(
         &self,
-        invoice_params: CreateInvoiceParams,
+        params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
-        crate::speed::api::create_invoice(&self.config, invoice_params).await
+        crate::speed::api::create_invoice(&self.config, params).await
     }
 
-    async fn pay_invoice(
+    pub async fn pay_invoice(
         &self,
-        invoice_params: PayInvoiceParams,
+        params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
-        crate::speed::api::pay_invoice(&self.config, invoice_params).await
+        crate::speed::api::pay_invoice(&self.config, params).await
     }
 
-    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+    pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
         Err(ApiError::Api { reason: "create_offer not implemented for SpeedNode".to_string() })
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
         crate::speed::api::lookup_invoice(
             &self.config,
             params.payment_hash,
@@ -86,7 +87,7 @@ impl LightningNode for SpeedNode {
         .await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<Transaction>, ApiError> {
@@ -94,19 +95,19 @@ impl LightningNode for SpeedNode {
             .await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::speed::api::decode(&self.config, str).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
+    pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::speed::api::get_offer(&self.config, search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::speed::api::list_offers(&self.config, search).await
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -115,14 +116,18 @@ impl LightningNode for SpeedNode {
         crate::speed::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: OnInvoiceEventParams,
-        callback: Box<dyn OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
     ) {
         crate::speed::api::on_invoice_events(self.config.clone(), params, callback).await;
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
+crate::impl_lightning_node!(SpeedNode);
 
 #[cfg(test)]
 mod tests {
@@ -177,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_invoice() {
         let params = CreateInvoiceParams {
-            invoice_type: crate::InvoiceType::Bolt11,
+            invoice_type: Some(crate::InvoiceType::Bolt11),
             amount_msats: Some(1000), // 1 sat
             description: Some("Test invoice".to_string()),
             description_hash: None,
@@ -314,7 +319,7 @@ mod tests {
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
 
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();

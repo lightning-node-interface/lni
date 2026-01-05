@@ -4,8 +4,10 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams, Offer,
-    PayInvoiceParams, PayInvoiceResponse, Transaction, LightningNode,
+    PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -48,20 +50,20 @@ impl ClnNode {
     }
 }
 
+// All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-#[async_trait::async_trait]
-impl LightningNode for ClnNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl ClnNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::cln::api::get_info(self.config.clone()).await
     }
 
-    async fn create_invoice(
+    pub async fn create_invoice(
         &self,
         params: CreateInvoiceParams,
     ) -> Result<Transaction, ApiError> {
         crate::cln::api::create_invoice(
             self.config.clone(),
-            params.invoice_type,
+            params.get_invoice_type(),
             params.amount_msats,
             params.offer.clone(),
             params.description,
@@ -71,26 +73,26 @@ impl LightningNode for ClnNode {
         .await
     }
 
-    async fn pay_invoice(
+    pub async fn pay_invoice(
         &self,
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
         crate::cln::api::pay_invoice(self.config.clone(), params).await
     }
 
-    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
+    pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
         crate::cln::api::create_offer(self.config.clone(), params).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
+    pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::cln::api::get_offer(self.config.clone(), search).await
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::cln::api::list_offers(self.config.clone(), search).await
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -99,7 +101,7 @@ impl LightningNode for ClnNode {
         crate::cln::api::pay_offer(self.config.clone(), offer, amount_msats, payer_note).await
     }
 
-    async fn lookup_invoice(
+    pub async fn lookup_invoice(
         &self,
         params: LookupInvoiceParams,
     ) -> Result<crate::Transaction, ApiError> {
@@ -113,7 +115,7 @@ impl LightningNode for ClnNode {
         .await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
@@ -126,18 +128,22 @@ impl LightningNode for ClnNode {
         .await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::cln::api::decode(self.config.clone(), str).await
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::cln::api::on_invoice_events(self.config.clone(), params, callback)
+        crate::cln::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
+
+// Trait implementation for Rust consumers - uses the impl_lightning_node macro
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
+crate::impl_lightning_node!(ClnNode);
 
 #[cfg(test)]
 mod tests {
@@ -207,7 +213,7 @@ mod tests {
         // BOLT11
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 amount_msats: Some(amount_msats),
                 description: Some(description.clone()),
                 description_hash: Some(description_hash.clone()),
@@ -231,7 +237,7 @@ mod tests {
         // BOLT11 - Zero amount
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt11,
+                invoice_type: Some(InvoiceType::Bolt11),
                 expiry: Some(expiry),
                 ..Default::default()
             })
@@ -252,7 +258,7 @@ mod tests {
         // BOLT12
         match NODE
             .create_invoice(CreateInvoiceParams {
-                invoice_type: InvoiceType::Bolt12,
+                invoice_type: Some(InvoiceType::Bolt12),
                 amount_msats: Some(amount_msats),
                 offer: Some(PHOENIX_MOBILE_OFFER.to_string()),
                 description: Some(description.clone()),
@@ -491,6 +497,6 @@ mod tests {
             ..Default::default()
         };
         let callback = OnInvoiceEventCallback {};
-        NODE.on_invoice_events(params, Box::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
     }
 }

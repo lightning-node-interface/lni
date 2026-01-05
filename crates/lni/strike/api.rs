@@ -131,7 +131,7 @@ pub async fn create_invoice(
 ) -> Result<Transaction, ApiError> {
     let client = async_client(&config);
 
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             // Create a receive request with bolt11 configuration
             let req_url = format!("{}/receive-requests", get_base_url(&config));
@@ -347,7 +347,7 @@ pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<Offe
     })
 }
 
-pub fn list_offers(
+pub async fn list_offers(
     _config: &StrikeConfig,
     _search: Option<String>,
 ) -> Result<Vec<Offer>, ApiError> {
@@ -686,7 +686,7 @@ where
 pub async fn on_invoice_events(
     config: StrikeConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     poll_invoice_events(config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),
