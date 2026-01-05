@@ -171,9 +171,14 @@ if [ "$BUILD_IOS" = true ]; then
         -output "$XCFRAMEWORK_DIR"
     
     echo "  Created $XCFRAMEWORK_DIR"
+    
+    # Fix modulemap naming to avoid conflicts with other xcframeworks
+    find "$XCFRAMEWORK_DIR" -name "module.modulemap" -exec sh -c 'mv "$1" "$(dirname "$1")/lniFFI.modulemap"' _ {} \;
+    echo "  Renamed module.modulemap to lniFFI.modulemap"
+    
     echo ""
     echo "XCFramework created successfully!"
-    
+
     # Package for release if requested
     if [ "$PACKAGE_RELEASE" = true ]; then
         echo ""
@@ -210,7 +215,7 @@ if [ "$BUILD_IOS" = true ]; then
         echo "  - Checksum: $CHECKSUM"
         echo ""
         echo "Next steps:"
-        echo "  1. Create a GitHub release with the desired version tag"
+        echo "  1. Create a GitHub release with the desired version tag" like `gh release create v0.1.1 lniFFI.xcframework.zip --title "v0.1.1" --notes "Initial release"`
         echo "  2. Upload lniFFI.xcframework.zip to the release"
         echo "  3. Update the version in Package.swift URL if needed"
         
