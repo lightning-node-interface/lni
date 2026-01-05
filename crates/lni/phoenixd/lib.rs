@@ -81,8 +81,8 @@ impl PhoenixdNode {
         crate::phoenixd::api::get_offer(self.config.clone()).await
     }
 
-    pub async fn list_offers(&self, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::phoenixd::api::list_offers()
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+        crate::phoenixd::api::list_offers(self.config.clone(), search).await
     }
 
     pub async fn pay_offer(
@@ -280,6 +280,18 @@ mod tests {
             }
             Err(e) => {
                 panic!("Failed to create offer (default): {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_offers() {
+        match NODE.list_offers(None).await {
+            Ok(offers) => {
+                println!("List offers resp: {:?}", offers);
+            }
+            Err(e) => {
+                panic!("Failed to list offers: {:?}", e);
             }
         }
     }

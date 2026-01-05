@@ -107,7 +107,7 @@ impl StrikeNode {
     }
 
     pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-        crate::strike::api::list_offers(&self.config, search)
+        crate::strike::api::list_offers(&self.config, search).await
     }
 
     pub async fn pay_offer(

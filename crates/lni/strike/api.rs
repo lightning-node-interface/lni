@@ -347,7 +347,7 @@ pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<Offe
     })
 }
 
-pub fn list_offers(
+pub async fn list_offers(
     _config: &StrikeConfig,
     _search: Option<String>,
 ) -> Result<Vec<Offer>, ApiError> {

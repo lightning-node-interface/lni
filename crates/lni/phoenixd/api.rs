@@ -368,7 +368,10 @@ pub async fn pay_offer(
 }
 
 // TODO implement list_offers, currently just one is returned by Phoenixd
-pub fn list_offers() -> Result<Vec<Offer>, ApiError> {
+pub async fn list_offers(
+    _config: PhoenixdConfig,
+    _search: Option<String>,
+) -> Result<Vec<Offer>, ApiError> {
     Ok(vec![])
 }
 

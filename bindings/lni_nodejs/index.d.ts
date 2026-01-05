@@ -386,7 +386,7 @@ export declare class StrikeNode {
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   getOffer(search?: string | undefined | null): Offer
-  listOffers(search?: string | undefined | null): Array<Offer>
+  listOffers(search?: string | undefined | null): Promise<Array<Offer>>
   payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): PayInvoiceResponse
   decode(str: string): string
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
