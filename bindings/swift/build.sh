@@ -151,9 +151,9 @@ ls -la "$OUTPUT_DIR"
 # Create XCFramework if iOS builds were requested
 if [ "$BUILD_IOS" = true ]; then
     LIBS_DIR="$SCRIPT_DIR/libs"
-    HEADERS_DIR="$SCRIPT_DIR/include"
+    HEADERS_DIR="$SCRIPT_DIR/include/lniFFI"
     
-    # Copy headers for XCFramework
+    # Copy headers for XCFramework (in subdirectory to avoid conflicts)
     mkdir -p "$HEADERS_DIR"
     cp "$OUTPUT_DIR/lniFFI.h" "$HEADERS_DIR/"
     cp "$OUTPUT_DIR/lniFFI.modulemap" "$HEADERS_DIR/module.modulemap"
@@ -172,9 +172,12 @@ if [ "$BUILD_IOS" = true ]; then
     
     echo "  Created $XCFRAMEWORK_DIR"
     
-    # Fix modulemap naming to avoid conflicts with other xcframeworks
-    find "$XCFRAMEWORK_DIR" -name "module.modulemap" -exec sh -c 'mv "$1" "$(dirname "$1")/lniFFI.modulemap"' _ {} \;
-    echo "  Renamed module.modulemap to lniFFI.modulemap"
+    # Update Info.plist to use lniFFI subdirectory for headers
+    find "$XCFRAMEWORK_DIR" -name "Info.plist" -exec plutil -replace LibraryIdentifier -string "$(plutil -extract LibraryIdentifier raw {})" {} \; 2>/dev/null || true
+    for plist in $(find "$XCFRAMEWORK_DIR" -path "*/*/Info.plist"); do
+        plutil -replace HeadersPath -string "Headers/lniFFI" "$plist"
+    done
+    echo "  Updated HeadersPath to Headers/lniFFI"
     
     echo ""
     echo "XCFramework created successfully!"
@@ -215,7 +218,8 @@ if [ "$BUILD_IOS" = true ]; then
         echo "  - Checksum: $CHECKSUM"
         echo ""
         echo "Next steps:"
-        echo "  1. Create a GitHub release with the desired version tag" like `gh release create v0.1.1 lniFFI.xcframework.zip --title "v0.1.1" --notes "Initial release"`
+        # gh release create v0.1.2 lniFFI.xcframework.zip --title "v0.1.2" --notes "release 3"
+        echo "  1. Create a GitHub release with the desired version tag"
         echo "  2. Upload lniFFI.xcframework.zip to the release"
         echo "  3. Update the version in Package.swift URL if needed"
         
