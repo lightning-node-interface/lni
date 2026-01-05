@@ -20,12 +20,12 @@ let package = Package(
         .target(
             name: "LNI",
             dependencies: ["lniFFI"],
-            path: "Sources/LNI"
+            path: "bindings/swift/Sources/LNI"
         ),
         // Binary XCFramework containing the native library
         // 
         // NOTE: The checksum below is a placeholder. When creating a new release:
-        // 1. Build the XCFramework: ./build.sh --release --ios
+        // 1. Build the XCFramework: ./bindings/swift/build.sh --release --ios
         // 2. Rename to lniFFI.xcframework
         // 3. Create zip: zip -r lniFFI.xcframework.zip lniFFI.xcframework
         // 4. Calculate checksum: swift package compute-checksum lniFFI.xcframework.zip
@@ -33,7 +33,7 @@ let package = Package(
         // 6. Update the URL version and checksum below
         //
         // For local development, replace this with:
-        // .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
+        // .binaryTarget(name: "lniFFI", path: "bindings/swift/lniFFI.xcframework")
         .binaryTarget(
             name: "lniFFI",
             url: "https://github.com/lightning-node-interface/lni/releases/download/v0.1.0/lniFFI.xcframework.zip",
