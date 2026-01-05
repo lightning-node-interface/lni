@@ -268,7 +268,7 @@ fun LniExampleScreen() {
 
 suspend fun getStrikeBalance(apiKey: String): String = withContext(Dispatchers.IO) {
     val sb = StringBuilder()
-    sb.appendLine("=== Strike Balance ===\n")
+    sb.appendLine("=== Strike Balance (Polymorphic) ===\n")
 
     try {
         val config = StrikeConfig(
@@ -278,9 +278,12 @@ suspend fun getStrikeBalance(apiKey: String): String = withContext(Dispatchers.I
             socks5Proxy = null,
             acceptInvalidCerts = null
         )
-        val node = StrikeNode(config)
+        
+        // Use the factory function to get a polymorphic LightningNode
+        // This allows you to treat all node types uniformly!
+        val node: LightningNode = createStrikeNode(config)
 
-        sb.appendLine("Fetching balance...")
+        sb.appendLine("Fetching balance via LightningNode interface...")
 
         val info = node.getInfo()
         
@@ -305,7 +308,7 @@ suspend fun getStrikeBalance(apiKey: String): String = withContext(Dispatchers.I
 
 suspend fun testStrike(): String = withContext(Dispatchers.IO) {
     val sb = StringBuilder()
-    sb.appendLine("=== Strike Node Test ===\n")
+    sb.appendLine("=== Strike Node Test (Polymorphic) ===\n")
 
     try {
         val config = StrikeConfig(
@@ -315,10 +318,12 @@ suspend fun testStrike(): String = withContext(Dispatchers.IO) {
             socks5Proxy = null,
             acceptInvalidCerts = null
         )
-        val node = StrikeNode(config)
+        
+        // Use factory function for polymorphic access
+        val node: LightningNode = createStrikeNode(config)
 
-        sb.appendLine("Strike node created successfully!")
-        sb.appendLine("Getting node info...")
+        sb.appendLine("Strike node created via createStrikeNode()!")
+        sb.appendLine("Using LightningNode interface...")
 
         val info = node.getInfo()
         sb.appendLine("Pubkey: ${info.pubkey}")
@@ -336,7 +341,7 @@ suspend fun testStrike(): String = withContext(Dispatchers.IO) {
 
 suspend fun testBlink(): String = withContext(Dispatchers.IO) {
     val sb = StringBuilder()
-    sb.appendLine("=== Blink Node Test ===\n")
+    sb.appendLine("=== Blink Node Test (Polymorphic) ===\n")
 
     try {
         val config = BlinkConfig(
@@ -344,10 +349,12 @@ suspend fun testBlink(): String = withContext(Dispatchers.IO) {
             baseUrl = null,
             httpTimeout = null
         )
-        val node = BlinkNode(config)
+        
+        // Use factory function for polymorphic access
+        val node: LightningNode = createBlinkNode(config)
 
-        sb.appendLine("Blink node created successfully!")
-        sb.appendLine("Getting node info...")
+        sb.appendLine("Blink node created via createBlinkNode()!")
+        sb.appendLine("Using LightningNode interface...")
 
         val info = node.getInfo()
         sb.appendLine("Pubkey: ${info.pubkey}")
@@ -365,16 +372,18 @@ suspend fun testBlink(): String = withContext(Dispatchers.IO) {
 
 suspend fun testNwc(): String = withContext(Dispatchers.IO) {
     val sb = StringBuilder()
-    sb.appendLine("=== NWC Node Test ===\n")
+    sb.appendLine("=== NWC Node Test (Polymorphic) ===\n")
 
     try {
         val config = NwcConfig(
             nwcUri = "nostr+walletconnect://test"
         )
-        val node = NwcNode(config)
+        
+        // Use factory function for polymorphic access
+        val node: LightningNode = createNwcNode(config)
 
-        sb.appendLine("NWC node created successfully!")
-        sb.appendLine("Getting node info...")
+        sb.appendLine("NWC node created via createNwcNode()!")
+        sb.appendLine("Using LightningNode interface...")
 
         val info = node.getInfo()
         sb.appendLine("Pubkey: ${info.pubkey}")
@@ -386,6 +395,86 @@ suspend fun testNwc(): String = withContext(Dispatchers.IO) {
     } catch (e: Exception) {
         sb.appendLine("Error: ${e.message}")
     }
+
+    sb.toString()
+}
+
+/**
+ * Demonstrates the power of polymorphism - this function works with ANY node type!
+ * You can pass a Strike, Blink, NWC, Phoenixd, CLN, LND, or Speed node.
+ */
+suspend fun getBalanceFromAnyNode(node: LightningNode): String = withContext(Dispatchers.IO) {
+    val sb = StringBuilder()
+    sb.appendLine("=== Polymorphic Balance Check ===\n")
+
+    try {
+        val info = node.getInfo()
+        
+        val balanceSats = info.sendBalanceMsat / 1000
+        sb.appendLine("Node: ${info.alias}")
+        sb.appendLine("Balance: $balanceSats sats")
+        sb.appendLine("Network: ${info.network}")
+        
+    } catch (e: Exception) {
+        sb.appendLine("Error: ${e.message}")
+    }
+
+    sb.toString()
+}
+
+/**
+ * Example: Creating multiple nodes and treating them uniformly
+ */
+suspend fun demonstratePolymorphism(): String = withContext(Dispatchers.IO) {
+    val sb = StringBuilder()
+    sb.appendLine("=== Polymorphism Demo ===\n")
+    sb.appendLine("Creating nodes of different types,")
+    sb.appendLine("all as LightningNode interface:\n")
+
+    // Create different node types using factory functions
+    val nodes: List<Pair<String, () -> LightningNode>> = listOf(
+        "Strike" to {
+            createStrikeNode(StrikeConfig(
+                apiKey = "demo_key",
+                baseUrl = null,
+                httpTimeout = null,
+                socks5Proxy = null,
+                acceptInvalidCerts = null
+            ))
+        },
+        "Blink" to {
+            createBlinkNode(BlinkConfig(
+                apiKey = "demo_key",
+                baseUrl = null,
+                httpTimeout = null
+            ))
+        },
+        "Speed" to {
+            createSpeedNode(SpeedConfig(
+                apiKey = "demo_key",
+                baseUrl = null,
+                httpTimeout = null
+            ))
+        }
+    )
+
+    for ((name, createNode) in nodes) {
+        sb.appendLine("✓ Created $name as LightningNode")
+    }
+
+    sb.appendLine("\nAll nodes share the same interface!")
+    sb.appendLine("Methods available on all nodes:")
+    sb.appendLine("  • getInfo()")
+    sb.appendLine("  • createInvoice(params)")
+    sb.appendLine("  • payInvoice(params)")
+    sb.appendLine("  • lookupInvoice(params)")
+    sb.appendLine("  • listTransactions(params)")
+    sb.appendLine("  • onInvoiceEvents(params, callback)")
+    sb.appendLine("  • decode(str)")
+    sb.appendLine("  • createOffer(params)")
+    sb.appendLine("  • getOffer(search)")
+    sb.appendLine("  • listOffers(search)")
+    sb.appendLine("  • payOffer(...)")
 
     sb.toString()
 }
@@ -480,7 +569,9 @@ suspend fun createAndMonitorInvoice(
             socks5Proxy = null,
             acceptInvalidCerts = null
         )
-        val node = StrikeNode(config)
+        
+        // Use factory function for polymorphic LightningNode access
+        val node: LightningNode = createStrikeNode(config)
 
         // Create an invoice for 21 sats
         val invoiceParams = CreateInvoiceParams(
@@ -531,7 +622,7 @@ suspend fun createAndMonitorInvoice(
             }
         }
 
-        // Monitor the invoice for payment
+        // Monitor the invoice for payment using LightningNode interface
         val params = OnInvoiceEventParams(
             paymentHash = transaction.paymentHash,
             search = null,

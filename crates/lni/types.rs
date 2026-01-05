@@ -1,12 +1,11 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-#[cfg(not(feature = "uniffi"))]
 use async_trait::async_trait;
 
-#[cfg(not(feature = "uniffi"))]
-use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
+use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode};
 
+/// Enum for polymorphic node access in non-UniFFI builds
 #[cfg(not(feature = "uniffi"))]
 pub enum LightningNodeEnum {
     Phoenixd(PhoenixdNode),
@@ -15,9 +14,12 @@ pub enum LightningNodeEnum {
     Nwc(NwcNode),
 }
 
-#[cfg(not(feature = "uniffi"))]
+/// The core LightningNode trait for polymorphic node operations.
+/// This trait is exported to UniFFI, allowing Kotlin/Swift to work with
+/// `Arc<dyn LightningNode>` directly without manual wrapper code.
+#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 #[async_trait]
-pub trait LightningNode {
+pub trait LightningNode: Send + Sync {
     async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
     async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;

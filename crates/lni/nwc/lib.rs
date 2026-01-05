@@ -110,7 +110,7 @@ impl NwcNode {
 }
 
 // Trait implementation for Rust consumers - uses the impl_lightning_node macro
-#[cfg(not(feature = "uniffi"))]
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
 crate::impl_lightning_node!(NwcNode);
 
 #[cfg(test)]
