@@ -565,7 +565,7 @@ Language Bindings
 
     ### Swift Bindings
     
-    Swift bindings use the same UniFFI infrastructure. (Documentation coming soon)
+    See [Swift bindings documentation](bindings/swift/example/README.md) for setup instructions and iOS usage examples.
 
 Shared Foreign Language Objects
 ===============================
