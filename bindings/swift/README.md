@@ -188,6 +188,53 @@ For local development, you can build and use the XCFramework locally:
    .binaryTarget(name: "lniFFI", path: "lniFFI.xcframework")
    ```
 
+## Publishing a Release
+
+To publish a new release for SPM distribution:
+
+### 1. Build and Package
+
+```bash
+cd bindings/swift
+./build.sh --release --ios --package
+```
+
+This will:
+- Build the XCFramework for iOS devices and simulators
+- Create `lniFFI.xcframework.zip`
+- Calculate the SHA256 checksum
+- Automatically update `Package.swift` with the new checksum
+
+### 2. Update Version (if needed)
+
+If releasing a new version, update the URL in `Package.swift`:
+
+```swift
+.binaryTarget(
+    name: "lniFFI",
+    url: "https://github.com/lightning-node-interface/lni/releases/download/vX.Y.Z/lniFFI.xcframework.zip",
+    checksum: "..."
+)
+```
+
+### 3. Create GitHub Release and Upload
+
+```bash
+# Create a new release and upload the zip file
+gh release create vX.Y.Z lniFFI.xcframework.zip --title "vX.Y.Z" --notes "Release notes here"
+
+# Or upload to an existing release
+gh release upload vX.Y.Z lniFFI.xcframework.zip
+```
+
+### 4. Commit and Push
+
+```bash
+git add Package.swift
+git commit -m "Release vX.Y.Z"
+git push
+```
+
 ### Manual Integration (without SPM)
 
 If you prefer not to use SPM:
