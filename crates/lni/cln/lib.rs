@@ -137,7 +137,7 @@ impl ClnNode {
         params: crate::types::OnInvoiceEventParams,
         callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::cln::api::on_invoice_events(self.config.clone(), params, callback)
+        crate::cln::api::on_invoice_events(self.config.clone(), params, callback).await
     }
 }
 
