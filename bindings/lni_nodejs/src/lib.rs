@@ -29,6 +29,9 @@ pub use strike::StrikeNode;
 mod speed;
 pub use speed::SpeedNode;
 
+mod cashu;
+pub use cashu::CashuNode;
+
 use std::time::Duration;
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
