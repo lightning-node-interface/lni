@@ -20,9 +20,9 @@ pub struct CashuConfig {
     pub seed: Option<String>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub accept_invalid_certs: Option<bool>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(60)))]
     pub http_timeout: Option<i64>,
 }
 

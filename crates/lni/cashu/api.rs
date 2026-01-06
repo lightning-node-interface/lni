@@ -13,6 +13,15 @@ use crate::{
     PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 
+/// Convert satoshi amount to millisatoshi, with overflow protection
+fn sats_to_msats(sats: u64) -> i64 {
+    // Limit to prevent overflow when multiplying by 1000
+    // i64::MAX is ~9.2 quintillion, so max sats is ~9.2 quadrillion
+    let max_sats = (i64::MAX / 1000) as u64;
+    let clamped_sats = sats.min(max_sats);
+    (clamped_sats as i64) * 1000
+}
+
 /// Generate a random seed for the wallet
 fn generate_seed() -> [u8; 64] {
     let mut seed = [0u8; 64];
@@ -69,7 +78,7 @@ pub async fn get_info(config: CashuConfig) -> Result<NodeInfo, ApiError> {
 
     // Convert balance to millisats (Cashu uses sats)
     let balance_sats: u64 = balance.into();
-    let balance_msat = (balance_sats as i64) * 1000;
+    let balance_msat = sats_to_msats(balance_sats);
 
     Ok(NodeInfo {
         alias,
@@ -166,7 +175,7 @@ pub async fn pay_invoice(
 
     // Fee is the total amount minus the invoice amount
     let fee_sats: u64 = melt_response.fee_paid.into();
-    let fee_msats = (fee_sats as i64) * 1000;
+    let fee_msats = sats_to_msats(fee_sats);
 
     Ok(PayInvoiceResponse {
         payment_hash,
@@ -253,7 +262,7 @@ pub async fn lookup_invoice(
 
     // Convert amount from Option<Amount> to i64 msats
     let amount_sats: u64 = quote_state.amount.map(|a| a.into()).unwrap_or(0);
-    let amount_msats = (amount_sats as i64) * 1000;
+    let amount_msats = sats_to_msats(amount_sats);
 
     // Convert expiry from Option<u64> to i64
     let expires_at = quote_state.expiry.map(|e| e as i64).unwrap_or(0);
@@ -297,7 +306,7 @@ pub async fn list_transactions(
             0
         };
 
-        let amount_sats: u64 = quote.amount.map(|a| u64::from(a)).unwrap_or(0);
+        let amount_sats: u64 = quote.amount.map(|a| a.into()).unwrap_or(0);
         let expires_at = quote.expiry as i64;
 
         transactions.push(Transaction {
@@ -305,7 +314,7 @@ pub async fn list_transactions(
             invoice: quote.request.clone(),
             preimage: "".to_string(),
             payment_hash: quote.id.clone(),
-            amount_msats: (amount_sats as i64) * 1000,
+            amount_msats: sats_to_msats(amount_sats),
             fees_paid: 0,
             created_at: 0,
             expires_at,
@@ -329,8 +338,8 @@ pub async fn list_transactions(
             0
         };
 
-        let amount_sats: u64 = u64::from(quote.amount);
-        let fee_reserve_sats: u64 = u64::from(quote.fee_reserve);
+        let amount_sats: u64 = quote.amount.into();
+        let fee_reserve_sats: u64 = quote.fee_reserve.into();
         let expires_at = quote.expiry as i64;
 
         transactions.push(Transaction {
@@ -338,8 +347,8 @@ pub async fn list_transactions(
             invoice: quote.request.clone(),
             preimage: "".to_string(),
             payment_hash: quote.id.clone(),
-            amount_msats: (amount_sats as i64) * 1000,
-            fees_paid: (fee_reserve_sats as i64) * 1000,
+            amount_msats: sats_to_msats(amount_sats),
+            fees_paid: sats_to_msats(fee_reserve_sats),
             created_at: 0,
             expires_at,
             settled_at,
