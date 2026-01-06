@@ -187,6 +187,13 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
+pub mod cashu {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{CashuConfig, CashuNode};
+}
+
 pub mod types;
 pub use types::*;
 
@@ -289,6 +296,12 @@ pub fn create_lnd_node(config: lnd::LndConfig) -> Arc<dyn LightningNode> {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
     Arc::new(nwc::NwcNode::new(config))
+}
+
+/// Create a Cashu node as a polymorphic LightningNode
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn create_cashu_node(config: cashu::CashuConfig) -> Arc<dyn LightningNode> {
+    Arc::new(cashu::CashuNode::new(config))
 }
 
 #[cfg(feature = "uniffi")]
