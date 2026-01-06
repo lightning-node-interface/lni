@@ -187,6 +187,13 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
+pub mod lnbits {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{LnBitsConfig, LnBitsNode};
+}
+
 pub mod types;
 pub use types::*;
 
