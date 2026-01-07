@@ -45,7 +45,7 @@ pub async fn create_invoice(
     sdk: Arc<BreezSdk>,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    match invoice_params.invoice_type {
+    match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             let response = sdk
                 .receive_payment(ReceivePaymentRequest {
@@ -424,7 +424,7 @@ pub async fn poll_invoice_events<F>(
 pub async fn on_invoice_events(
     sdk: Arc<BreezSdk>,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     poll_invoice_events(sdk, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),

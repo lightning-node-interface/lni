@@ -306,7 +306,7 @@ pub async fn poll_invoice_events<F>(
 pub async fn on_invoice_events(
     config: NwcConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     poll_invoice_events(&config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),

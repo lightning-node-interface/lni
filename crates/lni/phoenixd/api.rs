@@ -368,7 +368,10 @@ pub async fn pay_offer(
 }
 
 // TODO implement list_offers, currently just one is returned by Phoenixd
-pub fn list_offers() -> Result<Vec<Offer>, ApiError> {
+pub async fn list_offers(
+    _config: PhoenixdConfig,
+    _search: Option<String>,
+) -> Result<Vec<Offer>, ApiError> {
     Ok(vec![])
 }
 
@@ -655,7 +658,7 @@ pub async fn poll_invoice_events<F>(
 pub async fn on_invoice_events(
     config: PhoenixdConfig,
     params: OnInvoiceEventParams,
-    callback: Box<dyn OnInvoiceEventCallback>,
+    callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     poll_invoice_events(config, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),

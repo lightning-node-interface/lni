@@ -3,8 +3,10 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 
-use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode, ApiError};
+use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode};
 
+/// Enum for polymorphic node access in non-UniFFI builds
+#[cfg(not(feature = "uniffi"))]
 pub enum LightningNodeEnum {
     Phoenixd(PhoenixdNode),
     Lnd(LndNode),
@@ -12,36 +14,41 @@ pub enum LightningNodeEnum {
     Nwc(NwcNode),
 }
 
+/// The core LightningNode trait for polymorphic node operations.
+/// This trait is exported to UniFFI, allowing Kotlin/Swift to work with
+/// `Arc<dyn LightningNode>` directly without manual wrapper code.
+#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 #[async_trait]
-pub trait LightningNode {
-    async fn get_info(&self) -> Result<crate::NodeInfo, ApiError>;
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError>;
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError>;
-    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError>;
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError>;
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError>;
+pub trait LightningNode: Send + Sync {
+    async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
+    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
+    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;
+    async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, crate::ApiError>;
+    async fn get_offer(&self, search: Option<String>) -> Result<Offer, crate::ApiError>;
+    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, crate::ApiError>;
     async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
         payer_note: Option<String>,
-    ) -> Result<PayInvoiceResponse, ApiError>;
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError>;
+    ) -> Result<PayInvoiceResponse, crate::ApiError>;
+    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, crate::ApiError>;
     async fn list_transactions(
         &self,
         params: ListTransactionsParams,
-    ) -> Result<Vec<crate::Transaction>, ApiError>;
-    async fn decode(&self, str: String) -> Result<String, ApiError>;
+    ) -> Result<Vec<crate::Transaction>, crate::ApiError>;
+    async fn decode(&self, str: String) -> Result<String, crate::ApiError>;
     async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     );
 }
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
 pub enum InvoiceType {
     Bolt11,
     Bolt12,
@@ -314,23 +321,35 @@ impl Default for LookupInvoiceParams {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateInvoiceParams {
-    pub invoice_type: InvoiceType,
+    /// Defaults to Bolt11 if not specified
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub invoice_type: Option<InvoiceType>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub offer: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub description: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub description_hash: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub expiry: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub r_preimage: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_blinded: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_keysend: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_amp: Option<bool>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub is_private: Option<bool>,
     // pub route_hints: Option<Vec<HopHint>>, TODO
 }
 impl Default for CreateInvoiceParams {
     fn default() -> Self {
         Self {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11), // Defaults to Bolt11 when used
             amount_msats: None,
             offer: None,
             description: None,
@@ -342,6 +361,13 @@ impl Default for CreateInvoiceParams {
             is_amp: Some(false),
             is_private: Some(false),
         }
+    }
+}
+
+impl CreateInvoiceParams {
+    /// Get the invoice type, defaulting to Bolt11 if not specified
+    pub fn get_invoice_type(&self) -> InvoiceType {
+        self.invoice_type.clone().unwrap_or(InvoiceType::Bolt11)
     }
 }
 
@@ -410,7 +436,9 @@ impl Default for PayInvoiceParams {
 }
 
 // Define the callback trait for UniFFI
-#[cfg_attr(feature = "uniffi", uniffi::export(callback_interface))]
+// Using with_foreign allows foreign languages (Kotlin/Swift) to implement this trait
+// and pass it to Rust. This is the newer approach vs callback_interface.
+#[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait OnInvoiceEventCallback: Send + Sync {
     fn success(&self, transaction: Option<Transaction>);
     fn pending(&self, transaction: Option<Transaction>);

@@ -9,9 +9,11 @@ use breez_sdk_spark::{
 
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, LightningNode, ListTransactionsParams,
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams,
     LookupInvoiceParams, Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -56,6 +58,7 @@ impl SparkConfig {
 // Note: SparkNode cannot use napi(object) because BreezSdk has private fields
 // #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone)]
 pub struct SparkNode {
     pub config: SparkConfig,
     sdk: Arc<BreezSdk>,
@@ -134,29 +137,29 @@ impl SparkNode {
     }
 }
 
+// All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-#[async_trait::async_trait]
-impl LightningNode for SparkNode {
-    async fn get_info(&self) -> Result<NodeInfo, ApiError> {
+impl SparkNode {
+    pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         let network = self.config.network.as_deref().unwrap_or("mainnet");
         crate::spark::api::get_info(self.sdk.clone(), network).await
     }
 
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
         crate::spark::api::create_invoice(self.sdk.clone(), params).await
     }
 
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::spark::api::pay_invoice(self.sdk.clone(), params).await
     }
 
-    async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
+    pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
         Err(ApiError::Api {
             reason: "create_offer not yet implemented for SparkNode".to_string(),
         })
     }
 
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
         crate::spark::api::lookup_invoice(
             self.sdk.clone(),
             params.payment_hash,
@@ -167,7 +170,7 @@ impl LightningNode for SparkNode {
         .await
     }
 
-    async fn list_transactions(
+    pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<Transaction>, ApiError> {
@@ -180,27 +183,27 @@ impl LightningNode for SparkNode {
         .await
     }
 
-    async fn decode(&self, str: String) -> Result<String, ApiError> {
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
         crate::spark::api::decode(self.sdk.clone(), str).await
     }
 
-    async fn on_invoice_events(
+    pub async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,
-        callback: Box<dyn crate::types::OnInvoiceEventCallback>,
+        callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
         crate::spark::api::on_invoice_events(self.sdk.clone(), params, callback).await
     }
 
-    async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
+    pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
         crate::spark::api::get_offer(search)
     }
 
-    async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+    pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
         crate::spark::api::list_offers(search)
     }
 
-    async fn pay_offer(
+    pub async fn pay_offer(
         &self,
         offer: String,
         amount_msats: i64,
@@ -209,6 +212,9 @@ impl LightningNode for SparkNode {
         crate::spark::api::pay_offer(offer, amount_msats, payer_note)
     }
 }
+
+// Trait implementation for polymorphic access via Arc<dyn LightningNode>
+crate::impl_lightning_node!(SparkNode);
 
 #[cfg(test)]
 mod tests {
@@ -313,7 +319,7 @@ mod tests {
 
         let node = get_node().await.expect("Failed to connect");
         let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11),
             amount_msats: Some(1000),
             offer: None,
             description: Some("Test invoice".to_string()),
@@ -499,7 +505,7 @@ mod tests {
             ..Default::default()
         };
         let callback = TestInvoiceEventCallback;
-        node.on_invoice_events(params, Box::new(callback)).await;
+        node.on_invoice_events(params, Arc::new(callback)).await;
         let _ = node.disconnect().await;
     }
 }
