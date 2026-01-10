@@ -35,6 +35,39 @@ impl From<serde_json::Error> for ApiError {
     }
 }
 
+/// Generate a new BIP39 mnemonic phrase for wallet creation.
+/// Uses cryptographically secure randomness from the OS.
+/// 
+/// # Arguments
+/// * `word_count` - Number of words: 12 (default) or 24. If None or invalid, defaults to 12.
+/// 
+/// # Returns
+/// A space-separated mnemonic phrase
+#[cfg_attr(feature = "napi_rs", napi)]
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
+    use bip39::{Language, Mnemonic};
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+
+    // 16 bytes = 128 bits = 12 words
+    // 32 bytes = 256 bits = 24 words
+    let entropy_size = match word_count {
+        Some(24) => 32,
+        _ => 16, // Default to 12 words
+    };
+
+    let mut entropy = vec![0u8; entropy_size];
+    OsRng.fill_bytes(&mut entropy);
+
+    let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy)
+        .map_err(|e| ApiError::Api {
+            reason: format!("Failed to generate mnemonic: {}", e),
+        })?;
+
+    Ok(mnemonic.to_string())
+}
+
 /// Macro to implement LightningNode trait by delegating to inherent methods.
 /// This avoids code duplication between UniFFI exports and trait implementations.
 /// The macro works for both UniFFI and non-UniFFI builds.

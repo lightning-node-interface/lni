@@ -508,4 +508,53 @@ mod tests {
         node.on_invoice_events(params, Arc::new(callback)).await;
         let _ = node.disconnect().await;
     }
+
+    #[tokio::test]
+    async fn test_create_new_wallet_and_invoice() {
+        // Skip if no API key - we still need the API key for mainnet
+        if API_KEY.is_empty() {
+            println!("Skipping test: SPARK_API_KEY not set");
+            return;
+        }
+
+        // 1. Generate a fresh mnemonic (creates a brand new wallet)
+        let mnemonic_str = crate::generate_mnemonic(Some(12)).expect("Failed to generate mnemonic");
+        println!("Generated new mnemonic: {}", mnemonic_str);
+
+        // Verify it's a 12-word mnemonic
+        let word_count = mnemonic_str.split_whitespace().count();
+        assert_eq!(word_count, 12, "Expected 12-word mnemonic, got {}", word_count);
+
+        // 2. Create a new SparkNode with the fresh mnemonic
+        let config = SparkConfig {
+            mnemonic: mnemonic_str,
+            api_key: Some(API_KEY.clone()),
+            storage_dir: format!("{}/new_wallet_{}", STORAGE_DIR.clone(), uuid::Uuid::new_v4()),
+            network: Some("mainnet".to_string()),
+            passphrase: None,
+        };
+
+        let node = SparkNode::new(config).await.expect("Failed to connect with new wallet");
+
+        // 3. Create an invoice with the new wallet
+        let invoice_params = CreateInvoiceParams {
+            amount_msats: Some(1000), // 1 sat
+            description: Some("Test invoice from new wallet".to_string()),
+            expiry: Some(3600),
+            invoice_type: Some(InvoiceType::Bolt11),
+            ..Default::default()
+        };
+
+        let invoice = node.create_invoice(invoice_params).await.expect("Failed to create invoice");
+
+        println!("Created invoice: {}", invoice.invoice);
+        assert!(!invoice.invoice.is_empty(), "Invoice should not be empty");
+        assert!(
+            invoice.invoice.starts_with("lnbc") || invoice.invoice.starts_with("lntb"),
+            "Invoice should be a valid bolt11 invoice"
+        );
+
+        // 4. Clean up
+        let _ = node.disconnect().await;
+    }
 }
