@@ -39,7 +39,7 @@ impl ClnNode {
   pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
     let txn = lni::cln::api::create_invoice(
       self.inner.clone(),
-      params.invoice_type,
+      params.invoice_type.unwrap_or(lni::InvoiceType::Bolt11),
       params.amount_msats,
       params.offer,
       params.description,

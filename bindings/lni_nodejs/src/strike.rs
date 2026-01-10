@@ -92,9 +92,9 @@ impl StrikeNode {
   }
 
   #[napi]
-  pub fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
+  pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
     let offers = lni::strike::api::list_offers(&self.inner, search)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 

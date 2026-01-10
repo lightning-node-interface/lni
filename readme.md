@@ -200,7 +200,7 @@ let params = crate::types::OnInvoiceEventParams {
     max_polling_sec: 60,
 };
 let callback = OnInvoiceEventCallback {};
-NODE.on_invoice_events(params, Box::new(callback));
+NODE.on_invoice_events(params, Arc::new(callback));
 ```
 
 
@@ -247,6 +247,23 @@ yarn start
     - Then click the project in the left "LniExample" to select for the context menu
     - In the top click "Product -> Clean build folder" and then build and run
 - Lastly uninstalling the app from the mobile device
+
+#### kotlin (android)
+```sh
+cd bindings/kotlin
+
+# Build Kotlin bindings and Android native libraries
+./build.sh --release --android
+
+# Run the example Android app
+cd example
+./gradlew :app:installDebug
+
+# Or launch emulator first
+emulator -avd YOUR_AVD_NAME &
+./gradlew :app:installDebug
+adb shell am start -n com.lni.example/.MainActivity
+```
 
 #### nodejs 
 ```sh
@@ -414,6 +431,141 @@ Language Bindings
 - ## uniffi (kotlin, swift) 
     - https://mozilla.github.io/uniffi-rs/latest/
     - Uses decorators like `#[cfg_attr(feature = "uniffi", uniffi::export)]` to foreign codegen 
+
+    ### Kotlin Bindings
+    
+    **Prerequisites:**
+    1. Install Android NDK via Android Studio SDK Manager
+    2. Add Rust Android targets:
+        ```bash
+        rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+        ```
+    3. Configure cargo linker in `~/.cargo/config.toml`:
+        ```toml
+        [target.aarch64-linux-android]
+        linker = "/Users/YOUR_USER/Library/Android/sdk/ndk/VERSION/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang"
+        
+        [target.x86_64-linux-android]
+        linker = "/Users/YOUR_USER/Library/Android/sdk/ndk/VERSION/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android21-clang"
+        
+        [target.armv7-linux-androideabi]
+        linker = "/Users/YOUR_USER/Library/Android/sdk/ndk/VERSION/toolchains/llvm/prebuilt/darwin-x86_64/bin/armv7a-linux-androideabi21-clang"
+        
+        [target.i686-linux-android]
+        linker = "/Users/YOUR_USER/Library/Android/sdk/ndk/VERSION/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android21-clang"
+        ```
+        Replace `YOUR_USER` and `VERSION` with your actual values. To find them:
+        ```bash
+        # Find your username
+        whoami
+        
+        # List available NDK versions
+        ls ~/Library/Android/sdk/ndk/
+        ```
+        Then use the latest version (e.g., `28.2.13676358`).
+
+    **Build Kotlin Bindings:**
+    ```bash
+    cd bindings/kotlin
+    
+    # Generate Kotlin bindings only
+    ./build.sh --release
+    
+    # Build for all Android architectures + generate bindings
+    ./build.sh --release --android
+    ```
+
+    This generates:
+    - Kotlin source files in `bindings/kotlin/src/main/kotlin/`
+    - Native `.so` libraries in `bindings/kotlin/example/app/src/main/jniLibs/`
+        - `arm64-v8a/` - ARM64 devices & Apple Silicon emulators
+        - `armeabi-v7a/` - Older ARM devices
+        - `x86_64/` - Intel emulators
+        - `x86/` - Older Intel emulators
+
+    **Run Example Android App:**
+    ```bash
+    cd bindings/kotlin/example
+    
+    # Build and install on connected device/emulator
+    ./gradlew :app:installDebug
+    
+    # Or open in Android Studio
+    # File > Open > Navigate to bindings/kotlin/example
+    ```
+
+    The example app demonstrates:
+    - Strike API integration with balance lookup
+    - Blink and NWC node creation
+    - Proper async/coroutine usage with LNI
+
+    **Kotlin Usage Example:**
+    ```kotlin
+    import uniffi.lni.*
+    import kotlinx.coroutines.Dispatchers
+    import kotlinx.coroutines.withContext
+
+    // Get Strike balance
+    suspend fun getStrikeBalance(apiKey: String) = withContext(Dispatchers.IO) {
+        val config = StrikeConfig(
+            apiKey = apiKey,
+            baseUrl = null,
+            httpTimeout = null,
+            socks5Proxy = null,
+            acceptInvalidCerts = null
+        )
+        val node = StrikeNode(config)
+        
+        try {
+            val info = node.getInfo()
+            println("Balance: ${info.sendBalanceMsat / 1000} sats")
+        } catch (e: ApiException) {
+            println("API Error: ${e.message}")
+        }
+    }
+
+    // Create invoice with CLN
+    suspend fun createInvoice() = withContext(Dispatchers.IO) {
+        val config = ClnConfig(
+            url = "http://localhost:3010",
+            rune = "YOUR_RUNE",
+            httpTimeout = null,
+            socks5Proxy = null,
+            acceptInvalidCerts = null
+        )
+        val node = ClnNode(config)
+        
+        val params = CreateInvoiceParams(
+            invoiceType = InvoiceType.BOLT11,
+            amountMsats = 10000L,
+            description = "Test invoice",
+            expiry = null,
+            descriptionHash = null,
+            fallbackAddress = null,
+            paymentPreimage = null
+        )
+        
+        val invoice = node.createInvoice(params)
+        println("Invoice: ${invoice.invoice}")
+    }
+    ```
+
+    **Include in Your Android Project:**
+    
+    1. Copy the generated Kotlin sources from `bindings/kotlin/src/main/kotlin/uniffi/` to your project
+    2. Copy the native libraries from `bindings/kotlin/example/app/src/main/jniLibs/` to your app's `src/main/jniLibs/`
+    3. Add JNA dependency to your `build.gradle.kts`:
+        ```kotlin
+        dependencies {
+            implementation("net.java.dev.jna:jna:5.13.0@aar")
+        }
+        ```
+
+    See `bindings/kotlin/example/app/src/main/kotlin/com/lni/example/MainActivity.kt` for a complete Android Compose example.
+
+    ### Swift Bindings
+    
+    See [Swift bindings documentation](bindings/swift/example/README.md) for setup instructions and iOS usage examples.
 
 Shared Foreign Language Objects
 ===============================

@@ -245,9 +245,9 @@ async function main() {
   // await lnd();
   // await strike();
   // await cln();
-  await phoenixd();
+  // await phoenixd();
   // await blink();
-  // await speed();
+  await speed();
   // await nwc();
   
   console.log("\n=== All tests completed ===");

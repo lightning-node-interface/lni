@@ -11,6 +11,7 @@ yarn ubrn:android
 # yarn package
 
 #### ios
+# rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 yarn ubrn:ios
 # cd example/ios && pod install --repo-update && cd ../     <-- run this if you get errors to updates the pods
 # cd example && yarn ios
