@@ -26,6 +26,7 @@ import {
   createBlinkNode,
   createNwcNode,
   createSpeedNode,
+  generateMnemonic,
 } from 'lni_react_native';
 import { 
   LND_URL, 
@@ -383,6 +384,37 @@ export default function App() {
     }
   };
 
+  const testMnemonic = async () => {
+    const nodeName = 'Mnemonic';
+
+    try {
+      addOutput(nodeName, 'Testing generateMnemonic...');
+
+      // Test 12-word mnemonic (default)
+      addOutput(nodeName, '(1) Generating 12-word mnemonic...');
+      const mnemonic12 = generateMnemonic(12);
+      const words12 = mnemonic12.split(' ');
+      addOutput(nodeName, `12-word mnemonic: ${mnemonic12}`);
+      addOutput(nodeName, `Word count: ${words12.length}`);
+
+      // Test 24-word mnemonic
+      addOutput(nodeName, '(2) Generating 24-word mnemonic...');
+      const mnemonic24 = generateMnemonic(24);
+      const words24 = mnemonic24.split(' ');
+      addOutput(nodeName, `24-word mnemonic: ${mnemonic24}`);
+      addOutput(nodeName, `Word count: ${words24.length}`);
+
+      // Verify word counts
+      if (words12.length === 12 && words24.length === 24) {
+        updateTestStatus(nodeName, 'success', 'Mnemonic generation tests passed!');
+      } else {
+        updateTestStatus(nodeName, 'error', `Unexpected word counts: 12-word=${words12.length}, 24-word=${words24.length}`);
+      }
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Mnemonic test failed: ${error}`);
+    }
+  };
+
   // Initialize test result for an implementation
   const initializeTest = (implementation: string) => {
     setTestResults(prev => {
@@ -578,6 +610,12 @@ export default function App() {
             onPress={() => runTest('NWC', testNwc)} 
             disabled={isRunning}
             color="#DDA0DD"
+          />
+          <Button 
+            title="Mnemonic" 
+            onPress={() => runTest('Mnemonic', testMnemonic)} 
+            disabled={isRunning}
+            color="#9B59B6"
           />
         </View>
       </View>
