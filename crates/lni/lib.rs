@@ -43,7 +43,6 @@ impl From<serde_json::Error> for ApiError {
 /// 
 /// # Returns
 /// A space-separated mnemonic phrase
-#[cfg(not(feature = "napi_rs"))]
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     use bip39::{Language, Mnemonic};
@@ -330,7 +329,6 @@ pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create a Spark node as a polymorphic LightningNode
-#[cfg(not(feature = "napi_rs"))]
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;
