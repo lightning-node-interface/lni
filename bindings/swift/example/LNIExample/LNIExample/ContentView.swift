@@ -16,11 +16,32 @@ struct ContentView: View {
     @State private var isLoading: Bool = false
     @State private var strikeApiKey: String = ""
     @State private var showApiKey: Bool = false
+    @State private var use24Words: Bool = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // Mnemonic Generation Section
+                    GroupBox(label: Label("Wallet Utils", systemImage: "key.fill")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("24 words (default: 12)", isOn: $use24Words)
+                            
+                            Button {
+                                generateNewMnemonic()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                    Text("Generate Mnemonic")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
                     // Strike API Section
                     GroupBox(label: Label("Strike API", systemImage: "bolt.fill")) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -148,6 +169,30 @@ struct ContentView: View {
         }
         
         isLoading = false
+    }
+    
+    // MARK: - Generate Mnemonic
+    
+    private func generateNewMnemonic() {
+        output = "=== Generate Mnemonic ===\n\n"
+        
+        do {
+            let wordCount: UInt8? = use24Words ? 24 : nil
+            let mnemonic = try generateMnemonic(wordCount: wordCount)
+            
+            let words = mnemonic.split(separator: " ")
+            output += "✓ Generated \(words.count)-word mnemonic:\n\n"
+            
+            // Display words in a numbered list
+            for (index, word) in words.enumerated() {
+                output += String(format: "%2d. %@\n", index + 1, String(word))
+            }
+            
+            output += "\n⚠️ IMPORTANT: In a real app, never display\n"
+            output += "   the mnemonic on screen. Store it securely!\n"
+        } catch {
+            output += "✗ Error: \(error)\n"
+        }
     }
     
     // MARK: - Test Functions

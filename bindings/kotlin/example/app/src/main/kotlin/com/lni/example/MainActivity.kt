@@ -40,6 +40,7 @@ fun LniExampleScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var strikeApiKey by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
+    var use24Words by remember { mutableStateOf(false) }
     
     // Invoice monitoring state
     var invoiceStatus by remember { mutableStateOf<InvoiceStatus?>(null) }
@@ -59,6 +60,47 @@ fun LniExampleScreen() {
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // Wallet Utils Section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Wallet Utils",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("24 words (default: 12)")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = use24Words,
+                        onCheckedChange = { use24Words = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        output = generateNewMnemonic(use24Words)
+                    },
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Generate Mnemonic")
+                }
+            }
+        }
 
         // Strike API Key Section
         Card(
@@ -304,6 +346,34 @@ suspend fun getStrikeBalance(apiKey: String): String = withContext(Dispatchers.I
     }
 
     sb.toString()
+}
+
+fun generateNewMnemonic(use24Words: Boolean): String {
+    val sb = StringBuilder()
+    sb.appendLine("=== Generate Mnemonic ===\n")
+
+    try {
+        val wordCount: UByte? = if (use24Words) 24u else null
+        val mnemonic = generateMnemonic(wordCount)
+        
+        val words = mnemonic.split(" ")
+        sb.appendLine("✓ Generated ${words.size}-word mnemonic:\n")
+        
+        // Display words in a numbered list
+        words.forEachIndexed { index, word ->
+            sb.appendLine("${String.format("%2d", index + 1)}. $word")
+        }
+        
+        sb.appendLine("\n⚠️ IMPORTANT: In a real app, never display")
+        sb.appendLine("   the mnemonic on screen. Store it securely!")
+
+    } catch (e: ApiException) {
+        sb.appendLine("✗ API Error: ${e.message}")
+    } catch (e: Exception) {
+        sb.appendLine("✗ Error: ${e.message}")
+    }
+
+    return sb.toString()
 }
 
 suspend fun testStrike(): String = withContext(Dispatchers.IO) {

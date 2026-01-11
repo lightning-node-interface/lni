@@ -21,6 +21,8 @@ napi = { version = "2.16", default-features = false, features = ["napi4", "tokio
 napi-derive = "2.16"
 dotenv = "0.15.0"
 lazy_static = "1.4.0"
+bip39 = "2.2.2"
+rand = "0.8"
 
 
 [build-dependencies]

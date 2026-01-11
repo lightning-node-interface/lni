@@ -406,6 +406,22 @@ private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
     typealias FfiType = UInt16
     typealias SwiftType = UInt16
@@ -7252,6 +7268,30 @@ extension InvoiceType: Equatable, Hashable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = UInt8?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt8.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
     typealias SwiftType = Int64?
 
@@ -7694,6 +7734,23 @@ public func decode(config: LndConfig, invoiceStr: String)async throws  -> String
             errorHandler: FfiConverterTypeApiError_lift
         )
 }
+/**
+ * Generate a new BIP39 mnemonic phrase for wallet creation.
+ * Uses cryptographically secure randomness from the OS.
+ *
+ * # Arguments
+ * * `word_count` - Number of words: 12 (default) or 24. If None or invalid, defaults to 12.
+ *
+ * # Returns
+ * A space-separated mnemonic phrase
+ */
+public func generateMnemonic(wordCount: UInt8?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeApiError_lift) {
+    uniffi_lni_fn_func_generate_mnemonic(
+        FfiConverterOptionUInt8.lower(wordCount),$0
+    )
+})
+}
 public func getInfo(config: LndConfig)async throws  -> NodeInfo  {
     return
         try  await uniffiRustCallAsync(
@@ -7821,6 +7878,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_func_decode() != 11646) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_func_generate_mnemonic() != 62024) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_func_get_info() != 59600) {

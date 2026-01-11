@@ -285,6 +285,13 @@ export interface Payment {
   updatedAt: number
   amountMsats: number
 }
+/**
+ * Generate a BIP39 mnemonic phrase
+ *
+ * @param wordCount - Optional number of words (12 or 24). Defaults to 12.
+ * @returns A space-separated mnemonic phrase
+ */
+export declare function generateMnemonic(wordCount?: number | undefined | null): string
 export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)

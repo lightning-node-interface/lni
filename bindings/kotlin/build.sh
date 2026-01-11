@@ -5,10 +5,11 @@
 # This script:
 # 1. Builds the lni library with uniffi feature
 # 2. Uses uniffi-bindgen to generate Kotlin bindings from the shared library
-# 3. Optionally builds for Android targets
+# 3. Builds for Android targets (default, use --no-android to skip)
 #
-# Usage: ./build.sh [--release] [--android]
-#        ./build.sh --release --android   # Build for Android in release mode
+# Usage: ./build.sh [--release] [--no-android]
+#        ./build.sh --release             # Build for Android in release mode
+#        ./build.sh --release --no-android # Skip Android builds
 
 set -e
 
@@ -18,15 +19,15 @@ EXAMPLE_DIR="$SCRIPT_DIR/example"
 
 # Parse arguments
 BUILD_TYPE="debug"
-BUILD_ANDROID=false
+BUILD_ANDROID=true
 
 for arg in "$@"; do
     case $arg in
         --release)
             BUILD_TYPE="release"
             ;;
-        --android)
-            BUILD_ANDROID=true
+        --no-android)
+            BUILD_ANDROID=false
             ;;
     esac
 done
@@ -111,3 +112,13 @@ echo "Kotlin bindings generated successfully in: $OUTPUT_DIR"
 echo ""
 echo "Generated files:"
 ls -la "$OUTPUT_DIR"
+
+if [ "$BUILD_ANDROID" = true ]; then
+    echo ""
+    echo "============================================================"
+    echo "IMPORTANT: After updating native libraries, you may need to"
+    echo "invalidate Android Studio caches:"
+    echo ""
+    echo "  File → Invalidate Caches → Invalidate and Restart"
+    echo "============================================================"
+fi

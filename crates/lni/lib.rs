@@ -43,18 +43,16 @@ impl From<serde_json::Error> for ApiError {
 /// 
 /// # Returns
 /// A space-separated mnemonic phrase
-#[cfg_attr(feature = "napi_rs", napi)]
+#[cfg(not(feature = "napi_rs"))]
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     use bip39::{Language, Mnemonic};
     use rand::rngs::OsRng;
     use rand::RngCore;
 
-    // 16 bytes = 128 bits = 12 words
-    // 32 bytes = 256 bits = 24 words
     let entropy_size = match word_count {
         Some(24) => 32,
-        _ => 16, // Default to 12 words
+        _ => 16,
     };
 
     let mut entropy = vec![0u8; entropy_size];

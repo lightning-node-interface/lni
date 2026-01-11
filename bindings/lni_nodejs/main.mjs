@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, LndNode, StrikeNode, BlinkNode, SpeedNode, NwcNode } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, StrikeNode, BlinkNode, SpeedNode, NwcNode, generateMnemonic } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -241,6 +241,22 @@ async function main() {
   
   // Show environment help
   showEnvironmentHelp();
+
+  // Test generateMnemonic
+  console.log("\n=== Testing generateMnemonic ===");
+  try {
+    const mnemonic12 = generateMnemonic();
+    console.log("12-word mnemonic:", mnemonic12);
+    console.log("Word count:", mnemonic12.split(" ").length);
+
+    const mnemonic24 = generateMnemonic(24);
+    console.log("24-word mnemonic:", mnemonic24);
+    console.log("Word count:", mnemonic24.split(" ").length);
+    
+    console.log("generateMnemonic tests passed!");
+  } catch (error) {
+    console.error("generateMnemonic test failed:", error.message);
+  }
   
   // await lnd();
   // await strike();
