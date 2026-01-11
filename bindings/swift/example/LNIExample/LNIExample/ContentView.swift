@@ -17,6 +17,10 @@ struct ContentView: View {
     @State private var strikeApiKey: String = ""
     @State private var showApiKey: Bool = false
     @State private var use24Words: Bool = false
+    @State private var sparkMnemonic: String = ""
+    @State private var sparkApiKey: String = ""
+    @State private var showSparkMnemonic: Bool = false
+    @State private var showSparkApiKey: Bool = false
     
     var body: some View {
         NavigationStack {
@@ -72,6 +76,56 @@ struct ContentView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(isLoading || strikeApiKey.isEmpty)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
+                    // Spark API Section
+                    GroupBox(label: Label("Spark (Breez)", systemImage: "sparkles")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                if showSparkMnemonic {
+                                    TextField("Mnemonic (12 words)", text: $sparkMnemonic)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    SecureField("Mnemonic (12 words)", text: $sparkMnemonic)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                                Button(showSparkMnemonic ? "Hide" : "Show") {
+                                    showSparkMnemonic.toggle()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            
+                            HStack {
+                                if showSparkApiKey {
+                                    TextField("Breez API Key", text: $sparkApiKey)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    SecureField("Breez API Key", text: $sparkApiKey)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                                Button(showSparkApiKey ? "Hide" : "Show") {
+                                    showSparkApiKey.toggle()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            
+                            Button {
+                                Task {
+                                    await testSpark()
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                    Text("Test Spark")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading || sparkMnemonic.isEmpty || sparkApiKey.isEmpty)
                         }
                         .padding(.vertical, 8)
                     }
@@ -196,6 +250,68 @@ struct ContentView: View {
     }
     
     // MARK: - Test Functions
+    
+    private func testSpark() async {
+        isLoading = true
+        output = "=== Spark Node Test ===\n\n"
+        
+        do {
+            // Get the documents directory for storage
+            guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                output += "✗ Error: Could not get documents directory\n"
+                isLoading = false
+                return
+            }
+            
+            let storageDir = documentsDir.appendingPathComponent("spark_data").path
+            output += "Storage: \(storageDir)\n\n"
+            
+            let config = SparkConfig(
+                mnemonic: sparkMnemonic,
+                passphrase: nil,
+                apiKey: sparkApiKey,
+                storageDir: storageDir,
+                network: "mainnet"
+            )
+            
+            output += "(1) Creating SparkNode...\n"
+            let node: LightningNode = try await createSparkNode(config: config)
+            output += "✓ SparkNode connected!\n\n"
+            
+            output += "(2) Getting node info...\n"
+            let info = try await node.getInfo()
+            output += "✓ Node Info:\n"
+            output += "  • Alias: \(info.alias)\n"
+            output += "  • Network: \(info.network)\n"
+            output += "  • Balance: \(info.sendBalanceMsat / 1000) sats\n\n"
+            
+            output += "(3) Creating invoice...\n"
+            let invoiceParams = CreateInvoiceParams(
+                amountMsats: 1000,
+                description: "test invoice from Spark iOS",
+                expiry: 3600
+            )
+            let invoice = try await node.createInvoice(params: invoiceParams)
+            let shortHash = String(invoice.paymentHash.prefix(20))
+            output += "✓ Invoice created: \(shortHash)...\n\n"
+            
+            output += "(4) Listing transactions...\n"
+            let listParams = ListTransactionsParams(
+                from: 0,
+                limit: 3,
+                paymentHash: nil,
+                search: nil
+            )
+            let txns = try await node.listTransactions(params: listParams)
+            output += "✓ Found \(txns.count) transactions\n\n"
+            
+            output += "=== All tests passed! ===\n"
+        } catch {
+            output += "✗ Error: \(error)\n"
+        }
+        
+        isLoading = false
+    }
     
     private func testStrike() async {
         isLoading = true
