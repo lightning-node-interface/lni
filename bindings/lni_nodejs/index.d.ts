@@ -84,6 +84,18 @@ export interface SpeedConfig {
 export interface SpeedNode {
   config: SpeedConfig
 }
+export interface SparkConfig {
+  /** 12 or 24 word mnemonic phrase */
+  mnemonic: string
+  /** Optional passphrase for the mnemonic */
+  passphrase?: string
+  /** Breez API key (required for mainnet) */
+  apiKey?: string
+  /** Storage directory path for wallet data */
+  storageDir: string
+  /** Network: "mainnet" or "regtest" */
+  network?: string
+}
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
   Bolt12 = 'Bolt12'
@@ -403,6 +415,36 @@ export declare class SpeedNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): SpeedConfig
+  getInfo(): Promise<NodeInfo>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  createOffer(params: CreateOfferParams): Promise<Offer>
+  getOffer(search?: string | undefined | null): Promise<Offer>
+  listOffers(search?: string | undefined | null): Promise<Array<Offer>>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | undefined | null): Promise<PayInvoiceResponse>
+  listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
+  decode(str: string): Promise<string>
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
+}
+/**
+ * Spark Node wrapper for napi-rs
+ * Note: SparkNode requires async initialization, so we use a builder pattern
+ */
+export declare class SparkNode {
+  constructor(config: SparkConfig)
+  /** Connect to the Spark network (must be called before using other methods) */
+  connect(): Promise<void>
+  /** Disconnect from the Spark network */
+  disconnect(): Promise<void>
+  /** Check if the node is connected */
+  isConnected(): Promise<boolean>
+  getMnemonic(): string
+  getConfig(): SparkConfig
+  /** Get the Spark address for receiving payments */
+  getSparkAddress(): Promise<string>
+  /** Get a Bitcoin address for on-chain deposits */
+  getDepositAddress(): Promise<string>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>

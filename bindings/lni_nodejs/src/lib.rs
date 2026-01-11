@@ -29,6 +29,9 @@ pub use strike::StrikeNode;
 mod speed;
 pub use speed::SpeedNode;
 
+mod spark;
+pub use spark::SparkNode;
+
 use std::time::Duration;
 
 /// Generate a BIP39 mnemonic phrase

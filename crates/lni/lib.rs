@@ -331,7 +331,7 @@ pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create a Spark node as a polymorphic LightningNode
-#[cfg(feature = "spark")]
+#[cfg(all(feature = "spark", not(feature = "napi_rs")))]
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;

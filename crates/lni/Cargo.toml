@@ -58,5 +58,5 @@ strip = "symbols"
 [features]
 napi_rs = []
 uniffi = []
-spark = ["breez-sdk-spark"]
+spark = ["dep:breez-sdk-spark"]
 default = ["uniffi"]
