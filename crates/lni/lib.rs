@@ -218,7 +218,6 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
-#[cfg(feature = "spark")]
 pub mod spark {
     pub mod api;
     pub mod lib;
@@ -331,7 +330,7 @@ pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create a Spark node as a polymorphic LightningNode
-#[cfg(all(feature = "spark", not(feature = "napi_rs")))]
+#[cfg(not(feature = "napi_rs"))]
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;

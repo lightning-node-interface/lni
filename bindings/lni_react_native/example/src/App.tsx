@@ -8,6 +8,8 @@ import {
   BlinkConfig,
   NwcConfig,
   SpeedConfig,
+  SparkConfig,
+  SparkNode,
   type OnInvoiceEventCallback,
   Transaction,
   OnInvoiceEventParams,
@@ -46,6 +48,9 @@ import {
   BLINK_TEST_PAYMENT_HASH,
   SPEED_API_KEY,
   SPEED_TEST_PAYMENT_HASH,
+  SPARK_MNEMONIC,
+  SPARK_API_KEY,
+  SPARK_TEST_PAYMENT_HASH,
 } from '@env';
 
 type TestResult = {
@@ -384,6 +389,109 @@ export default function App() {
     }
   };
 
+  const testSpark = async () => {
+    const nodeName = 'Spark';
+
+    if (!SPARK_MNEMONIC || !SPARK_API_KEY) {
+      updateTestStatus(nodeName, 'skipped', 'SPARK_MNEMONIC or SPARK_API_KEY not configured');
+      return;
+    }
+
+    let sparkNode: SparkNode | null = null;
+
+    try {
+      addOutput(nodeName, 'Testing Spark node...');
+
+      // Test 1: Create and connect SparkNode
+      addOutput(nodeName, '(1) Creating SparkNode...');
+      const config = SparkConfig.create({
+        mnemonic: SPARK_MNEMONIC,
+        passphrase: undefined,
+        apiKey: SPARK_API_KEY,
+        storageDir: './spark_data',
+        network: 'mainnet',
+      });
+
+      sparkNode = await SparkNode.new(config);
+      addOutput(nodeName, 'SparkNode connected successfully!');
+
+      // Test 2: Get Spark address
+      addOutput(nodeName, '(2) Testing getSparkAddress...');
+      try {
+        const sparkAddress = await sparkNode.getSparkAddress();
+        addOutput(nodeName, `Spark address: ${sparkAddress.substring(0, 40)}...`);
+      } catch (error) {
+        addOutput(nodeName, `getSparkAddress failed: ${error}`);
+      }
+
+      // Test 3: Get deposit address (Bitcoin on-chain)
+      addOutput(nodeName, '(3) Testing getDepositAddress...');
+      try {
+        const depositAddress = await sparkNode.getDepositAddress();
+        addOutput(nodeName, `Deposit address: ${depositAddress}`);
+      } catch (error) {
+        addOutput(nodeName, `getDepositAddress failed: ${error}`);
+      }
+
+      // Test 4: Get node info
+      addOutput(nodeName, '(4) Testing getInfo...');
+      const info = await sparkNode.getInfo();
+      addOutput(nodeName, `Node info: ${info.alias} (balance: ${info.balanceMsats} msats)`);
+
+      // Test 5: Create invoice
+      addOutput(nodeName, '(5) Testing createInvoice...');
+      const invoiceParams = CreateInvoiceParams.create({
+        amountMsats: BigInt(1000),
+        description: 'test invoice from Spark',
+        expiry: BigInt(3600),
+      });
+      const invoice = await sparkNode.createInvoice(invoiceParams);
+      addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
+
+      // Test 6: List transactions
+      addOutput(nodeName, '(6) Testing listTransactions...');
+      const listParams = ListTransactionsParams.create({
+        from: BigInt(0),
+        limit: BigInt(3),
+        paymentHash: undefined,
+        search: undefined,
+      });
+      const txns = await sparkNode.listTransactions(listParams);
+      addOutput(nodeName, `Found ${txns.length} transactions`);
+
+      // Test 7: Lookup invoice (if test hash provided)
+      if (SPARK_TEST_PAYMENT_HASH) {
+        addOutput(nodeName, '(7) Testing lookupInvoice...');
+        try {
+          const lookupParams = LookupInvoiceParams.create({
+            paymentHash: SPARK_TEST_PAYMENT_HASH,
+            search: undefined,
+          });
+          const lookupInvoice = await sparkNode.lookupInvoice(lookupParams);
+          addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
+        } catch (error) {
+          addOutput(nodeName, `Lookup failed (expected if hash doesn't exist): ${error}`);
+        }
+      }
+
+      updateTestStatus(nodeName, 'success', 'Spark tests completed successfully!');
+
+    } catch (error) {
+      console.error('Spark test error:', error);
+      updateTestStatus(nodeName, 'error', `Spark test failed: ${error}`);
+    } finally {
+      // Disconnect from Spark
+      if (sparkNode) {
+        try {
+          await sparkNode.disconnect();
+          addOutput(nodeName, 'Disconnected from Spark');
+        } catch (e) {
+          addOutput(nodeName, `Disconnect error: ${e}`);
+        }
+      }
+    }
+  };
+
   const testMnemonic = async () => {
     const nodeName = 'Mnemonic';
 
@@ -617,6 +725,12 @@ export default function App() {
             disabled={isRunning}
             color="#9B59B6"
           />
+          <Button 
+            title="Spark" 
+            onPress={() => runTest('Spark', testSpark)} 
+            disabled={isRunning}
+            color="#FF8C00"
+          />
         </View>
       </View>
 
@@ -664,7 +778,8 @@ export default function App() {
             CLN_URL, CLN_RUNE{'\n'}
             STRIKE_API_KEY{'\n'}
             PHOENIXD_URL, PHOENIXD_PASSWORD{'\n'}
-            And test payment hashes for each implementation
+            And test payment hashes for each implementation{`\n`}
+            SPARK_MNEMONIC, SPARK_API_KEY
           </Text>
         </View>
       )}

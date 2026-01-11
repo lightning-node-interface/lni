@@ -31,5 +31,9 @@ declare module '@env' {
   export const SPEED_API_KEY: string;
   export const SPEED_TEST_PAYMENT_HASH: string;
   export const SPEED_TEST_PAYMENT_REQUEST: string;
+
+  export const SPARK_MNEMONIC: string;
+  export const SPARK_API_KEY: string;
+  export const SPARK_TEST_PAYMENT_HASH: string;
 }
 
