@@ -138,12 +138,12 @@ impl SparkNode {
 }
 
 // Non-uniffi methods (internal Rust API only)
-impl SparkNode {
-    /// Get the internal SDK Arc for low-level operations
-    pub fn get_sdk(&self) -> Arc<BreezSdk> {
-        self.sdk.clone()
-    }
-}
+// impl SparkNode {
+//     /// Get the internal SDK Arc for low-level operations
+//     pub fn get_sdk(&self) -> Arc<BreezSdk> {
+//         self.sdk.clone()
+//     }
+// }
 
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
