@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch } from 'react-native';
+import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch, Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 import {
   LndConfig,
   PhoenixdConfig,
@@ -436,11 +437,13 @@ export default function App() {
 
       // Test 1: Create and connect SparkNode
       addOutput(nodeName, '(1) Creating SparkNode...');
+      const storageDir = `${RNFS.DocumentDirectoryPath}/spark_data`;
+      addOutput(nodeName, `Using storage directory: ${storageDir}`);
       const config = SparkConfig.create({
         mnemonic: SPARK_MNEMONIC,
         passphrase: undefined,
         apiKey: SPARK_API_KEY,
-        storageDir: './spark_data',
+        storageDir: storageDir,
         network: 'mainnet',
       });
 
