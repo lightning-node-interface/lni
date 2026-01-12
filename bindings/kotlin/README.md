@@ -95,7 +95,65 @@ This builds native libraries for all Android targets (arm64-v8a, armeabi-v7a, x8
 To skip Android builds (only generate Kotlin bindings):
 
 ```bash
-./build.sh --release --no-android
+./build.sh --no-android
+```
+
+## Publishing a Release
+
+The build script can automatically create a GitHub release with pre-built Android native libraries.
+
+### Prerequisites
+
+1. **Install GitHub CLI:**
+   ```bash
+   brew install gh
+   ```
+
+2. **Authenticate with GitHub:**
+   ```bash
+   gh auth login
+   ```
+   Follow the prompts to authenticate with your GitHub account.
+
+3. **Ensure version is updated:**
+   The release version is read from `crates/lni/Cargo.toml`. Update the version there before publishing:
+   ```toml
+   [package]
+   version = "0.2.0"  # Update this
+   ```
+
+### Create a Release
+
+```bash
+./build.sh --publish
+```
+
+This will:
+1. Build release binaries for all Android architectures
+2. Create a zip archive containing all `.so` files
+3. Create a GitHub release tagged `v{version}` (e.g., `v0.2.0`)
+4. Upload the archive as a release asset
+
+If the release already exists, the script will update the existing asset.
+
+### What Gets Published
+
+The release includes `lni-android-{version}.zip` containing:
+- `arm64-v8a/` - ARM64 devices (most modern Android phones)
+- `armeabi-v7a/` - ARM32 devices (older phones)
+- `x86_64/` - 64-bit emulators
+- `x86/` - 32-bit emulators
+
+### Using Pre-built Binaries
+
+Users can download the release and extract to their project:
+
+```bash
+# Download from GitHub releases
+curl -L https://github.com/lightning-node-interface/lni/releases/download/v0.2.0/lni-android-0.2.0.zip -o lni-android.zip
+
+# Extract to jniLibs
+unzip lni-android.zip -d app/src/main/jniLibs/
 ```
 
 ### Important: Invalidate Caches

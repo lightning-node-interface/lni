@@ -12,9 +12,15 @@
 # - Android NDK: Set ANDROID_NDK_HOME environment variable
 # - Rust targets: rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
 #
-# Usage: ./build.sh [--release] [--no-android]
-#        ./build.sh --release             # Build for Android in release mode
-#        ./build.sh --release --no-android # Skip Android builds
+# Usage: ./build.sh [--no-android] [--publish]
+#        ./build.sh                       # Build for Android in release mode
+#        ./build.sh --no-android          # Skip Android builds
+#        ./build.sh --publish             # Build and create GitHub release with binaries
+#
+# For --publish:
+# - Requires GitHub CLI (gh): brew install gh
+# - Must be authenticated: gh auth login
+# - Version is read from Cargo.toml
 
 set -e
 
@@ -23,8 +29,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EXAMPLE_DIR="$SCRIPT_DIR/example"
 
 # Parse arguments
-BUILD_TYPE="debug"
+BUILD_TYPE="release"
 BUILD_ANDROID=true
+PUBLISH_RELEASE=false
 
 for arg in "$@"; do
     case $arg in
@@ -34,8 +41,27 @@ for arg in "$@"; do
         --no-android)
             BUILD_ANDROID=false
             ;;
+        --publish)
+            PUBLISH_RELEASE=true
+            ;;
     esac
 done
+
+# Check for gh CLI if publishing
+if [ "$PUBLISH_RELEASE" = true ]; then
+    if ! command -v gh &> /dev/null; then
+        echo "Error: GitHub CLI (gh) is required for publishing releases."
+        echo "Install it with: brew install gh"
+        exit 1
+    fi
+    
+    # Check if authenticated
+    if ! gh auth status &> /dev/null; then
+        echo "Error: Not authenticated with GitHub CLI."
+        echo "Run: gh auth login"
+        exit 1
+    fi
+fi
 
 # Check for cargo-ndk if building for Android
 if [ "$BUILD_ANDROID" = true ]; then
@@ -162,5 +188,66 @@ if [ "$BUILD_ANDROID" = true ]; then
     echo "invalidate Android Studio caches:"
     echo ""
     echo "  File → Invalidate Caches → Invalidate and Restart"
+    echo "============================================================"
+fi
+
+# Publish to GitHub Release if requested
+if [ "$PUBLISH_RELEASE" = true ] && [ "$BUILD_ANDROID" = true ]; then
+    echo ""
+    echo "Creating GitHub release with Android binaries..."
+    
+    # Get version from crates/lni/Cargo.toml
+    VERSION=$(grep -m1 '^version' "$ROOT_DIR/crates/lni/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/')
+    if [ -z "$VERSION" ]; then
+        echo "Error: Could not read version from crates/lni/Cargo.toml"
+        exit 1
+    fi
+    
+    TAG="v${VERSION}"
+    RELEASE_NAME="LNI ${VERSION}"
+    
+    # Create zip archive of jniLibs
+    ARCHIVE_NAME="lni-android-${VERSION}.zip"
+    ARCHIVE_PATH="$SCRIPT_DIR/$ARCHIVE_NAME"
+    
+    echo "Creating archive: $ARCHIVE_NAME"
+    cd "$JNILIBS_DIR"
+    zip -r "$ARCHIVE_PATH" arm64-v8a armeabi-v7a x86 x86_64 -x "*.DS_Store"
+    
+    cd "$ROOT_DIR"
+    
+    # Check if release already exists
+    if gh release view "$TAG" &> /dev/null; then
+        echo "Release $TAG already exists. Uploading/updating assets..."
+        # Delete existing asset if present, then upload new one
+        gh release delete-asset "$TAG" "$ARCHIVE_NAME" --yes 2>/dev/null || true
+        gh release upload "$TAG" "$ARCHIVE_PATH"
+    else
+        echo "Creating new release: $TAG"
+        gh release create "$TAG" \
+            --title "$RELEASE_NAME" \
+            --notes "## LNI ${VERSION} Native Libraries
+
+### Android
+Download \`lni-android-${VERSION}.zip\` and extract to your \`app/src/main/jniLibs/\` directory.
+
+Included architectures:
+- \`arm64-v8a\` (ARM64)
+- \`armeabi-v7a\` (ARM32)
+- \`x86_64\` (Intel/AMD 64-bit emulator)
+- \`x86\` (Intel/AMD 32-bit emulator)
+
+### iOS
+Download \`lni-ios-${VERSION}.zip\` for XCFramework (if available)." \
+            "$ARCHIVE_PATH"
+    fi
+    
+    # Clean up archive
+    rm -f "$ARCHIVE_PATH"
+    
+    echo ""
+    echo "============================================================"
+    echo "GitHub release created/updated: $TAG"
+    echo "View at: https://github.com/lightning-node-interface/lni/releases/tag/$TAG"
     echo "============================================================"
 fi
