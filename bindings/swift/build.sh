@@ -5,12 +5,13 @@
 # This script:
 # 1. Builds the lni library with uniffi feature
 # 2. Uses uniffi-bindgen to generate Swift bindings from the shared library
-# 3. Optionally builds for iOS simulator targets
+# 3. Builds for iOS simulator and device targets (default, use --no-ios to skip)
 # 4. Optionally packages XCFramework for SPM distribution
 #
-# Usage: ./build.sh [--release] [--ios] [--package]
-#        ./build.sh --release --ios            # Build for iOS in release mode
-#        ./build.sh --release --ios --package  # Build and package for SPM release
+# Usage: ./build.sh [--release] [--no-ios] [--package]
+#        ./build.sh --release               # Build for iOS in release mode
+#        ./build.sh --release --no-ios      # Skip iOS builds
+#        ./build.sh --release --package     # Build and package for SPM release
 
 set -e
 
@@ -20,7 +21,7 @@ EXAMPLE_DIR="$SCRIPT_DIR/example"
 
 # Parse arguments
 BUILD_TYPE="debug"
-BUILD_IOS=false
+BUILD_IOS=true
 PACKAGE_RELEASE=false
 
 for arg in "$@"; do
@@ -28,8 +29,8 @@ for arg in "$@"; do
         --release)
             BUILD_TYPE="release"
             ;;
-        --ios)
-            BUILD_IOS=true
+        --no-ios)
+            BUILD_IOS=false
             ;;
         --package)
             PACKAGE_RELEASE=true
@@ -181,6 +182,18 @@ if [ "$BUILD_IOS" = true ]; then
     
     echo ""
     echo "XCFramework created successfully!"
+    
+    # Copy to example project
+    EXAMPLE_LNIEXAMPLE_DIR="$SCRIPT_DIR/example/LNIExample"
+    if [ -d "$EXAMPLE_LNIEXAMPLE_DIR" ]; then
+        echo ""
+        echo "Copying to example project..."
+        rm -rf "$EXAMPLE_LNIEXAMPLE_DIR/LNI.xcframework"
+        cp -R "$XCFRAMEWORK_DIR" "$EXAMPLE_LNIEXAMPLE_DIR/"
+        cp "$OUTPUT_DIR/lni.swift" "$EXAMPLE_LNIEXAMPLE_DIR/"
+        echo "  Copied LNI.xcframework to $EXAMPLE_LNIEXAMPLE_DIR/"
+        echo "  Copied lni.swift to $EXAMPLE_LNIEXAMPLE_DIR/"
+    fi
 
     # Package for release if requested
     if [ "$PACKAGE_RELEASE" = true ]; then

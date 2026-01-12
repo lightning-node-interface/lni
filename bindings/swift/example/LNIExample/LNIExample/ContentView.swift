@@ -9,6 +9,28 @@
 
 import SwiftUI
 
+// MARK: - Spark Invoice Event Callback
+
+final class SparkInvoiceCallback: OnInvoiceEventCallback, @unchecked Sendable {
+    private let onUpdate: @Sendable (String, Transaction?) -> Void
+    
+    init(onUpdate: @escaping @Sendable (String, Transaction?) -> Void) {
+        self.onUpdate = onUpdate
+    }
+    
+    func success(transaction: Transaction?) {
+        onUpdate("success", transaction)
+    }
+    
+    func pending(transaction: Transaction?) {
+        onUpdate("pending", transaction)
+    }
+    
+    func failure(transaction: Transaction?) {
+        onUpdate("failure", transaction)
+    }
+}
+
 // MARK: - Main Content View
 
 struct ContentView: View {
@@ -16,11 +38,36 @@ struct ContentView: View {
     @State private var isLoading: Bool = false
     @State private var strikeApiKey: String = ""
     @State private var showApiKey: Bool = false
+    @State private var use24Words: Bool = false
+    @State private var sparkMnemonic: String = ""
+    @State private var sparkApiKey: String = ""
+    @State private var showSparkMnemonic: Bool = false
+    @State private var showSparkApiKey: Bool = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // Mnemonic Generation Section
+                    GroupBox(label: Label("Wallet Utils", systemImage: "key.fill")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("24 words (default: 12)", isOn: $use24Words)
+                            
+                            Button {
+                                generateNewMnemonic()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                    Text("Generate Mnemonic")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
                     // Strike API Section
                     GroupBox(label: Label("Strike API", systemImage: "bolt.fill")) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -51,6 +98,56 @@ struct ContentView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(isLoading || strikeApiKey.isEmpty)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
+                    // Spark API Section
+                    GroupBox(label: Label("Spark (Breez)", systemImage: "sparkles")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                if showSparkMnemonic {
+                                    TextField("Mnemonic (12 words)", text: $sparkMnemonic)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    SecureField("Mnemonic (12 words)", text: $sparkMnemonic)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                                Button(showSparkMnemonic ? "Hide" : "Show") {
+                                    showSparkMnemonic.toggle()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            
+                            HStack {
+                                if showSparkApiKey {
+                                    TextField("Breez API Key", text: $sparkApiKey)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.caption, design: .monospaced))
+                                } else {
+                                    SecureField("Breez API Key", text: $sparkApiKey)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                                Button(showSparkApiKey ? "Hide" : "Show") {
+                                    showSparkApiKey.toggle()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            
+                            Button {
+                                Task {
+                                    await testSpark()
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "sparkles")
+                                    Text("Test Spark")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading || sparkMnemonic.isEmpty || sparkApiKey.isEmpty)
                         }
                         .padding(.vertical, 8)
                     }
@@ -150,7 +247,116 @@ struct ContentView: View {
         isLoading = false
     }
     
+    // MARK: - Generate Mnemonic
+    
+    private func generateNewMnemonic() {
+        output = "=== Generate Mnemonic ===\n\n"
+        
+        do {
+            let wordCount: UInt8? = use24Words ? 24 : nil
+            let mnemonic = try generateMnemonic(wordCount: wordCount)
+            
+            let words = mnemonic.split(separator: " ")
+            output += "✓ Generated \(words.count)-word mnemonic:\n\n"
+            
+            // Display words in a numbered list
+            for (index, word) in words.enumerated() {
+                output += String(format: "%2d. %@\n", index + 1, String(word))
+            }
+            
+            output += "\n⚠️ IMPORTANT: In a real app, never display\n"
+            output += "   the mnemonic on screen. Store it securely!\n"
+        } catch {
+            output += "✗ Error: \(error)\n"
+        }
+    }
+    
     // MARK: - Test Functions
+    
+    private func testSpark() async {
+        isLoading = true
+        output = "=== Spark Node Test ===\n\n"
+        
+        do {
+            // Get the documents directory for storage
+            guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                output += "✗ Error: Could not get documents directory\n"
+                isLoading = false
+                return
+            }
+            
+            let storageDir = documentsDir.appendingPathComponent("spark_data").path
+            output += "Storage: \(storageDir)\n\n"
+            
+            let config = SparkConfig(
+                mnemonic: sparkMnemonic,
+                passphrase: nil,
+                apiKey: sparkApiKey,
+                storageDir: storageDir,
+                network: "mainnet"
+            )
+            
+            output += "(1) Creating SparkNode...\n"
+            let node: LightningNode = try await createSparkNode(config: config)
+            output += "✓ SparkNode connected!\n\n"
+            
+            output += "(2) Getting node info...\n"
+            let info = try await node.getInfo()
+            output += "✓ Node Info:\n"
+            output += "  • Alias: \(info.alias)\n"
+            output += "  • Network: \(info.network)\n"
+            output += "  • Balance: \(info.sendBalanceMsat / 1000) sats\n\n"
+            
+            output += "(3) Creating invoice...\n"
+            let invoiceParams = CreateInvoiceParams(
+                amountMsats: 1000,
+                description: "test invoice from Spark iOS",
+                expiry: 3600
+            )
+            let invoice = try await node.createInvoice(params: invoiceParams)
+            let shortHash = String(invoice.paymentHash.prefix(20))
+            output += "✓ Invoice created: \(shortHash)...\n\n"
+            
+            output += "(4) Testing onInvoiceEvents...\n"
+            output += "  Polling for payment (will timeout after 6s)...\n"
+            
+            let eventParams = OnInvoiceEventParams(
+                paymentHash: "d742679487d0f01b3f8d9c4a6ceea12b70c99c0965f732584f337bd172bb81cb",
+                search: nil,
+                pollingDelaySec: 2,
+                maxPollingSec: 6
+            )
+            
+            let callback = SparkInvoiceCallback { [self] status, tx in
+                Task { @MainActor in
+                    self.output += "  • Event: \(status)"
+                    if let tx = tx {
+                        self.output += " (amount: \(tx.amountMsats / 1000) sats)"
+                    }
+                    self.output += "\n"
+                }
+            }
+            
+            await node.onInvoiceEvents(params: eventParams, callback: callback)
+            output += "✓ onInvoiceEvents completed\n\n"
+            
+            output += "(5) Listing transactions...\n"
+            let listParams = ListTransactionsParams(
+                from: 0,
+                limit: 3,
+                paymentHash: nil,
+                search: nil
+            )
+            let txns = try await node.listTransactions(params: listParams)
+            output += "✓ Found \(txns.count) transactions\n\n"
+            
+            output += "=== All tests passed! ===\n"
+        } catch {
+            output += "✗ Error: \(error)\n"
+        }
+        
+        isLoading = false
+    }
     
     private func testStrike() async {
         isLoading = true

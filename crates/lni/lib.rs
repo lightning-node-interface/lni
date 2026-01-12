@@ -1,7 +1,4 @@
-#[cfg(feature = "napi_rs")]
-use napi_derive::napi;
-#[cfg(feature = "napi_rs")]
-use napi::bindgen_prelude::*;
+
 
 use std::time::Duration;
 use once_cell::sync::Lazy;
@@ -33,6 +30,37 @@ impl From<serde_json::Error> for ApiError {
             reason: e.to_string(),
         }
     }
+}
+
+/// Generate a new BIP39 mnemonic phrase for wallet creation.
+/// Uses cryptographically secure randomness from the OS.
+/// 
+/// # Arguments
+/// * `word_count` - Number of words: 12 (default) or 24. If None or invalid, defaults to 12.
+/// 
+/// # Returns
+/// A space-separated mnemonic phrase
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
+    use bip39::{Language, Mnemonic};
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+
+    let entropy_size = match word_count {
+        Some(24) => 32,
+        _ => 16,
+    };
+
+    let mut entropy = vec![0u8; entropy_size];
+    OsRng.fill_bytes(&mut entropy);
+
+    let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy)
+        .map_err(|e| ApiError::Api {
+            reason: format!("Failed to generate mnemonic: {}", e),
+        })?;
+
+    Ok(mnemonic.to_string())
 }
 
 /// Macro to implement LightningNode trait by delegating to inherent methods.
@@ -187,6 +215,13 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
+pub mod spark {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{SparkConfig, SparkNode};
+}
+
 pub mod types;
 pub use types::*;
 
@@ -286,9 +321,18 @@ pub fn create_lnd_node(config: lnd::LndConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create an NWC node as a polymorphic LightningNode
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
 pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
     Arc::new(nwc::NwcNode::new(config))
+}
+
+/// Create a Spark node as a polymorphic LightningNode
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
+    let node = spark::SparkNode::new(config).await?;
+    Ok(Arc::new(node))
 }
 
 #[cfg(feature = "uniffi")]

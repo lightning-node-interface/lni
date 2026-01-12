@@ -84,6 +84,28 @@ node.close()
 
 See the `example/` directory for a complete Android example project.
 
+### Building for Android
+
+```bash
+./build.sh --release
+```
+
+This builds native libraries for all Android targets (arm64-v8a, armeabi-v7a, x86_64, x86) and copies them to the example project's `jniLibs` directory.
+
+To skip Android builds (only generate Kotlin bindings):
+
+```bash
+./build.sh --release --no-android
+```
+
+### Important: Invalidate Caches
+
+After updating native libraries, you may need to invalidate Android Studio caches:
+
+**File → Invalidate Caches → Invalidate and Restart**
+
+This ensures Android Studio picks up the updated native libraries.
+
 ### Adding to your Android project
 
 1. Copy the generated `lni.kt` file to your project

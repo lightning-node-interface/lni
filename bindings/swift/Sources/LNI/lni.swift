@@ -406,6 +406,22 @@ private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
     typealias FfiType = UInt16
     typealias SwiftType = UInt16
@@ -3240,6 +3256,423 @@ public func FfiConverterTypePhoenixdNode_lift(_ pointer: UnsafeMutableRawPointer
 #endif
 public func FfiConverterTypePhoenixdNode_lower(_ value: PhoenixdNode) -> UnsafeMutableRawPointer {
     return FfiConverterTypePhoenixdNode.lower(value)
+}
+
+
+
+
+
+
+public protocol SparkNodeProtocol: AnyObject, Sendable {
+    
+    func createInvoice(params: CreateInvoiceParams) async throws  -> Transaction
+    
+    func createOffer(params: CreateOfferParams) async throws  -> Offer
+    
+    func decode(str: String) async throws  -> String
+    
+    /**
+     * Disconnect from the Spark network
+     */
+    func disconnect() async throws 
+    
+    /**
+     * Get a Bitcoin address for on-chain deposits
+     */
+    func getDepositAddress() async throws  -> String
+    
+    func getInfo() async throws  -> NodeInfo
+    
+    func getOffer(search: String?) async throws  -> Offer
+    
+    /**
+     * Get the Spark address for receiving payments
+     */
+    func getSparkAddress() async throws  -> String
+    
+    func listOffers(search: String?) async throws  -> [Offer]
+    
+    func listTransactions(params: ListTransactionsParams) async throws  -> [Transaction]
+    
+    func lookupInvoice(params: LookupInvoiceParams) async throws  -> Transaction
+    
+    func onInvoiceEvents(params: OnInvoiceEventParams, callback: OnInvoiceEventCallback) async 
+    
+    func payInvoice(params: PayInvoiceParams) async throws  -> PayInvoiceResponse
+    
+    func payOffer(offer: String, amountMsats: Int64, payerNote: String?) async throws  -> PayInvoiceResponse
+    
+}
+open class SparkNode: SparkNodeProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_lni_fn_clone_sparknode(self.pointer, $0) }
+    }
+    /**
+     * Create a new SparkNode and connect to the Spark network
+     */
+public convenience init(config: SparkConfig)async throws  {
+    let pointer =
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_constructor_sparknode_new(FfiConverterTypeSparkConfig_lower(config)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_pointer,
+            completeFunc: ffi_lni_rust_future_complete_pointer,
+            freeFunc: ffi_lni_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeSparkNode_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+        
+        .uniffiClonePointer()
+    self.init(unsafeFromRawPointer: pointer)
+}
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_lni_fn_free_sparknode(pointer, $0) }
+    }
+
+    
+
+    
+open func createInvoice(params: CreateInvoiceParams)async throws  -> Transaction  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_create_invoice(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeCreateInvoiceParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTransaction_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func createOffer(params: CreateOfferParams)async throws  -> Offer  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_create_offer(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeCreateOfferParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOffer_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func decode(str: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_decode(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(str)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+    /**
+     * Disconnect from the Spark network
+     */
+open func disconnect()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_disconnect(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_void,
+            completeFunc: ffi_lni_rust_future_complete_void,
+            freeFunc: ffi_lni_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+    /**
+     * Get a Bitcoin address for on-chain deposits
+     */
+open func getDepositAddress()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_get_deposit_address(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func getInfo()async throws  -> NodeInfo  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_get_info(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeNodeInfo_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func getOffer(search: String?)async throws  -> Offer  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_get_offer(
+                    self.uniffiClonePointer(),
+                    FfiConverterOptionString.lower(search)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOffer_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+    /**
+     * Get the Spark address for receiving payments
+     */
+open func getSparkAddress()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_get_spark_address(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func listOffers(search: String?)async throws  -> [Offer]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_list_offers(
+                    self.uniffiClonePointer(),
+                    FfiConverterOptionString.lower(search)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeOffer.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func listTransactions(params: ListTransactionsParams)async throws  -> [Transaction]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_list_transactions(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeListTransactionsParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeTransaction.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func lookupInvoice(params: LookupInvoiceParams)async throws  -> Transaction  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_lookup_invoice(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeLookupInvoiceParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTransaction_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func onInvoiceEvents(params: OnInvoiceEventParams, callback: OnInvoiceEventCallback)async   {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_on_invoice_events(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeOnInvoiceEventParams_lower(params),FfiConverterTypeOnInvoiceEventCallback_lower(callback)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_void,
+            completeFunc: ffi_lni_rust_future_complete_void,
+            freeFunc: ffi_lni_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: nil
+            
+        )
+}
+    
+open func payInvoice(params: PayInvoiceParams)async throws  -> PayInvoiceResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_pay_invoice(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypePayInvoiceParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePayInvoiceResponse_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+open func payOffer(offer: String, amountMsats: Int64, payerNote: String?)async throws  -> PayInvoiceResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_sparknode_pay_offer(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(offer),FfiConverterInt64.lower(amountMsats),FfiConverterOptionString.lower(payerNote)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePayInvoiceResponse_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+    
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSparkNode: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = SparkNode
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> SparkNode {
+        return SparkNode(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: SparkNode) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SparkNode {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: SparkNode, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkNode_lift(_ pointer: UnsafeMutableRawPointer) throws -> SparkNode {
+    return try FfiConverterTypeSparkNode.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkNode_lower(_ value: SparkNode) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeSparkNode.lower(value)
 }
 
 
@@ -6582,6 +7015,130 @@ public func FfiConverterTypePhoenixdConfig_lower(_ value: PhoenixdConfig) -> Rus
 }
 
 
+public struct SparkConfig {
+    /**
+     * 12 or 24 word mnemonic phrase
+     */
+    public var mnemonic: String
+    /**
+     * Optional passphrase for the mnemonic
+     */
+    public var passphrase: String?
+    /**
+     * Breez API key (required for mainnet)
+     */
+    public var apiKey: String?
+    /**
+     * Storage directory path for wallet data
+     */
+    public var storageDir: String
+    /**
+     * Network: "mainnet" or "regtest"
+     */
+    public var network: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 12 or 24 word mnemonic phrase
+         */mnemonic: String, 
+        /**
+         * Optional passphrase for the mnemonic
+         */passphrase: String? = nil, 
+        /**
+         * Breez API key (required for mainnet)
+         */apiKey: String? = nil, 
+        /**
+         * Storage directory path for wallet data
+         */storageDir: String, 
+        /**
+         * Network: "mainnet" or "regtest"
+         */network: String? = "mainnet") {
+        self.mnemonic = mnemonic
+        self.passphrase = passphrase
+        self.apiKey = apiKey
+        self.storageDir = storageDir
+        self.network = network
+    }
+}
+
+#if compiler(>=6)
+extension SparkConfig: Sendable {}
+#endif
+
+
+extension SparkConfig: Equatable, Hashable {
+    public static func ==(lhs: SparkConfig, rhs: SparkConfig) -> Bool {
+        if lhs.mnemonic != rhs.mnemonic {
+            return false
+        }
+        if lhs.passphrase != rhs.passphrase {
+            return false
+        }
+        if lhs.apiKey != rhs.apiKey {
+            return false
+        }
+        if lhs.storageDir != rhs.storageDir {
+            return false
+        }
+        if lhs.network != rhs.network {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mnemonic)
+        hasher.combine(passphrase)
+        hasher.combine(apiKey)
+        hasher.combine(storageDir)
+        hasher.combine(network)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSparkConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SparkConfig {
+        return
+            try SparkConfig(
+                mnemonic: FfiConverterString.read(from: &buf), 
+                passphrase: FfiConverterOptionString.read(from: &buf), 
+                apiKey: FfiConverterOptionString.read(from: &buf), 
+                storageDir: FfiConverterString.read(from: &buf), 
+                network: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SparkConfig, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mnemonic, into: &buf)
+        FfiConverterOptionString.write(value.passphrase, into: &buf)
+        FfiConverterOptionString.write(value.apiKey, into: &buf)
+        FfiConverterString.write(value.storageDir, into: &buf)
+        FfiConverterOptionString.write(value.network, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkConfig_lift(_ buf: RustBuffer) throws -> SparkConfig {
+    return try FfiConverterTypeSparkConfig.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkConfig_lower(_ value: SparkConfig) -> RustBuffer {
+    return FfiConverterTypeSparkConfig.lower(value)
+}
+
+
 public struct SpeedConfig {
     public var baseUrl: String?
     public var apiKey: String
@@ -7252,6 +7809,30 @@ extension InvoiceType: Equatable, Hashable {}
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = UInt8?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt8.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
     typealias SwiftType = Int64?
 
@@ -7661,6 +8242,23 @@ public func createPhoenixdNode(config: PhoenixdConfig) -> LightningNode  {
 })
 }
 /**
+ * Create a Spark node as a polymorphic LightningNode
+ */
+public func createSparkNode(config: SparkConfig)async throws  -> LightningNode  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_func_create_spark_node(FfiConverterTypeSparkConfig_lower(config)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_pointer,
+            completeFunc: ffi_lni_rust_future_complete_pointer,
+            freeFunc: ffi_lni_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeLightningNode_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+/**
  * Create a Speed node as a polymorphic LightningNode
  */
 public func createSpeedNode(config: SpeedConfig) -> LightningNode  {
@@ -7693,6 +8291,23 @@ public func decode(config: LndConfig, invoiceStr: String)async throws  -> String
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeApiError_lift
         )
+}
+/**
+ * Generate a new BIP39 mnemonic phrase for wallet creation.
+ * Uses cryptographically secure randomness from the OS.
+ *
+ * # Arguments
+ * * `word_count` - Number of words: 12 (default) or 24. If None or invalid, defaults to 12.
+ *
+ * # Returns
+ * A space-separated mnemonic phrase
+ */
+public func generateMnemonic(wordCount: UInt8?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeApiError_lift) {
+    uniffi_lni_fn_func_generate_mnemonic(
+        FfiConverterOptionUInt8.lower(wordCount),$0
+    )
+})
 }
 public func getInfo(config: LndConfig)async throws  -> NodeInfo  {
     return
@@ -7814,6 +8429,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lni_checksum_func_create_phoenixd_node() != 55373) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lni_checksum_func_create_spark_node() != 28205) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lni_checksum_func_create_speed_node() != 45583) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7821,6 +8439,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_func_decode() != 11646) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_func_generate_mnemonic() != 62024) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_func_get_info() != 59600) {
@@ -8048,6 +8669,48 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lni_checksum_method_phoenixdnode_pay_offer() != 58136) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lni_checksum_method_sparknode_create_invoice() != 34637) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_create_offer() != 14974) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_decode() != 60941) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_disconnect() != 32412) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_get_deposit_address() != 42278) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_get_info() != 29197) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_get_offer() != 59868) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_get_spark_address() != 49506) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_list_offers() != 3118) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_list_transactions() != 41) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_lookup_invoice() != 48122) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_on_invoice_events() != 5341) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_pay_invoice() != 24397) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_sparknode_pay_offer() != 8920) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lni_checksum_method_speednode_create_invoice() != 60705) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8127,6 +8790,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_constructor_phoenixdnode_new() != 22874) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_constructor_sparknode_new() != 5819) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_constructor_speednode_new() != 58509) {

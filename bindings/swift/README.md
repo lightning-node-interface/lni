@@ -25,7 +25,7 @@ This package provides Swift bindings for LNI, allowing you to interact with vari
 - Xcode (for iOS builds)
 - iOS SDK (comes with Xcode)
 
-### Generate Swift bindings
+### Build for iOS
 
 ```bash
 ./build.sh --release
@@ -34,17 +34,15 @@ This package provides Swift bindings for LNI, allowing you to interact with vari
 This will:
 1. Build the LNI library with UniFFI support
 2. Generate Swift bindings in `Sources/LNI/`
+3. Build static libraries for iOS Simulator (arm64 + x86_64)
+4. Build static library for iOS devices (arm64)
+5. Create a universal XCFramework
 
-### Build for iOS
+To skip iOS builds (only generate Swift bindings):
 
 ```bash
-./build.sh --release --ios
+./build.sh --release --no-ios
 ```
-
-This will additionally:
-1. Build static libraries for iOS Simulator (arm64 + x86_64)
-2. Build static library for iOS devices (arm64)
-3. Create a universal XCFramework
 
 ## Usage
 
