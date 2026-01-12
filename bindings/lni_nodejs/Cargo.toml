@@ -10,7 +10,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "lni_napi_rs"
 
 [dependencies]
-lni = { path = "../../crates/lni", features = ["napi_rs"] }
+lni = { path = "../../crates/lni", default-features = false, features = ["napi_rs"] }
 async-trait = "0.1"
 thiserror = "1.0"
 serde = { version = "1", features=["derive"] }

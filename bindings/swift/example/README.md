@@ -38,7 +38,7 @@ This will:
 ### Step 2: Open in Xcode
 
 ```bash
-open LNIExample.xcodeproj
+open ./example/LNIExample/LNIExample.xcodeproj
 ```
 
 ### Step 3: Link the LNI Library

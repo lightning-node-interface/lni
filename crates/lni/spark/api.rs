@@ -156,77 +156,96 @@ pub async fn lookup_invoice(
         });
     }
 
-    let payments = sdk
-        .list_payments(ListPaymentsRequest {
-            limit: Some(100),
-            ..Default::default()
-        })
-        .await
-        .map_err(|e| ApiError::Api {
-            reason: e.to_string(),
-        })?;
+    // Paginate through all payments to find the target hash
+    const PAGE_SIZE: u32 = 100;
+    let mut offset: u32 = 0;
 
-    for payment in payments.payments {
-        let (invoice, p_hash, preimage, description) = match &payment.details {
-            Some(PaymentDetails::Lightning {
-                invoice,
-                payment_hash,
-                preimage,
-                description,
-                ..
-            }) => (
-                invoice.clone(),
-                payment_hash.clone(),
-                preimage.clone().unwrap_or_default(),
-                description.clone().unwrap_or_default(),
-            ),
-            Some(PaymentDetails::Spark {
-                invoice_details,
-                htlc_details,
-                ..
-            }) => {
-                let inv = invoice_details
-                    .as_ref()
-                    .map(|d| d.invoice.clone())
-                    .unwrap_or_default();
-                let desc = invoice_details
-                    .as_ref()
-                    .and_then(|d| d.description.clone())
-                    .unwrap_or_default();
-                let (hash, preimg) = if let Some(htlc) = htlc_details {
-                    (htlc.payment_hash.clone(), htlc.preimage.clone().unwrap_or_default())
-                } else {
-                    ("".to_string(), "".to_string())
-                };
-                (inv, hash, preimg, desc)
-            }
-            _ => continue,
-        };
+    loop {
+        let payments = sdk
+            .list_payments(ListPaymentsRequest {
+                offset: Some(offset),
+                limit: Some(PAGE_SIZE),
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| ApiError::Api {
+                reason: e.to_string(),
+            })?;
+        dbg!(&payments);
 
-        if p_hash == target_hash {
-            return Ok(Transaction {
-                type_: match payment.payment_type {
-                    PaymentType::Send => "outgoing".to_string(),
-                    PaymentType::Receive => "incoming".to_string(),
-                },
-                invoice,
-                preimage,
-                payment_hash: p_hash,
-                amount_msats: (payment.amount as i64) * 1000,
-                fees_paid: (payment.fees as i64) * 1000,
-                created_at: payment.timestamp as i64,
-                expires_at: 0,
-                settled_at: if payment.status == PaymentStatus::Completed {
-                    payment.timestamp as i64
-                } else {
-                    0
-                },
-                description,
-                description_hash: "".to_string(),
-                payer_note: None,
-                external_id: Some(payment.id),
-            });
+        if payments.payments.is_empty() {
+            break;
         }
+
+        for payment in payments.payments.iter() {
+            let (invoice, p_hash, preimage, description) = match &payment.details {
+                Some(PaymentDetails::Lightning {
+                    invoice,
+                    payment_hash,
+                    preimage,
+                    description,
+                    ..
+                }) => (
+                    invoice.clone(),
+                    payment_hash.clone(),
+                    preimage.clone().unwrap_or_default(),
+                    description.clone().unwrap_or_default(),
+                ),
+                Some(PaymentDetails::Spark {
+                    invoice_details,
+                    htlc_details,
+                    ..
+                }) => {
+                    let inv = invoice_details
+                        .as_ref()
+                        .map(|d| d.invoice.clone())
+                        .unwrap_or_default();
+                    let desc = invoice_details
+                        .as_ref()
+                        .and_then(|d| d.description.clone())
+                        .unwrap_or_default();
+                    let (hash, preimg) = if let Some(htlc) = htlc_details {
+                        (htlc.payment_hash.clone(), htlc.preimage.clone().unwrap_or_default())
+                    } else {
+                        ("".to_string(), "".to_string())
+                    };
+                    (inv, hash, preimg, desc)
+                }
+                _ => continue,
+            };
+
+            if p_hash == target_hash {
+                return Ok(Transaction {
+                    type_: match payment.payment_type {
+                        PaymentType::Send => "outgoing".to_string(),
+                        PaymentType::Receive => "incoming".to_string(),
+                    },
+                    invoice,
+                    preimage,
+                    payment_hash: p_hash,
+                    amount_msats: (payment.amount as i64) * 1000,
+                    fees_paid: (payment.fees as i64) * 1000,
+                    created_at: payment.timestamp as i64,
+                    expires_at: 0,
+                    settled_at: if payment.status == PaymentStatus::Completed {
+                        payment.timestamp as i64
+                    } else {
+                        0
+                    },
+                    description,
+                    description_hash: "".to_string(),
+                    payer_note: None,
+                    external_id: Some(payment.id.clone()),
+                });
+            }
+        }
+
+        // If we got fewer than PAGE_SIZE results, we've reached the end
+        if (payments.payments.len() as u32) < PAGE_SIZE {
+            break;
+        }
+
+        offset += PAGE_SIZE;
     }
 
     Err(ApiError::Api {
@@ -397,16 +416,14 @@ pub async fn poll_invoice_events<F>(
                     ("pending".to_string(), Some(transaction))
                 }
             }
-            Err(_) => ("error".to_string(), None),
+            // Treat lookup errors as transient - invoice may not be indexed yet
+            Err(_) => ("pending".to_string(), None),
         };
 
         match status.as_str() {
             "settled" => {
                 callback("success".to_string(), transaction);
                 break;
-            }
-            "error" => {
-                callback("failure".to_string(), transaction);
             }
             _ => {
                 callback("pending".to_string(), transaction);
@@ -423,9 +440,14 @@ pub async fn poll_invoice_events<F>(
 /// Handle invoice events with callback trait
 pub async fn on_invoice_events(
     sdk: Arc<BreezSdk>,
-    params: OnInvoiceEventParams,
+    mut params: OnInvoiceEventParams,
     callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
+    // Use payment_hash if provided, otherwise fall back to search
+    if params.payment_hash.is_none() {
+        params.payment_hash = params.search.clone();
+    }
+
     poll_invoice_events(sdk, params, move |status, tx| match status.as_str() {
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),

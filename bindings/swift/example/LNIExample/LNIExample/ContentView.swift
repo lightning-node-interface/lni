@@ -9,6 +9,28 @@
 
 import SwiftUI
 
+// MARK: - Spark Invoice Event Callback
+
+final class SparkInvoiceCallback: OnInvoiceEventCallback, @unchecked Sendable {
+    private let onUpdate: @Sendable (String, Transaction?) -> Void
+    
+    init(onUpdate: @escaping @Sendable (String, Transaction?) -> Void) {
+        self.onUpdate = onUpdate
+    }
+    
+    func success(transaction: Transaction?) {
+        onUpdate("success", transaction)
+    }
+    
+    func pending(transaction: Transaction?) {
+        onUpdate("pending", transaction)
+    }
+    
+    func failure(transaction: Transaction?) {
+        onUpdate("failure", transaction)
+    }
+}
+
 // MARK: - Main Content View
 
 struct ContentView: View {
@@ -295,7 +317,30 @@ struct ContentView: View {
             let shortHash = String(invoice.paymentHash.prefix(20))
             output += "✓ Invoice created: \(shortHash)...\n\n"
             
-            output += "(4) Listing transactions...\n"
+            output += "(4) Testing onInvoiceEvents...\n"
+            output += "  Polling for payment (will timeout after 6s)...\n"
+            
+            let eventParams = OnInvoiceEventParams(
+                paymentHash: "d742679487d0f01b3f8d9c4a6ceea12b70c99c0965f732584f337bd172bb81cb",
+                search: nil,
+                pollingDelaySec: 2,
+                maxPollingSec: 6
+            )
+            
+            let callback = SparkInvoiceCallback { [self] status, tx in
+                Task { @MainActor in
+                    self.output += "  • Event: \(status)"
+                    if let tx = tx {
+                        self.output += " (amount: \(tx.amountMsats / 1000) sats)"
+                    }
+                    self.output += "\n"
+                }
+            }
+            
+            await node.onInvoiceEvents(params: eventParams, callback: callback)
+            output += "✓ onInvoiceEvents completed\n\n"
+            
+            output += "(5) Listing transactions...\n"
             let listParams = ListTransactionsParams(
                 from: 0,
                 limit: 3,

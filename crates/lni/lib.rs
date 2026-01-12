@@ -1,7 +1,4 @@
-#[cfg(feature = "napi_rs")]
-use napi_derive::napi;
-#[cfg(feature = "napi_rs")]
-use napi::bindgen_prelude::*;
+
 
 use std::time::Duration;
 use once_cell::sync::Lazy;
@@ -43,7 +40,8 @@ impl From<serde_json::Error> for ApiError {
 /// 
 /// # Returns
 /// A space-separated mnemonic phrase
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
 pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     use bip39::{Language, Mnemonic};
     use rand::rngs::OsRng;
@@ -323,13 +321,15 @@ pub fn create_lnd_node(config: lnd::LndConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create an NWC node as a polymorphic LightningNode
-#[cfg_attr(feature = "uniffi", uniffi::export)]
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
 pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
     Arc::new(nwc::NwcNode::new(config))
 }
 
 /// Create a Spark node as a polymorphic LightningNode
-#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;
     Ok(Arc::new(node))

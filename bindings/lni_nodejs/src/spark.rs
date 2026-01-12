@@ -242,7 +242,7 @@ impl SparkNode {
     ) -> Result<()> {
         let inner = self.inner.clone();
 
-        // Block on the async function in the current thread
+        // Block on the async function in the current thread, similar to Blink's sync approach
         tokio::runtime::Runtime::new().unwrap().block_on(async {
             let guard = inner.read().await;
             if let Some(node) = guard.as_ref() {

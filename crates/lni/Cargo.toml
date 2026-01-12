@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 name = "lni"
 path = "lib.rs"
-crate-type = ["staticlib", "cdylib", "lib"] # staticlib for iOS, cdylib for Android/uniffi bindgen, lib for Rust consumers, comment this out for napi builds
+crate-type = ["staticlib", "cdylib", "lib"] # *comment this out for napi builds. this is a staticlib for iOS, cdylib for Android/uniffi bindgen, lib for Rust consumers, 
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = [
@@ -19,9 +19,9 @@ async-trait = "0.1"
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-uniffi = { version = "0.29.0", features = ["tokio", "cli"] }
-napi = { version = "2.16", default-features = false, features = ["napi4"] }
-napi-derive = "2.16"
+uniffi = { version = "0.29.0", features = ["tokio", "cli"], optional = true }
+napi = { version = "2.16", default-features = false, features = ["napi4"], optional = true }
+napi-derive = { version = "2.16", optional = true }
 async-std = "1.10.0"
 tokio = { version = "1", features = ["full"] }
 dotenv = "0.15.0"
@@ -56,8 +56,8 @@ lto = true
 strip = "symbols"
 
 [features]
-napi_rs = []
-uniffi = []
+napi_rs = ["dep:napi", "dep:napi-derive"]
+uniffi = ["dep:uniffi"]
 default = ["uniffi", "rustls-tls"]
 
 # TLS backend options (choose one, rustls-tls is default for cross-compilation compatibility)

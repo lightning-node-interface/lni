@@ -137,13 +137,13 @@ impl SparkNode {
     }
 }
 
-// Non-uniffi methods (internal Rust API only)
-// impl SparkNode {
-//     /// Get the internal SDK Arc for low-level operations
-//     pub fn get_sdk(&self) -> Arc<BreezSdk> {
-//         self.sdk.clone()
-//     }
-// }
+// Internal Rust API only - not exported via uniffi
+impl SparkNode {
+    /// Get the internal SDK Arc for low-level operations
+    pub fn get_sdk(&self) -> Arc<BreezSdk> {
+        self.sdk.clone()
+    }
+}
 
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
@@ -384,7 +384,7 @@ mod tests {
         let node = get_node().await.expect("Failed to connect");
         let params = ListTransactionsParams {
             from: 0,
-            limit: 10,
+            limit: 100,
             payment_hash: None,
             search: None,
         };
