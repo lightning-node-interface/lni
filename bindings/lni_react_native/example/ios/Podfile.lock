@@ -1623,7 +1623,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios`)
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
-  - RNFS (from `../../node_modules/react-native-fs`)
+  - RNFS (from `../node_modules/react-native-fs`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -1766,7 +1766,7 @@ EXTERNAL SOURCES:
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
   RNFS:
-    :path: "../../node_modules/react-native-fs"
+    :path: "../node_modules/react-native-fs"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 

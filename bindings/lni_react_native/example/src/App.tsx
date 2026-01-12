@@ -491,6 +491,34 @@ export default function App() {
         }
       }
 
+      // Test 5: Test onInvoiceEvents with callback
+      addOutput(nodeName, '(5) Testing onInvoiceEvents...');
+      try {
+        const eventParams = OnInvoiceEventParams.create({
+          paymentHash: SPARK_TEST_PAYMENT_HASH,
+          search: undefined,
+          pollingDelaySec: BigInt(1),
+          maxPollingSec: BigInt(6),
+        });
+
+        const invoiceCallback: OnInvoiceEventCallback = {
+          success: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: SUCCESS - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+          pending: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: PENDING - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+          failure: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: FAILURE - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+        };
+
+        await sparkNode.onInvoiceEvents(eventParams, invoiceCallback);
+        addOutput(nodeName, 'onInvoiceEvents completed (timeout expected for unpaid invoice)');
+      } catch (error) {
+        addOutput(nodeName, `onInvoiceEvents error (expected for timeout): ${error}`);
+      }
+
       updateTestStatus(nodeName, 'success', 'Spark tests completed successfully!');
 
     } catch (error) {
