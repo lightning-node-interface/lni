@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -36,10 +37,18 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun LniExampleScreen() {
+    val context = LocalContext.current
     var output by remember { mutableStateOf("LNI Kotlin Android Example\n\nEnter your Strike API key and tap 'Get Balance' to test.") }
     var isLoading by remember { mutableStateOf(false) }
     var strikeApiKey by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
+    var use24Words by remember { mutableStateOf(false) }
+    
+    // Spark config state
+    var sparkMnemonic by remember { mutableStateOf("") }
+    var showSparkMnemonic by remember { mutableStateOf(false) }
+    var breezApiKey by remember { mutableStateOf("") }
+    var showBreezApiKey by remember { mutableStateOf(false) }
     
     // Invoice monitoring state
     var invoiceStatus by remember { mutableStateOf<InvoiceStatus?>(null) }
@@ -48,17 +57,148 @@ fun LniExampleScreen() {
     
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val outputScrollState = rememberScrollState()
+
+    // Auto-scroll output to bottom when it changes
+    LaunchedEffect(output) {
+        outputScrollState.animateScrollTo(outputScrollState.maxValue)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
+            .verticalScroll(scrollState)
     ) {
         Text(
             text = "LNI Android Example",
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // Wallet Utils Section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Wallet Utils",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("24 words (default: 12)")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = use24Words,
+                        onCheckedChange = { use24Words = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        output = generateNewMnemonic(use24Words)
+                    },
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Generate Mnemonic")
+                }
+            }
+        }
+
+        // Spark Section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "⚡ Spark (Breez SDK)",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                OutlinedTextField(
+                    value = breezApiKey,
+                    onValueChange = { breezApiKey = it },
+                    label = { Text("Breez API Key") },
+                    placeholder = { Text("Enter your Breez API key") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = if (showBreezApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        TextButton(onClick = { showBreezApiKey = !showBreezApiKey }) {
+                            Text(if (showBreezApiKey) "Hide" else "Show")
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = sparkMnemonic,
+                    onValueChange = { sparkMnemonic = it },
+                    label = { Text("Mnemonic (12 or 24 words)") },
+                    placeholder = { Text("Enter your mnemonic phrase") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3,
+                    visualTransformation = if (showSparkMnemonic) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        TextButton(onClick = { showSparkMnemonic = !showSparkMnemonic }) {
+                            Text(if (showSparkMnemonic) "Hide" else "Show")
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            sparkMnemonic = generateMnemonic(null)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Generate New")
+                    }
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                isLoading = true
+                                output = testSpark(sparkMnemonic, breezApiKey, filesDir = context.filesDir.absolutePath)
+                                isLoading = false
+                            }
+                        },
+                        enabled = !isLoading && sparkMnemonic.isNotBlank() && breezApiKey.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Test Spark")
+                    }
+                }
+            }
+        }
 
         // Strike API Key Section
         Card(
@@ -253,13 +393,13 @@ fun LniExampleScreen() {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .heightIn(min = 200.dp, max = 400.dp)
         ) {
             Text(
                 text = output,
                 modifier = Modifier
                     .padding(16.dp)
-                    .verticalScroll(scrollState),
+                    .verticalScroll(outputScrollState),
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -304,6 +444,34 @@ suspend fun getStrikeBalance(apiKey: String): String = withContext(Dispatchers.I
     }
 
     sb.toString()
+}
+
+fun generateNewMnemonic(use24Words: Boolean): String {
+    val sb = StringBuilder()
+    sb.appendLine("=== Generate Mnemonic ===\n")
+
+    try {
+        val wordCount: UByte? = if (use24Words) 24u else null
+        val mnemonic = generateMnemonic(wordCount)
+        
+        val words = mnemonic.split(" ")
+        sb.appendLine("✓ Generated ${words.size}-word mnemonic:\n")
+        
+        // Display words in a numbered list
+        words.forEachIndexed { index, word ->
+            sb.appendLine("${String.format("%2d", index + 1)}. $word")
+        }
+        
+        sb.appendLine("\n⚠️ IMPORTANT: In a real app, never display")
+        sb.appendLine("   the mnemonic on screen. Store it securely!")
+
+    } catch (e: ApiException) {
+        sb.appendLine("✗ API Error: ${e.message}")
+    } catch (e: Exception) {
+        sb.appendLine("✗ Error: ${e.message}")
+    }
+
+    return sb.toString()
 }
 
 suspend fun testStrike(): String = withContext(Dispatchers.IO) {
@@ -394,6 +562,70 @@ suspend fun testNwc(): String = withContext(Dispatchers.IO) {
         sb.appendLine("(Expected if no valid NWC URI)")
     } catch (e: Exception) {
         sb.appendLine("Error: ${e.message}")
+    }
+
+    sb.toString()
+}
+
+suspend fun testSpark(mnemonic: String, breezApiKey: String, filesDir: String?): String = withContext(Dispatchers.IO) {
+    val sb = StringBuilder()
+    sb.appendLine("=== Spark Node Test (Breez SDK) ===\n")
+
+    try {
+        // Use provided mnemonic or generate a new one
+        val actualMnemonic = if (mnemonic.isBlank()) {
+            sb.appendLine("No mnemonic provided, generating new one...")
+            generateMnemonic(null)
+        } else {
+            mnemonic
+        }
+
+        val wordCount = actualMnemonic.split(" ").size
+        sb.appendLine("Using $wordCount-word mnemonic")
+
+        // Create storage directory (use app's files directory on Android)
+        val storageDir = if (filesDir != null) "$filesDir/spark_wallet" else "/tmp/spark_android_test"
+        sb.appendLine("Storage: $storageDir")
+
+        val config = SparkConfig(
+            mnemonic = actualMnemonic,
+            passphrase = null,
+            apiKey = breezApiKey.ifBlank { null },
+            storageDir = storageDir,
+            network = "mainnet"
+        )
+
+        sb.appendLine("\nConnecting to Spark (mainnet)...")
+
+        val node = createSparkNode(config)
+
+        sb.appendLine("✓ Connected to Spark!\n")
+
+        // Get node info using the LightningNode interface
+        sb.appendLine("Getting node info...")
+        val info = node.getInfo()
+        sb.appendLine("✓ Node Info:")
+        sb.appendLine("  Alias: ${info.alias}")
+        sb.appendLine("  Pubkey: ${info.pubkey.take(20)}...")
+
+        // Create an invoice
+        sb.appendLine("\nCreating invoice for 1000 sats...")
+        val invoiceParams = CreateInvoiceParams(
+            amountMsats = 1000_000L, // 1000 sats = 1,000,000 msats
+            description = "Test invoice from Android"
+        )
+        val invoice = node.createInvoice(invoiceParams)
+        sb.appendLine("✓ Invoice created!")
+        sb.appendLine("  Payment Hash: ${invoice.paymentHash.take(20)}...")
+        sb.appendLine("  Invoice: ${invoice.invoice.take(50)}...")
+
+        sb.appendLine("\n=== Spark Test Complete! ===")
+
+    } catch (e: ApiException) {
+        sb.appendLine("✗ API Error: ${e.message}")
+    } catch (e: Exception) {
+        sb.appendLine("✗ Error: ${e.message}")
+        e.printStackTrace()
     }
 
     sb.toString()

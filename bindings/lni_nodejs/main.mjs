@@ -1,4 +1,4 @@
-import { PhoenixdNode, ClnNode, LndNode, StrikeNode, BlinkNode, SpeedNode, NwcNode } from "./index.js";
+import { PhoenixdNode, ClnNode, LndNode, StrikeNode, BlinkNode, SpeedNode, NwcNode, SparkNode, generateMnemonic } from "./index.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -217,6 +217,67 @@ async function nwc() {
   await testAsyncNode("Nwc", node, process.env.NWC_TEST_PAYMENT_HASH);
 }
 
+async function spark() {
+  const mnemonic = process.env.SPARK_MNEMONIC;
+  const apiKey = process.env.SPARK_API_KEY;
+  const storageDir = process.env.SPARK_STORAGE_DIR || "/tmp/spark_nodejs_test";
+
+  if (!mnemonic || !apiKey) {
+    console.log("Skipping Spark test - SPARK_MNEMONIC or SPARK_API_KEY not set");
+    return;
+  }
+
+  const config = {
+    mnemonic: mnemonic,
+    apiKey: apiKey,
+    storageDir: storageDir,
+    network: "mainnet",
+  };
+
+  console.log("\n=== Testing Spark ===");
+  console.log("Creating SparkNode...");
+  const node = new SparkNode(config);
+
+  try {
+    // Connect to Spark network (required before using other methods)
+    console.log("(0) Spark - Connecting to Spark network...");
+    await node.connect();
+    console.log("Spark - Connected!");
+
+    // Check connection status
+    const isConnected = await node.isConnected();
+    console.log("Spark - Is connected:", isConnected);
+
+    // Test Spark-specific methods
+    console.log("(1) Spark - Testing getSparkAddress...");
+    try {
+      const sparkAddress = await node.getSparkAddress();
+      console.log("Spark Address:", sparkAddress);
+    } catch (error) {
+      console.log("getSparkAddress failed:", error.message);
+    }
+
+    console.log("(2) Spark - Testing getDepositAddress...");
+    try {
+      const depositAddress = await node.getDepositAddress();
+      console.log("Deposit Address:", depositAddress);
+    } catch (error) {
+      console.log("getDepositAddress failed:", error.message);
+    }
+
+    // Run standard node tests
+    await testAsyncNode("Spark", node, process.env.SPARK_TEST_PAYMENT_HASH);
+
+    // Disconnect
+    console.log("Spark - Disconnecting...");
+    await node.disconnect();
+    console.log("Spark - Disconnected!");
+
+  } catch (error) {
+    console.error("Spark test failed:", error.message);
+  }
+}
+
 
 
 // Helper function to show required environment variables
@@ -227,6 +288,12 @@ function showEnvironmentHelp() {
   console.log("  LND_MACAROON=your_base64_macaroon");
   console.log("  LND_SOCKS5_PROXY=socks5h://127.0.0.1:9150 (optional)");
   console.log("  LND_TEST_PAYMENT_HASH=existing_payment_hash (optional)");
+  console.log("");
+  console.log("For Spark testing:");
+  console.log("  SPARK_MNEMONIC=your_12_or_24_word_mnemonic");
+  console.log("  SPARK_API_KEY=your_breez_api_key");
+  console.log("  SPARK_STORAGE_DIR=/tmp/spark_data (optional)");
+  console.log("  SPARK_TEST_PAYMENT_HASH=existing_payment_hash (optional)");
   console.log("");
   console.log("For Strike testing:");
   console.log("  STRIKE_API_KEY=your_strike_api_key");
@@ -241,14 +308,31 @@ async function main() {
   
   // Show environment help
   showEnvironmentHelp();
+
+  // Test generateMnemonic
+  console.log("\n=== Testing generateMnemonic ===");
+  try {
+    const mnemonic12 = generateMnemonic();
+    console.log("12-word mnemonic:", mnemonic12);
+    console.log("Word count:", mnemonic12.split(" ").length);
+
+    const mnemonic24 = generateMnemonic(24);
+    console.log("24-word mnemonic:", mnemonic24);
+    console.log("Word count:", mnemonic24.split(" ").length);
+    
+    console.log("generateMnemonic tests passed!");
+  } catch (error) {
+    console.error("generateMnemonic test failed:", error.message);
+  }
   
   // await lnd();
   // await strike();
   // await cln();
   // await phoenixd();
   // await blink();
-  await speed();
+  // await speed();
   // await nwc();
+  await spark();
   
   console.log("\n=== All tests completed ===");
 }

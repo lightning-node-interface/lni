@@ -31,8 +31,34 @@ pub use speed::SpeedNode;
 
 mod cashu;
 pub use cashu::CashuNode;
+mod spark;
+pub use spark::SparkNode;
 
 use std::time::Duration;
+
+/// Generate a BIP39 mnemonic phrase
+/// 
+/// @param wordCount - Optional number of words (12 or 24). Defaults to 12.
+/// @returns A space-separated mnemonic phrase
+#[napi]
+pub fn generate_mnemonic(word_count: Option<u8>) -> napi::Result<String> {
+    use bip39::{Language, Mnemonic};
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+
+    let entropy_size = match word_count {
+        Some(24) => 32,
+        _ => 16,
+    };
+
+    let mut entropy = vec![0u8; entropy_size];
+    OsRng.fill_bytes(&mut entropy);
+
+    match Mnemonic::from_entropy_in(Language::English, &entropy) {
+        Ok(mnemonic) => Ok(mnemonic.to_string()),
+        Err(e) => Err(napi::Error::from_reason(format!("Failed to generate mnemonic: {}", e))),
+    }
+}
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[napi]

@@ -28,7 +28,7 @@ example/
    ./build.sh --release
    ```
 
-2. Build native libraries for your target architectures (e.g., for Android):
+   This will build native libraries for your target architectures (e.g., for Android). this should have been done in build.sh:
    ```bash
    # Example for arm64-v8a
    cargo build --package lni --features uniffi --release --target aarch64-linux-android
@@ -50,11 +50,20 @@ For JVM-based execution (testing on desktop):
 ```
 
 For Android:
-1. `cd .. && ./build.sh --release --android 2>&1`
+1. `cd .. && ./build.sh --release --android 2>&1 && cd example`
 2. Import the project into Android Studio and Open `lni/bindings/kotlin/example`
 3. File → Sync Project with Gradle Files
 4. Build → Clean Project
-5. Build and run on an emulator or device
+5. Build and run on an emulator or device 
+```
+# in example dir
+# list 
+emulator -list-avds
+# start
+emulator -avd EMULATOR
+# run app
+./gradlew installDebug && adb shell am start -n com.lni.example/.MainActivity
+```
 
 ## Usage Examples
 

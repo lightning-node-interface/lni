@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch } from 'react-native';
+import { Text, View, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TextInput, Switch, Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 import {
   LndConfig,
   PhoenixdConfig,
@@ -8,6 +9,7 @@ import {
   BlinkConfig,
   NwcConfig,
   SpeedConfig,
+  SparkConfig,
   type OnInvoiceEventCallback,
   Transaction,
   OnInvoiceEventParams,
@@ -26,6 +28,8 @@ import {
   createBlinkNode,
   createNwcNode,
   createSpeedNode,
+  generateMnemonic,
+  createSparkNode,
 } from 'lni_react_native';
 import { 
   LND_URL, 
@@ -45,6 +49,9 @@ import {
   BLINK_TEST_PAYMENT_HASH,
   SPEED_API_KEY,
   SPEED_TEST_PAYMENT_HASH,
+  SPARK_MNEMONIC,
+  SPARK_API_KEY,
+  SPARK_TEST_PAYMENT_HASH
 } from '@env';
 
 type TestResult = {
@@ -383,6 +390,155 @@ export default function App() {
     }
   };
 
+
+  const testMnemonic = async () => {
+    const nodeName = 'Mnemonic';
+
+    try {
+      addOutput(nodeName, 'Testing generateMnemonic...');
+
+      // Test 12-word mnemonic (default)
+      addOutput(nodeName, '(1) Generating 12-word mnemonic...');
+      const mnemonic12 = generateMnemonic(12);
+      const words12 = mnemonic12.split(' ');
+      addOutput(nodeName, `12-word mnemonic: ${mnemonic12}`);
+      addOutput(nodeName, `Word count: ${words12.length}`);
+
+      // Test 24-word mnemonic
+      addOutput(nodeName, '(2) Generating 24-word mnemonic...');
+      const mnemonic24 = generateMnemonic(24);
+      const words24 = mnemonic24.split(' ');
+      addOutput(nodeName, `24-word mnemonic: ${mnemonic24}`);
+      addOutput(nodeName, `Word count: ${words24.length}`);
+
+      // Verify word counts
+      if (words12.length === 12 && words24.length === 24) {
+        updateTestStatus(nodeName, 'success', 'Mnemonic generation tests passed!');
+      } else {
+        updateTestStatus(nodeName, 'error', `Unexpected word counts: 12-word=${words12.length}, 24-word=${words24.length}`);
+      }
+    } catch (error) {
+      updateTestStatus(nodeName, 'error', `Mnemonic test failed: ${error}`);
+    }
+  };
+
+  const testSpark = async () => {
+    const nodeName = 'Spark';
+
+    if (!SPARK_MNEMONIC || !SPARK_API_KEY) {
+      updateTestStatus(nodeName, 'skipped', 'SPARK_MNEMONIC or SPARK_API_KEY not configured');
+      return;
+    }
+
+    // let sparkNode: SparkNode | null = null;
+
+    try {
+      addOutput(nodeName, 'Testing Spark node...');
+
+      // Test 1: Create and connect SparkNode
+      addOutput(nodeName, '(1) Creating SparkNode...');
+      const storageDir = `${RNFS.DocumentDirectoryPath}/spark_data`;
+      addOutput(nodeName, `Using storage directory: ${storageDir}`);
+      const config = SparkConfig.create({
+        mnemonic: SPARK_MNEMONIC,
+        passphrase: undefined,
+        apiKey: SPARK_API_KEY,
+        storageDir: storageDir,
+        network: 'mainnet',
+      });
+
+      const sparkNode: LightningNode = await createSparkNode(config);
+      addOutput(nodeName, 'SparkNode connected successfully!');
+
+      // Test 1: Get node info
+      addOutput(nodeName, '(1) Testing getInfo...');
+      const info = await sparkNode.getInfo();
+      addOutput(nodeName, `Node info: ${info.alias} (balance: ${info.sendBalanceMsat} msats)`);
+
+      // Test 2: Create invoice
+      addOutput(nodeName, '(2) Testing createInvoice...');
+      const invoiceParams = CreateInvoiceParams.create({
+        amountMsats: BigInt(1000),
+        description: 'test invoice from Spark',
+        expiry: BigInt(3600),
+      });
+      const invoice = await sparkNode.createInvoice(invoiceParams);
+      addOutput(nodeName, `Invoice created: ${invoice.paymentHash?.substring(0, 20)}...`);
+
+      // Test 3: List transactions
+      addOutput(nodeName, '(3) Testing listTransactions...');
+      const listParams = ListTransactionsParams.create({
+        from: BigInt(0),
+        limit: BigInt(3),
+        paymentHash: undefined,
+        search: undefined,
+      });
+      const txns = await sparkNode.listTransactions(listParams);
+      addOutput(nodeName, `Found ${txns.length} transactions`);
+
+      // Test 4: Lookup invoice (if test hash provided)
+      if (SPARK_TEST_PAYMENT_HASH) {
+        addOutput(nodeName, '(4) Testing lookupInvoice...');
+        try {
+          const lookupParams = LookupInvoiceParams.create({
+            paymentHash: SPARK_TEST_PAYMENT_HASH,
+            search: undefined,
+          });
+          const lookupInvoice = await sparkNode.lookupInvoice(lookupParams);
+          addOutput(nodeName, `Lookup success: ${lookupInvoice.paymentHash?.substring(0, 20)}...`);
+        } catch (error) {
+          addOutput(nodeName, `Lookup failed (expected if hash doesn't exist): ${error}`);
+        }
+      }
+
+      // Test 5: Test onInvoiceEvents with callback
+      addOutput(nodeName, '(5) Testing onInvoiceEvents...');
+      try {
+        const eventParams = OnInvoiceEventParams.create({
+          paymentHash: SPARK_TEST_PAYMENT_HASH,
+          search: undefined,
+          pollingDelaySec: BigInt(1),
+          maxPollingSec: BigInt(6),
+        });
+
+        const invoiceCallback: OnInvoiceEventCallback = {
+          success: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: SUCCESS - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+          pending: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: PENDING - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+          failure: (transaction: Transaction | undefined) => {
+            addOutput(nodeName, `onInvoiceEvents: FAILURE - ${transaction?.paymentHash?.substring(0, 20) ?? 'no transaction'}...`);
+          },
+        };
+
+        await sparkNode.onInvoiceEvents(eventParams, invoiceCallback);
+        addOutput(nodeName, 'onInvoiceEvents completed (timeout expected for unpaid invoice)');
+      } catch (error) {
+        addOutput(nodeName, `onInvoiceEvents error (expected for timeout): ${error}`);
+      }
+
+      updateTestStatus(nodeName, 'success', 'Spark tests completed successfully!');
+
+    } catch (error) {
+      console.error('Spark test error:', error);
+      updateTestStatus(nodeName, 'error', `Spark test failed: ${error}`);
+    } finally {
+      // Disconnect from Spark
+      // if (sparkNode) {
+      //   try {
+      //     await sparkNode.disconnect();
+      //     addOutput(nodeName, 'Disconnected from Spark');
+      //   } catch (e) {
+      //     addOutput(nodeName, `Disconnect error: ${e}`);
+      //   }
+      // }
+    }
+  };
+
+
+
   // Initialize test result for an implementation
   const initializeTest = (implementation: string) => {
     setTestResults(prev => {
@@ -579,6 +735,18 @@ export default function App() {
             disabled={isRunning}
             color="#DDA0DD"
           />
+          <Button 
+            title="Mnemonic" 
+            onPress={() => runTest('Mnemonic', testMnemonic)} 
+            disabled={isRunning}
+            color="#9B59B6"
+          />
+          <Button 
+            title="Spark" 
+            onPress={() => runTest('Spark', testSpark)} 
+            disabled={isRunning}
+            color="#FF8C00"
+          />
         </View>
       </View>
 
@@ -626,7 +794,8 @@ export default function App() {
             CLN_URL, CLN_RUNE{'\n'}
             STRIKE_API_KEY{'\n'}
             PHOENIXD_URL, PHOENIXD_PASSWORD{'\n'}
-            And test payment hashes for each implementation
+            And test payment hashes for each implementation{`\n`}
+            SPARK_MNEMONIC, SPARK_API_KEY
           </Text>
         </View>
       )}
