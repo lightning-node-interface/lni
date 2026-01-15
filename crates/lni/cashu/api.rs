@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::str::FromStr;
 
+use bip39::{Language, Mnemonic};
 use cdk::nuts::{CurrencyUnit, MeltQuoteState, MintQuoteState};
 use cdk::wallet::Wallet;
 use cdk_sqlite::wallet::memory;
@@ -30,21 +31,43 @@ fn generate_seed() -> [u8; 64] {
     seed
 }
 
-/// Create a CDK wallet from config
-pub async fn create_wallet(config: &CashuConfig) -> Result<Wallet, ApiError> {
-    // Use provided seed or generate random one
-    let seed: [u8; 64] = if let Some(seed_hex) = &config.seed {
-        let seed_bytes = hex::decode(seed_hex).map_err(|e| ApiError::Api {
+/// Parse seed from string - supports both mnemonic phrases and hex seeds
+fn parse_seed(seed_str: &str) -> Result<[u8; 64], ApiError> {
+    let trimmed = seed_str.trim();
+    
+    // Check if it looks like a mnemonic (contains spaces and words)
+    if trimmed.contains(' ') {
+        // Parse as BIP39 mnemonic
+        let mnemonic = Mnemonic::from_str(trimmed).map_err(|e| ApiError::Api {
+            reason: format!("Invalid mnemonic phrase: {}", e),
+        })?;
+        
+        // Convert mnemonic to seed (uses empty passphrase)
+        let seed_bytes = mnemonic.to_seed("");
+        let mut seed_arr = [0u8; 64];
+        seed_arr.copy_from_slice(&seed_bytes);
+        Ok(seed_arr)
+    } else {
+        // Parse as hex seed
+        let seed_bytes = hex::decode(trimmed).map_err(|e| ApiError::Api {
             reason: format!("Invalid seed hex: {}", e),
         })?;
         let mut seed_arr = [0u8; 64];
         if seed_bytes.len() != 64 {
             return Err(ApiError::Api {
-                reason: "Seed must be 64 bytes (128 hex chars)".to_string(),
+                reason: format!("Seed must be 64 bytes (128 hex chars), got {} bytes", seed_bytes.len()),
             });
         }
         seed_arr.copy_from_slice(&seed_bytes);
-        seed_arr
+        Ok(seed_arr)
+    }
+}
+
+/// Create a CDK wallet from config
+pub async fn create_wallet(config: &CashuConfig) -> Result<Wallet, ApiError> {
+    // Use provided seed or generate random one
+    let seed: [u8; 64] = if let Some(seed_str) = &config.seed {
+        parse_seed(seed_str)?
     } else {
         generate_seed()
     };

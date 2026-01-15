@@ -181,7 +181,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_invoice() {
-        let amount_msats = 5000; // 5 sats
+        let amount_msats = 1000; // 1 sats
         let description = "Test Cashu invoice".to_string();
         let expiry = 3600;
 
