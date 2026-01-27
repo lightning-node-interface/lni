@@ -305,6 +305,38 @@ export interface Payment {
  */
 export declare function generateMnemonic(wordCount?: number | undefined | null): string
 export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
+/** Payment destination info for confirmation flows */
+export interface PaymentInfo {
+  destinationType: string
+  destination: string
+  amountMsats?: number
+  minSendableMsats?: number
+  maxSendableMsats?: number
+  description?: string
+}
+/**
+ * Check what type of payment destination this is
+ * Returns: "bolt11", "bolt12", "lnurl", or "lightning_address"
+ */
+export declare function detectPaymentType(destination: string): string
+/**
+ * Check if a payment destination needs LNURL resolution
+ * (Lightning Address or LNURL need to be resolved to BOLT11 first)
+ */
+export declare function needsResolution(destination: string): boolean
+/**
+ * Resolve any payment destination to a BOLT11 invoice
+ * - BOLT11: Returns as-is
+ * - Lightning Address: Fetches LNURL endpoint, requests invoice
+ * - LNURL: Decodes, fetches endpoint, requests invoice
+ * - BOLT12: Returns error (use pay_offer instead)
+ */
+export declare function resolveToBolt11(destination: string, amountMsats?: number | undefined | null): Promise<string>
+/**
+ * Get payment info for a destination (for confirmation flows)
+ * Fetches LNURL metadata if needed to get min/max amounts
+ */
+export declare function getPaymentInfo(destination: string, amountMsats?: number | undefined | null): Promise<PaymentInfo>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
