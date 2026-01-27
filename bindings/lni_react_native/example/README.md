@@ -32,6 +32,8 @@ npm run android
 yarn android
 ```
 
+> **Linux Note**: On Linux, Metro does not auto-start when running `yarn android`. This is because React Native CLI uses AppleScript to spawn a new terminal window on macOS, but there's no standard way to do this on Linux. You must start Metro manually in a separate terminal first with `yarn start`, then run `yarn android` in another terminal.
+
 ### iOS
 
 For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).

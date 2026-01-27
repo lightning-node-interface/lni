@@ -1,5 +1,5 @@
 #!/bin/bash
-# Patches generated Android files for the example app
+# Creates Android application files for the example app
 # Only runs on Linux due to different generated paths on macOS
 
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
@@ -10,30 +10,71 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_ANDROID="$SCRIPT_DIR/../example/android/app/src/main/java/com/lnireactnative"
 
-# Check if the expected path exists
-if [ ! -d "$EXAMPLE_ANDROID" ]; then
-  echo "Android source directory not found, skipping patches"
-  exit 0
-fi
+# Create directory if it doesn't exist
+mkdir -p "$EXAMPLE_ANDROID"
 
-# Fix MainApplication.kt - use OpenSourceMergedSoMapping for SoLoader
-if [ -f "$EXAMPLE_ANDROID/MainApplication.kt" ]; then
-  # Add import if not present
-  if ! grep -q "OpenSourceMergedSoMapping" "$EXAMPLE_ANDROID/MainApplication.kt"; then
-    sed -i 's/import com.facebook.soloader.SoLoader/import com.facebook.react.soloader.OpenSourceMergedSoMapping\nimport com.facebook.soloader.SoLoader/' "$EXAMPLE_ANDROID/MainApplication.kt"
-  fi
+# Create MainApplication.kt
+cat > "$EXAMPLE_ANDROID/MainApplication.kt" << 'EOF'
+package com.lnireactnative
 
-  # Replace SoLoader.init call
-  sed -i 's/SoLoader.init(this, false)/SoLoader.init(this, OpenSourceMergedSoMapping)/' "$EXAMPLE_ANDROID/MainApplication.kt"
+import android.app.Application
+import com.facebook.react.PackageList
+import com.facebook.react.ReactApplication
+import com.facebook.react.ReactHost
+import com.facebook.react.ReactNativeHost
+import com.facebook.react.ReactPackage
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
+import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.facebook.react.defaults.DefaultReactNativeHost
+import com.facebook.react.soloader.OpenSourceMergedSoMapping
+import com.facebook.soloader.SoLoader
+import lnireactnative.example.BuildConfig
 
-  echo "Patched MainApplication.kt"
-fi
+class MainApplication : Application(), ReactApplication {
+    override val reactNativeHost: ReactNativeHost =
+        object : DefaultReactNativeHost(this) {
+            override fun getPackages(): List<ReactPackage> = PackageList(this).packages
 
-# Fix MainActivity.kt - correct component name
-if [ -f "$EXAMPLE_ANDROID/MainActivity.kt" ]; then
-  sed -i 's/getMainComponentName(): String = "lni_react_native-example"/getMainComponentName(): String = "LniReactNativeExample"/' "$EXAMPLE_ANDROID/MainActivity.kt"
+            override fun getJSMainModuleName(): String = "index"
 
-  echo "Patched MainActivity.kt"
-fi
+            override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
-echo "Android patches applied"
+            override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
+            override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
+        }
+
+    override val reactHost: ReactHost
+        get() = getDefaultReactHost(applicationContext, reactNativeHost)
+
+    override fun onCreate() {
+        super.onCreate()
+        SoLoader.init(this, OpenSourceMergedSoMapping)
+        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+            load()
+        }
+    }
+}
+EOF
+
+echo "Created MainApplication.kt"
+
+# Create MainActivity.kt
+cat > "$EXAMPLE_ANDROID/MainActivity.kt" << 'EOF'
+package com.lnireactnative
+
+import com.facebook.react.ReactActivity
+import com.facebook.react.ReactActivityDelegate
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
+import com.facebook.react.defaults.DefaultReactActivityDelegate
+
+class MainActivity : ReactActivity() {
+    override fun getMainComponentName(): String = "LniReactNativeExample"
+
+    override fun createReactActivityDelegate(): ReactActivityDelegate =
+        DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+}
+EOF
+
+echo "Created MainActivity.kt"
+
+echo "Android files created"
