@@ -23,6 +23,12 @@ pub enum ApiError {
     Api { reason: String },
     #[error("JsonError: {reason}")]
     Json { reason: String },
+    #[error("NetworkError: {0}")]
+    NetworkError(String),
+    #[error("InvalidInput: {0}")]
+    InvalidInput(String),
+    #[error("LnurlError: {0}")]
+    LnurlError(String),
 }
 impl From<serde_json::Error> for ApiError {
     fn from(e: serde_json::Error) -> Self {
@@ -221,6 +227,8 @@ pub mod spark {
     pub mod types;
     pub use lib::{SparkConfig, SparkNode};
 }
+
+pub mod lnurl;
 
 pub mod types;
 pub use types::*;
