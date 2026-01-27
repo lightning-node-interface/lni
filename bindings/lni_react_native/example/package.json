@@ -4,8 +4,7 @@
   "private": true,
   "types": "../lib/typescript/commonjs/src/index.d.ts",
   "scripts": {
-    "preandroid": "../scripts/patch-android.sh",
-    "android": "react-native run-android",
+    "android": "../scripts/patch-android.sh && react-native run-android",
     "ios": "react-native run-ios",
     "start": "react-native start",
     "adb": "adb reverse tcp:9740 tcp:9740",
