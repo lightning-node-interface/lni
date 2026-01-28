@@ -257,12 +257,12 @@ jobs:
 
       - name: Publish to npm
         working-directory: bindings/lni_nodejs
-        run: |
-          # Only publish if NPM_TOKEN is set
-          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
-            npm publish --access public
-          else
-            echo "NPM_TOKEN not set, skipping publish"
-          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Only publish if NODE_AUTH_TOKEN is set (via secrets.NPM_TOKEN)
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            npm publish --access public
+          else
+            echo "NPM_TOKEN not configured, skipping publish"
+          fi
