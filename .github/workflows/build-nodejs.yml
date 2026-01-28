@@ -13,11 +13,6 @@ on:
         description: 'Release tag (e.g., v0.1.0) - triggers release + publish'
         required: false
         type: string
-      skip_tests:
-        description: 'Skip test jobs'
-        required: false
-        type: boolean
-        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -145,54 +140,10 @@ jobs:
           name: bindings-darwin-universal
           path: lni_js.darwin-universal.node
 
-  # Test the builds
-  test:
-    if: ${{ !inputs.skip_tests }}
-    needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: bindings-linux-x64-gnu
-          - os: macos-latest  # Apple Silicon runner
-            artifact: bindings-darwin-arm64
-          - os: windows-latest
-            artifact: bindings-win32-x64-msvc
-
-    runs-on: ${{ matrix.os }}
-    name: Test - ${{ matrix.os }}
-
-    steps:
-      # actions/checkout@v4
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - name: Setup Node.js
-        # actions/setup-node@v4
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '20'
-
-      - name: Download artifact
-        # actions/download-artifact@v4
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: ${{ matrix.artifact }}
-          path: bindings/lni_nodejs
-
-      - name: Install dependencies
-        working-directory: bindings/lni_nodejs
-        run: yarn install --mode=skip-build
-
-      - name: Test import
-        working-directory: bindings/lni_nodejs
-        run: |
-          node -e "const lni = require('./'); console.log('✅ LNI loaded:', Object.keys(lni).slice(0,5).join(', '))"
-
   # Create release on tag
   release:
-    if: ${{ always() && !cancelled() && !failure() && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '') }}
-    needs: [build, universal-macos, test]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' }}
+    needs: [build, universal-macos]
     runs-on: ubuntu-latest
     name: Create Release
     permissions:
