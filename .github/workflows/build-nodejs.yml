@@ -26,10 +26,10 @@ jobs:
             target: aarch64-unknown-linux-gnu
             name: linux-arm64-gnu
           # macOS (use specific runners for native builds)
-          - os: macos-13  # Intel runner for x64
+          - os: macos-15-intel  # Intel runner for x64 (macos-13 deprecated)
             target: x86_64-apple-darwin
             name: darwin-x64
-          - os: macos-14  # Apple Silicon runner for arm64
+          - os: macos-latest  # Apple Silicon runner for arm64 (macos-15)
             target: aarch64-apple-darwin
             name: darwin-arm64
           # Windows
@@ -100,7 +100,7 @@ jobs:
   # Universal macOS binary
   universal-macos:
     needs: build
-    runs-on: macos-14  # Apple Silicon (lipo works on any arch)
+    runs-on: macos-latest  # Apple Silicon (lipo works on any arch)
     name: Universal macOS Binary
 
     steps:
@@ -144,7 +144,7 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: bindings-linux-x64-gnu
-          - os: macos-14  # Apple Silicon runner
+          - os: macos-latest  # Apple Silicon runner
             artifact: bindings-darwin-arm64
           - os: windows-latest
             artifact: bindings-win32-x64-msvc
