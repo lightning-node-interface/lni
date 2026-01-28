@@ -32,6 +32,9 @@ pub use speed::SpeedNode;
 mod spark;
 pub use spark::SparkNode;
 
+mod lnurl;
+pub use lnurl::*;
+
 use std::time::Duration;
 
 /// Generate a BIP39 mnemonic phrase
