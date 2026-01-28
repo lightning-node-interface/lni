@@ -212,8 +212,8 @@ jobs:
           ls -la release/
 
       - name: Create Release
-        # softprops/action-gh-release@v1
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        # softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
         with:
           files: release/*
           generate_release_notes: true
