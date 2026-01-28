@@ -50,9 +50,10 @@ impl PaymentDestination {
     /// Parse a payment destination string and detect its type
     pub fn parse(input: &str) -> Result<Self, ApiError> {
         let input = input.trim();
+        let lower = input.to_lowercase();
         
-        // Lightning Address: user@domain
-        if input.contains('@') && !input.starts_with("lnurl") {
+        // Lightning Address: user@domain (but not LNURL which may contain @)
+        if input.contains('@') && !lower.starts_with("lnurl") {
             let parts: Vec<&str> = input.split('@').collect();
             if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
                 return Ok(PaymentDestination::LightningAddress {
@@ -62,8 +63,6 @@ impl PaymentDestination {
             }
             return Err(ApiError::InvalidInput("Invalid Lightning Address format".to_string()));
         }
-        
-        let lower = input.to_lowercase();
         
         // BOLT11: lnbc, lntb, lntbs (mainnet, testnet, signet)
         if lower.starts_with("lnbc") || lower.starts_with("lntb") || lower.starts_with("lntbs") {
@@ -356,6 +355,21 @@ mod tests {
             assert_eq!(user, "test");
             assert_eq!(domain, "example.com");
         }
+    }
+    
+    #[test]
+    fn test_parse_lnurl() {
+        // Lowercase
+        let result = PaymentDestination::parse("lnurl1test");
+        assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
+        
+        // Uppercase - should NOT be parsed as Lightning Address
+        let result = PaymentDestination::parse("LNURL1TEST");
+        assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
+        
+        // Mixed case with @ - should still be LNURL, not Lightning Address
+        let result = PaymentDestination::parse("LNURL1test@fake");
+        assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
     }
     
     #[test]
