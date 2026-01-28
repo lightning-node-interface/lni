@@ -171,7 +171,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: bindings/lni_nodejs
-        run: yarn install --ignore-scripts
+        run: yarn install --mode=skip-build
 
       - name: Test import
         working-directory: bindings/lni_nodejs
