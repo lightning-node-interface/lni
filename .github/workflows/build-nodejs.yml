@@ -1,0 +1,268 @@
+name: Build lni_nodejs
+
+on:
+  push:
+    branches: [master, main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: linux-x64-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            name: linux-arm64-gnu
+          # macOS (use specific runners for native builds)
+          - os: macos-15-intel  # Intel runner for x64 (macos-13 deprecated)
+            target: x86_64-apple-darwin
+            name: darwin-x64
+          - os: macos-latest  # Apple Silicon runner for arm64 (macos-15)
+            target: aarch64-apple-darwin
+            name: darwin-arm64
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: win32-x64-msvc
+
+    runs-on: ${{ matrix.os }}
+    name: Build - ${{ matrix.name }}
+
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        # actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        # dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install protobuf
+
+      - name: Install build dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install protoc -y
+
+      - name: Install dependencies
+        working-directory: bindings/lni_nodejs
+        run: yarn install
+
+      - name: Build native module
+        working-directory: bindings/lni_nodejs
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          yarn napi build --platform --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        # actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bindings-${{ matrix.name }}
+          path: bindings/lni_nodejs/*.node
+          if-no-files-found: error
+
+  # Universal macOS binary
+  universal-macos:
+    needs: build
+    runs-on: macos-latest  # Apple Silicon (lipo works on any arch)
+    name: Universal macOS Binary
+
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Download x64 artifact
+        # actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bindings-darwin-x64
+          path: artifacts/x64
+
+      - name: Download arm64 artifact
+        # actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bindings-darwin-arm64
+          path: artifacts/arm64
+
+      - name: Create universal binary
+        run: |
+          lipo -create \
+            artifacts/x64/*.node \
+            artifacts/arm64/*.node \
+            -output lni_js.darwin-universal.node
+
+      - name: Upload universal artifact
+        # actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bindings-darwin-universal
+          path: lni_js.darwin-universal.node
+
+  # Test the builds
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: bindings-linux-x64-gnu
+          - os: macos-latest  # Apple Silicon runner
+            artifact: bindings-darwin-arm64
+          - os: windows-latest
+            artifact: bindings-win32-x64-msvc
+
+    runs-on: ${{ matrix.os }}
+    name: Test - ${{ matrix.os }}
+
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        # actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Download artifact
+        # actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ matrix.artifact }}
+          path: bindings/lni_nodejs
+
+      - name: Install dependencies
+        working-directory: bindings/lni_nodejs
+        run: yarn install --ignore-scripts
+
+      - name: Test import
+        working-directory: bindings/lni_nodejs
+        run: |
+          node -e "const lni = require('./'); console.log('✅ LNI loaded:', Object.keys(lni).slice(0,5).join(', '))"
+
+  # Create release on tag
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, universal-macos, test]
+    runs-on: ubuntu-latest
+    name: Create Release
+    permissions:
+      contents: write
+
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Download all artifacts
+        # actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/bindings-*; do
+            name=$(basename "$dir")
+            platform="${name#bindings-}"
+            for file in "$dir"/*.node; do
+              if [ -f "$file" ]; then
+                cp "$file" "release/lni_js.${platform}.node"
+              fi
+            done
+          done
+          ls -la release/
+
+      - name: Create Release
+        # softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Publish to npm
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: ubuntu-latest
+    name: Publish to npm
+    
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        # actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download all artifacts
+        # actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: artifacts
+
+      - name: Prepare npm package
+        working-directory: bindings/lni_nodejs
+        run: |
+          # Copy platform-specific binaries
+          for dir in ../../artifacts/bindings-*; do
+            cp "$dir"/*.node . 2>/dev/null || true
+          done
+          ls -la *.node
+
+      - name: Publish to npm
+        working-directory: bindings/lni_nodejs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Only publish if NODE_AUTH_TOKEN is set (via secrets.NPM_TOKEN)
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            npm publish --access public
+          else
+            echo "NPM_TOKEN not configured, skipping publish"
+          fi
