@@ -297,14 +297,6 @@ export interface Payment {
   updatedAt: number
   amountMsats: number
 }
-/**
- * Generate a BIP39 mnemonic phrase
- *
- * @param wordCount - Optional number of words (12 or 24). Defaults to 12.
- * @returns A space-separated mnemonic phrase
- */
-export declare function generateMnemonic(wordCount?: number | undefined | null): string
-export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 /** Payment destination info for confirmation flows */
 export interface PaymentInfo {
   destinationType: string
@@ -337,6 +329,14 @@ export declare function resolveToBolt11(destination: string, amountMsats?: numbe
  * Fetches LNURL metadata if needed to get min/max amounts
  */
 export declare function getPaymentInfo(destination: string, amountMsats?: number | undefined | null): Promise<PaymentInfo>
+/**
+ * Generate a BIP39 mnemonic phrase
+ *
+ * @param wordCount - Optional number of words (12 or 24). Defaults to 12.
+ * @returns A space-separated mnemonic phrase
+ */
+export declare function generateMnemonic(wordCount?: number | undefined | null): string
+export declare function sayAfterWithTokio(ms: number, who: string, url: string, socks5Proxy?: string | undefined | null, headerKey?: string | undefined | null, headerValue?: string | undefined | null): Promise<string>
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string

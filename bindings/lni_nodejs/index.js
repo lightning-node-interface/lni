@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { InvoiceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, SparkNode, generateMnemonic, sayAfterWithTokio, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo } = nativeBinding
+const { InvoiceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, SparkNode, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo, generateMnemonic, sayAfterWithTokio } = nativeBinding
 
 module.exports.InvoiceType = InvoiceType
 module.exports.PhoenixdNode = PhoenixdNode
@@ -321,9 +321,9 @@ module.exports.NwcNode = NwcNode
 module.exports.StrikeNode = StrikeNode
 module.exports.SpeedNode = SpeedNode
 module.exports.SparkNode = SparkNode
-module.exports.generateMnemonic = generateMnemonic
-module.exports.sayAfterWithTokio = sayAfterWithTokio
 module.exports.detectPaymentType = detectPaymentType
 module.exports.needsResolution = needsResolution
 module.exports.resolveToBolt11 = resolveToBolt11
 module.exports.getPaymentInfo = getPaymentInfo
+module.exports.generateMnemonic = generateMnemonic
+module.exports.sayAfterWithTokio = sayAfterWithTokio
