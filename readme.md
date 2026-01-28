@@ -5,6 +5,7 @@ Remote connect to all the major lightning node implementations with a standard i
 
 - Supports all major nodes - CLN, LND, Phoenixd, *LNDK (WIP) 
 - Supports the main protocols - BOLT 11, BOLT 12, and NWC
+- **LNURL & Lightning Address support** - Pay to `user@domain.com` or `lnurl1...`
 - Also popular REST APIs (Custodial) - Strike, Speed, Blink
 - Language Binding support for kotlin, swift, react-native, nodejs (typescript/javascript). No support for WASM (yet)
 - Tor support
@@ -115,6 +116,12 @@ node.get_offer(search: Option<String>) -> Result<Offer, ApiError> // return the 
 node.pay_offer(offer: String, amount_msats: i64, payer_note: Option<String>) -> Result<PayInvoiceResponse, ApiError> 
 node.list_offers(search: Option<String>) -> Result<Vec<Offer>, ApiError>
 
+// LNURL & Lightning Address (see lnurl module)
+lnurl::resolve_to_bolt11(destination, amount_msats) -> Result<String, ApiError>  // Resolve any destination to BOLT11
+lnurl::get_payment_info(destination, amount_msats) -> Result<PaymentInfo, ApiError>  // Get min/max amounts
+lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: bolt11|bolt12|lnurl|lightning_address
+lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
+
 // Lookup
 node.decode(str: String) -> Result<String, ApiError> 
 node.lookup_invoice(payment_hash: String) -> Result<Transaction, ApiError>
@@ -131,6 +138,60 @@ node.get_info() -> Result<NodeInfo, ApiError> // returns NodeInfo and balances
 // TODO - Not implemented
 node.channel_info()
 ```
+
+#### LNURL & Lightning Address
+
+LNI supports paying to Lightning Addresses (`user@domain.com`) and LNURL endpoints. The `lnurl` module handles automatic resolution to BOLT11 invoices.
+
+**Rust**
+```rust
+use lni::lnurl::{resolve_to_bolt11, get_payment_info, PaymentDestination};
+
+// Auto-detect payment type
+let dest = PaymentDestination::parse("nicktee@strike.me")?;
+// Returns: LightningAddress { user: "nicktee", domain: "strike.me" }
+
+// Check if destination needs LNURL resolution
+let needs_resolve = lni::lnurl::needs_resolution("nicktee@strike.me"); // true
+let needs_resolve = lni::lnurl::needs_resolution("lnbc10u1..."); // false
+
+// Get payment info (fetches min/max amounts from LNURL endpoint)
+let info = get_payment_info("nicktee@strike.me", Some(100_000)).await?;
+println!("Min: {} msats, Max: {} msats", info.min_sendable_msats, info.max_sendable_msats);
+
+// Resolve to BOLT11 invoice and pay
+let bolt11 = resolve_to_bolt11("nicktee@strike.me", Some(100_000)).await?;
+node.pay_invoice(PayInvoiceParams { invoice: bolt11, ..Default::default() }).await?;
+```
+
+**TypeScript (Node.js)**
+```typescript
+import { detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo } from 'lni_js';
+
+// Auto-detect payment type
+const type = detectPaymentType('nicktee@strike.me'); // "lightning_address"
+const type2 = detectPaymentType('lnbc10u1...'); // "bolt11"
+const type3 = detectPaymentType('lno1pg...'); // "bolt12"
+
+// Check if needs resolution
+const needsResolve = needsResolution('nicktee@strike.me'); // true
+
+// Get payment info
+const info = await getPaymentInfo('nicktee@strike.me', 100_000n);
+console.log(`Min: ${info.minSendableMsats}, Max: ${info.maxSendableMsats}`);
+
+// Resolve and pay
+const bolt11 = await resolveToBolt11('nicktee@strike.me', 100_000n);
+await node.payInvoice({ invoice: bolt11 });
+```
+
+**Supported Destinations**
+| Type | Example | Resolution |
+|------|---------|------------|
+| BOLT11 | `lnbc10u1p5...` | None (direct pay) |
+| BOLT12 | `lno1pg...` | None (use `payOffer`) |
+| Lightning Address | `user@domain.com` | LNURL-pay → BOLT11 |
+| LNURL | `lnurl1...` | Decode → LNURL-pay → BOLT11 |
 
 #### Event Polling
 
