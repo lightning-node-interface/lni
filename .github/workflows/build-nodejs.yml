@@ -8,6 +8,16 @@ on:
   pull_request:
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v0.1.0) - triggers release + publish'
+        required: false
+        type: string
+      skip_tests:
+        description: 'Skip test jobs'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -137,6 +147,7 @@ jobs:
 
   # Test the builds
   test:
+    if: ${{ !inputs.skip_tests }}
     needs: build
     strategy:
       fail-fast: false
@@ -180,7 +191,7 @@ jobs:
 
   # Create release on tag
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ always() && !cancelled() && !failure() && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '') }}
     needs: [build, universal-macos, test]
     runs-on: ubuntu-latest
     name: Create Release
@@ -215,16 +226,17 @@ jobs:
         # softprops/action-gh-release@v2
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           files: release/*
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
+          prerelease: ${{ contains(inputs.release_tag || github.ref, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Optional: Publish to npm
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' }}
     needs: [release]
     runs-on: ubuntu-latest
     name: Publish to npm
