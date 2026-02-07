@@ -1,0 +1,70 @@
+{
+  "name": "@sunnyln/lni",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Frontend-first TypeScript port of LNI lightning wallet HTTP adapters",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/typescript"
+  },
+  "homepage": "https://github.com/lightning-node-interface/lni/tree/master/bindings/typescript",
+  "bugs": {
+    "url": "https://github.com/lightning-node-interface/lni/issues"
+  },
+  "keywords": [
+    "lightning",
+    "bitcoin",
+    "lnurl",
+    "nwc",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "npm run clean && npm run typecheck && npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:public": "npm publish --access public",
+    "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/*.real.test.ts",
+    "test:integration:phoenixd": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/phoenixd.real.test.ts",
+    "test:integration:cln": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/cln.real.test.ts",
+    "test:integration:lnd": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/lnd.real.test.ts",
+    "test:integration:strike": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/strike.real.test.ts",
+    "test:integration:speed": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/speed.real.test.ts",
+    "test:integration:blink": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/blink.real.test.ts",
+    "test:integration:nwc": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/nwc.real.test.ts"
+  },
+  "dependencies": {
+    "@getalby/sdk": "^7.0.0",
+    "@scure/base": "^1.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "websocket-polyfill": "^0.0.3"
+  }
+}

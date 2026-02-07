@@ -281,6 +281,7 @@ lni
 ├── bindings
 │   ├── lni_nodejs
 │   ├── lni_react_native
+│   ├── typescript
 ├── crates
 │   ├── lni
 │       |─── lnd
@@ -291,6 +292,26 @@ lni
 │       |─── speed
 │       |─── blink
 ```
+
+#### typescript (frontend)
+```sh
+npm install @sunnyln/lni
+```
+
+Build from source:
+```sh
+cd bindings/typescript
+npm install
+npm run typecheck
+npm run build
+```
+
+Install TypeScript binding from GitHub repo ([lightning-node-interface/lni](https://github.com/lightning-node-interface/lni)):
+```sh
+TMP_DIR=$(mktemp -d) && git clone --depth 1 https://github.com/lightning-node-interface/lni.git "$TMP_DIR/lni" && npm install "$TMP_DIR/lni/bindings/typescript"
+```
+
+Why this form: `bindings/typescript` is a subfolder package in a monorepo, so install is done from the cloned path.
 
 Example
 ========
