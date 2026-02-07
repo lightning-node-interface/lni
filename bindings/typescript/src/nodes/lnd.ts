@@ -268,9 +268,32 @@ export class LndNode implements LightningNode {
     return this.mapInvoice(payload);
   }
 
-  async listTransactions(_params: ListTransactionsParams): Promise<Transaction[]> {
+  async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
     const payload = await this.getJson<LndInvoiceListResponse>('/v1/invoices');
-    return payload.invoices.map((invoice) => this.mapInvoice(invoice)).sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = payload.invoices
+      .map((invoice) => this.mapInvoice(invoice))
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    const filtered = sorted.filter((tx) => {
+      if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
+        return false;
+      }
+
+      if (!params.search) {
+        return true;
+      }
+
+      const search = params.search.toLowerCase();
+      return (
+        tx.paymentHash.toLowerCase().includes(search) ||
+        tx.description.toLowerCase().includes(search) ||
+        tx.invoice.toLowerCase().includes(search)
+      );
+    });
+
+    const from = Math.max(params.from, 0);
+    const end = params.limit > 0 ? from + params.limit : undefined;
+    return filtered.slice(from, end);
   }
 
   async decode(str: string): Promise<string> {

@@ -46,6 +46,8 @@ interface ClnInvoice {
   payment_preimage?: string;
   description?: string;
   expires_at: number;
+  expiry?: number;
+  expiry_seconds?: number;
   paid_at?: number;
   amount_msat?: number;
   invreq_payer_note?: string;
@@ -126,6 +128,20 @@ export class ClnNode implements LightningNode {
   }
 
   private invoiceToTransaction(invoice: ClnInvoice): Transaction {
+    const expiresAt = parseOptionalNumber(invoice.expires_at);
+    const expirySeconds = parseOptionalNumber(invoice.expiry_seconds ?? invoice.expiry);
+
+    let createdAt = 0;
+    if (expiresAt > 0 && expirySeconds > 0) {
+      createdAt = Math.max(expiresAt - expirySeconds, 0);
+    }
+    if (createdAt <= 0) {
+      createdAt = parseOptionalNumber(invoice.paid_at);
+    }
+    if (createdAt <= 0) {
+      createdAt = Math.floor(Date.now() / 1000);
+    }
+
     return emptyTransaction({
       type: 'incoming',
       invoice: invoice.bolt11 ?? invoice.bolt12 ?? '',
@@ -133,9 +149,9 @@ export class ClnNode implements LightningNode {
       paymentHash: invoice.payment_hash,
       amountMsats: invoice.amount_received_msat ?? invoice.amount_msat ?? 0,
       feesPaid: 0,
-      createdAt: 0,
-      expiresAt: invoice.expires_at ?? 0,
-      settledAt: invoice.paid_at ?? 0,
+      createdAt,
+      expiresAt,
+      settledAt: parseOptionalNumber(invoice.paid_at),
       description: invoice.description ?? '',
       descriptionHash: '',
       payerNote: invoice.invreq_payer_note ?? '',

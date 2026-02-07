@@ -57,6 +57,7 @@ interface BlinkTransactionsQuery {
     defaultAccount: {
       transactions: {
         edges: Array<{
+          cursor: string;
           node: {
             id: string;
             createdAt: number;
@@ -76,6 +77,10 @@ interface BlinkTransactionsQuery {
             };
           };
         }>;
+        pageInfo: {
+          hasNextPage: boolean;
+          endCursor?: string | null;
+        };
       };
     };
   };
@@ -314,11 +319,12 @@ export class BlinkNode implements LightningNode {
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
     const query = `
-      query TransactionsQuery($first: Int, $last: Int, $after: String, $before: String) {
+      query TransactionsQuery($first: Int, $after: String) {
         me {
           defaultAccount {
-            transactions(first: $first, last: $last, after: $after, before: $before) {
+            transactions(first: $first, after: $after) {
               edges {
+                cursor
                 node {
                   id
                   createdAt
@@ -342,57 +348,93 @@ export class BlinkNode implements LightningNode {
                   }
                 }
               }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
             }
           }
         }
       }
     `;
 
-    const first = Math.max(params.from + params.limit, 1);
+    const limit = params.limit > 0 ? params.limit : Number.POSITIVE_INFINITY;
+    const from = Math.max(params.from, 0);
+    const pageSize = Math.max(params.limit > 0 ? params.limit : 50, 1);
 
-    const response = await this.gql<BlinkTransactionsQuery>(query, {
-      first,
-      last: null,
-      after: null,
-      before: null,
-    });
+    let after: string | null = null;
+    let skipped = 0;
+    const transactions: Transaction[] = [];
 
-    const transactions = response.me.defaultAccount.transactions.edges.map(({ node }) => {
-      const paymentHash =
-        node.initiationVia?.__typename === 'InitiationViaLn'
-          ? (node.initiationVia.paymentHash ?? '')
-          : '';
-      const preimage =
-        node.settlementVia?.__typename === 'SettlementViaLn' ? (node.settlementVia.preImage ?? '') : '';
-
-      const amountMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementAmount ?? 0)) : 0;
-      const feeMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementFee ?? 0)) : 0;
-
-      return emptyTransaction({
-        type: node.direction === 'SEND' ? 'outgoing' : 'incoming',
-        paymentHash,
-        preimage,
-        amountMsats,
-        feesPaid: feeMsats,
-        createdAt: node.createdAt,
-        settledAt: node.status === 'SUCCESS' ? node.createdAt : 0,
-        description: node.memo ?? '',
-        descriptionHash: '',
-        payerNote: '',
-        externalId: node.id,
+    while (transactions.length < limit) {
+      const response: BlinkTransactionsQuery = await this.gql<BlinkTransactionsQuery>(query, {
+        first: pageSize,
+        after,
       });
-    });
 
-    const filtered = transactions.filter((tx) => {
-      if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
-        return false;
+      const page: BlinkTransactionsQuery['me']['defaultAccount']['transactions'] =
+        response.me.defaultAccount.transactions;
+      const edges = page.edges;
+      if (!edges.length) {
+        break;
       }
-      return matchesSearch(tx, params.search);
-    });
 
-    const skip = Math.max(params.from, 0);
-    const end = params.limit > 0 ? skip + params.limit : undefined;
-    return filtered.slice(skip, end);
+      for (const { node } of edges) {
+        const paymentHash =
+          node.initiationVia?.__typename === 'InitiationViaLn'
+            ? (node.initiationVia.paymentHash ?? '')
+            : '';
+        const preimage =
+          node.settlementVia?.__typename === 'SettlementViaLn' ? (node.settlementVia.preImage ?? '') : '';
+
+        const amountMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementAmount ?? 0)) : 0;
+        const feeMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementFee ?? 0)) : 0;
+
+        const tx = emptyTransaction({
+          type: node.direction === 'SEND' ? 'outgoing' : 'incoming',
+          paymentHash,
+          preimage,
+          amountMsats,
+          feesPaid: feeMsats,
+          createdAt: node.createdAt,
+          settledAt: node.status === 'SUCCESS' ? node.createdAt : 0,
+          description: node.memo ?? '',
+          descriptionHash: '',
+          payerNote: '',
+          externalId: node.id,
+        });
+
+        if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
+          continue;
+        }
+        if (!matchesSearch(tx, params.search)) {
+          continue;
+        }
+
+        if (skipped < from) {
+          skipped += 1;
+          continue;
+        }
+
+        transactions.push(tx);
+        if (transactions.length >= limit) {
+          break;
+        }
+      }
+
+      if (!page.pageInfo.hasNextPage) {
+        break;
+      }
+
+      const nextCursor: string | null = page.pageInfo.endCursor ?? edges[edges.length - 1]?.cursor ?? null;
+      if (!nextCursor || nextCursor === after) {
+        break;
+      }
+
+      after = nextCursor;
+    }
+
+    return transactions;
   }
 
   async decode(str: string): Promise<string> {

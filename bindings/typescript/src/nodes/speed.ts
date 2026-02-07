@@ -217,7 +217,10 @@ export class SpeedNode implements LightningNode {
     const txs = rows
       .map((row) => this.sendToTransaction(row))
       .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, params.limit > 0 ? params.limit : undefined);
+      .slice(
+        Math.max(0, params.from || 0),
+        params.limit > 0 ? Math.max(0, params.from || 0) + params.limit : undefined,
+      );
 
     if (!params.paymentHash) {
       return txs;

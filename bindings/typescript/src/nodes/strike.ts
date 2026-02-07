@@ -233,7 +233,7 @@ export class StrikeNode implements LightningNode {
       amountMsats: btcToMsats(item.amountReceived.amount),
       feesPaid: 0,
       createdAt: toUnixSeconds(Date.parse(item.created)),
-      settledAt: item.state === 'COMPLETED' ? toUnixSeconds(Date.parse(item.completed ?? '')) : 0,
+      settledAt: item.state === 'COMPLETED' && item.completed ? toUnixSeconds(Date.parse(item.completed)) : 0,
       description: item.lightning.description ?? item.lightning.descriptionHash ?? '',
       descriptionHash: item.lightning.descriptionHash ?? '',
       externalId: item.receiveRequestId,
@@ -275,7 +275,7 @@ export class StrikeNode implements LightningNode {
         amountMsats: btcToMsats(receive.amountReceived.amount),
         feesPaid: 0,
         createdAt: toUnixSeconds(Date.parse(receive.created)),
-        settledAt: receive.state === 'COMPLETED' ? toUnixSeconds(Date.parse(receive.completed ?? '')) : 0,
+        settledAt: receive.state === 'COMPLETED' && receive.completed ? toUnixSeconds(Date.parse(receive.completed)) : 0,
         description: receive.lightning.description ?? receive.lightning.descriptionHash ?? '',
         descriptionHash: receive.lightning.descriptionHash ?? '',
         externalId: receive.receiveRequestId,
@@ -293,7 +293,7 @@ export class StrikeNode implements LightningNode {
         amountMsats: btcToMsats(payment.amount.amount),
         feesPaid: payment.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0,
         createdAt: toUnixSeconds(Date.parse(payment.created)),
-        settledAt: payment.state === 'COMPLETED' ? toUnixSeconds(Date.parse(payment.completed ?? '')) : 0,
+        settledAt: payment.state === 'COMPLETED' && payment.completed ? toUnixSeconds(Date.parse(payment.completed)) : 0,
         description: payment.description ?? '',
         descriptionHash: '',
         externalId: payment.id,
@@ -310,7 +310,8 @@ export class StrikeNode implements LightningNode {
       return matchesSearch(tx, params.search);
     });
 
-    return filtered.sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = filtered.sort((a, b) => b.createdAt - a.createdAt);
+    return sorted.slice(0, params.limit > 0 ? params.limit : undefined);
   }
 
   async decode(str: string): Promise<string> {
