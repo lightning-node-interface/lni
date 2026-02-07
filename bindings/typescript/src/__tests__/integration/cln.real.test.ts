@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { ClnNode } from '../../nodes/cln.js';
-import { hasEnv, testInvoiceLabel, timeout } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, testInvoiceLabel, timeout } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > ClnNode', () => {
   const enabled = hasEnv('CLN_URL', 'CLN_RUNE');
@@ -26,7 +24,7 @@ describe('Real integration from crates/lni/.env > ClnNode', () => {
       amountMsats: 2_000,
       description: testInvoiceLabel('cln'),
     });
-
+   console.log('CLN Invoice:', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
     expect(invoice.paymentHash.length).toBeGreaterThan(0);
 

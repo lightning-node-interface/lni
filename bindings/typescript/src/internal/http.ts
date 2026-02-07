@@ -54,39 +54,56 @@ function encodeForm(form: Record<string, QueryValue>): URLSearchParams {
   return params;
 }
 
-function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefined): AbortSignal | undefined {
+interface TimeoutSignal {
+  signal: AbortSignal | undefined;
+  clear: () => void;
+}
+
+function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefined): TimeoutSignal {
   if (!timeoutMs || timeoutMs <= 0) {
-    return signal;
+    return {
+      signal,
+      clear: () => {},
+    };
   }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let externalAbortListener: (() => void) | undefined;
+
+  const clear = (): void => {
+    clearTimeout(timeoutId);
+    if (signal && externalAbortListener) {
+      signal.removeEventListener('abort', externalAbortListener);
+      externalAbortListener = undefined;
+    }
+  };
 
   if (signal) {
     if (signal.aborted) {
-      clearTimeout(timeoutId);
+      clear();
       controller.abort();
     } else {
-      signal.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(timeoutId);
-          controller.abort();
-        },
-        { once: true },
-      );
+      externalAbortListener = () => {
+        clear();
+        controller.abort();
+      };
+      signal.addEventListener('abort', externalAbortListener, { once: true });
     }
   }
 
   controller.signal.addEventListener(
     'abort',
     () => {
-      clearTimeout(timeoutId);
+      clear();
     },
     { once: true },
   );
 
-  return controller.signal;
+  return {
+    signal: controller.signal,
+    clear,
+  };
 }
 
 export async function requestText(fetchFn: FetchLike, url: string, args: RequestArgs = {}): Promise<string> {
@@ -105,7 +122,7 @@ export async function requestText(fetchFn: FetchLike, url: string, args: Request
     body = encodeForm(args.form).toString();
   }
 
-  const signal = withTimeout(args.signal, args.timeoutMs);
+  const timeout = withTimeout(args.signal, args.timeoutMs);
 
   let response: Response;
   try {
@@ -113,12 +130,14 @@ export async function requestText(fetchFn: FetchLike, url: string, args: Request
       method: args.method ?? (body ? 'POST' : 'GET'),
       headers,
       body,
-      signal,
+      signal: timeout.signal,
     });
   } catch (error) {
     throw new LniError('NetworkError', `Network request failed: ${(error as Error)?.message ?? 'unknown error'}`, {
       cause: error,
     });
+  } finally {
+    timeout.clear();
   }
 
   const text = await response.text();

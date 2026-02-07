@@ -1,7 +1,7 @@
 import { LniError } from '../errors.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { btcToMsats, emptyNodeInfo, emptyTransaction, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
+import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
 import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type StrikeConfig, type Transaction } from '../types.js';
 
 interface StrikeBalance {
@@ -139,7 +139,7 @@ export class StrikeNode implements LightningNode {
         amount:
           params.amountMsats !== undefined
             ? {
-                amount: (params.amountMsats / 100_000_000_000).toFixed(8),
+                amount: msatsToBtc(params.amountMsats),
                 currency: 'BTC',
               }
             : undefined,
@@ -177,7 +177,7 @@ export class StrikeNode implements LightningNode {
       amount:
         params.amountMsats !== undefined
           ? {
-              amount: (params.amountMsats / 100_000_000_000).toFixed(8),
+              amount: msatsToBtc(params.amountMsats),
               currency: 'BTC',
             }
           : undefined,
@@ -257,6 +257,7 @@ export class StrikeNode implements LightningNode {
       if (!this.isNotFoundError(error)) {
         throw error;
       }
+      // Strike can return 404 when there are no outgoing payments for the account.
     }
 
     const txs: Transaction[] = [];
@@ -306,15 +307,7 @@ export class StrikeNode implements LightningNode {
       if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
         return false;
       }
-      if (params.search) {
-        const search = params.search.toLowerCase();
-        return (
-          tx.paymentHash.toLowerCase().includes(search) ||
-          tx.description.toLowerCase().includes(search) ||
-          tx.invoice.toLowerCase().includes(search)
-        );
-      }
-      return true;
+      return matchesSearch(tx, params.search);
     });
 
     return filtered.sort((a, b) => b.createdAt - a.createdAt);

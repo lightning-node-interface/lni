@@ -53,7 +53,10 @@ interface LndPayResult {
 }
 
 interface LndPayResponseWrapper {
-  result: LndPayResult;
+  result?: LndPayResult;
+  error?: {
+    message?: string;
+  };
 }
 
 export class LndNode implements LightningNode {
@@ -196,10 +199,6 @@ export class LndNode implements LightningNode {
       timeoutMs: this.timeoutMs,
     });
 
-    if (responseText.includes('"error"') && !responseText.includes('"result"')) {
-      throw new LniError('Api', `Payment failed: ${responseText}`);
-    }
-
     const finalLine = responseText
       .split('\n')
       .map((line) => line.trim())
@@ -215,6 +214,10 @@ export class LndNode implements LightningNode {
       wrapped = JSON.parse(finalLine) as LndPayResponseWrapper;
     } catch (error) {
       throw new LniError('Json', `Failed to parse LND pay response: ${(error as Error).message}`);
+    }
+
+    if (wrapped.error) {
+      throw new LniError('Api', `Payment failed: ${wrapped.error.message ?? 'unknown reason'}`);
     }
 
     if (!wrapped.result) {

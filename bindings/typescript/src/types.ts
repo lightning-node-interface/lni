@@ -24,8 +24,10 @@ export interface NodeInfo {
   pendingOpenReceiveBalance: number;
 }
 
+export type TransactionType = 'incoming' | 'outgoing';
+
 export interface Transaction {
-  type: string;
+  type: TransactionType;
   invoice: string;
   description: string;
   descriptionHash: string;
@@ -96,7 +98,9 @@ export interface LookupInvoiceParams {
 export interface ListTransactionsParams {
   from: number;
   limit: number;
+  // Exact payment hash match.
   paymentHash?: string;
+  // Case-insensitive partial match across common transaction text fields.
   search?: string;
 }
 
@@ -179,6 +183,24 @@ export interface LightningNode {
   decode(str: string): Promise<string>;
   onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void>;
 }
+
+export type BackendNodeKind =
+  | 'phoenixd'
+  | 'cln'
+  | 'lnd'
+  | 'nwc'
+  | 'strike'
+  | 'speed'
+  | 'blink';
+
+export type BackendNodeConfig =
+  | { kind: 'phoenixd'; config: PhoenixdConfig }
+  | { kind: 'cln'; config: ClnConfig }
+  | { kind: 'lnd'; config: LndConfig }
+  | { kind: 'nwc'; config: NwcConfig }
+  | { kind: 'strike'; config: StrikeConfig }
+  | { kind: 'speed'; config: SpeedConfig }
+  | { kind: 'blink'; config: BlinkConfig };
 
 export interface PaymentInfo {
   destinationType: 'bolt11' | 'bolt12' | 'lnurl' | 'lightning_address';

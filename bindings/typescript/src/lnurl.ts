@@ -1,7 +1,7 @@
 import { bech32 } from '@scure/base';
 import { LniError } from './errors.js';
 import type { FetchLike, PaymentInfo } from './types.js';
-import { resolveFetch, requestJson, requestText } from './internal/http.js';
+import { resolveFetch, requestJson } from './internal/http.js';
 
 export type PaymentDestinationType = 'bolt11' | 'bolt12' | 'lnurl' | 'lightning_address';
 
@@ -49,7 +49,7 @@ export function detectPaymentType(destination: string): PaymentDestinationType {
 
 export function needsResolution(destination: string): boolean {
   const normalized = destination.trim().toLowerCase();
-  return destination.includes('@') || normalized.startsWith('lnurl1');
+  return (normalized.includes('@') && !normalized.startsWith('lnurl')) || normalized.startsWith('lnurl1');
 }
 
 export function lightningAddressToUrl(user: string, domain: string): string {
@@ -74,7 +74,7 @@ export function decodeLnurl(lnurl: string): string {
 }
 
 async function fetchLnurlPay(url: string, fetchFn: FetchLike): Promise<LnurlPayResponse> {
-  const payload = await requestText(fetchFn, url, {
+  const payload = await requestJson<LnurlPayResponse | LnurlErrorResponse>(fetchFn, url, {
     method: 'GET',
     headers: {
       accept: 'application/json',
@@ -82,19 +82,12 @@ async function fetchLnurlPay(url: string, fetchFn: FetchLike): Promise<LnurlPayR
     timeoutMs: 30_000,
   });
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(payload);
-  } catch (error) {
-    throw new LniError('Json', `Invalid LNURL-pay response: ${(error as Error).message}`);
-  }
-
-  const maybeError = parsed as LnurlErrorResponse;
+  const maybeError = payload as LnurlErrorResponse;
   if (maybeError?.status === 'ERROR') {
     throw new LniError('LnurlError', maybeError.reason);
   }
 
-  return parsed as LnurlPayResponse;
+  return payload as LnurlPayResponse;
 }
 
 async function requestInvoice(callbackUrl: string, amountMsats: number, fetchFn: FetchLike): Promise<string> {
@@ -139,6 +132,12 @@ function assertAmountRange(amountMsats: number, minSendable: number, maxSendable
   }
 }
 
+async function resolveViaLnurlPay(url: string, amountMsats: number, fetchFn: FetchLike): Promise<string> {
+  const lnurlPay = await fetchLnurlPay(url, fetchFn);
+  assertAmountRange(amountMsats, lnurlPay.minSendable, lnurlPay.maxSendable);
+  return requestInvoice(lnurlPay.callback, amountMsats, fetchFn);
+}
+
 export async function resolveToBolt11(
   destination: string,
   amountMsats?: number,
@@ -161,15 +160,11 @@ export async function resolveToBolt11(
 
   if (destinationType === 'lightning_address') {
     const { user, domain } = parseLightningAddress(destination.trim());
-    const lnurlPay = await fetchLnurlPay(lightningAddressToUrl(user, domain), fetchFn);
-    assertAmountRange(amountMsats, lnurlPay.minSendable, lnurlPay.maxSendable);
-    return requestInvoice(lnurlPay.callback, amountMsats, fetchFn);
+    return resolveViaLnurlPay(lightningAddressToUrl(user, domain), amountMsats, fetchFn);
   }
 
   const lnurl = decodeLnurl(destination.trim());
-  const lnurlPay = await fetchLnurlPay(lnurl, fetchFn);
-  assertAmountRange(amountMsats, lnurlPay.minSendable, lnurlPay.maxSendable);
-  return requestInvoice(lnurlPay.callback, amountMsats, fetchFn);
+  return resolveViaLnurlPay(lnurl, amountMsats, fetchFn);
 }
 
 export async function getPaymentInfo(

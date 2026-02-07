@@ -1,7 +1,7 @@
 import { LniError } from '../errors.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, satsToMsats } from '../internal/transform.js';
+import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
 import { InvoiceType, type BlinkConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Transaction } from '../types.js';
 
 interface GraphQLError {
@@ -16,13 +16,15 @@ interface GraphQLResponse<T> {
 interface BlinkMeQuery {
   me: {
     defaultAccount: {
-      wallets: Array<{
-        id: string;
-        walletCurrency: string;
-        balance: number;
-      }>;
+      wallets: BlinkWallet[];
     };
   };
+}
+
+interface BlinkWallet {
+  id: string;
+  walletCurrency: string;
+  balance: number;
 }
 
 interface BlinkInvoiceCreateResponse {
@@ -83,6 +85,21 @@ export class BlinkNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
   private readonly baseUrl: string;
+  private cachedWalletId?: string;
+
+  private static readonly ME_QUERY = `
+    query Me {
+      me {
+        defaultAccount {
+          wallets {
+            id
+            walletCurrency
+            balance
+          }
+        }
+      }
+    }
+  `;
 
   constructor(private readonly config: BlinkConfig, options: NodeRequestOptions = {}) {
     this.fetchFn = resolveFetch(options.fetch);
@@ -120,49 +137,31 @@ export class BlinkNode implements LightningNode {
     return payload.data;
   }
 
-  private async getBtcWalletId(): Promise<string> {
-    const query = `
-      query Me {
-        me {
-          defaultAccount {
-            wallets {
-              id
-              walletCurrency
-              balance
-            }
-          }
-        }
-      }
-    `;
-
-    const response = await this.gql<BlinkMeQuery>(query);
+  private async getBtcWallet(): Promise<BlinkWallet> {
+    const response = await this.gql<BlinkMeQuery>(BlinkNode.ME_QUERY);
     const wallet = response.me.defaultAccount.wallets.find((item) => item.walletCurrency === 'BTC');
 
     if (!wallet) {
       throw new LniError('Api', 'No BTC wallet found in Blink account.');
     }
 
+    this.cachedWalletId = wallet.id;
+    return wallet;
+  }
+
+  private async getBtcWalletId(): Promise<string> {
+    if (this.cachedWalletId) {
+      return this.cachedWalletId;
+    }
+
+    const wallet = await this.getBtcWallet();
+    this.cachedWalletId = wallet.id;
     return wallet.id;
   }
 
   async getInfo(): Promise<NodeInfo> {
-    const query = `
-      query Me {
-        me {
-          defaultAccount {
-            wallets {
-              id
-              walletCurrency
-              balance
-            }
-          }
-        }
-      }
-    `;
-
-    const response = await this.gql<BlinkMeQuery>(query);
-    const wallet = response.me.defaultAccount.wallets.find((item) => item.walletCurrency === 'BTC');
-    const sats = wallet?.balance ?? 0;
+    const wallet = await this.getBtcWallet();
+    const sats = wallet.balance;
 
     return emptyNodeInfo({
       alias: 'Blink Node',
@@ -388,17 +387,7 @@ export class BlinkNode implements LightningNode {
       if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
         return false;
       }
-
-      if (!params.search) {
-        return true;
-      }
-
-      const search = params.search.toLowerCase();
-      return (
-        tx.description.toLowerCase().includes(search) ||
-        tx.paymentHash.toLowerCase().includes(search) ||
-        tx.preimage.toLowerCase().includes(search)
-      );
+      return matchesSearch(tx, params.search);
     });
 
     const skip = Math.max(params.from, 0);

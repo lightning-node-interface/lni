@@ -12,15 +12,11 @@ export class LniError extends Error {
   public readonly body?: string;
 
   constructor(code: LniErrorCode, message: string, options?: { status?: number; body?: string; cause?: unknown }) {
-    super(message);
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'LniError';
     this.code = code;
     this.status = options?.status;
     this.body = options?.body;
-
-    if (options?.cause !== undefined) {
-      (this as Error & { cause?: unknown }).cause = options.cause;
-    }
   }
 }
 

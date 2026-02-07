@@ -22,7 +22,7 @@ export function emptyNodeInfo(overrides: Partial<NodeInfo> = {}): NodeInfo {
 
 export function emptyTransaction(overrides: Partial<Transaction> = {}): Transaction {
   return {
-    type: '',
+    type: 'incoming',
     invoice: '',
     description: '',
     descriptionHash: '',
@@ -81,6 +81,14 @@ export function btcToMsats(amount: string | number): number {
     return 0;
   }
   return Math.round(num * 100_000_000_000);
+}
+
+export function msatsToBtc(amountMsats: number): string {
+  if (!Number.isFinite(amountMsats)) {
+    return '0.00000000';
+  }
+
+  return (amountMsats / 100_000_000_000).toFixed(8);
 }
 
 export function satsToMsats(amount: string | number): number {

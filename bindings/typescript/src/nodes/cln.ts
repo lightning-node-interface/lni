@@ -67,6 +67,14 @@ interface ClnListOffersResponse {
   offers: Offer[];
 }
 
+function newInvoiceLabel(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return `lni.${globalThis.crypto.randomUUID()}`;
+  }
+
+  return `lni.${Date.now()}.${Math.floor(Math.random() * 1_000_000)}`;
+}
+
 export class ClnNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -223,7 +231,7 @@ export class ClnNode implements LightningNode {
       description: params.description ?? '',
       amount_msat: params.amountMsats !== undefined ? String(params.amountMsats) : 'any',
       expiry: params.expiry,
-      label: `lni.${Math.floor(Math.random() * 1_000_000_000)}`,
+      label: newInvoiceLabel(),
     });
 
     return emptyTransaction({

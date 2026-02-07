@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { StrikeNode } from '../../nodes/strike.js';
-import { hasEnv, nonEmpty, runOrSkipKnownError, testInvoiceLabel, timeout, uniqueValues } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, nonEmpty, runOrSkipKnownError, testInvoiceLabel, timeout, uniqueValues } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > StrikeNode', () => {
   const enabled = hasEnv('STRIKE_API_KEY');
@@ -22,7 +20,7 @@ describe('Real integration from crates/lni/.env > StrikeNode', () => {
       amountMsats: 5_000,
       description: testInvoiceLabel('strike'),
     });
-
+    console.log('Strike Invoice:', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
     expect(invoice.paymentHash.length).toBeGreaterThan(0);
 

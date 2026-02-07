@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Frontend-first TypeScript port of LNI lightning wallet HTTP adapters",
   "type": "module",
@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@getalby/sdk": "^7.0.0",
-    "@scure/base": "^1.2.6"
+    "@scure/base": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",

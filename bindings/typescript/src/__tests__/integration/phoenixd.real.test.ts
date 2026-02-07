@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { PhoenixdNode } from '../../nodes/phoenixd.js';
-import { hasEnv, runOrSkipKnownError, testInvoiceLabel, timeout } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, runOrSkipKnownError, testInvoiceLabel, timeout } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > PhoenixdNode', () => {
   const enabled = hasEnv('PHOENIXD_URL', 'PHOENIXD_PASSWORD');
@@ -29,7 +27,7 @@ describe('Real integration from crates/lni/.env > PhoenixdNode', () => {
         amountMsats: 2_000,
         description: testInvoiceLabel('phoenixd'),
       });
-
+      console.log('Phoenixd Invoice:', invoice);
       expect(invoice.invoice.length).toBeGreaterThan(0);
       expect(invoice.paymentHash.length).toBeGreaterThan(0);
 

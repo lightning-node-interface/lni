@@ -25,11 +25,19 @@ export async function pollInvoiceEvents(args: PollInvoiceEventsArgs): Promise<vo
         return;
       }
       args.callback('pending', tx);
-    } catch {
+    } catch (error) {
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[lni] pollInvoiceEvents lookup failed', error);
+      }
       args.callback('failure');
     }
 
-    await sleep(delayMs);
+    if (Date.now() - startedAt + delayMs <= maxDurationMs) {
+      await sleep(delayMs);
+      continue;
+    }
+
+    break;
   }
 
   args.callback('failure');

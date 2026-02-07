@@ -1,6 +1,9 @@
+import { it } from 'vitest';
 import 'websocket-polyfill';
 
 export const timeout = 120_000;
+type ConditionalIt = (name: string, fn: () => Promise<void> | void, timeout?: number) => void;
+export const itIf = (condition: boolean): ConditionalIt => (condition ? it : it.skip);
 
 export const hasEnv = (...keys: string[]): boolean =>
   keys.every((key) => Boolean(process.env[key]?.trim()));

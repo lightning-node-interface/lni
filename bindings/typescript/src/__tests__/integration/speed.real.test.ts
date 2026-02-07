@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { SpeedNode } from '../../nodes/speed.js';
-import { hasEnv, nonEmpty, runOrSkipKnownError, testInvoiceLabel, timeout, uniqueValues } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, nonEmpty, runOrSkipKnownError, testInvoiceLabel, timeout, uniqueValues } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > SpeedNode', () => {
   const enabled = hasEnv('SPEED_API_KEY');
@@ -22,6 +20,7 @@ describe('Real integration from crates/lni/.env > SpeedNode', () => {
       amountMsats: 5_000,
       description: testInvoiceLabel('speed'),
     });
+    console.log('Speed Invoice:', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
 
     const txs = await node.listTransactions({ from: 0, limit: 25 });

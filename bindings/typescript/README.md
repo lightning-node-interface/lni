@@ -1,10 +1,101 @@
-# LNI TypeScript (Frontend-first)
+# Lightning Node Interface
 
-Pure TypeScript port of `crates/lni` HTTP adapters for frontend runtimes.
+Remote connect to major Lightning node implementations with one TypeScript interface.
 
-## Scope
+- Supports major nodes: CLN, LND, Phoenixd
+- Supports protocols: BOLT11, BOLT12, NWC
+- Includes custodial APIs: Strike, Speed, Blink
+- LNURL + Lightning Address support (`user@domain.com`, `lnurl1...`)
+- Frontend-capable TypeScript runtime (`fetch`-based)
 
-Implemented in this package:
+## Install
+
+```bash
+npm install @sunnyln/lni
+```
+
+## TypeScript Examples
+
+### Node API
+
+```ts
+import {
+  createNode,
+  InvoiceType,
+  type BackendNodeConfig,
+} from '@sunnyln/lni';
+
+const backend: BackendNodeConfig = {
+  kind: 'lnd',
+  config: {
+    url: 'https://lnd.example.com',
+    macaroon: '...',
+  },
+};
+
+const node = createNode(backend);
+
+const info = await node.getInfo();
+
+const invoiceParams = {
+  invoiceType: InvoiceType.Bolt11,
+  amountMsats: 2000,
+  description: 'your memo',
+  expiry: 3600,
+};
+
+const invoice = await node.createInvoice(invoiceParams);
+
+const payInvoiceParams = {
+  invoice: invoice.invoice,
+  feeLimitPercentage: 1,
+  allowSelfPayment: true,
+};
+
+const payment = await node.payInvoice(payInvoiceParams);
+
+const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
+
+const txs = await node.listTransactions({ from: 0, limit: 10 });
+```
+
+For NWC specifically, `createNode` returns `NwcNode` when `kind: 'nwc'`, so you can close it:
+
+```ts
+const nwcNode = createNode({ kind: 'nwc', config: { nwcUri: 'nostr+walletconnect://...' } });
+// ... use node
+nwcNode.close();
+```
+
+### LNURL + Lightning Address
+
+```ts
+import { detectPaymentType, needsResolution, getPaymentInfo, resolveToBolt11 } from '@sunnyln/lni';
+
+const destination = 'user@domain.com';
+
+const type = detectPaymentType(destination);
+const requiresResolution = needsResolution(destination);
+const info = await getPaymentInfo(destination, 100_000);
+const bolt11 = await resolveToBolt11(destination, 100_000);
+```
+
+### Invoice Event Polling
+
+```ts
+await node.onInvoiceEvents(
+  {
+    paymentHash: invoice.paymentHash,
+    pollingDelaySec: 3,
+    maxPollingSec: 60,
+  },
+  (status, tx) => {
+    console.log('Invoice event:', status, tx);
+  },
+);
+```
+
+## Implemented in this package
 
 - `PhoenixdNode`
 - `ClnNode`
@@ -16,103 +107,27 @@ Implemented in this package:
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
 
 Not included yet:
+- `SparkNode` (planned)
 
-- `SparkNode` (intentionally deferred)
+## Frontend Runtime Notes
 
-## Install
+- Uses `fetch`, no Node-native runtime dependency required.
+- You can inject custom fetch via constructor options:
+  - `new LndNode(config, { fetch: customFetch })`
+- Most backends require secrets (API keys, macaroons, runes, passwords). For production web apps, use a backend proxy/BFF to protect credentials.
 
-```bash
-npm install @sunnyln/lni
-```
-
-From source:
-
-```bash
-cd bindings/typescript
-npm install
-npm run typecheck
-npm run build
-```
-
-## Install from this GitHub repo (without publishing)
-
-Because this package lives in a monorepo subfolder, install it from a local path after cloning:
+## Build and Publish (package maintainers)
 
 ```bash
-git clone https://github.com/lightning-node-interface/lni.git
-npm install ./lni/bindings/typescript
-```
-
-One-liner:
-
-```bash
-TMP_DIR=$(mktemp -d) && git clone --depth 1 https://github.com/lightning-node-interface/lni.git "$TMP_DIR/lni" && npm install "$TMP_DIR/lni/bindings/typescript"
-```
-
-From another project:
-
-```bash
-npm install /absolute/path/to/lni/bindings/typescript
-```
-
-## Packaging and publish
-
-```bash
-cd bindings/typescript
-npm install
 npm run prepack
 npm run pack:dry-run
-```
-
-To publish:
-
-```bash
-npm login
 npm run publish:public
 ```
 
-Per-node real integration test scripts are available before publishing:
+## Integration tests
 
-- `npm run test:integration:phoenixd`
-- `npm run test:integration:cln`
-- `npm run test:integration:lnd`
-- `npm run test:integration:strike`
-- `npm run test:integration:speed`
-- `npm run test:integration:blink`
-- `npm run test:integration:nwc`
-
-## Basic usage
-
-```ts
-import { LndNode } from '@sunnyln/lni';
-
-const node = new LndNode({
-  url: 'https://127.0.0.1:8080',
-  macaroon: '...'
-});
-
-const info = await node.getInfo();
-console.log(info.sendBalanceMsat);
+```bash
+npm run test:integration
 ```
 
-## Frontend runtime notes
-
-- This package uses `fetch` and does not depend on Node native modules.
-- You can inject a custom fetch implementation via constructor options:
-  - `new LndNode(config, { fetch: customFetch })`
-- `socks5Proxy` and `acceptInvalidCerts` are config-compatible with Rust structs, but not applied in browser fetch runtimes.
-- Most backends require secrets (API keys, macaroons, runes, passwords). For production web apps, use a backend proxy/BFF to protect secrets.
-
-## API parity
-
-The exported TypeScript interfaces mirror `bindings/lni_nodejs/index.d.ts` shapes:
-
-- `NodeInfo`
-- `Transaction`
-- `CreateInvoiceParams`
-- `PayInvoiceParams`
-- `ListTransactionsParams`
-- `LookupInvoiceParams`
-- `OnInvoiceEventParams`
-
-Methods are class-based (`getInfo`, `createInvoice`, `payInvoice`, `lookupInvoice`, etc.), with polling callback support via `onInvoiceEvents`.
+These scripts set `NODE_TLS_REJECT_UNAUTHORIZED=0` because many local Lightning nodes use self-signed certs in test environments. Do not use this in production.

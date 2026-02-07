@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { NwcNode } from '../../nodes/nwc.js';
-import { hasEnv, testInvoiceLabel, timeout } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, testInvoiceLabel, timeout } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > NwcNode', () => {
   const enabled = hasEnv('NWC_URI');
@@ -19,7 +17,7 @@ describe('Real integration from crates/lni/.env > NwcNode', () => {
         amountMsats: 3_000,
         description: testInvoiceLabel('nwc'),
       });
-
+      console.log('NWC Invoice:', invoice);
       expect(invoice.invoice.length).toBeGreaterThan(0);
 
       const txs = await node.listTransactions({ from: 0, limit: 25 });

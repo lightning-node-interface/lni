@@ -64,42 +64,45 @@ let cln_txns = cln_node.list_transactions(list_txn_params).await;
 
 #### Typescript
 ```typescript
-const lndNode = new LndNode({ url, macaroon });
-const clnNode = new ClnNode({ url, rune });
+import { createNode, InvoiceType, type BackendNodeConfig } from '@sunnyln/lni';
 
-const lndNodeInfo = lndNode.getInfo();
-const clnNodeInfo = clnNode.getInfo();
+const backend: BackendNodeConfig = {
+    kind: 'lnd',
+    config: {
+        url: 'https://lnd.example.com',
+        macaroon: '...',
+    },
+};
+
+const node = createNode(backend);
+const nodeInfo = await node.getInfo();
 
 const invoiceParams = {
     invoiceType: InvoiceType.Bolt11,
     amountMsats: 2000,
     description: "your memo",
     expiry: 1743355716,
-});
+};
 
-const lndInvoice = await lndNode.createInvoice(invoiceParams);
-const clnInvoice = await clnNode.createInvoice(invoiceParams);
+const invoice = await node.createInvoice(invoiceParams);
 
 const payInvoiceParams = {
-    invoice: "{lnbc1***}", // BOLT 11 payment request
+    invoice: invoice.invoice, // BOLT 11 payment request
     feeLimitPercentage: 1, // 1% fee limit
-    allowSelfPayment: true, // This setting works with LND, but is simply ignored for CLN etc...
-});
+    allowSelfPayment: true, // Used by LND; ignored by nodes that do not support it
+};
 
-const lndPayInvoice = await lndNode.payInvoice(payInvoiceParams);
-const clnPayInvoice = await clnNode.payInvoice(payInvoiceParams);
+const payInvoice = await node.payInvoice(payInvoiceParams);
 
-const lndInvoiceStatus = await lndNode.lookupInvoice("{PAYMENT_HASH}");
-const clnInvoiceStatus = await clnNode.lookupInvoice("{PAYMENT_HASH}");
+const invoiceStatus = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 
 const listTxnParams = {
     from: 0,
     limit: 10,
-    payment_hash: None, // Optionally pass in the payment hash, or None to search all
+    paymentHash: undefined, // Optionally pass a payment hash to filter
 };
 
-const lndTxns = await lndNode.listTransactions(listTxnParams);
-const clnTxns = await clnNode.listTransactions(listTxnParams);
+const txns = await node.listTransactions(listTxnParams);
 ```
 
 
@@ -166,7 +169,7 @@ node.pay_invoice(PayInvoiceParams { invoice: bolt11, ..Default::default() }).awa
 
 **TypeScript (Node.js)**
 ```typescript
-import { detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo } from 'lni_js';
+import { detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo } from '@sunnyln/lni';
 
 // Auto-detect payment type
 const type = detectPaymentType('nicktee@strike.me'); // "lightning_address"
@@ -293,7 +296,7 @@ lni
 │       |─── blink
 ```
 
-#### typescript (frontend)
+### TypeScript (frontend)
 ```sh
 npm install @sunnyln/lni
 ```

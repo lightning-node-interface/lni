@@ -1,8 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 import { LndNode } from '../../nodes/lnd.js';
-import { hasEnv, runOrSkipKnownError, testInvoiceLabel, timeout } from './helpers.js';
-
-const itIf = (condition: boolean) => (condition ? it : it.skip);
+import { hasEnv, itIf, runOrSkipKnownError, testInvoiceLabel, timeout } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > LndNode', () => {
   const enabled = hasEnv('LND_URL', 'LND_MACAROON');
@@ -28,7 +26,7 @@ describe('Real integration from crates/lni/.env > LndNode', () => {
       amountMsats: 3_000,
       description: testInvoiceLabel('lnd'),
     });
-
+    console.log('LND Invoice:', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
     expect(invoice.paymentHash.length).toBeGreaterThan(0);
 

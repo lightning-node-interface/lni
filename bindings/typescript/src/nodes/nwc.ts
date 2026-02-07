@@ -2,7 +2,7 @@ import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, typ
 import { LniError } from '../errors.js';
 import { bytesToHex, hexToBytes } from '../internal/encoding.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, parseOptionalNumber } from '../internal/transform.js';
+import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
 import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction } from '../types.js';
 
 function extractPubkeyFromNwcUri(uri: string): string {
@@ -26,15 +26,13 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
     throw new LniError('Api', 'Web Crypto API is required to hash NWC preimages.');
   }
 
-  const digestInput = new Uint8Array(bytes.length);
-  digestInput.set(bytes);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', digestInput);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
   return bytesToHex(new Uint8Array(digest));
 }
 
 function nwcTransactionToLniTransaction(tx: Nip47Transaction): Transaction {
   return emptyTransaction({
-    type: tx.type,
+    type: tx.type === 'outgoing' ? 'outgoing' : 'incoming',
     invoice: tx.invoice ?? '',
     description: tx.description ?? '',
     descriptionHash: tx.description_hash ?? '',
@@ -203,16 +201,7 @@ export class NwcNode implements LightningNode {
         return false;
       }
 
-      if (params.search) {
-        const search = params.search.toLowerCase();
-        return (
-          tx.paymentHash.toLowerCase().includes(search) ||
-          tx.invoice.toLowerCase().includes(search) ||
-          tx.description.toLowerCase().includes(search)
-        );
-      }
-
-      return true;
+      return matchesSearch(tx, params.search);
     });
   }
 

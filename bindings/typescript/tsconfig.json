@@ -10,7 +10,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "skipLibCheck": true,
-    "types": ["node", "vitest/globals"],
+    "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false

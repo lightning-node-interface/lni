@@ -205,11 +205,7 @@ export class SpeedNode implements LightningNode {
       throw new LniError('Api', 'No transactions found matching lookup parameters.');
     }
 
-    const tx = txs[0];
-    if (!tx) {
-      throw new LniError('Api', 'No transactions found matching lookup parameters.');
-    }
-    return tx;
+    return txs[0]!;
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {

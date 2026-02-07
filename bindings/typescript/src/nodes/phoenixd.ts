@@ -220,7 +220,16 @@ export class PhoenixdNode implements LightningNode {
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
     if (!params.paymentHash) {
-      throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash for PhoenixdNode.');
+      if (!params.search) {
+        throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search for PhoenixdNode.');
+      }
+
+      const txs = await this.listTransactions({ from: 0, limit: 100, search: params.search });
+      const tx = txs[0];
+      if (!tx) {
+        throw new LniError('Api', 'No matching transactions');
+      }
+      return tx;
     }
 
     const invoice = await this.requestJson<PhoenixdInvoiceResponse>(`/payments/incoming/${params.paymentHash}`, {
@@ -332,11 +341,11 @@ export class PhoenixdNode implements LightningNode {
       params,
       callback,
       lookup: () => {
-        if (params.paymentHash) {
-          return this.lookupInvoice({ paymentHash: params.paymentHash });
+        if (params.paymentHash || params.search) {
+          return this.lookupInvoice({ paymentHash: params.paymentHash, search: params.search });
         }
 
-        return this.listTransactions({ from: 0, limit: 2500, search: params.search }).then((txs) => {
+        return this.listTransactions({ from: 0, limit: 100 }).then((txs) => {
           const tx = txs[0];
           if (!tx) {
             throw new LniError('Api', 'No matching transactions');
