@@ -219,6 +219,9 @@ export class ClnNode implements LightningNode {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     const invoiceType = params.invoiceType ?? InvoiceType.Bolt11;
+    const now = Math.floor(Date.now() / 1000);
+    const expirySeconds = Math.max(params.expiry ?? 3600, 0);
+    const expiresAt = now + expirySeconds;
 
     if (invoiceType === InvoiceType.Bolt12) {
       if (!params.offer) {
@@ -235,7 +238,7 @@ export class ClnNode implements LightningNode {
         type: 'incoming',
         invoice,
         amountMsats: params.amountMsats ?? 0,
-        expiresAt: params.expiry ?? 0,
+        expiresAt,
         description: params.description ?? '',
         descriptionHash: params.descriptionHash ?? '',
         payerNote: '',
@@ -255,7 +258,7 @@ export class ClnNode implements LightningNode {
       invoice: payload.bolt11,
       paymentHash: payload.payment_hash,
       amountMsats: params.amountMsats ?? 0,
-      expiresAt: params.expiry ?? 3600,
+      expiresAt,
       description: params.description ?? '',
       descriptionHash: params.descriptionHash ?? '',
       payerNote: '',
@@ -313,12 +316,11 @@ export class ClnNode implements LightningNode {
 
   async getOffer(search?: string): Promise<Offer> {
     const offers = await this.listOffers(search);
-    return (
-      offers[0] ?? {
-        offerId: '',
-        bolt12: '',
-      }
-    );
+    if (!offers.length) {
+      throw new LniError('Api', search ? `Offer not found for search: ${search}` : 'Offer not found');
+    }
+
+    return offers[0]!;
   }
 
   async listOffers(search?: string): Promise<Offer[]> {

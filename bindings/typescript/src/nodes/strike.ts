@@ -184,7 +184,16 @@ export class StrikeNode implements LightningNode {
     });
 
     const execution = await this.patchJson<StrikePaymentExecutionResponse>(`/payment-quotes/${quote.paymentQuoteId}/execute`);
-    const payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
+    let payment: StrikePaymentResponse;
+    try {
+      payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
+    } catch (error) {
+      throw new LniError(
+        'Api',
+        `Strike payment executed but status lookup failed. paymentId=${execution.paymentId}`,
+        { cause: error },
+      );
+    }
 
     const feeMsats = payment.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0;
 
@@ -250,8 +259,8 @@ export class StrikeNode implements LightningNode {
     let outgoing: StrikePaymentsResponse = { data: [] };
     try {
       outgoing = await this.getJson<StrikePaymentsResponse>('/payments', {
-        skip: params.from,
-        top: params.limit,
+        '$skip': params.from,
+        '$top': params.limit,
       });
     } catch (error) {
       if (!this.isNotFoundError(error)) {

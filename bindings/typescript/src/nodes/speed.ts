@@ -214,19 +214,17 @@ export class SpeedNode implements LightningNode {
       params.search,
     );
 
-    const txs = rows
-      .map((row) => this.sendToTransaction(row))
+    const mapped = rows.map((row) => this.sendToTransaction(row));
+    const filtered = params.paymentHash
+      ? mapped.filter((tx) => tx.paymentHash === params.paymentHash)
+      : mapped;
+
+    const start = Math.max(0, params.from || 0);
+    const end = params.limit > 0 ? start + params.limit : undefined;
+
+    return filtered
       .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(
-        Math.max(0, params.from || 0),
-        params.limit > 0 ? Math.max(0, params.from || 0) + params.limit : undefined,
-      );
-
-    if (!params.paymentHash) {
-      return txs;
-    }
-
-    return txs.filter((tx) => tx.paymentHash === params.paymentHash);
+      .slice(start, end);
   }
 
   async decode(str: string): Promise<string> {
