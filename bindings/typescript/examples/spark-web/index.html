@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark Web Demo (No WASM)</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0b1020;
+        color: #e5e7eb;
+      }
+      .card {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        background: #111827;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.4rem;
+      }
+      p {
+        margin: 0 0 14px;
+        color: #9ca3af;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.9rem;
+      }
+      input,
+      textarea,
+      select,
+      button {
+        font: inherit;
+        padding: 10px 12px;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: #0f172a;
+        color: #e5e7eb;
+      }
+      textarea {
+        min-height: 86px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 16px 0;
+      }
+      button {
+        cursor: pointer;
+        background: #1f2937;
+      }
+      button.primary {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+      button.warn {
+        background: #7f1d1d;
+        border-color: #7f1d1d;
+      }
+      pre {
+        margin: 0;
+        background: #030712;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 12px;
+        overflow: auto;
+        font-size: 0.86rem;
+      }
+      .muted {
+        color: #93c5fd;
+        font-size: 0.85rem;
+      }
+      .row {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Spark Browser Wallet Demo (No WASM)</h1>
+      <p>
+        Uses <code>createNode({ kind: 'spark' })</code> from LNI with runtime setup from
+        <code>@sunnyln/lni/spark-runtime</code> and a patched Spark bare vendor bundle.
+        This demo stores mnemonic/config in <code>localStorage</code>.
+      </p>
+
+      <div class="grid">
+        <label>
+          Mnemonic (seed phrase)
+          <textarea id="mnemonic" placeholder="abandon ..."></textarea>
+        </label>
+
+        <label>
+          Spark Network
+          <select id="network">
+            <option value="MAINNET">MAINNET</option>
+            <option value="TESTNET">TESTNET</option>
+            <option value="REGTEST">REGTEST</option>
+            <option value="SIGNET">SIGNET</option>
+            <option value="LOCAL">LOCAL</option>
+          </select>
+        </label>
+
+        <label>
+          API Key (optional; sent as <code>x-api-key</code> for same-origin/proxied requests)
+          <input id="apiKey" type="password" placeholder="optional" />
+        </label>
+
+        <label>
+          SSP Base URL (optional)
+          <input id="sspBaseUrl" type="url" placeholder="https://..." />
+        </label>
+
+        <label>
+          SSP Identity Public Key (optional)
+          <input id="sspIdentityKey" type="text" placeholder="hex pubkey" />
+        </label>
+
+        <label>
+          Transfer Limit
+          <input id="transferLimit" type="number" min="1" max="100" value="25" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn">Save Inputs</button>
+        <button id="connectBtn" class="primary">Connect Wallet</button>
+        <button id="refreshBtn">Refresh Balance + Transactions</button>
+        <button id="clearBtn" class="warn">Clear Saved Inputs</button>
+      </div>
+
+      <div class="row muted" id="status">Status: idle</div>
+
+      <div class="row">
+        <strong>Wallet summary</strong>
+        <pre id="summary">{}</pre>
+      </div>
+
+      <div class="row">
+        <strong>Transactions</strong>
+        <pre id="transactions">[]</pre>
+      </div>
+    </main>
+
+    <script type="module">
+      import { createNode, installSparkRuntime } from '@sunnyln/lni';
+
+      const STORAGE_KEY = 'lni.spark.web.demo.v1';
+      const NETWORK_TO_SPARK_CONFIG = {
+        MAINNET: 'mainnet',
+        TESTNET: 'testnet',
+        REGTEST: 'regtest',
+        SIGNET: 'signet',
+        LOCAL: 'local',
+      };
+
+      const state = {
+        node: null,
+      };
+      let sparkRuntimeHandle = null;
+
+      const elements = {
+        mnemonic: document.getElementById('mnemonic'),
+        network: document.getElementById('network'),
+        apiKey: document.getElementById('apiKey'),
+        sspBaseUrl: document.getElementById('sspBaseUrl'),
+        sspIdentityKey: document.getElementById('sspIdentityKey'),
+        transferLimit: document.getElementById('transferLimit'),
+        status: document.getElementById('status'),
+        summary: document.getElementById('summary'),
+        transactions: document.getElementById('transactions'),
+        saveBtn: document.getElementById('saveBtn'),
+        connectBtn: document.getElementById('connectBtn'),
+        refreshBtn: document.getElementById('refreshBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+      };
+
+      function setStatus(message, isError = false) {
+        elements.status.textContent = `Status: ${message}`;
+        elements.status.style.color = isError ? '#fca5a5' : '#93c5fd';
+      }
+
+      function getConfigFromForm() {
+        return {
+          mnemonic: elements.mnemonic.value.trim(),
+          network: elements.network.value,
+          apiKey: elements.apiKey.value.trim(),
+          sspBaseUrl: elements.sspBaseUrl.value.trim(),
+          sspIdentityKey: elements.sspIdentityKey.value.trim(),
+          transferLimit: Math.max(1, Number(elements.transferLimit.value || 25)),
+        };
+      }
+
+      function setConfigToForm(config) {
+        elements.mnemonic.value = config.mnemonic ?? '';
+        elements.network.value = config.network ?? 'MAINNET';
+        elements.apiKey.value = config.apiKey ?? '';
+        elements.sspBaseUrl.value = config.sspBaseUrl ?? '';
+        elements.sspIdentityKey.value = config.sspIdentityKey ?? '';
+        elements.transferLimit.value = String(config.transferLimit ?? 25);
+      }
+
+      function loadSavedConfig() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          setConfigToForm(parsed);
+        } catch (error) {
+          console.warn('Failed to load saved config:', error);
+        }
+      }
+
+      function saveConfig() {
+        const config = getConfigFromForm();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        setStatus('saved inputs to localStorage');
+      }
+
+      function setupRuntime(apiKey) {
+        sparkRuntimeHandle?.restore();
+        sparkRuntimeHandle = installSparkRuntime({
+          apiKey,
+          apiKeyHeader: 'x-api-key',
+          apiKeySameOriginOnly: true,
+        });
+      }
+
+      async function disconnectNode() {
+        const node = state.node;
+        state.node = null;
+
+        if (!node || typeof node.cleanupConnections !== 'function') {
+          return;
+        }
+
+        try {
+          await node.cleanupConnections();
+        } catch {
+          // ignore teardown failures in demo app
+        }
+      }
+
+      async function clearSavedConfig() {
+        localStorage.removeItem(STORAGE_KEY);
+        setConfigToForm({});
+        elements.summary.textContent = '{}';
+        elements.transactions.textContent = '[]';
+        await disconnectNode();
+        sparkRuntimeHandle?.restore();
+        sparkRuntimeHandle = null;
+        setStatus('cleared saved inputs and disconnected wallet');
+      }
+
+      function mapTransaction(tx) {
+        return {
+          id: tx.externalId || tx.paymentHash || tx.invoice || '',
+          direction: tx.type,
+          status: tx.settledAt > 0 ? 'SETTLED' : 'PENDING',
+          totalValue: String(Math.floor((Number(tx.amountMsats || 0)) / 1000)),
+          createdTime: tx.createdAt > 0 ? new Date(tx.createdAt * 1000).toISOString() : '',
+          paymentHash: tx.paymentHash || '',
+          memo: tx.description || '',
+        };
+      }
+
+      async function connectWallet() {
+        const cfg = getConfigFromForm();
+        if (!cfg.mnemonic) {
+          setStatus('mnemonic is required', true);
+          return;
+        }
+
+        saveConfig();
+        setStatus('connecting wallet...');
+        setupRuntime(cfg.apiKey);
+
+        const sparkOptions = {};
+        if (cfg.sspBaseUrl && cfg.sspIdentityKey) {
+          sparkOptions.sspClientOptions = {
+            baseUrl: cfg.sspBaseUrl,
+            identityPublicKey: cfg.sspIdentityKey,
+          };
+        }
+
+        try {
+          await disconnectNode();
+          state.node = createNode({
+            kind: 'spark',
+            config: {
+              mnemonic: cfg.mnemonic,
+              network: NETWORK_TO_SPARK_CONFIG[cfg.network] ?? 'mainnet',
+              sdkEntry: 'bare',
+              sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
+            },
+          });
+
+          setStatus('wallet connected');
+          await refreshData();
+        } catch (error) {
+          setStatus(`connect failed: ${error?.message ?? String(error)}`, true);
+          throw error;
+        }
+      }
+
+      async function refreshData() {
+        if (!state.node) {
+          setStatus('connect wallet first', true);
+          return;
+        }
+
+        const cfg = getConfigFromForm();
+        setupRuntime(cfg.apiKey);
+        setStatus('loading balance + transactions...');
+        try {
+          const [info, transactions] = await Promise.all([
+            state.node.getInfo(),
+            state.node.listTransactions({ from: 0, limit: cfg.transferLimit }),
+          ]);
+
+          const mapped = Array.isArray(transactions)
+            ? transactions.map(mapTransaction)
+            : [];
+
+          elements.summary.textContent = JSON.stringify(
+            {
+              network: info.network,
+              identityPublicKey: info.pubkey,
+              balanceSats: Math.floor(Number(info.sendBalanceMsat || 0) / 1000),
+              transferCount: mapped.length,
+            },
+            null,
+            2,
+          );
+
+          elements.transactions.textContent = JSON.stringify(
+            mapped,
+            null,
+            2,
+          );
+
+          setStatus('loaded');
+        } catch (error) {
+          setStatus(`refresh failed: ${error?.message ?? String(error)}`, true);
+        }
+      }
+
+      elements.saveBtn.addEventListener('click', saveConfig);
+      elements.connectBtn.addEventListener('click', () => {
+        connectWallet().catch(() => undefined);
+      });
+      elements.refreshBtn.addEventListener('click', () => {
+        refreshData().catch(() => undefined);
+      });
+      elements.clearBtn.addEventListener('click', () => {
+        clearSavedConfig().catch(() => undefined);
+      });
+      window.addEventListener('beforeunload', () => {
+        sparkRuntimeHandle?.restore();
+        sparkRuntimeHandle = null;
+        const node = state.node;
+        if (node && typeof node.cleanupConnections === 'function') {
+          void node.cleanupConnections();
+        }
+      });
+
+      loadSavedConfig();
+      setStatus('ready');
+    </script>
+  </body>
+</html>
