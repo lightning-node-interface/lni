@@ -60,6 +60,20 @@ describe('Real integration from crates/lni/.env > SparkNode', () => {
     expect(Array.isArray(txs)).toBe(true);
   }, timeout);
 
+  itIf(enabled)('payInvoice', async () => {
+    const invoice = nonEmpty(process.env.SPARK_TEST_PAY_INVOICE);
+    if (!invoice) {
+      console.log('Skipping payInvoice: set SPARK_TEST_PAY_INVOICE env var');
+      return;
+    }
+
+    const node = makeNode();
+    const result = await node.payInvoice({ invoice });
+    console.log('payInvoice result:', result);
+    expect(result.paymentHash.length).toBeGreaterThan(0);
+    expect(result.preimage.length).toBeGreaterThan(0);
+  }, timeout);
+
   itIf(enabled)('lookupInvoice (best effort from env or recent tx)', async () => {
     await runOrSkipKnownError(async () => {
       const node = makeNode();

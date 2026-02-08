@@ -4,6 +4,7 @@ export {
   Nonce,
   NonceCommitment,
   PublicKeyPackage,
+  Signature,
   SignatureShare,
   SigningCommitments,
   SigningNonces,
@@ -20,4 +21,5 @@ export {
   intoEvenYKeyPackage,
   round2,
   tweakKeyPackage,
+  tweakPublicKeyPackage,
 } from '@frosts/secp256k1-tr';

@@ -148,6 +148,28 @@
         <button id="clearBtn" class="warn">Clear Saved Inputs</button>
       </div>
 
+      <div class="row">
+        <strong>Pay invoice test</strong>
+      </div>
+      <div class="grid">
+        <label>
+          Bolt11 Invoice
+          <textarea id="payInvoice" placeholder="lnbc..."></textarea>
+        </label>
+
+        <label>
+          Amount (msats, optional for amountless invoice)
+          <input id="payAmountMsats" type="number" min="1" placeholder="e.g. 118000" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="payBtn" class="primary">Pay Invoice</button>
+      </div>
+      <div class="row">
+        <strong>Pay result</strong>
+        <pre id="payResult">{}</pre>
+      </div>
+
       <div class="row muted" id="status">Status: idle</div>
 
       <div class="row">
@@ -185,6 +207,10 @@
         sspBaseUrl: document.getElementById('sspBaseUrl'),
         sspIdentityKey: document.getElementById('sspIdentityKey'),
         transferLimit: document.getElementById('transferLimit'),
+        payInvoice: document.getElementById('payInvoice'),
+        payAmountMsats: document.getElementById('payAmountMsats'),
+        payBtn: document.getElementById('payBtn'),
+        payResult: document.getElementById('payResult'),
         status: document.getElementById('status'),
         summary: document.getElementById('summary'),
         transactions: document.getElementById('transactions'),
@@ -364,12 +390,53 @@
         }
       }
 
+      async function payInvoiceTest() {
+        if (!state.node) {
+          setStatus('connect wallet first', true);
+          return;
+        }
+
+        const invoice = elements.payInvoice.value.trim();
+        if (!invoice) {
+          setStatus('invoice is required', true);
+          return;
+        }
+
+        const cfg = getConfigFromForm();
+        const parsedAmount = Number(elements.payAmountMsats.value.trim());
+        const amountMsats =
+          Number.isFinite(parsedAmount) && parsedAmount > 0
+            ? Math.floor(parsedAmount)
+            : undefined;
+
+        setupRuntime(cfg.apiKey);
+        setStatus('paying invoice...');
+        elements.payResult.textContent = '{}';
+
+        try {
+          const payment = await state.node.payInvoice({
+            invoice,
+            amountMsats,
+          });
+          elements.payResult.textContent = JSON.stringify(payment, null, 2);
+          setStatus('invoice paid');
+          await refreshData();
+        } catch (error) {
+          const message = error?.message ?? String(error);
+          elements.payResult.textContent = JSON.stringify({ error: message }, null, 2);
+          setStatus(`pay failed: ${message}`, true);
+        }
+      }
+
       elements.saveBtn.addEventListener('click', saveConfig);
       elements.connectBtn.addEventListener('click', () => {
         connectWallet().catch(() => undefined);
       });
       elements.refreshBtn.addEventListener('click', () => {
         refreshData().catch(() => undefined);
+      });
+      elements.payBtn.addEventListener('click', () => {
+        payInvoiceTest().catch(() => undefined);
       });
       elements.clearBtn.addEventListener('click', () => {
         clearSavedConfig().catch(() => undefined);

@@ -22,6 +22,9 @@
 .vscode/
 *.iml
 
+# Vite
+.vite/
+
 # Ignore Node.js-specific files
 node_modules/
 npm-debug.log

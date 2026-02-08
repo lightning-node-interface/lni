@@ -20,3 +20,10 @@ Open:
 - http://localhost:5173
 
 `npm run build` generates and validates both vendor bundles in `dist/vendor`.
+
+## Manual pay-invoice test
+
+1. Connect wallet in the demo UI.
+2. Paste a Bolt11 invoice into **Pay invoice test**.
+3. For amountless invoices, set **Amount (msats)**.
+4. Click **Pay Invoice** and check **Pay result**.

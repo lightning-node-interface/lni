@@ -80,6 +80,7 @@ npx expo start --clear
 - Persists form values in AsyncStorage.
 - Uses `installSparkRuntime({ apiKey })` to set up Buffer/base64/fetch compatibility.
 - Uses `createNode({ kind: 'spark' })` + `getInfo()` + `listTransactions()`.
+- Includes a `payInvoice` test section (paste a BOLT11 invoice and optionally amount for zero-amount invoices).
 - Uses the Spark browser-safe vendor bundle packaged inside `@sunnyln/lni` (no app-level shims/vendor needed).
 - Includes Metro resolver handling for `./dist/*` imports from the linked package (`metro.config.js`).
 

@@ -1,6 +1,7 @@
 import 'react-native-get-random-values';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
 import {
   createNode,
   installSparkRuntime,
@@ -40,6 +41,12 @@ type TransferPreview = {
   createdTime: string;
   paymentHash: string;
   memo: string;
+};
+
+type SparkDebugCheckpoint = {
+  phase: string;
+  ts: number;
+  meta?: Record<string, unknown>;
 };
 
 const STORAGE_KEY = 'lni.spark.expo-go.v1';
@@ -93,9 +100,15 @@ export default function App() {
   const [status, setStatus] = useState('idle');
   const [summaryJson, setSummaryJson] = useState('{}');
   const [transactionsJson, setTransactionsJson] = useState('[]');
+  const [sendInvoice, setSendInvoice] = useState('');
+  const [sendAmountMsats, setSendAmountMsats] = useState('');
+  const [sendResultJson, setSendResultJson] = useState('{}');
+  const [sendDebugEnabled, setSendDebugEnabled] = useState(false);
+  const [sendDebugJson, setSendDebugJson] = useState('[]');
 
   const nodeRef = useRef<SparkNode | null>(null);
   const sparkRuntimeRef = useRef<SparkRuntimeHandle | null>(null);
+  const sendDebugRef = useRef<SparkDebugCheckpoint[]>([]);
 
   const transferLimit = useMemo(() => {
     const parsed = Number(form.transferLimit);
@@ -108,6 +121,17 @@ export default function App() {
   const updateForm = useCallback((patch: Partial<SparkFormState>) => {
     setForm((previous) => ({ ...previous, ...patch }));
   }, []);
+
+  const appendSendDebugCheckpoint = useCallback((checkpoint: SparkDebugCheckpoint) => {
+    if (!sendDebugEnabled) {
+      return;
+    }
+
+    const next = [...sendDebugRef.current, checkpoint].slice(-120);
+    sendDebugRef.current = next;
+    setSendDebugJson(JSON.stringify(next, null, 2));
+    console.log(`[spark-debug] ${checkpoint.phase}`, checkpoint.meta ?? {});
+  }, [sendDebugEnabled]);
 
   const setupRuntime = useCallback((apiKey: string) => {
     sparkRuntimeRef.current?.restore();
@@ -138,6 +162,32 @@ export default function App() {
       sparkRuntimeRef.current = null;
     };
   }, [disconnectNode]);
+
+  useEffect(() => {
+    const runtime = globalThis as typeof globalThis & {
+      __LNI_SPARK_DEBUG__?: unknown;
+    };
+
+    if (!sendDebugEnabled) {
+      delete runtime.__LNI_SPARK_DEBUG__;
+      return;
+    }
+
+    runtime.__LNI_SPARK_DEBUG__ = {
+      enabled: true,
+      emit: (checkpoint: SparkDebugCheckpoint) => {
+        appendSendDebugCheckpoint({
+          phase: checkpoint.phase,
+          ts: checkpoint.ts,
+          meta: checkpoint.meta,
+        });
+      },
+    };
+
+    return () => {
+      delete runtime.__LNI_SPARK_DEBUG__;
+    };
+  }, [appendSendDebugCheckpoint, sendDebugEnabled]);
 
   const persistForm = useCallback(async (value: SparkFormState) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(value));
@@ -251,12 +301,101 @@ export default function App() {
     await AsyncStorage.removeItem(STORAGE_KEY);
     await disconnectNode();
     setForm(DEFAULT_FORM);
+    setSendInvoice('');
+    setSendAmountMsats('');
+    setSendResultJson('{}');
+    sendDebugRef.current = [];
+    setSendDebugJson('[]');
     setSummaryJson('{}');
     setTransactionsJson('[]');
     sparkRuntimeRef.current?.restore();
     sparkRuntimeRef.current = null;
     setStatus('cleared saved data');
   }, [disconnectNode]);
+
+  const sendInvoicePayment = useCallback(async () => {
+    const node = nodeRef.current;
+    if (!node) {
+      setStatus('connect wallet first');
+      return;
+    }
+
+    const invoice = sendInvoice.trim();
+    if (!invoice) {
+      setStatus('invoice is required');
+      return;
+    }
+
+    const parsedAmount = Number(sendAmountMsats.trim());
+    const amountMsats =
+      Number.isFinite(parsedAmount) && parsedAmount > 0
+        ? Math.floor(parsedAmount)
+        : undefined;
+
+    sendDebugRef.current = [];
+    setSendDebugJson('[]');
+    appendSendDebugCheckpoint({
+      phase: 'send_invoice:start',
+      ts: Date.now(),
+      meta: {
+        invoiceChars: invoice.length,
+        hasAmountMsats: amountMsats !== undefined,
+      },
+    });
+
+    setStatus('paying invoice...');
+    setSendResultJson('{}');
+
+    try {
+      appendSendDebugCheckpoint({
+        phase: 'send_invoice:runtime_setup',
+        ts: Date.now(),
+      });
+      setupRuntime(form.apiKey);
+      appendSendDebugCheckpoint({
+        phase: 'send_invoice:pay_invoice_call',
+        ts: Date.now(),
+      });
+      const payment = await node.payInvoice({
+        invoice,
+        amountMsats,
+      });
+      appendSendDebugCheckpoint({
+        phase: 'send_invoice:pay_invoice_success',
+        ts: Date.now(),
+        meta: {
+          hasPaymentHash: Boolean(payment.paymentHash),
+          hasPreimage: Boolean(payment.preimage),
+        },
+      });
+      setSendResultJson(JSON.stringify(payment, null, 2));
+      setStatus('invoice paid');
+      await refresh();
+    } catch (error) {
+      appendSendDebugCheckpoint({
+        phase: 'send_invoice:error',
+        ts: Date.now(),
+        meta: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      });
+      setStatus(`send failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [appendSendDebugCheckpoint, form.apiKey, refresh, sendAmountMsats, sendInvoice, setupRuntime]);
+
+  const copyDebugSteps = useCallback(async () => {
+    if (sendDebugJson === '[]') {
+      setStatus('no debug steps to copy');
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(sendDebugJson);
+      setStatus('debug steps copied');
+    } catch (error) {
+      setStatus(`copy debug failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [sendDebugJson]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -355,6 +494,62 @@ export default function App() {
 
         <Text style={styles.status}>Status: {status}</Text>
 
+        <Text style={styles.sectionTitle}>Pay Invoice (Test)</Text>
+        <Text style={styles.label}>BOLT11 Invoice</Text>
+        <TextInput
+          value={sendInvoice}
+          onChangeText={setSendInvoice}
+          multiline
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="lnbc..."
+          placeholderTextColor="#7d8590"
+          style={[styles.input, styles.textarea]}
+        />
+
+        <Text style={styles.label}>Amount (msats, optional for zero-amount invoices)</Text>
+        <TextInput
+          value={sendAmountMsats}
+          onChangeText={setSendAmountMsats}
+          keyboardType="number-pad"
+          placeholder="optional"
+          placeholderTextColor="#7d8590"
+          style={styles.input}
+        />
+
+        <Pressable
+          style={[styles.button, sendDebugEnabled ? styles.primaryButton : null, styles.singleButton]}
+          onPress={() => setSendDebugEnabled((current) => !current)}
+        >
+          <Text style={styles.buttonText}>
+            Signer Debug Checkpoints: {sendDebugEnabled ? 'ON' : 'OFF'}
+          </Text>
+        </Pressable>
+
+        <Pressable style={[styles.button, styles.primaryButton, styles.singleButton]} onPress={() => void sendInvoicePayment()}>
+          <Text style={styles.buttonText}>Send Invoice</Text>
+        </Pressable>
+
+        {(sendDebugEnabled || sendDebugJson !== '[]') && (
+          <>
+            <Text style={styles.sectionTitle}>Signer Debug Checkpoints</Text>
+            <Pressable
+              style={[styles.button, styles.singleButton]}
+              onPress={() => void copyDebugSteps()}
+            >
+              <Text style={styles.buttonText}>Copy Debug Steps</Text>
+            </Pressable>
+            <Text selectable style={styles.jsonBlock}>
+              {sendDebugJson}
+            </Text>
+          </>
+        )}
+
+        <Text style={styles.sectionTitle}>Send Result</Text>
+        <Text selectable style={styles.jsonBlock}>
+          {sendResultJson}
+        </Text>
+
         <Text style={styles.sectionTitle}>Wallet Summary</Text>
         <Text selectable style={styles.jsonBlock}>
           {summaryJson}
@@ -443,6 +638,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     paddingVertical: 12,
     alignItems: 'center',
+  },
+  singleButton: {
+    marginTop: 12,
   },
   primaryButton: {
     backgroundColor: '#2563eb',

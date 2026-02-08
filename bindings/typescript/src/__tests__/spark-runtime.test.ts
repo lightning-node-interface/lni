@@ -52,6 +52,22 @@ describe('spark-runtime helpers', () => {
     expect(headers.get('x-api-key')).toBe('demo-key');
   });
 
+  it('removes incompatible signal before fetch', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => new Response('{}'));
+    const wrapped = withHeaderFetch(
+      fetchMock as unknown as typeof fetch,
+      'x-api-key',
+      'demo-key',
+    );
+
+    await wrapped('https://example.com', {
+      signal: { aborted: false } as unknown as AbortSignal,
+    });
+
+    const init = (fetchMock.mock.calls[0]?.[1] ?? {}) as RequestInit;
+    expect(init.signal).toBeUndefined();
+  });
+
   it('installs and restores global fetch', async () => {
     const fetchMock = vi.fn<FetchLike>(async () => new Response('{}'));
     const handle = installSparkRuntime({

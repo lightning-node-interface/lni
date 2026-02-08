@@ -25,6 +25,38 @@ export interface SparkRuntimeHandle {
   restore: () => void;
 }
 
+function isCompatibleAbortSignal(value: unknown): value is AbortSignal {
+  if (value === undefined || value === null) {
+    return true;
+  }
+
+  const runtime = globalThis as typeof globalThis & {
+    AbortSignal?: typeof AbortSignal;
+  };
+  const AbortSignalCtor = runtime.AbortSignal;
+  if (typeof AbortSignalCtor !== 'function') {
+    return true;
+  }
+
+  try {
+    return value instanceof AbortSignalCtor;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeRequestInit(init?: RequestInit): RequestInit | undefined {
+  if (!init) {
+    return undefined;
+  }
+
+  const normalized: RequestInit = { ...init };
+  if (!isCompatibleAbortSignal(normalized.signal)) {
+    normalized.signal = undefined;
+  }
+  return normalized;
+}
+
 function getRequestUrl(input: RequestInfo | URL): URL | null {
   try {
     if (typeof input === 'string') {
@@ -120,7 +152,7 @@ function createFallbackReaderResponse(response: Response): Response {
 
 export function createStreamCompatibleFetch(baseFetch: FetchLike): FetchLike {
   return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const response = await baseFetch(input, init);
+    const response = await baseFetch(input, normalizeRequestInit(init));
     const body = (response as { body?: { getReader?: () => unknown } }).body;
 
     if (body && typeof body.getReader === 'function') {
@@ -145,15 +177,16 @@ export function withHeaderFetch(
   }
 
   return (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const normalizedInit = normalizeRequestInit(init) ?? {};
     const sameOriginOnly = options.sameOriginOnly === true;
     if (!shouldAttachApiKeyHeader(input, sameOriginOnly)) {
-      return baseFetch(input, init);
+      return baseFetch(input, normalizedInit);
     }
 
-    const headers = new Headers(init.headers ?? {});
+    const headers = new Headers(normalizedInit.headers ?? {});
     headers.set(headerName, trimmedValue);
     return baseFetch(input, {
-      ...init,
+      ...normalizedInit,
       headers,
     });
   };
