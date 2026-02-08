@@ -304,6 +304,15 @@
           </div>
           <div id="txList"><div class="tx-empty">No transactions yet</div></div>
         </div>
+
+        <!-- Debug log -->
+        <div style="padding:0 20px 20px">
+          <button class="btn btn-ghost" id="logToggleBtn" style="width:100%">Show Log</button>
+          <div class="hidden" id="logSection" style="margin-top:12px">
+            <button class="btn btn-ghost" id="copyLogBtn" style="width:100%;margin-bottom:8px">Copy Log</button>
+            <pre id="logContent" style="background:var(--input-bg);border:1px solid var(--card-border);border-radius:10px;padding:12px;font-size:0.7rem;color:var(--text-muted);max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -340,6 +349,7 @@
         mnemonicEye: $('mnemonicEye'), apiKeyEye: $('apiKeyEye'), settingsApiKeyEye: $('settingsApiKeyEye'),
         txDetailOverlay: $('txDetailOverlay'), txDetailIcon: $('txDetailIcon'),
         txDetailAmount: $('txDetailAmount'), txDetailType: $('txDetailType'), txDetailRows: $('txDetailRows'),
+        logToggleBtn: $('logToggleBtn'), logSection: $('logSection'), logContent: $('logContent'), copyLogBtn: $('copyLogBtn'),
       };
 
       function setLoginStatus(msg, err = false) {
@@ -350,6 +360,30 @@
         el.walletStatus.textContent = msg;
         el.walletStatus.classList.toggle('error', err);
       }
+
+      // Debug log
+      const debugCheckpoints = [];
+      function appendDebug(checkpoint) {
+        debugCheckpoints.push(checkpoint);
+        if (debugCheckpoints.length > 120) debugCheckpoints.shift();
+        el.logContent.textContent = JSON.stringify(debugCheckpoints, null, 2);
+      }
+      globalThis.__LNI_SPARK_DEBUG__ = {
+        enabled: true,
+        emit: (cp) => appendDebug({ phase: cp.phase, ts: cp.ts, meta: cp.meta }),
+      };
+      let logOpen = false;
+      el.logToggleBtn.addEventListener('click', () => {
+        logOpen = !logOpen;
+        el.logSection.classList.toggle('hidden', !logOpen);
+        el.logToggleBtn.textContent = logOpen ? 'Hide Log' : 'Show Log';
+      });
+      el.copyLogBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(JSON.stringify(debugCheckpoints, null, 2)).then(
+          () => setWalletStatus('Log copied'),
+          () => {},
+        );
+      });
 
       function getConfig() {
         return {
@@ -412,35 +446,40 @@
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
       }
 
+      function h(tag, className, textContent) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (textContent != null) node.textContent = textContent;
+        return node;
+      }
+
       function renderTransactions(transactions) {
+        el.txList.textContent = '';
         if (!transactions.length) {
-          el.txList.innerHTML = '<div class="tx-empty">No transactions yet</div>';
+          el.txList.appendChild(h('div', 'tx-empty', 'No transactions yet'));
           return;
         }
-        el.txList.innerHTML = '<div class="tx-list">' + transactions.map((tx, i) => {
+        const list = h('div', 'tx-list');
+        transactions.forEach((tx, i) => {
           const isIncoming = tx.type === 'incoming';
           const sats = Math.floor(Number(tx.amountMsats || 0) / 1000);
           const memo = tx.description || (isIncoming ? 'Received' : 'Sent');
-          const icon = isIncoming ? '&#x2193;' : '&#x2191;';
           const dir = isIncoming ? 'incoming' : 'outgoing';
           const sign = isIncoming ? '+' : '-';
           const time = formatTime(tx.settledAt || tx.createdAt);
-          return `<div class="tx-row" data-tx-idx="${i}" style="cursor:pointer">
-            <div class="tx-icon ${dir}">${icon}</div>
-            <div class="tx-details">
-              <div class="tx-memo">${memo}</div>
-              <div class="tx-time">${time}</div>
-            </div>
-            <div class="tx-amount ${dir}">${sign}${formatSats(sats)} sats</div>
-          </div>`;
-        }).join('') + '</div>';
 
-        el.txList.querySelectorAll('.tx-row[data-tx-idx]').forEach(row => {
-          row.addEventListener('click', () => {
-            const idx = Number(row.getAttribute('data-tx-idx'));
-            showTxDetail(state.transactions[idx]);
-          });
+          const row = h('div', 'tx-row');
+          row.style.cursor = 'pointer';
+          row.appendChild(h('div', `tx-icon ${dir}`, isIncoming ? '\u2193' : '\u2191'));
+          const details = h('div', 'tx-details');
+          details.appendChild(h('div', 'tx-memo', memo));
+          details.appendChild(h('div', 'tx-time', time));
+          row.appendChild(details);
+          row.appendChild(h('div', `tx-amount ${dir}`, `${sign}${formatSats(sats)} sats`));
+          row.addEventListener('click', () => showTxDetail(state.transactions[i]));
+          list.appendChild(row);
         });
+        el.txList.appendChild(list);
       }
 
       function showTxDetail(tx) {
@@ -450,19 +489,24 @@
         const memo = tx.description || (isIncoming ? 'Received' : 'Sent');
         const time = formatTime(tx.settledAt || tx.createdAt);
         const dir = isIncoming ? 'incoming' : 'outgoing';
-        const icon = isIncoming ? '&#x2193;' : '&#x2191;';
         const sign = isIncoming ? '+' : '-';
 
         el.txDetailIcon.className = `tx-detail-icon tx-icon ${dir}`;
-        el.txDetailIcon.innerHTML = icon;
+        el.txDetailIcon.textContent = isIncoming ? '\u2193' : '\u2191';
         el.txDetailAmount.className = `tx-detail-amount tx-amount ${dir}`;
         el.txDetailAmount.textContent = `${sign}${formatSats(sats)} sats`;
         el.txDetailType.textContent = isIncoming ? 'Received' : 'Sent';
 
-        let rows = `<div class="tx-detail-row"><div class="tx-detail-label">Memo</div><div class="tx-detail-value">${memo}</div></div>`;
-        rows += `<div class="tx-detail-row"><div class="tx-detail-label">Time</div><div class="tx-detail-value">${time}</div></div>`;
-        if (tx.paymentHash) rows += `<div class="tx-detail-row"><div class="tx-detail-label">Payment Hash</div><div class="tx-detail-hash">${tx.paymentHash}</div></div>`;
-        el.txDetailRows.innerHTML = rows;
+        el.txDetailRows.textContent = '';
+        const addRow = (label, value, valueClass) => {
+          const row = h('div', 'tx-detail-row');
+          row.appendChild(h('div', 'tx-detail-label', label));
+          row.appendChild(h('div', valueClass || 'tx-detail-value', value));
+          el.txDetailRows.appendChild(row);
+        };
+        addRow('Memo', memo);
+        addRow('Time', time);
+        if (tx.paymentHash) addRow('Payment Hash', tx.paymentHash, 'tx-detail-hash');
 
         el.txDetailOverlay.classList.add('visible');
       }

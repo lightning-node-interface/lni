@@ -4,6 +4,7 @@ function notSupported() {
 
 const https = {
   request: notSupported,
+  get: notSupported,
 };
 
 export default https;

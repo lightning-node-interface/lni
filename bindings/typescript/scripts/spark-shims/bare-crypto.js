@@ -2,7 +2,7 @@ const cryptoImpl =
   globalThis.crypto ??
   {
     getRandomValues(array) {
-      throw new Error('globalThis.crypto is not available in this browser runtime.');
+      throw new Error('globalThis.crypto is not available in this runtime.');
     },
     subtle: undefined,
   };

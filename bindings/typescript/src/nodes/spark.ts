@@ -146,6 +146,9 @@ function numberFromUnknown(value: unknown): number {
     return Number.isFinite(value) ? value : 0;
   }
   if (typeof value === 'bigint') {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+      throw new Error(`BigInt value ${value} exceeds Number.MAX_SAFE_INTEGER and cannot be safely converted.`);
+    }
     return Number(value);
   }
   if (typeof value === 'string') {
@@ -188,7 +191,7 @@ function mapCurrencyAmountToMsats(value: unknown): number {
   if (unit.includes('millisatoshi') || unit.includes('msat')) {
     return Math.floor(amount);
   }
-  if (unit.includes('satoshi') || unit === 'sat') {
+  if (unit.includes('sat') && !unit.includes('msat')) {
     return Math.floor(amount * 1000);
   }
   if (unit.includes('btc') || unit.includes('bitcoin')) {
@@ -771,12 +774,9 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
     emitSparkDebugCheckpoint('aggregate_frost:adaptor_validation_failed', {
       candidates: candidateDiagnostics,
     });
-    const serialized = fallbackSerialized ?? bigIntToFixedBytes(0n, 64);
-    emitSparkDebugCheckpoint('aggregate_frost:complete', {
-      mode: 'adaptor',
-      candidateIndex: -1,
-    });
-    return serialized;
+    throw new Error(
+      `Adaptor signature validation failed: no z-candidate passed validation (${candidateDiagnostics.length} tried).`,
+    );
   } catch (error) {
     emitSparkDebugCheckpoint('aggregate_frost:error', {
       reason: toDebugReason(error),
@@ -985,6 +985,7 @@ export class SparkNode implements LightningNode {
         }
       }
 
+      this.sdkPromise = undefined;
       throw new LniError(
         'Api',
         `Failed to load Spark SDK entry (${candidates.join(', ')}): ${(lastError as Error)?.message ?? 'unknown error'}`,
@@ -1034,21 +1035,26 @@ export class SparkNode implements LightningNode {
     }
 
     this.walletPromise = (async () => {
-      const sdk = await this.loadSdk();
-      const mnemonic = this.config.mnemonic.trim();
-      const mnemonicOrSeed = this.config.passphrase
-        ? mnemonicToSeedSync(mnemonic, this.config.passphrase)
-        : mnemonic;
-      const init = await sdk.SparkWallet.initialize({
-        mnemonicOrSeed,
-        accountNumber: this.config.accountNumber,
-        options: {
-          network: mapNetworkToSpark(this.config.network),
-          ...removeUndefinedValues(this.config.sparkOptions ?? {}),
-        },
-      });
+      try {
+        const sdk = await this.loadSdk();
+        const mnemonic = this.config.mnemonic.trim();
+        const mnemonicOrSeed = this.config.passphrase
+          ? mnemonicToSeedSync(mnemonic, this.config.passphrase)
+          : mnemonic;
+        const init = await sdk.SparkWallet.initialize({
+          mnemonicOrSeed,
+          accountNumber: this.config.accountNumber,
+          options: {
+            network: mapNetworkToSpark(this.config.network),
+            ...removeUndefinedValues(this.config.sparkOptions ?? {}),
+          },
+        });
 
-      return init.wallet;
+        return init.wallet;
+      } catch (error) {
+        this.walletPromise = undefined;
+        throw error;
+      }
     })();
 
     return this.walletPromise;
@@ -1077,7 +1083,7 @@ export class SparkNode implements LightningNode {
     }
 
     const wallet = await this.getWallet();
-    const amountSats = params.amountMsats ? Math.floor(params.amountMsats / 1000) : 0;
+    const amountSats = params.amountMsats ? Math.max(1, Math.floor(params.amountMsats / 1000)) : 0;
     const now = Math.floor(Date.now() / 1000);
     const response = await wallet.createLightningInvoice({
       amountSats,
@@ -1136,7 +1142,7 @@ export class SparkNode implements LightningNode {
         ? Math.max(1, Math.floor(providedAmountMsats / 1000))
         : undefined;
       const maxFeeSats = params.feeLimitMsat
-        ? Math.max(0, Math.floor(params.feeLimitMsat / 1000))
+        ? Math.max(1, Math.ceil(params.feeLimitMsat / 1000))
         : (this.config.defaultMaxFeeSats ?? DEFAULT_MAX_FEE_SATS);
 
       emitSparkDebugCheckpoint('pay_invoice:submit', {

@@ -1,6 +1,6 @@
 const createNoopExpectation = () =>
   new Proxy(
-    {},
+    function () {},
     {
       get: () => (..._args) => createNoopExpectation(),
       apply: () => createNoopExpectation(),
