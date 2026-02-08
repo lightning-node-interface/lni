@@ -1,8 +1,8 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": false,
-  "description": "Frontend-first TypeScript port of LNI lightning wallet HTTP adapters",
+  "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed, Blink and Spark. Supports BOLT11, BOLT12, LNURL, Lightning Address  (Frontend-first TypeScript support, no wasm, no native node modules)",
   "type": "module",
   "sideEffects": false,
   "repository": {
@@ -43,7 +43,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "clean": "rm -rf dist",
