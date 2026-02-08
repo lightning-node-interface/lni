@@ -158,6 +158,7 @@ export default function App() {
   const [sendAmountMsats, setSendAmountMsats] = useState('');
   const [sendResult, setSendResult] = useState('');
   const [sending, setSending] = useState(false);
+  const [invoiceInfo, setInvoiceInfo] = useState('');
 
   // Receive
   const [recvAmountMsats, setRecvAmountMsats] = useState('');
@@ -311,6 +312,41 @@ export default function App() {
     }
   }, [form.mnemonic, connectWallet]);
 
+  // Decode pasted invoice
+  useEffect(() => {
+    const inv = sendInvoice.trim();
+    if (!inv || !nodeRef.current) { setInvoiceInfo(''); return; }
+    let cancelled = false;
+    nodeRef.current.decode(inv).then((json) => {
+      if (cancelled) return;
+      try {
+        const decoded = JSON.parse(json);
+        const sections = Array.isArray(decoded.sections) ? decoded.sections : [];
+        const amountMsats = sections.find((s: { name?: string }) => s.name === 'amount')?.value;
+        const expiry = decoded.expiry ?? sections.find((s: { name?: string }) => s.name === 'expiry')?.value;
+        const timestamp = sections.find((s: { name?: string }) => s.name === 'timestamp')?.value;
+        const parts: string[] = [];
+        if (amountMsats && Number(amountMsats) > 0) {
+          parts.push(`${Math.floor(Number(amountMsats) / 1000)} sats`);
+        } else {
+          parts.push('No amount (open)');
+        }
+        if (timestamp && expiry) {
+          const expiresAt = new Date((Number(timestamp) + Number(expiry)) * 1000);
+          const now = new Date();
+          const diffMin = Math.floor((expiresAt.getTime() - now.getTime()) / 60000);
+          if (diffMin <= 0) parts.push('Expired');
+          else if (diffMin < 60) parts.push(`Expires in ${diffMin}m`);
+          else parts.push(`Expires in ${Math.floor(diffMin / 60)}h ${diffMin % 60}m`);
+        }
+        setInvoiceInfo(parts.join('  \u00b7  '));
+      } catch {
+        setInvoiceInfo('');
+      }
+    }).catch(() => { if (!cancelled) setInvoiceInfo(''); });
+    return () => { cancelled = true; };
+  }, [sendInvoice]);
+
   // Disconnect
   const disconnect = useCallback(async () => {
     await disconnectNode();
@@ -366,13 +402,9 @@ export default function App() {
             setStatus('');
             showSuccessAnimation('Invoice Paid!');
             void refresh();
-          } else if (eventStatus === 'failure') {
-            setInvoicePollingStatus('Failed');
           }
         },
-      ).then(() => {
-        setInvoicePollingStatus((cur) => cur === 'Waiting for payment...' ? 'Timed out' : cur);
-      }).catch((e: unknown) => console.warn('onInvoiceEvents error:', e));
+      ).catch((e: unknown) => console.warn('onInvoiceEvents error:', e));
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
@@ -531,6 +563,7 @@ export default function App() {
               placeholder="Paste a Lightning invoice (lnbc...)"
               placeholderTextColor="#555" style={[s.input, s.textarea]}
             />
+            {invoiceInfo !== '' && <Text style={s.invoiceInfo}>{invoiceInfo}</Text>}
             <Text style={s.fieldLabel}>Amount (msats, optional)</Text>
             <TextInput
               value={sendAmountMsats} onChangeText={setSendAmountMsats}
@@ -774,6 +807,7 @@ const s = StyleSheet.create({
 
   // Panel
   panel: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
+  invoiceInfo: { color: '#60a5fa', fontSize: 13, fontWeight: '600' },
   resultText: { backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b', borderRadius: 10, padding: 12, fontFamily: 'Courier', fontSize: 12, color: '#94a3b8', lineHeight: 16 },
   pollingText: { color: '#60a5fa', fontSize: 13, fontWeight: '600' },
   copyHint: { color: '#475569', fontSize: 11, textAlign: 'center', marginTop: 4 },

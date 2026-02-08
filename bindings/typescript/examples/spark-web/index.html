@@ -241,6 +241,7 @@
             <div class="field-label">Invoice</div>
             <textarea id="payInvoice" placeholder="Paste a Lightning invoice (lnbc...)" rows="3"></textarea>
           </div>
+          <div class="polling-status waiting hidden" id="invoiceInfoLine"></div>
           <div class="field">
             <div class="field-label">Amount (msats, optional)</div>
             <input id="payAmountMsats" type="number" min="1" placeholder="For zero-amount invoices" />
@@ -337,7 +338,7 @@
         refreshBtn: $('refreshBtn'), settingsBtn: $('settingsBtn'), disconnectBtn: $('disconnectBtn'),
         tabSend: $('tabSend'), tabRecv: $('tabRecv'),
         sendPanel: $('sendPanel'), recvPanel: $('recvPanel'),
-        payInvoice: $('payInvoice'), payAmountMsats: $('payAmountMsats'),
+        payInvoice: $('payInvoice'), payAmountMsats: $('payAmountMsats'), invoiceInfoLine: $('invoiceInfoLine'),
         payBtn: $('payBtn'), payResult: $('payResult'),
         recvAmountMsats: $('recvAmountMsats'), recvDescription: $('recvDescription'),
         createInvoiceBtn: $('createInvoiceBtn'), invoiceResult: $('invoiceResult'), invoiceStatus: $('invoiceStatus'),
@@ -634,17 +635,9 @@
                 setWalletStatus('');
                 showSuccessAnimation('Invoice Paid!');
                 refreshData().catch(() => {});
-              } else if (eventStatus === 'failure') {
-                el.invoiceStatus.textContent = 'Failed';
-                el.invoiceStatus.className = 'polling-status failed';
               }
             },
-          ).then(() => {
-            if (el.invoiceStatus.textContent === 'Waiting for payment...') {
-              el.invoiceStatus.textContent = 'Timed out';
-              el.invoiceStatus.className = 'polling-status timeout';
-            }
-          }).catch((e) => console.warn('onInvoiceEvents error:', e));
+          ).catch((e) => console.warn('onInvoiceEvents error:', e));
         } catch (error) {
           setWalletStatus(`${error?.message ?? error}`, true);
         }
@@ -725,6 +718,51 @@
         saveConfig();
         setWalletStatus('Settings saved');
         setTimeout(() => { if (el.walletStatus.textContent === 'Settings saved') setWalletStatus(''); }, 1500);
+      });
+
+      // Decode pasted invoice
+      let decodeVersion = 0;
+      el.payInvoice.addEventListener('input', () => {
+        const inv = el.payInvoice.value.trim();
+        if (!inv || !state.node) {
+          el.invoiceInfoLine.textContent = '';
+          el.invoiceInfoLine.classList.add('hidden');
+          return;
+        }
+        const version = ++decodeVersion;
+        state.node.decode(inv).then((json) => {
+          if (version !== decodeVersion) return;
+          try {
+            const decoded = JSON.parse(json);
+            const sections = Array.isArray(decoded.sections) ? decoded.sections : [];
+            const amountMsats = sections.find(s => s.name === 'amount')?.value;
+            const expiry = decoded.expiry ?? sections.find(s => s.name === 'expiry')?.value;
+            const timestamp = sections.find(s => s.name === 'timestamp')?.value;
+            const parts = [];
+            if (amountMsats && Number(amountMsats) > 0) {
+              parts.push(`${formatSats(Math.floor(Number(amountMsats) / 1000))} sats`);
+            } else {
+              parts.push('No amount (open)');
+            }
+            if (timestamp && expiry) {
+              const expiresAt = new Date((Number(timestamp) + Number(expiry)) * 1000);
+              const diffMin = Math.floor((expiresAt.getTime() - Date.now()) / 60000);
+              if (diffMin <= 0) parts.push('Expired');
+              else if (diffMin < 60) parts.push(`Expires in ${diffMin}m`);
+              else parts.push(`Expires in ${Math.floor(diffMin / 60)}h ${diffMin % 60}m`);
+            }
+            el.invoiceInfoLine.textContent = parts.join('  \u00b7  ');
+            el.invoiceInfoLine.classList.remove('hidden');
+          } catch {
+            el.invoiceInfoLine.textContent = '';
+            el.invoiceInfoLine.classList.add('hidden');
+          }
+        }).catch(() => {
+          if (version === decodeVersion) {
+            el.invoiceInfoLine.textContent = '';
+            el.invoiceInfoLine.classList.add('hidden');
+          }
+        });
       });
 
       window.addEventListener('beforeunload', () => {
