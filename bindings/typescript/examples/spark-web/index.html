@@ -3,329 +3,494 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Spark Web Demo (No WASM)</title>
+    <title>Spark Wallet</title>
     <style>
       :root {
-        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         color-scheme: dark;
+        --bg: #0a0e1a;
+        --card: #111827;
+        --card-border: #1e293b;
+        --input-bg: #0f172a;
+        --input-border: #334155;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --orange: #f7931a;
+        --orange-dim: rgba(247, 147, 26, 0.15);
+        --green: #4ade80;
+        --red: #f87171;
+        --blue: #60a5fa;
       }
-      body {
-        margin: 0;
-        padding: 24px;
-        background: #0b1020;
-        color: #e5e7eb;
-      }
-      .card {
-        max-width: 980px;
-        margin: 0 auto;
-        padding: 20px;
-        border: 1px solid #374151;
-        border-radius: 12px;
-        background: #111827;
-      }
-      h1 {
-        margin: 0 0 8px;
-        font-size: 1.4rem;
-      }
-      p {
-        margin: 0 0 14px;
-        color: #9ca3af;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 12px;
-        margin-top: 16px;
-      }
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        font-size: 0.9rem;
-      }
-      input,
-      textarea,
-      select,
-      button {
-        font: inherit;
-        padding: 10px 12px;
-        border: 1px solid #4b5563;
-        border-radius: 8px;
-        background: #0f172a;
-        color: #e5e7eb;
-      }
-      textarea {
-        min-height: 86px;
-        resize: vertical;
-      }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin: 16px 0;
-      }
-      button {
-        cursor: pointer;
-        background: #1f2937;
-      }
-      button.primary {
-        background: #2563eb;
-        border-color: #2563eb;
-      }
-      button.warn {
-        background: #7f1d1d;
-        border-color: #7f1d1d;
-      }
-      pre {
-        margin: 0;
-        background: #030712;
-        border: 1px solid #374151;
-        border-radius: 8px;
-        padding: 12px;
-        overflow: auto;
-        font-size: 0.86rem;
-      }
-      .muted {
-        color: #93c5fd;
-        font-size: 0.85rem;
-      }
-      .row {
-        margin-top: 10px;
-      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: var(--bg); color: var(--text); min-height: 100dvh; }
+
+      /* Layout */
+      .app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+      .hidden { display: none !important; }
+
+      /* Login */
+      .login { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 24px; gap: 20px; }
+      .login-logo { text-align: center; font-size: 2rem; font-weight: 800; color: var(--orange); }
+      .login-sub { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: -12px; }
+      .field { display: flex; flex-direction: column; gap: 6px; }
+      .field-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+      input, textarea, select { font: inherit; font-size: 0.95rem; padding: 12px; border: 1px solid var(--input-border); border-radius: 12px; background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.15s; }
+      input:focus, textarea:focus, select:focus { border-color: var(--orange); }
+      textarea { min-height: 80px; resize: vertical; }
+      .advanced-toggle { font-size: 0.85rem; color: var(--text-muted); cursor: pointer; user-select: none; }
+      .advanced-toggle:hover { color: var(--text); }
+      .advanced-fields { display: flex; flex-direction: column; gap: 12px; }
+      .secret-field { position: relative; }
+      .secret-field input, .secret-field textarea { width: 100%; padding-right: 44px; }
+      .eye-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 4px; }
+      .eye-btn:hover { color: var(--text); }
+      .optional-tag { font-weight: 400; text-transform: none; color: #475569; letter-spacing: 0; }
+
+      /* Buttons */
+      .btn { font: inherit; font-weight: 700; font-size: 0.95rem; padding: 14px; border: none; border-radius: 12px; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+      .btn:active { transform: scale(0.98); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+      .btn-orange { background: var(--orange); color: #000; }
+      .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--input-border); }
+      .btn-ghost:hover { border-color: var(--text-muted); }
+
+      /* Wallet */
+      .wallet { flex: 1; display: flex; flex-direction: column; }
+      .wallet-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
+      .wallet-title { font-size: 1rem; font-weight: 700; color: var(--text-muted); }
+      .wallet-actions { display: flex; gap: 8px; }
+      .icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 4px; border-radius: 6px; }
+      .icon-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+      /* Balance */
+      .balance-card { text-align: center; padding: 32px 20px 28px; }
+      .balance-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+      .balance-value { font-size: 3rem; font-weight: 800; letter-spacing: -1px; }
+      .balance-unit { font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+      .balance-status { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+      .balance-status.error { color: var(--red); }
+
+      /* Tab buttons */
+      .tab-bar { display: flex; gap: 12px; padding: 0 20px 16px; }
+      .tab-btn { flex: 1; font: inherit; font-weight: 700; font-size: 0.95rem; padding: 14px; border: none; border-radius: 14px; cursor: pointer; transition: all 0.15s; }
+      .tab-btn:active { transform: scale(0.97); }
+      .tab-send { background: var(--orange); color: #000; }
+      .tab-recv { background: var(--orange-dim); color: var(--orange); }
+
+      /* Panels */
+      .panel { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+      .panel-title { font-size: 0.95rem; font-weight: 700; }
+      .panel-result { background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; word-break: break-all; white-space: pre-wrap; color: var(--text-muted); max-height: 120px; overflow: auto; }
+      .polling-status { font-size: 0.8rem; font-weight: 600; }
+      .polling-status.waiting { color: var(--blue); }
+      .polling-status.paid { color: var(--green); }
+      .polling-status.failed { color: var(--red); }
+      .polling-status.timeout { color: #fbbf24; }
+
+      /* Spinner */
+      .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Transaction list */
+      .tx-section { flex: 1; padding: 0 20px 20px; }
+      .tx-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .tx-title { font-size: 0.95rem; font-weight: 700; }
+      .tx-empty { text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 40px 0; }
+      .tx-list { display: flex; flex-direction: column; gap: 2px; }
+      .tx-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; transition: background 0.1s; }
+      .tx-row:hover { background: rgba(255,255,255,0.03); }
+      .tx-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+      .tx-icon.incoming { background: rgba(74, 222, 128, 0.12); color: var(--green); }
+      .tx-icon.outgoing { background: rgba(248, 113, 113, 0.12); color: var(--red); }
+      .tx-details { flex: 1; min-width: 0; }
+      .tx-memo { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tx-time { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+      .tx-amount { font-size: 0.9rem; font-weight: 600; text-align: right; white-space: nowrap; }
+      .tx-amount.incoming { color: var(--green); }
+      .tx-amount.outgoing { color: var(--text); }
+
+      /* Settings panel */
+      .settings-panel { padding: 20px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--card-border); }
+      .settings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+      /* Transaction detail modal */
+      .tx-detail-overlay { display: none; position: fixed; inset: 0; z-index: 900; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); }
+      .tx-detail-overlay.visible { display: flex; }
+      .tx-detail-card { background: #111827; border: 1px solid var(--card-border); border-radius: 20px; padding: 24px; width: 340px; max-width: 90vw; text-align: center; }
+      .tx-detail-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin: 0 auto 12px; }
+      .tx-detail-amount { font-size: 1.8rem; font-weight: 800; margin-bottom: 4px; }
+      .tx-detail-type { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+      .tx-detail-rows { text-align: left; }
+      .tx-detail-row { border-bottom: 1px solid var(--card-border); padding-bottom: 10px; margin-bottom: 10px; }
+      .tx-detail-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
+      .tx-detail-value { font-size: 0.9rem; color: var(--text); }
+      .tx-detail-hash { font-size: 0.7rem; color: var(--text-muted); font-family: 'SF Mono', 'Fira Code', monospace; word-break: break-all; }
+
+      /* Success overlay */
+      .check-overlay { display: none; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); }
+      .check-overlay.visible { display: flex; }
+      .check-content { display: flex; flex-direction: column; align-items: center; }
+      .check-circle { width: 100px; height: 100px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; box-shadow: 0 0 60px rgba(74, 222, 128, 0.4); }
+      .check-circle svg { width: 48px; height: 48px; stroke: #fff; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .check-circle svg .check-path { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw-check 0.4s 0.3s ease forwards; }
+      .check-label { color: #fff; font-size: 1.1rem; font-weight: 700; margin-top: 16px; opacity: 0; animation: fade-in 0.3s 0.5s ease forwards; }
+      @keyframes pop-in { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+      @keyframes draw-check { to { stroke-dashoffset: 0; } }
+      @keyframes fade-in { to { opacity: 1; } }
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Spark Browser Wallet Demo (No WASM)</h1>
-      <p>
-        Uses <code>createNode({ kind: 'spark' })</code> from LNI with runtime setup from
-        <code>@sunnyln/lni/spark-runtime</code> and a patched Spark bare vendor bundle.
-        This demo stores mnemonic/config in <code>localStorage</code>.
-      </p>
+    <!-- Success overlay -->
+    <div class="check-overlay" id="checkOverlay">
+      <div class="check-content">
+        <div class="check-circle">
+          <svg viewBox="0 0 40 40"><path class="check-path" d="M10 20 L17 27 L30 13" /></svg>
+        </div>
+        <div class="check-label" id="checkLabel">Invoice Paid!</div>
+      </div>
+    </div>
 
-      <div class="grid">
-        <label>
-          Mnemonic (seed phrase)
-          <textarea id="mnemonic" placeholder="abandon ..."></textarea>
-        </label>
+    <!-- Transaction detail modal -->
+    <div class="tx-detail-overlay" id="txDetailOverlay">
+      <div class="tx-detail-card">
+        <div class="tx-detail-icon" id="txDetailIcon"></div>
+        <div class="tx-detail-amount" id="txDetailAmount"></div>
+        <div class="tx-detail-type" id="txDetailType"></div>
+        <div class="tx-detail-rows" id="txDetailRows"></div>
+        <button class="btn btn-ghost" style="margin-top:16px;width:100%" onclick="document.getElementById('txDetailOverlay').classList.remove('visible')">Close</button>
+      </div>
+    </div>
 
-        <label>
-          Spark Network
+    <div class="app">
+      <!-- Login View -->
+      <div class="login" id="loginView">
+        <div>
+          <div class="login-logo">Spark Wallet</div>
+          <div class="login-sub">Pure TypeScript &middot; No WASM</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Seed Phrase</div>
+          <div class="secret-field">
+            <textarea id="mnemonic" placeholder="Enter your 12 or 24 word mnemonic..." rows="3"></textarea>
+            <button class="eye-btn" id="mnemonicEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Network</div>
           <select id="network">
-            <option value="MAINNET">MAINNET</option>
-            <option value="TESTNET">TESTNET</option>
-            <option value="REGTEST">REGTEST</option>
-            <option value="SIGNET">SIGNET</option>
-            <option value="LOCAL">LOCAL</option>
+            <option value="MAINNET">Mainnet</option>
+            <option value="TESTNET">Testnet</option>
+            <option value="REGTEST">Regtest</option>
+            <option value="SIGNET">Signet</option>
+            <option value="LOCAL">Local</option>
           </select>
-        </label>
+        </div>
 
-        <label>
-          API Key (optional; sent as <code>x-api-key</code> for same-origin/proxied requests)
-          <input id="apiKey" type="password" placeholder="optional" />
-        </label>
+        <div class="advanced-toggle" id="advancedToggle">&#9656; Advanced settings</div>
+        <div class="advanced-fields hidden" id="advancedFields">
+          <div class="field">
+            <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
+            <div class="secret-field">
+              <input id="apiKey" type="password" placeholder="Optional" />
+              <button class="eye-btn" id="apiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
+            <input id="sspBaseUrl" type="url" placeholder="https://..." />
+          </div>
+          <div class="field">
+            <div class="field-label">SSP Identity Public Key <span class="optional-tag">(optional)</span></div>
+            <input id="sspIdentityKey" type="text" placeholder="Hex pubkey" />
+          </div>
+        </div>
 
-        <label>
-          SSP Base URL (optional)
-          <input id="sspBaseUrl" type="url" placeholder="https://..." />
-        </label>
-
-        <label>
-          SSP Identity Public Key (optional)
-          <input id="sspIdentityKey" type="text" placeholder="hex pubkey" />
-        </label>
-
-        <label>
-          Transfer Limit
-          <input id="transferLimit" type="number" min="1" max="100" value="25" />
-        </label>
+        <button class="btn btn-orange" id="connectBtn">Connect Wallet</button>
+        <div class="balance-status" id="loginStatus" style="text-align:center"></div>
       </div>
 
-      <div class="actions">
-        <button id="saveBtn">Save Inputs</button>
-        <button id="connectBtn" class="primary">Connect Wallet</button>
-        <button id="refreshBtn">Refresh Balance + Transactions</button>
-        <button id="clearBtn" class="warn">Clear Saved Inputs</button>
-      </div>
+      <!-- Wallet View -->
+      <div class="wallet hidden" id="walletView">
+        <div class="wallet-header">
+          <div class="wallet-title">Spark Wallet</div>
+          <div class="wallet-actions">
+            <button class="icon-btn" id="refreshBtn" title="Refresh">&#x21bb;</button>
+            <button class="icon-btn" id="settingsBtn" title="Settings">&#x2699;</button>
+            <button class="icon-btn" id="disconnectBtn" title="Disconnect">&#x23fb;</button>
+          </div>
+        </div>
 
-      <div class="row">
-        <strong>Pay invoice test</strong>
-      </div>
-      <div class="grid">
-        <label>
-          Bolt11 Invoice
-          <textarea id="payInvoice" placeholder="lnbc..."></textarea>
-        </label>
+        <!-- Balance -->
+        <div class="balance-card">
+          <div class="balance-label">Balance</div>
+          <div><span class="balance-value" id="balanceValue">--</span><span class="balance-unit">sats</span></div>
+          <div class="balance-status" id="walletStatus"></div>
+        </div>
 
-        <label>
-          Amount (msats, optional for amountless invoice)
-          <input id="payAmountMsats" type="number" min="1" placeholder="e.g. 118000" />
-        </label>
-      </div>
-      <div class="actions">
-        <button id="payBtn" class="primary">Pay Invoice</button>
-      </div>
-      <div class="row">
-        <strong>Pay result</strong>
-        <pre id="payResult">{}</pre>
-      </div>
+        <!-- Send / Receive tabs -->
+        <div class="tab-bar">
+          <button class="tab-btn tab-send" id="tabSend">Send</button>
+          <button class="tab-btn tab-recv" id="tabRecv">Receive</button>
+        </div>
 
-      <div class="row muted" id="status">Status: idle</div>
+        <!-- Send panel -->
+        <div class="panel hidden" id="sendPanel">
+          <div class="field">
+            <div class="field-label">Invoice</div>
+            <textarea id="payInvoice" placeholder="Paste a Lightning invoice (lnbc...)" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <div class="field-label">Amount (msats, optional)</div>
+            <input id="payAmountMsats" type="number" min="1" placeholder="For zero-amount invoices" />
+          </div>
+          <button class="btn btn-orange" id="payBtn">Send Payment</button>
+          <div class="panel-result hidden" id="payResult"></div>
+        </div>
 
-      <div class="row">
-        <strong>Wallet summary</strong>
-        <pre id="summary">{}</pre>
-      </div>
+        <!-- Receive panel -->
+        <div class="panel hidden" id="recvPanel">
+          <div class="field">
+            <div class="field-label">Amount (msats)</div>
+            <input id="recvAmountMsats" type="number" min="1" placeholder="e.g. 25000" />
+          </div>
+          <div class="field">
+            <div class="field-label">Description</div>
+            <input id="recvDescription" type="text" placeholder="Optional memo" />
+          </div>
+          <button class="btn btn-orange" id="createInvoiceBtn">Create Invoice</button>
+          <div class="polling-status hidden" id="invoiceStatus"></div>
+          <div class="panel-result hidden" id="invoiceResult"></div>
+        </div>
 
-      <div class="row">
-        <strong>Transactions</strong>
-        <pre id="transactions">[]</pre>
+        <!-- Settings panel (hidden by default) -->
+        <div class="settings-panel hidden" id="settingsPanel">
+          <div class="field">
+            <div class="field-label">Seed Phrase</div>
+            <div class="secret-field">
+              <textarea id="settingsMnemonic" placeholder="12 or 24 word mnemonic..." rows="2"></textarea>
+              <button class="eye-btn" id="settingsMnemonicEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
+            <div class="secret-field">
+              <input id="settingsApiKey" type="password" placeholder="Optional" />
+              <button class="eye-btn" id="settingsApiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="field">
+              <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
+              <input id="settingsSspBaseUrl" type="url" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <div class="field-label">SSP Identity Key <span class="optional-tag">(optional)</span></div>
+              <input id="settingsSspIdentityKey" type="text" placeholder="Hex" />
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Transaction Limit <span class="optional-tag">(optional)</span></div>
+            <input id="transferLimit" type="number" min="1" max="100" value="25" />
+          </div>
+          <button class="btn btn-ghost" id="saveSettingsBtn">Save Settings</button>
+        </div>
+
+        <!-- Transactions -->
+        <div class="tx-section">
+          <div class="tx-header">
+            <div class="tx-title">Transactions</div>
+          </div>
+          <div id="txList"><div class="tx-empty">No transactions yet</div></div>
+        </div>
       </div>
-    </main>
+    </div>
 
     <script type="module">
       import { createNode, installSparkRuntime } from '@sunnyln/lni';
 
       const STORAGE_KEY = 'lni.spark.web.demo.v1';
-      const NETWORK_TO_SPARK_CONFIG = {
-        MAINNET: 'mainnet',
-        TESTNET: 'testnet',
-        REGTEST: 'regtest',
-        SIGNET: 'signet',
-        LOCAL: 'local',
-      };
+      const NETWORK_MAP = { MAINNET: 'mainnet', TESTNET: 'testnet', REGTEST: 'regtest', SIGNET: 'signet', LOCAL: 'local' };
 
-      const state = {
-        node: null,
-      };
+      const state = { node: null, balanceSats: 0, transactions: [] };
       let sparkRuntimeHandle = null;
 
-      const elements = {
-        mnemonic: document.getElementById('mnemonic'),
-        network: document.getElementById('network'),
-        apiKey: document.getElementById('apiKey'),
-        sspBaseUrl: document.getElementById('sspBaseUrl'),
-        sspIdentityKey: document.getElementById('sspIdentityKey'),
-        transferLimit: document.getElementById('transferLimit'),
-        payInvoice: document.getElementById('payInvoice'),
-        payAmountMsats: document.getElementById('payAmountMsats'),
-        payBtn: document.getElementById('payBtn'),
-        payResult: document.getElementById('payResult'),
-        status: document.getElementById('status'),
-        summary: document.getElementById('summary'),
-        transactions: document.getElementById('transactions'),
-        saveBtn: document.getElementById('saveBtn'),
-        connectBtn: document.getElementById('connectBtn'),
-        refreshBtn: document.getElementById('refreshBtn'),
-        clearBtn: document.getElementById('clearBtn'),
+      // Elements
+      const $ = (id) => document.getElementById(id);
+      const el = {
+        loginView: $('loginView'), walletView: $('walletView'),
+        mnemonic: $('mnemonic'), network: $('network'), apiKey: $('apiKey'),
+        sspBaseUrl: $('sspBaseUrl'), sspIdentityKey: $('sspIdentityKey'),
+        advancedToggle: $('advancedToggle'), advancedFields: $('advancedFields'),
+        connectBtn: $('connectBtn'), loginStatus: $('loginStatus'),
+        balanceValue: $('balanceValue'), walletStatus: $('walletStatus'),
+        refreshBtn: $('refreshBtn'), settingsBtn: $('settingsBtn'), disconnectBtn: $('disconnectBtn'),
+        tabSend: $('tabSend'), tabRecv: $('tabRecv'),
+        sendPanel: $('sendPanel'), recvPanel: $('recvPanel'),
+        payInvoice: $('payInvoice'), payAmountMsats: $('payAmountMsats'),
+        payBtn: $('payBtn'), payResult: $('payResult'),
+        recvAmountMsats: $('recvAmountMsats'), recvDescription: $('recvDescription'),
+        createInvoiceBtn: $('createInvoiceBtn'), invoiceResult: $('invoiceResult'), invoiceStatus: $('invoiceStatus'),
+        settingsPanel: $('settingsPanel'), settingsApiKey: $('settingsApiKey'),
+        settingsSspBaseUrl: $('settingsSspBaseUrl'), settingsSspIdentityKey: $('settingsSspIdentityKey'),
+        transferLimit: $('transferLimit'), saveSettingsBtn: $('saveSettingsBtn'),
+        txList: $('txList'), checkOverlay: $('checkOverlay'),
+        settingsMnemonic: $('settingsMnemonic'), settingsMnemonicEye: $('settingsMnemonicEye'),
+        mnemonicEye: $('mnemonicEye'), apiKeyEye: $('apiKeyEye'), settingsApiKeyEye: $('settingsApiKeyEye'),
+        txDetailOverlay: $('txDetailOverlay'), txDetailIcon: $('txDetailIcon'),
+        txDetailAmount: $('txDetailAmount'), txDetailType: $('txDetailType'), txDetailRows: $('txDetailRows'),
       };
 
-      function setStatus(message, isError = false) {
-        elements.status.textContent = `Status: ${message}`;
-        elements.status.style.color = isError ? '#fca5a5' : '#93c5fd';
+      function setLoginStatus(msg, err = false) {
+        el.loginStatus.textContent = msg;
+        el.loginStatus.classList.toggle('error', err);
+      }
+      function setWalletStatus(msg, err = false) {
+        el.walletStatus.textContent = msg;
+        el.walletStatus.classList.toggle('error', err);
       }
 
-      function getConfigFromForm() {
+      function getConfig() {
         return {
-          mnemonic: elements.mnemonic.value.trim(),
-          network: elements.network.value,
-          apiKey: elements.apiKey.value.trim(),
-          sspBaseUrl: elements.sspBaseUrl.value.trim(),
-          sspIdentityKey: elements.sspIdentityKey.value.trim(),
-          transferLimit: Math.max(1, Number(elements.transferLimit.value || 25)),
+          mnemonic: el.mnemonic.value.trim(),
+          network: el.network.value,
+          apiKey: el.apiKey.value.trim() || el.settingsApiKey.value.trim(),
+          sspBaseUrl: el.sspBaseUrl.value.trim() || el.settingsSspBaseUrl.value.trim(),
+          sspIdentityKey: el.sspIdentityKey.value.trim() || el.settingsSspIdentityKey.value.trim(),
+          transferLimit: Math.max(1, Number(el.transferLimit.value || 25)),
         };
       }
 
-      function setConfigToForm(config) {
-        elements.mnemonic.value = config.mnemonic ?? '';
-        elements.network.value = config.network ?? 'MAINNET';
-        elements.apiKey.value = config.apiKey ?? '';
-        elements.sspBaseUrl.value = config.sspBaseUrl ?? '';
-        elements.sspIdentityKey.value = config.sspIdentityKey ?? '';
-        elements.transferLimit.value = String(config.transferLimit ?? 25);
-      }
-
-      function loadSavedConfig() {
+      function loadSaved() {
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (!raw) return;
-          const parsed = JSON.parse(raw);
-          setConfigToForm(parsed);
-        } catch (error) {
-          console.warn('Failed to load saved config:', error);
-        }
+          const c = JSON.parse(raw);
+          el.mnemonic.value = c.mnemonic ?? '';
+          el.settingsMnemonic.value = c.mnemonic ?? '';
+          el.network.value = c.network ?? 'MAINNET';
+          el.apiKey.value = c.apiKey ?? '';
+          el.settingsApiKey.value = c.apiKey ?? '';
+          el.sspBaseUrl.value = c.sspBaseUrl ?? '';
+          el.settingsSspBaseUrl.value = c.sspBaseUrl ?? '';
+          el.sspIdentityKey.value = c.sspIdentityKey ?? '';
+          el.settingsSspIdentityKey.value = c.sspIdentityKey ?? '';
+          el.transferLimit.value = String(c.transferLimit ?? 25);
+        } catch {}
       }
 
       function saveConfig() {
-        const config = getConfigFromForm();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-        setStatus('saved inputs to localStorage');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getConfig()));
       }
 
       function setupRuntime(apiKey) {
         sparkRuntimeHandle?.restore();
-        sparkRuntimeHandle = installSparkRuntime({
-          apiKey,
-          apiKeyHeader: 'x-api-key',
-          apiKeySameOriginOnly: true,
+        sparkRuntimeHandle = installSparkRuntime({ apiKey, apiKeyHeader: 'x-api-key', apiKeySameOriginOnly: true });
+      }
+
+      function showView(view) {
+        el.loginView.classList.toggle('hidden', view !== 'login');
+        el.walletView.classList.toggle('hidden', view !== 'wallet');
+      }
+
+      function formatSats(sats) {
+        return sats.toLocaleString();
+      }
+
+      function formatTime(unix) {
+        if (!unix) return '';
+        const d = new Date(unix * 1000);
+        const now = new Date();
+        const diffMs = now.getTime() - d.getTime();
+        if (diffMs < 60_000) return 'Just now';
+        if (diffMs < 3600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+        if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)}h ago`;
+        if (d.getFullYear() === now.getFullYear()) {
+          return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      function renderTransactions(transactions) {
+        if (!transactions.length) {
+          el.txList.innerHTML = '<div class="tx-empty">No transactions yet</div>';
+          return;
+        }
+        el.txList.innerHTML = '<div class="tx-list">' + transactions.map((tx, i) => {
+          const isIncoming = tx.type === 'incoming';
+          const sats = Math.floor(Number(tx.amountMsats || 0) / 1000);
+          const memo = tx.description || (isIncoming ? 'Received' : 'Sent');
+          const icon = isIncoming ? '&#x2193;' : '&#x2191;';
+          const dir = isIncoming ? 'incoming' : 'outgoing';
+          const sign = isIncoming ? '+' : '-';
+          const time = formatTime(tx.settledAt || tx.createdAt);
+          return `<div class="tx-row" data-tx-idx="${i}" style="cursor:pointer">
+            <div class="tx-icon ${dir}">${icon}</div>
+            <div class="tx-details">
+              <div class="tx-memo">${memo}</div>
+              <div class="tx-time">${time}</div>
+            </div>
+            <div class="tx-amount ${dir}">${sign}${formatSats(sats)} sats</div>
+          </div>`;
+        }).join('') + '</div>';
+
+        el.txList.querySelectorAll('.tx-row[data-tx-idx]').forEach(row => {
+          row.addEventListener('click', () => {
+            const idx = Number(row.getAttribute('data-tx-idx'));
+            showTxDetail(state.transactions[idx]);
+          });
         });
       }
+
+      function showTxDetail(tx) {
+        if (!tx) return;
+        const isIncoming = tx.type === 'incoming';
+        const sats = Math.floor(Number(tx.amountMsats || 0) / 1000);
+        const memo = tx.description || (isIncoming ? 'Received' : 'Sent');
+        const time = formatTime(tx.settledAt || tx.createdAt);
+        const dir = isIncoming ? 'incoming' : 'outgoing';
+        const icon = isIncoming ? '&#x2193;' : '&#x2191;';
+        const sign = isIncoming ? '+' : '-';
+
+        el.txDetailIcon.className = `tx-detail-icon tx-icon ${dir}`;
+        el.txDetailIcon.innerHTML = icon;
+        el.txDetailAmount.className = `tx-detail-amount tx-amount ${dir}`;
+        el.txDetailAmount.textContent = `${sign}${formatSats(sats)} sats`;
+        el.txDetailType.textContent = isIncoming ? 'Received' : 'Sent';
+
+        let rows = `<div class="tx-detail-row"><div class="tx-detail-label">Memo</div><div class="tx-detail-value">${memo}</div></div>`;
+        rows += `<div class="tx-detail-row"><div class="tx-detail-label">Time</div><div class="tx-detail-value">${time}</div></div>`;
+        if (tx.paymentHash) rows += `<div class="tx-detail-row"><div class="tx-detail-label">Payment Hash</div><div class="tx-detail-hash">${tx.paymentHash}</div></div>`;
+        el.txDetailRows.innerHTML = rows;
+
+        el.txDetailOverlay.classList.add('visible');
+      }
+      el.txDetailOverlay.addEventListener('click', (e) => {
+        if (e.target === el.txDetailOverlay) el.txDetailOverlay.classList.remove('visible');
+      });
 
       async function disconnectNode() {
         const node = state.node;
         state.node = null;
-
-        if (!node || typeof node.cleanupConnections !== 'function') {
-          return;
+        if (node?.cleanupConnections) {
+          try { await node.cleanupConnections(); } catch {}
         }
-
-        try {
-          await node.cleanupConnections();
-        } catch {
-          // ignore teardown failures in demo app
-        }
-      }
-
-      async function clearSavedConfig() {
-        localStorage.removeItem(STORAGE_KEY);
-        setConfigToForm({});
-        elements.summary.textContent = '{}';
-        elements.transactions.textContent = '[]';
-        await disconnectNode();
-        sparkRuntimeHandle?.restore();
-        sparkRuntimeHandle = null;
-        setStatus('cleared saved inputs and disconnected wallet');
-      }
-
-      function mapTransaction(tx) {
-        return {
-          id: tx.externalId || tx.paymentHash || tx.invoice || '',
-          direction: tx.type,
-          status: tx.settledAt > 0 ? 'SETTLED' : 'PENDING',
-          totalValue: String(Math.floor((Number(tx.amountMsats || 0)) / 1000)),
-          createdTime: tx.createdAt > 0 ? new Date(tx.createdAt * 1000).toISOString() : '',
-          paymentHash: tx.paymentHash || '',
-          memo: tx.description || '',
-        };
       }
 
       async function connectWallet() {
-        const cfg = getConfigFromForm();
-        if (!cfg.mnemonic) {
-          setStatus('mnemonic is required', true);
-          return;
-        }
+        const cfg = getConfig();
+        if (!cfg.mnemonic) { setLoginStatus('Seed phrase is required', true); return; }
 
+        el.settingsMnemonic.value = cfg.mnemonic;
         saveConfig();
-        setStatus('connecting wallet...');
+        setLoginStatus('Connecting...');
+        el.connectBtn.disabled = true;
         setupRuntime(cfg.apiKey);
 
         const sparkOptions = {};
         if (cfg.sspBaseUrl && cfg.sspIdentityKey) {
-          sparkOptions.sspClientOptions = {
-            baseUrl: cfg.sspBaseUrl,
-            identityPublicKey: cfg.sspIdentityKey,
-          };
+          sparkOptions.sspClientOptions = { baseUrl: cfg.sspBaseUrl, identityPublicKey: cfg.sspIdentityKey };
         }
 
         try {
@@ -334,124 +499,234 @@
             kind: 'spark',
             config: {
               mnemonic: cfg.mnemonic,
-              network: NETWORK_TO_SPARK_CONFIG[cfg.network] ?? 'mainnet',
+              network: NETWORK_MAP[cfg.network] ?? 'mainnet',
               sdkEntry: 'bare',
               sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
             },
           });
 
-          setStatus('wallet connected');
+          showView('wallet');
+          setWalletStatus('Loading...');
           await refreshData();
         } catch (error) {
-          setStatus(`connect failed: ${error?.message ?? String(error)}`, true);
-          throw error;
+          setLoginStatus(`Failed: ${error?.message ?? error}`, true);
+        } finally {
+          el.connectBtn.disabled = false;
         }
       }
 
       async function refreshData() {
-        if (!state.node) {
-          setStatus('connect wallet first', true);
-          return;
-        }
-
-        const cfg = getConfigFromForm();
+        if (!state.node) return;
+        const cfg = getConfig();
         setupRuntime(cfg.apiKey);
-        setStatus('loading balance + transactions...');
+        setWalletStatus('Refreshing...');
+
         try {
-          const [info, transactions] = await Promise.all([
+          const [info, txs] = await Promise.all([
             state.node.getInfo(),
             state.node.listTransactions({ from: 0, limit: cfg.transferLimit }),
           ]);
 
-          const mapped = Array.isArray(transactions)
-            ? transactions.map(mapTransaction)
-            : [];
-
-          elements.summary.textContent = JSON.stringify(
-            {
-              network: info.network,
-              identityPublicKey: info.pubkey,
-              balanceSats: Math.floor(Number(info.sendBalanceMsat || 0) / 1000),
-              transferCount: mapped.length,
-            },
-            null,
-            2,
-          );
-
-          elements.transactions.textContent = JSON.stringify(
-            mapped,
-            null,
-            2,
-          );
-
-          setStatus('loaded');
+          state.balanceSats = Math.floor(Number(info.sendBalanceMsat || 0) / 1000);
+          state.transactions = Array.isArray(txs) ? txs : [];
+          el.balanceValue.textContent = formatSats(state.balanceSats);
+          renderTransactions(state.transactions);
+          setWalletStatus('');
         } catch (error) {
-          setStatus(`refresh failed: ${error?.message ?? String(error)}`, true);
+          setWalletStatus(`${error?.message ?? error}`, true);
         }
       }
 
-      async function payInvoiceTest() {
-        if (!state.node) {
-          setStatus('connect wallet first', true);
-          return;
-        }
+      function showSuccessAnimation(label = 'Success!') {
+        const overlay = el.checkOverlay;
+        const content = overlay.querySelector('.check-content');
+        const clone = content.cloneNode(true);
+        clone.querySelector('.check-label').textContent = label;
+        content.replaceWith(clone);
+        overlay.classList.add('visible');
+        setTimeout(() => overlay.classList.remove('visible'), 2200);
+      }
+      el.checkOverlay.addEventListener('click', () => el.checkOverlay.classList.remove('visible'));
 
-        const invoice = elements.payInvoice.value.trim();
-        if (!invoice) {
-          setStatus('invoice is required', true);
-          return;
-        }
+      // Tabs
+      function showPanel(panel) {
+        el.sendPanel.classList.toggle('hidden', panel !== 'send');
+        el.recvPanel.classList.toggle('hidden', panel !== 'recv');
+        el.tabSend.style.opacity = panel === 'send' ? '1' : '0.5';
+        el.tabRecv.style.opacity = panel === 'recv' ? '1' : '0.5';
+      }
 
-        const cfg = getConfigFromForm();
-        const parsedAmount = Number(elements.payAmountMsats.value.trim());
-        const amountMsats =
-          Number.isFinite(parsedAmount) && parsedAmount > 0
-            ? Math.floor(parsedAmount)
-            : undefined;
+      el.tabSend.addEventListener('click', () => showPanel('send'));
+      el.tabRecv.addEventListener('click', () => showPanel('recv'));
 
-        setupRuntime(cfg.apiKey);
-        setStatus('paying invoice...');
-        elements.payResult.textContent = '{}';
+      // Receive / Create Invoice
+      async function createInvoice() {
+        if (!state.node) return;
+        const parsed = Number(el.recvAmountMsats.value.trim());
+        const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+        const description = el.recvDescription.value.trim() || undefined;
+
+        setWalletStatus('Creating invoice...');
+        el.invoiceResult.classList.add('hidden');
+        el.invoiceStatus.classList.add('hidden');
 
         try {
-          const payment = await state.node.payInvoice({
-            invoice,
-            amountMsats,
-          });
-          elements.payResult.textContent = JSON.stringify(payment, null, 2);
-          setStatus('invoice paid');
-          await refreshData();
+          const cfg = getConfig();
+          setupRuntime(cfg.apiKey);
+          const tx = await state.node.createInvoice({ amountMsats, description, expiry: 3600 });
+
+          el.invoiceResult.textContent = tx.invoice;
+          el.invoiceResult.classList.remove('hidden');
+          el.invoiceStatus.textContent = 'Waiting for payment...';
+          el.invoiceStatus.className = 'polling-status waiting';
+          setWalletStatus('Invoice created');
+
+          state.node.onInvoiceEvents(
+            { paymentHash: tx.paymentHash, pollingDelaySec: 3, maxPollingSec: 300 },
+            (eventStatus) => {
+              if (eventStatus === 'success') {
+                el.invoiceStatus.textContent = 'Paid!';
+                el.invoiceStatus.className = 'polling-status paid';
+                setWalletStatus('');
+                showSuccessAnimation('Invoice Paid!');
+                refreshData().catch(() => {});
+              } else if (eventStatus === 'failure') {
+                el.invoiceStatus.textContent = 'Failed';
+                el.invoiceStatus.className = 'polling-status failed';
+              }
+            },
+          ).then(() => {
+            if (el.invoiceStatus.textContent === 'Waiting for payment...') {
+              el.invoiceStatus.textContent = 'Timed out';
+              el.invoiceStatus.className = 'polling-status timeout';
+            }
+          }).catch((e) => console.warn('onInvoiceEvents error:', e));
         } catch (error) {
-          const message = error?.message ?? String(error);
-          elements.payResult.textContent = JSON.stringify({ error: message }, null, 2);
-          setStatus(`pay failed: ${message}`, true);
+          setWalletStatus(`${error?.message ?? error}`, true);
         }
       }
 
-      elements.saveBtn.addEventListener('click', saveConfig);
-      elements.connectBtn.addEventListener('click', () => {
-        connectWallet().catch(() => undefined);
-      });
-      elements.refreshBtn.addEventListener('click', () => {
-        refreshData().catch(() => undefined);
-      });
-      elements.payBtn.addEventListener('click', () => {
-        payInvoiceTest().catch(() => undefined);
-      });
-      elements.clearBtn.addEventListener('click', () => {
-        clearSavedConfig().catch(() => undefined);
-      });
-      window.addEventListener('beforeunload', () => {
-        sparkRuntimeHandle?.restore();
-        sparkRuntimeHandle = null;
-        const node = state.node;
-        if (node && typeof node.cleanupConnections === 'function') {
-          void node.cleanupConnections();
+      // Send / Pay Invoice
+      async function payInvoice() {
+        if (!state.node) return;
+        const invoice = el.payInvoice.value.trim();
+        if (!invoice) { setWalletStatus('Paste an invoice first', true); return; }
+
+        const parsed = Number(el.payAmountMsats.value.trim());
+        const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+
+        const cfg = getConfig();
+        setupRuntime(cfg.apiKey);
+        setWalletStatus('Sending...');
+        el.payResult.classList.add('hidden');
+        el.payBtn.disabled = true;
+        el.payBtn.innerHTML = '<span class="spinner"></span>Sending...';
+
+        try {
+          const payment = await state.node.payInvoice({ invoice, amountMsats });
+          const feeSats = Math.floor(Number(payment.feeMsats || 0) / 1000);
+          el.payResult.textContent = `Preimage: ${payment.preimage}\nFee: ${feeSats} sats`;
+          el.payResult.classList.remove('hidden');
+          setWalletStatus('Sent!');
+          el.payInvoice.value = '';
+          el.payAmountMsats.value = '';
+          showSuccessAnimation('Payment Sent!');
+          await refreshData();
+        } catch (error) {
+          el.payResult.textContent = error?.message ?? String(error);
+          el.payResult.classList.remove('hidden');
+          setWalletStatus('Send failed', true);
+        } finally {
+          el.payBtn.disabled = false;
+          el.payBtn.textContent = 'Send Payment';
         }
+      }
+
+      // Settings toggle
+      let settingsOpen = false;
+      el.settingsBtn.addEventListener('click', () => {
+        settingsOpen = !settingsOpen;
+        el.settingsPanel.classList.toggle('hidden', !settingsOpen);
       });
 
-      loadSavedConfig();
-      setStatus('ready');
+      // Advanced toggle on login
+      el.advancedToggle.addEventListener('click', () => {
+        const open = el.advancedFields.classList.toggle('hidden');
+        el.advancedToggle.innerHTML = (open ? '&#9656;' : '&#9662;') + ' Advanced settings';
+      });
+
+      // Disconnect
+      async function disconnect() {
+        await disconnectNode();
+        sparkRuntimeHandle?.restore();
+        sparkRuntimeHandle = null;
+        state.balanceSats = 0;
+        state.transactions = [];
+        showView('login');
+        setLoginStatus('');
+      }
+
+      // Wire up
+      el.connectBtn.addEventListener('click', () => connectWallet().catch(() => {}));
+      el.refreshBtn.addEventListener('click', () => refreshData().catch(() => {}));
+      el.disconnectBtn.addEventListener('click', () => disconnect().catch(() => {}));
+      el.createInvoiceBtn.addEventListener('click', () => createInvoice().catch(() => {}));
+      el.payBtn.addEventListener('click', () => payInvoice().catch(() => {}));
+      el.saveSettingsBtn.addEventListener('click', () => {
+        // Sync settings back to login fields
+        if (el.settingsMnemonic.value.trim()) el.mnemonic.value = el.settingsMnemonic.value;
+        el.apiKey.value = el.settingsApiKey.value;
+        el.sspBaseUrl.value = el.settingsSspBaseUrl.value;
+        el.sspIdentityKey.value = el.settingsSspIdentityKey.value;
+        saveConfig();
+        setWalletStatus('Settings saved');
+        setTimeout(() => { if (el.walletStatus.textContent === 'Settings saved') setWalletStatus(''); }, 1500);
+      });
+
+      window.addEventListener('beforeunload', () => {
+        sparkRuntimeHandle?.restore();
+        if (state.node?.cleanupConnections) void state.node.cleanupConnections();
+      });
+
+      // Eye toggles
+      let mnemonicVisible = false;
+      el.mnemonicEye.addEventListener('click', () => {
+        mnemonicVisible = !mnemonicVisible;
+        el.mnemonic.style.color = mnemonicVisible ? 'var(--text)' : 'transparent';
+        el.mnemonic.style.textShadow = mnemonicVisible ? 'none' : '0 0 8px var(--text-muted)';
+        el.mnemonicEye.innerHTML = mnemonicVisible ? '\u{1F441}' : '&bull;&bull;&bull;';
+      });
+      // Start masked
+      el.mnemonic.style.color = 'transparent';
+      el.mnemonic.style.textShadow = '0 0 8px var(--text-muted)';
+
+      function togglePasswordEye(inputEl, btnEl) {
+        let visible = false;
+        btnEl.addEventListener('click', () => {
+          visible = !visible;
+          inputEl.type = visible ? 'text' : 'password';
+          btnEl.innerHTML = visible ? '\u{1F441}' : '&bull;&bull;&bull;';
+        });
+      }
+      togglePasswordEye(el.apiKey, el.apiKeyEye);
+      togglePasswordEye(el.settingsApiKey, el.settingsApiKeyEye);
+
+      // Settings mnemonic eye (same textarea masking approach)
+      let settingsMnemonicVisible = false;
+      el.settingsMnemonicEye.addEventListener('click', () => {
+        settingsMnemonicVisible = !settingsMnemonicVisible;
+        el.settingsMnemonic.style.color = settingsMnemonicVisible ? 'var(--text)' : 'transparent';
+        el.settingsMnemonic.style.textShadow = settingsMnemonicVisible ? 'none' : '0 0 8px var(--text-muted)';
+        el.settingsMnemonicEye.innerHTML = settingsMnemonicVisible ? '\u{1F441}' : '&bull;&bull;&bull;';
+      });
+      el.settingsMnemonic.style.color = 'transparent';
+      el.settingsMnemonic.style.textShadow = '0 0 8px var(--text-muted)';
+
+      // Init
+      loadSaved();
+      if (el.mnemonic.value.trim()) {
+        connectWallet().catch(() => {});
+      }
     </script>
   </body>
 </html>
