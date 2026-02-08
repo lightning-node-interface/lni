@@ -17,7 +17,11 @@ export async function pollInvoiceEvents(args: PollInvoiceEventsArgs): Promise<vo
   const maxDurationMs = Math.max(args.params.maxPollingSec, 1) * 1000;
   const startedAt = Date.now();
 
-  while (Date.now() - startedAt <= maxDurationMs) {
+  const elapsed = () => Date.now() - startedAt;
+
+  while (elapsed() < maxDurationMs) {
+    const iterationStart = Date.now();
+
     try {
       const tx = await args.lookup();
       if (tx.settledAt > 0) {
@@ -27,17 +31,20 @@ export async function pollInvoiceEvents(args: PollInvoiceEventsArgs): Promise<vo
       args.callback('pending', tx);
     } catch (error) {
       if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[lni] pollInvoiceEvents lookup failed', error);
+        console.debug('[lni] pollInvoiceEvents lookup failed (will retry)', error);
       }
-      args.callback('failure');
+      args.callback('pending');
     }
 
-    if (Date.now() - startedAt + delayMs <= maxDurationMs) {
-      await sleep(delayMs);
+    // Sleep for the remaining delay time (accounting for how long the lookup took)
+    const lookupDuration = Date.now() - iterationStart;
+    const remainingSleep = Math.max(0, delayMs - lookupDuration);
+    if (remainingSleep > 0 && elapsed() + remainingSleep < maxDurationMs) {
+      await sleep(remainingSleep);
+    } else if (elapsed() < maxDurationMs) {
+      // Still have time but not enough for a full delay — do one more iteration
       continue;
     }
-
-    break;
   }
 
   args.callback('failure');

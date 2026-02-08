@@ -3,6 +3,7 @@ import { ClnNode } from './nodes/cln.js';
 import { LndNode } from './nodes/lnd.js';
 import { NwcNode } from './nodes/nwc.js';
 import { PhoenixdNode } from './nodes/phoenixd.js';
+import { SparkNode } from './nodes/spark.js';
 import { SpeedNode } from './nodes/speed.js';
 import { StrikeNode } from './nodes/strike.js';
 import type {
@@ -14,6 +15,7 @@ import type {
   NodeRequestOptions,
   NwcConfig,
   PhoenixdConfig,
+  SparkConfig,
   SpeedConfig,
   StrikeConfig,
 } from './types.js';
@@ -46,6 +48,10 @@ export function createNode(
   input: { kind: 'blink'; config: BlinkConfig },
   options?: NodeRequestOptions,
 ): BlinkNode;
+export function createNode(
+  input: { kind: 'spark'; config: SparkConfig },
+  options?: NodeRequestOptions,
+): SparkNode;
 export function createNode(input: BackendNodeConfig, options?: NodeRequestOptions): LightningNode;
 export function createNode(input: BackendNodeConfig, options: NodeRequestOptions = {}): LightningNode {
   switch (input.kind) {
@@ -63,5 +69,9 @@ export function createNode(input: BackendNodeConfig, options: NodeRequestOptions
       return new SpeedNode(input.config, options);
     case 'blink':
       return new BlinkNode(input.config, options);
+    case 'spark':
+      return new SparkNode(input.config, options);
+    default:
+      throw new Error(`Unsupported backend kind: ${(input as { kind: string }).kind}`);
   }
 }

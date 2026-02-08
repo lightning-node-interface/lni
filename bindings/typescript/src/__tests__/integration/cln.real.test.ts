@@ -24,7 +24,7 @@ describe('Real integration from crates/lni/.env > ClnNode', () => {
       amountMsats: 2_000,
       description: testInvoiceLabel('cln'),
     });
-   console.log('CLN Invoice:', invoice);
+    console.log('CLN Invoice:', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
     expect(invoice.paymentHash.length).toBeGreaterThan(0);
 
