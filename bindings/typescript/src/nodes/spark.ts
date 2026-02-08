@@ -774,7 +774,8 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
     emitSparkDebugCheckpoint('aggregate_frost:adaptor_validation_failed', {
       candidates: candidateDiagnostics,
     });
-    throw new Error(
+    throw new LniError(
+      'Api',
       `Adaptor signature validation failed: no z-candidate passed validation (${candidateDiagnostics.length} tried).`,
     );
   } catch (error) {
@@ -911,7 +912,7 @@ function mapSparkTransferToTransaction(transfer: unknown): Transaction {
     descriptionHash: '',
     preimage: paymentPreimage,
     paymentHash,
-    amountMsats: numberFromUnknown(item.totalValue) * 1000,
+    amountMsats: mapCurrencyAmountToMsats(item.totalValue),
     feesPaid: feeMsats,
     createdAt,
     expiresAt,

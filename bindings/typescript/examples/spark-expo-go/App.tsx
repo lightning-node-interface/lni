@@ -344,7 +344,7 @@ export default function App() {
     const node = nodeRef.current;
     if (!node) return;
     const parsed = Number(recvAmountMsats.trim());
-    const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+    const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) * 1000 : undefined;
     const description = recvDescription.trim() || undefined;
 
     setStatus('Creating invoice...');
@@ -555,10 +555,10 @@ export default function App() {
         {/* Receive panel */}
         {activeTab === 'recv' && (
           <View style={s.panel}>
-            <Text style={s.fieldLabel}>Amount (msats)</Text>
+            <Text style={s.fieldLabel}>Amount (sats)</Text>
             <TextInput
               value={recvAmountMsats} onChangeText={setRecvAmountMsats}
-              keyboardType="number-pad" placeholder="e.g. 25000"
+              keyboardType="number-pad" placeholder="e.g. 25"
               placeholderTextColor="#555" style={s.input}
             />
             <Text style={s.fieldLabel}>Description</Text>

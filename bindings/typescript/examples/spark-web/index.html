@@ -252,8 +252,8 @@
         <!-- Receive panel -->
         <div class="panel hidden" id="recvPanel">
           <div class="field">
-            <div class="field-label">Amount (msats)</div>
-            <input id="recvAmountMsats" type="number" min="1" placeholder="e.g. 25000" />
+            <div class="field-label">Amount (sats)</div>
+            <input id="recvAmountMsats" type="number" min="1" placeholder="e.g. 25" />
           </div>
           <div class="field">
             <div class="field-label">Description</div>
@@ -607,7 +607,7 @@
       async function createInvoice() {
         if (!state.node) return;
         const parsed = Number(el.recvAmountMsats.value.trim());
-        const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+        const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) * 1000 : undefined;
         const description = el.recvDescription.value.trim() || undefined;
 
         setWalletStatus('Creating invoice...');
