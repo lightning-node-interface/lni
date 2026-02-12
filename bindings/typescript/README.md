@@ -60,6 +60,33 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### Invoice Event Polling
+
+Poll for invoice settlement after creating an invoice. The callback fires with `'success'`, `'pending'`, or `'failure'`.
+
+```ts
+await node.onInvoiceEvents(
+  {
+    paymentHash: invoice.paymentHash,
+    pollingDelaySec: 3,
+    maxPollingSec: 60,
+  },
+  (status, tx) => {
+    if (status === 'success') {
+      // Invoice was paid and settled
+      console.log('Paid!', tx.amountMsats, 'msats');
+      console.log('Preimage:', tx.preimage);
+    } else if (status === 'pending') {
+      // Still waiting — fires each poll interval
+      console.log('Waiting for payment...');
+    } else if (status === 'failure') {
+      // maxPollingSec exceeded without settlement
+      console.log('Invoice was not paid within the timeout');
+    }
+  },
+);
+```
+
 ### Spark (browser + Expo Go oriented)
 
 ```ts
@@ -153,21 +180,6 @@ const type = detectPaymentType(destination);
 const requiresResolution = needsResolution(destination);
 const info = await getPaymentInfo(destination, 100_000);
 const bolt11 = await resolveToBolt11(destination, 100_000);
-```
-
-### Invoice Event Polling
-
-```ts
-await node.onInvoiceEvents(
-  {
-    paymentHash: invoice.paymentHash,
-    pollingDelaySec: 3,
-    maxPollingSec: 60,
-  },
-  (status, tx) => {
-    console.log('Invoice event:', status, tx);
-  },
-);
 ```
 
 ## Implemented in this package
