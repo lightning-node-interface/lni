@@ -1,11 +1,13 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use breez_sdk_spark::{
     connect, default_config, BreezSdk, ConnectRequest, Network, Seed,
 };
+use tokio::sync::RwLock;
 
 use crate::types::NodeInfo;
 use crate::{
@@ -62,6 +64,7 @@ impl SparkConfig {
 pub struct SparkNode {
     pub config: SparkConfig,
     sdk: Arc<BreezSdk>,
+    spark_transactions_cache: Arc<RwLock<HashMap<String, String>>>,  // paymentHash → paymentId
 }
 
 // Constructor is inherent, not part of the trait
@@ -92,6 +95,7 @@ impl SparkNode {
         Ok(Self {
             config,
             sdk: Arc::new(sdk),
+            spark_transactions_cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -174,6 +178,7 @@ impl SparkNode {
             None,
             None,
             params.search,
+            self.spark_transactions_cache.clone(),
         )
         .await
     }
@@ -187,6 +192,9 @@ impl SparkNode {
             params.from,
             params.limit,
             params.search,
+            params.created_after,
+            params.created_before,
+            self.spark_transactions_cache.clone(),
         )
         .await
     }
@@ -200,7 +208,12 @@ impl SparkNode {
         params: crate::types::OnInvoiceEventParams,
         callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     ) {
-        crate::spark::api::on_invoice_events(self.sdk.clone(), params, callback).await
+        crate::spark::api::on_invoice_events(
+            self.sdk.clone(),
+            params,
+            callback,
+            self.spark_transactions_cache.clone(),
+        ).await
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
@@ -387,6 +400,8 @@ mod tests {
             limit: 100,
             payment_hash: None,
             search: None,
+            created_after: None,
+            created_before: None,
         };
 
         match node.list_transactions(params).await {

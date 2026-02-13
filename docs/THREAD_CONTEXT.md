@@ -115,6 +115,45 @@
 - Root cause: The Spark SDK's `payLightningInvoice()` initiates the swap and Lightning send, then returns immediately without waiting for settlement. The preimage becomes available only after the Lightning payment succeeds and the transfer completes (status progression: `LIGHTNING_PAYMENT_INITIATED` → `LIGHTNING_PAYMENT_SUCCEEDED` → `PREIMAGE_PROVIDED` → `TRANSFER_COMPLETED`).
 - Resolution: After the initial `payLightningInvoice` call, poll `wallet.getLightningSendRequest(id)` at 2-second intervals (up to 60 seconds) until a terminal status is reached. On success (`TRANSFER_COMPLETED`, `PREIMAGE_PROVIDED`, `LIGHTNING_PAYMENT_SUCCEEDED`), extract the preimage. On failure statuses (`LIGHTNING_PAYMENT_FAILED`, `USER_SWAP_RETURNED`, etc.), throw an error.
 
+## StorageProvider and Transaction Scanning Optimization
+
+### StorageProvider Interface
+- Defined in `types.ts`: async key-value store (`get`, `set`, `remove`)
+- Optional on `SparkConfig.storage` — when omitted, cache is in-memory only
+- Used by internal `TransferCache` class in `spark.ts` that wraps a Map + optional StorageProvider
+- All cache keys use the `lni:txcache:` prefix
+
+### TransferCache
+- Located in `spark.ts` as a private helper class
+- Populated during `scanTransactions` (every transfer seen gets cached) and `lookupByTransferId`
+- Two-level: in-memory Map checked first, then StorageProvider on miss
+
+### Tiered lookupInvoice Strategy
+1. Cache hit → `getTransfer(id)` direct lookup (O(1))
+2. 1-hour window scan (`createdAfter: now - 3600`)
+3. 24-hour window scan (`createdAfter: now - 86400`)
+4. Full scan — pages through all transfers (previous behavior, last resort)
+
+### Event-Based onInvoiceEvents
+- Uses `wallet.on('transfer:claimed', listener)` when SDK supports it
+- Registers listener, checks for match by paymentHash, emits 'success'
+- Falls back to polling when `on`/`off` methods are not available
+- Timeout at `maxPollingSec` emits 'failure' and cleans up listener via `wallet.off()`
+
+### Date Filters on listTransactions
+- `ListTransactionsParams` now accepts optional `createdAfter` / `createdBefore` (unix seconds)
+- Spark adapter passes them through to `getTransfers()` as `Date` objects
+- Other adapters ignore these fields (backward compatible)
+
+### SparkWalletLike Type Extensions
+- `getTransfer?(id)` — direct single-transfer lookup
+- `on?(event, listener)` / `off?(event, listener)` — event subscription
+- `getTransfers` now accepts `createdAfter?` / `createdBefore?` Date params
+
+### Example Implementations
+- Web (`spark-web/index.html`): localStorage-backed StorageProvider
+- Expo (`spark-expo-go/App.tsx`): Drizzle ORM + expo-sqlite with typed schema (`sparkTransactionsCache` table with paymentHash, transferId, timestamps) and a display cache (`sparkTransactions` table for instant startup)
+
 ## Recent Successes (Spark Frontend Work)
 - **payInvoice works end-to-end** with real Spark backend — payment confirmed received on destination node, preimage returned via polling (fee 3000 msats).
 - Spark node runs through public LNI factory API (`createNode({ kind: 'spark', ... })`) in both example apps.
@@ -140,6 +179,7 @@
 - Add deterministic signer/adaptor vector checks to catch parity or R-point divergence before runtime.
 - Add documented backend-side diagnostics for `request_swap` generic failures (to distinguish client math vs service-side policy/state issues).
 - Consider making payInvoice polling timeout configurable (currently 60s hardcoded).
+- StorageProvider: consider IndexedDB adapter for browser environments with large caches.
 
 ## README / Packaging Updates
 - Main TS README includes Spark usage and frontend runtime guidance.

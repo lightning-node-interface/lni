@@ -1,16 +1,138 @@
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use breez_sdk_spark::{
-    BreezSdk, GetInfoRequest, ListPaymentsRequest, PaymentDetails, PaymentStatus, PaymentType,
-    PrepareSendPaymentRequest, ReceivePaymentMethod, ReceivePaymentRequest, SendPaymentRequest,
+    BreezSdk, EventListener, GetInfoRequest, GetPaymentRequest, ListPaymentsRequest,
+    PaymentDetails, PaymentStatus, PaymentType, PrepareSendPaymentRequest, ReceivePaymentMethod,
+    ReceivePaymentRequest, SdkEvent, SendPaymentRequest,
 };
+use tokio::sync::RwLock;
 
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
     OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+struct PaymentInfo {
+    invoice: String,
+    payment_hash: String,
+    preimage: String,
+    description: String,
+}
+
+/// Extract invoice/hash/preimage/description from Lightning or Spark payment details.
+/// Returns None for non-Lightning/Spark payment types (Deposit, Withdraw, Token, etc.)
+fn extract_payment_info(payment: &breez_sdk_spark::Payment) -> Option<PaymentInfo> {
+    match &payment.details {
+        Some(PaymentDetails::Lightning {
+            invoice,
+            payment_hash,
+            preimage,
+            description,
+            ..
+        }) => Some(PaymentInfo {
+            invoice: invoice.clone(),
+            payment_hash: payment_hash.clone(),
+            preimage: preimage.clone().unwrap_or_default(),
+            description: description.clone().unwrap_or_default(),
+        }),
+        Some(PaymentDetails::Spark {
+            invoice_details,
+            htlc_details,
+            ..
+        }) => {
+            let invoice = invoice_details
+                .as_ref()
+                .map(|d| d.invoice.clone())
+                .unwrap_or_default();
+            let description = invoice_details
+                .as_ref()
+                .and_then(|d| d.description.clone())
+                .unwrap_or_default();
+            let (payment_hash, preimage) = if let Some(htlc) = htlc_details {
+                (
+                    htlc.payment_hash.clone(),
+                    htlc.preimage.clone().unwrap_or_default(),
+                )
+            } else {
+                ("".to_string(), "".to_string())
+            };
+            Some(PaymentInfo {
+                invoice,
+                payment_hash,
+                preimage,
+                description,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Convert a Breez Payment to an LNI Transaction.
+/// Returns None for payment types we can't map (non-Lightning/Spark without extract_payment_info).
+fn payment_to_transaction(payment: &breez_sdk_spark::Payment) -> Option<Transaction> {
+    let (invoice, payment_hash, preimage, description) = match extract_payment_info(payment) {
+        Some(info) => (info.invoice, info.payment_hash, info.preimage, info.description),
+        None => {
+            // Handle on-chain types
+            match &payment.details {
+                Some(PaymentDetails::Deposit { tx_id }) => {
+                    (tx_id.clone(), "".to_string(), "".to_string(), "Deposit".to_string())
+                }
+                Some(PaymentDetails::Withdraw { tx_id }) => {
+                    (tx_id.clone(), "".to_string(), "".to_string(), "Withdraw".to_string())
+                }
+                Some(PaymentDetails::Token { tx_hash, .. }) => {
+                    (tx_hash.clone(), "".to_string(), "".to_string(), "Token Transfer".to_string())
+                }
+                _ => return None,
+            }
+        }
+    };
+
+    Some(Transaction {
+        type_: match payment.payment_type {
+            PaymentType::Send => "outgoing".to_string(),
+            PaymentType::Receive => "incoming".to_string(),
+        },
+        invoice,
+        preimage,
+        payment_hash,
+        amount_msats: (payment.amount as i64) * 1000,
+        fees_paid: (payment.fees as i64) * 1000,
+        created_at: payment.timestamp as i64,
+        expires_at: 0,
+        settled_at: if payment.status == PaymentStatus::Completed {
+            payment.timestamp as i64
+        } else {
+            0
+        },
+        description,
+        description_hash: "".to_string(),
+        payer_note: None,
+        external_id: Some(payment.id.clone()),
+    })
+}
+
+/// Populate the cache for a payment (paymentHash → paymentId)
+async fn cache_payment(
+    payment: &breez_sdk_spark::Payment,
+    cache: &RwLock<HashMap<String, String>>,
+) {
+    if let Some(info) = extract_payment_info(payment) {
+        if !info.payment_hash.is_empty() {
+            cache
+                .write()
+                .await
+                .insert(info.payment_hash, payment.id.clone());
+        }
+    }
+}
+
+// ── Public API ───────────────────────────────────────────────────────
 
 /// Get node info from Spark SDK
 pub async fn get_info(sdk: Arc<BreezSdk>, network: &str) -> Result<NodeInfo, ApiError> {
@@ -138,13 +260,84 @@ pub async fn pay_invoice(
     })
 }
 
-/// Lookup an invoice by payment hash
+// ── Lookup ───────────────────────────────────────────────────────────
+
+/// O(1) lookup by payment ID via get_payment
+async fn lookup_by_payment_id(
+    sdk: &BreezSdk,
+    payment_id: &str,
+) -> Result<Option<Transaction>, ApiError> {
+    match sdk
+        .get_payment(GetPaymentRequest {
+            payment_id: payment_id.to_string(),
+        })
+        .await
+    {
+        Ok(resp) => Ok(payment_to_transaction(&resp.payment)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Scan payments within a time window, looking for a specific payment hash.
+/// Populates the cache for all payments seen.
+async fn scan_for_hash(
+    sdk: &BreezSdk,
+    target_hash: &str,
+    from_timestamp: Option<u64>,
+    cache: &RwLock<HashMap<String, String>>,
+) -> Result<Option<Transaction>, ApiError> {
+    const PAGE_SIZE: u32 = 100;
+    let mut offset: u32 = 0;
+
+    loop {
+        let payments = sdk
+            .list_payments(ListPaymentsRequest {
+                offset: Some(offset),
+                limit: Some(PAGE_SIZE),
+                from_timestamp,
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| ApiError::Api {
+                reason: e.to_string(),
+            })?;
+
+        if payments.payments.is_empty() {
+            break;
+        }
+
+        for payment in &payments.payments {
+            cache_payment(payment, cache).await;
+
+            if let Some(info) = extract_payment_info(payment) {
+                if info.payment_hash == target_hash {
+                    return Ok(payment_to_transaction(payment));
+                }
+            }
+        }
+
+        if (payments.payments.len() as u32) < PAGE_SIZE {
+            break;
+        }
+
+        offset += PAGE_SIZE;
+    }
+
+    Ok(None)
+}
+
+/// Lookup an invoice by payment hash using tiered strategy:
+/// 1. Cache hit → O(1) get_payment
+/// 2. 1-hour window scan
+/// 3. 24-hour window scan
+/// 4. Full scan (fallback)
 pub async fn lookup_invoice(
     sdk: Arc<BreezSdk>,
     payment_hash: Option<String>,
     _from: Option<i64>,
     _limit: Option<i64>,
     _search: Option<String>,
+    cache: Arc<RwLock<HashMap<String, String>>>,
 ) -> Result<Transaction, ApiError> {
     let target_hash = payment_hash.ok_or_else(|| ApiError::Api {
         reason: "Payment hash is required for lookup".to_string(),
@@ -156,96 +349,39 @@ pub async fn lookup_invoice(
         });
     }
 
-    // Paginate through all payments to find the target hash
-    const PAGE_SIZE: u32 = 100;
-    let mut offset: u32 = 0;
-
-    loop {
-        let payments = sdk
-            .list_payments(ListPaymentsRequest {
-                offset: Some(offset),
-                limit: Some(PAGE_SIZE),
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| ApiError::Api {
-                reason: e.to_string(),
-            })?;
-        dbg!(&payments);
-
-        if payments.payments.is_empty() {
-            break;
-        }
-
-        for payment in payments.payments.iter() {
-            let (invoice, p_hash, preimage, description) = match &payment.details {
-                Some(PaymentDetails::Lightning {
-                    invoice,
-                    payment_hash,
-                    preimage,
-                    description,
-                    ..
-                }) => (
-                    invoice.clone(),
-                    payment_hash.clone(),
-                    preimage.clone().unwrap_or_default(),
-                    description.clone().unwrap_or_default(),
-                ),
-                Some(PaymentDetails::Spark {
-                    invoice_details,
-                    htlc_details,
-                    ..
-                }) => {
-                    let inv = invoice_details
-                        .as_ref()
-                        .map(|d| d.invoice.clone())
-                        .unwrap_or_default();
-                    let desc = invoice_details
-                        .as_ref()
-                        .and_then(|d| d.description.clone())
-                        .unwrap_or_default();
-                    let (hash, preimg) = if let Some(htlc) = htlc_details {
-                        (htlc.payment_hash.clone(), htlc.preimage.clone().unwrap_or_default())
-                    } else {
-                        ("".to_string(), "".to_string())
-                    };
-                    (inv, hash, preimg, desc)
+    // Tier 1: Cache hit → O(1) lookup
+    {
+        let cached_id = cache.read().await.get(&target_hash).cloned();
+        if let Some(payment_id) = cached_id {
+            if let Some(txn) = lookup_by_payment_id(&sdk, &payment_id).await? {
+                // Verify the hash still matches (stale eviction)
+                if txn.payment_hash == target_hash {
+                    return Ok(txn);
                 }
-                _ => continue,
-            };
-
-            if p_hash == target_hash {
-                return Ok(Transaction {
-                    type_: match payment.payment_type {
-                        PaymentType::Send => "outgoing".to_string(),
-                        PaymentType::Receive => "incoming".to_string(),
-                    },
-                    invoice,
-                    preimage,
-                    payment_hash: p_hash,
-                    amount_msats: (payment.amount as i64) * 1000,
-                    fees_paid: (payment.fees as i64) * 1000,
-                    created_at: payment.timestamp as i64,
-                    expires_at: 0,
-                    settled_at: if payment.status == PaymentStatus::Completed {
-                        payment.timestamp as i64
-                    } else {
-                        0
-                    },
-                    description,
-                    description_hash: "".to_string(),
-                    payer_note: None,
-                    external_id: Some(payment.id.clone()),
-                });
             }
+            // Stale entry — evict
+            cache.write().await.remove(&target_hash);
         }
+    }
 
-        // If we got fewer than PAGE_SIZE results, we've reached the end
-        if (payments.payments.len() as u32) < PAGE_SIZE {
-            break;
-        }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
 
-        offset += PAGE_SIZE;
+    // Tier 2: 1-hour window
+    if let Some(txn) = scan_for_hash(&sdk, &target_hash, Some(now - 3600), &cache).await? {
+        return Ok(txn);
+    }
+
+    // Tier 3: 24-hour window
+    if let Some(txn) = scan_for_hash(&sdk, &target_hash, Some(now - 86400), &cache).await? {
+        return Ok(txn);
+    }
+
+    // Tier 4: Full scan (no time filter)
+    if let Some(txn) = scan_for_hash(&sdk, &target_hash, None, &cache).await? {
+        return Ok(txn);
     }
 
     Err(ApiError::Api {
@@ -253,17 +389,24 @@ pub async fn lookup_invoice(
     })
 }
 
-/// List transactions from Spark SDK
+// ── List Transactions ────────────────────────────────────────────────
+
+/// List transactions from Spark SDK with optional date filters
 pub async fn list_transactions(
     sdk: Arc<BreezSdk>,
     from: i64,
     limit: i64,
     _search: Option<String>,
+    created_after: Option<i64>,
+    created_before: Option<i64>,
+    cache: Arc<RwLock<HashMap<String, String>>>,
 ) -> Result<Vec<Transaction>, ApiError> {
     let payments = sdk
         .list_payments(ListPaymentsRequest {
             offset: Some(from as u32),
             limit: Some(limit as u32),
+            from_timestamp: created_after.map(|t| t as u64),
+            to_timestamp: created_before.map(|t| t as u64),
             ..Default::default()
         })
         .await
@@ -273,87 +416,23 @@ pub async fn list_transactions(
 
     let mut transactions = Vec::new();
 
-    for payment in payments.payments {
-        let (invoice, payment_hash, preimage, description) = match &payment.details {
-            Some(PaymentDetails::Lightning {
-                invoice,
-                payment_hash,
-                preimage,
-                description,
-                ..
-            }) => (
-                invoice.clone(),
-                payment_hash.clone(),
-                preimage.clone().unwrap_or_default(),
-                description.clone().unwrap_or_default(),
-            ),
-            Some(PaymentDetails::Spark {
-                invoice_details,
-                htlc_details,
-                ..
-            }) => {
-                let inv = invoice_details
-                    .as_ref()
-                    .map(|d| d.invoice.clone())
-                    .unwrap_or_default();
-                let desc = invoice_details
-                    .as_ref()
-                    .and_then(|d| d.description.clone())
-                    .unwrap_or_default();
-                let (hash, preimg) = if let Some(htlc) = htlc_details {
-                    (htlc.payment_hash.clone(), htlc.preimage.clone().unwrap_or_default())
-                } else {
-                    ("".to_string(), "".to_string())
-                };
-                (inv, hash, preimg, desc)
-            }
-            Some(PaymentDetails::Deposit { tx_id }) => {
-                (tx_id.clone(), "".to_string(), "".to_string(), "Deposit".to_string())
-            }
-            Some(PaymentDetails::Withdraw { tx_id }) => {
-                (tx_id.clone(), "".to_string(), "".to_string(), "Withdraw".to_string())
-            }
-            Some(PaymentDetails::Token { tx_hash, .. }) => {
-                (tx_hash.clone(), "".to_string(), "".to_string(), "Token Transfer".to_string())
-            }
-            None => continue,
-        };
+    for payment in &payments.payments {
+        cache_payment(payment, &cache).await;
 
-        transactions.push(Transaction {
-            type_: match payment.payment_type {
-                PaymentType::Send => "outgoing".to_string(),
-                PaymentType::Receive => "incoming".to_string(),
-            },
-            invoice,
-            preimage,
-            payment_hash,
-            amount_msats: (payment.amount as i64) * 1000,
-            fees_paid: (payment.fees as i64) * 1000,
-            created_at: payment.timestamp as i64,
-            expires_at: 0,
-            settled_at: if payment.status == PaymentStatus::Completed {
-                payment.timestamp as i64
-            } else {
-                0
-            },
-            description,
-            description_hash: "".to_string(),
-            payer_note: None,
-            external_id: Some(payment.id),
-        });
+        if let Some(txn) = payment_to_transaction(payment) {
+            transactions.push(txn);
+        }
     }
 
     Ok(transactions)
 }
 
+// ── Decode / Offers ──────────────────────────────────────────────────
+
 /// Decode a payment request using the SDK's parse functionality
 pub async fn decode(sdk: Arc<BreezSdk>, input: String) -> Result<String, ApiError> {
-    // Use the SDK's parse method to decode the input
     match sdk.parse(&input).await {
-        Ok(parsed) => {
-            // Return a JSON representation of the parsed input
-            Ok(format!("{:?}", parsed))
-        }
+        Ok(parsed) => Ok(format!("{:?}", parsed)),
         Err(e) => Err(ApiError::Api {
             reason: format!("Failed to decode input: {}", e),
         }),
@@ -385,76 +464,108 @@ pub fn pay_offer(
     })
 }
 
-/// Poll invoice events
-pub async fn poll_invoice_events<F>(
-    sdk: Arc<BreezSdk>,
-    params: OnInvoiceEventParams,
-    mut callback: F,
-) where
-    F: FnMut(String, Option<Transaction>),
-{
-    let start_time = std::time::Instant::now();
-    loop {
-        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
-            callback("failure".to_string(), None);
-            break;
+// ── Invoice Events (event-driven) ───────────────────────────────────
+
+/// EventListener that forwards PaymentSucceeded events through an mpsc channel
+struct InvoiceEventListener {
+    tx: tokio::sync::mpsc::UnboundedSender<breez_sdk_spark::Payment>,
+}
+
+#[async_trait::async_trait]
+impl EventListener for InvoiceEventListener {
+    async fn on_event(&self, event: SdkEvent) {
+        if let SdkEvent::PaymentSucceeded { payment } = event {
+            let _ = self.tx.send(payment);
         }
-
-        let (status, transaction) = match lookup_invoice(
-            sdk.clone(),
-            params.payment_hash.clone(),
-            None,
-            None,
-            params.search.clone(),
-        )
-        .await
-        {
-            Ok(transaction) => {
-                if transaction.settled_at > 0 {
-                    ("settled".to_string(), Some(transaction))
-                } else {
-                    ("pending".to_string(), Some(transaction))
-                }
-            }
-            // Treat lookup errors as transient - invoice may not be indexed yet
-            Err(_) => ("pending".to_string(), None),
-        };
-
-        match status.as_str() {
-            "settled" => {
-                callback("success".to_string(), transaction);
-                break;
-            }
-            _ => {
-                callback("pending".to_string(), transaction);
-            }
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            params.polling_delay_sec as u64,
-        ))
-        .await;
     }
 }
 
-/// Handle invoice events with callback trait
+/// Handle invoice events using event listener + timeout
 pub async fn on_invoice_events(
     sdk: Arc<BreezSdk>,
     mut params: OnInvoiceEventParams,
     callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
+    cache: Arc<RwLock<HashMap<String, String>>>,
 ) {
     // Use payment_hash if provided, otherwise fall back to search
     if params.payment_hash.is_none() {
         params.payment_hash = params.search.clone();
     }
 
-    poll_invoice_events(sdk, params, move |status, tx| match status.as_str() {
-        "success" => callback.success(tx),
-        "pending" => callback.pending(tx),
-        "failure" => callback.failure(tx),
-        _ => {}
+    let target_hash = match &params.payment_hash {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => {
+            callback.failure(None);
+            return;
+        }
+    };
+
+    // Check if already settled
+    if let Ok(txn) = lookup_invoice(
+        sdk.clone(),
+        Some(target_hash.clone()),
+        None,
+        None,
+        None,
+        cache.clone(),
+    )
+    .await
+    {
+        if txn.settled_at > 0 {
+            callback.success(Some(txn));
+            return;
+        }
+        callback.pending(Some(txn));
+    }
+
+    // Register event listener
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let listener = InvoiceEventListener { tx };
+    let listener_id = sdk.add_event_listener(Box::new(listener)).await;
+
+    let timeout = tokio::time::Duration::from_secs(params.max_polling_sec as u64);
+
+    // Wait for matching event or timeout
+    let result = tokio::time::timeout(timeout, async {
+        while let Some(payment) = rx.recv().await {
+            cache_payment(&payment, &cache).await;
+            if let Some(info) = extract_payment_info(&payment) {
+                if info.payment_hash == target_hash {
+                    return Some(payment_to_transaction(&payment));
+                }
+            }
+        }
+        None
     })
     .await;
+
+    // Cleanup listener
+    sdk.remove_event_listener(&listener_id).await;
+
+    match result {
+        Ok(Some(Some(txn))) => callback.success(Some(txn)),
+        Ok(Some(None)) => callback.failure(None), // matched but couldn't convert
+        Ok(None) => callback.failure(None),        // channel closed
+        Err(_) => {
+            // Timeout — do one final lookup in case we missed the event
+            if let Ok(txn) = lookup_invoice(
+                sdk.clone(),
+                Some(target_hash),
+                None,
+                None,
+                None,
+                cache,
+            )
+            .await
+            {
+                if txn.settled_at > 0 {
+                    callback.success(Some(txn));
+                    return;
+                }
+            }
+            callback.failure(None);
+        }
+    }
 }
 
 /// Extract payment hash from a BOLT11 invoice
