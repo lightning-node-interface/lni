@@ -299,6 +299,10 @@ pub struct ListTransactionsParams {
     pub limit: i64,
     pub payment_hash: Option<String>,
     pub search: Option<String>, // searches the payer_note/memo/decription
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub created_after: Option<i64>,   // unix seconds
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub created_before: Option<i64>,  // unix seconds
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]

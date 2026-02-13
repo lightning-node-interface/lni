@@ -620,6 +620,8 @@ pub async fn poll_invoice_events<F>(
                 limit: 2500, // TODO remove hardcoded limit
                 payment_hash: params.payment_hash.clone(),
                 search: params.search.clone(),
+                created_after: None,
+                created_before: None,
             },
         ).await {
             Ok(transactions) => {

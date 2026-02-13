@@ -323,6 +323,13 @@
       const STORAGE_KEY = 'lni.spark.web.demo.v1';
       const NETWORK_MAP = { MAINNET: 'mainnet', TESTNET: 'testnet', REGTEST: 'regtest', SIGNET: 'signet', LOCAL: 'local' };
 
+      /** StorageProvider backed by localStorage for persisting the transfer cache. */
+      const localStorageProvider = {
+        async get(key) { return localStorage.getItem(key); },
+        async set(key, value) { localStorage.setItem(key, value); },
+        async remove(key) { localStorage.removeItem(key); },
+      };
+
       const state = { node: null, balanceSats: 0, transactions: [] };
       let sparkRuntimeHandle = null;
 
@@ -546,6 +553,7 @@
               mnemonic: cfg.mnemonic,
               network: NETWORK_MAP[cfg.network] ?? 'mainnet',
               sdkEntry: 'bare',
+              storage: localStorageProvider,
               sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
             },
           });

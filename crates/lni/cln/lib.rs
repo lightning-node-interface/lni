@@ -448,6 +448,8 @@ mod tests {
             limit: 10,
             payment_hash: None,
             search: None,
+            created_after: None,
+            created_before: None,
         };
         match NODE.list_transactions(params).await {
             Ok(txns) => {

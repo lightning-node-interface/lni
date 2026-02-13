@@ -260,6 +260,8 @@ mod tests {
             limit: 100,
             payment_hash: None,
             search: None,
+            created_after: None,
+            created_before: None,
         };
 
         match NODE.list_transactions(params).await {

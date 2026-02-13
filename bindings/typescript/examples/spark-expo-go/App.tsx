@@ -1,7 +1,11 @@
 import 'react-native-get-random-values';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { desc, eq, sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/expo-sqlite';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import * as Clipboard from 'expo-clipboard';
+import { openDatabaseSync } from 'expo-sqlite';
 import {
   createNode,
   installSparkRuntime,
@@ -9,6 +13,7 @@ import {
   type SparkConfig,
   type SparkNode,
   type SparkRuntimeHandle,
+  type StorageProvider,
   type Transaction,
 } from '@sunnyln/lni';
 import { StatusBar } from 'expo-status-bar';
@@ -58,7 +63,116 @@ const DEFAULT_FORM: SparkFormState = {
   apiKey: '',
   sspBaseUrl: '',
   sspIdentityPublicKey: '',
-  transferLimit: '25',
+  transferLimit: '100',
+};
+
+/** Drizzle schema — Spark transaction cache. */
+export const sparkTransactionsCache = sqliteTable('spark_transactions_cache', {
+  paymentHash: text('payment_hash').primaryKey(),
+  transferId: text('transfer_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export type SparkTransactionCache = typeof sparkTransactionsCache.$inferSelect;
+export type NewSparkTransactionCache = typeof sparkTransactionsCache.$inferInsert;
+
+const lniDb = drizzle(openDatabaseSync('lni-cache.db'), { schema: { sparkTransactionsCache } });
+lniDb.run(sql`CREATE TABLE IF NOT EXISTS spark_transactions_cache (
+  payment_hash TEXT PRIMARY KEY,
+  transfer_id  TEXT NOT NULL,
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at   INTEGER NOT NULL DEFAULT (unixepoch())
+)`);
+
+/** Drizzle schema — cached transaction display data for instant startup. */
+export const sparkTransactions = sqliteTable('spark_transactions', {
+  paymentHash: text('payment_hash').primaryKey(),
+  type: text('type').notNull(),
+  amountMsats: integer('amount_msats').notNull(),
+  memo: text('memo').notNull().default(''),
+  createdAt: integer('created_at').notNull().default(0),
+  settledAt: integer('settled_at').notNull().default(0),
+});
+
+export type SparkTransaction = typeof sparkTransactions.$inferSelect;
+export type NewSparkTransaction = typeof sparkTransactions.$inferInsert;
+
+lniDb.run(sql`CREATE TABLE IF NOT EXISTS spark_transactions (
+  payment_hash TEXT PRIMARY KEY,
+  type         TEXT NOT NULL,
+  amount_msats INTEGER NOT NULL,
+  memo         TEXT NOT NULL DEFAULT '',
+  created_at   INTEGER NOT NULL DEFAULT 0,
+  settled_at   INTEGER NOT NULL DEFAULT 0
+)`);
+
+function loadCachedTransactions(limit: number): TxRow[] {
+  const rows = lniDb.select().from(sparkTransactions)
+    .orderBy(desc(sparkTransactions.createdAt))
+    .limit(limit).all();
+  return rows.map((row) => {
+    const amountSats = Math.floor(row.amountMsats / 1000);
+    const isIncoming = row.type === 'incoming';
+    return {
+      type: row.type,
+      amountSats,
+      memo: row.memo || (isIncoming ? 'Received' : 'Sent'),
+      time: formatTime(row.settledAt || row.createdAt),
+      paymentHash: row.paymentHash,
+    };
+  });
+}
+
+function saveCachedTransactions(txs: Transaction[]): void {
+  for (const tx of txs) {
+    if (!tx.paymentHash) continue;
+    lniDb.insert(sparkTransactions)
+      .values({
+        paymentHash: tx.paymentHash,
+        type: tx.type,
+        amountMsats: tx.amountMsats,
+        memo: tx.description,
+        createdAt: tx.createdAt,
+        settledAt: tx.settledAt,
+      })
+      .onConflictDoUpdate({
+        target: sparkTransactions.paymentHash,
+        set: {
+          type: tx.type,
+          amountMsats: tx.amountMsats,
+          memo: tx.description,
+          settledAt: tx.settledAt,
+        },
+      }).run();
+  }
+}
+
+const CACHE_PREFIX = 'lni:txcache:';
+
+const drizzleStorageProvider: StorageProvider = {
+  async get(key: string) {
+    if (!key.startsWith(CACHE_PREFIX)) return null;
+    const paymentHash = key.slice(CACHE_PREFIX.length);
+    const row = lniDb.select().from(sparkTransactionsCache)
+      .where(eq(sparkTransactionsCache.paymentHash, paymentHash)).get();
+    return row?.transferId ?? null;
+  },
+  async set(key: string, value: string) {
+    if (!key.startsWith(CACHE_PREFIX)) return;
+    const paymentHash = key.slice(CACHE_PREFIX.length);
+    lniDb.insert(sparkTransactionsCache)
+      .values({ paymentHash, transferId: value })
+      .onConflictDoUpdate({
+        target: sparkTransactionsCache.paymentHash,
+        set: { transferId: value, updatedAt: new Date() },
+      }).run();
+  },
+  async remove(key: string) {
+    if (!key.startsWith(CACHE_PREFIX)) return;
+    const paymentHash = key.slice(CACHE_PREFIX.length);
+    lniDb.delete(sparkTransactionsCache).where(eq(sparkTransactionsCache.paymentHash, paymentHash)).run();
+  },
 };
 
 function numberFromUnknown(value: unknown): number {
@@ -166,6 +280,11 @@ export default function App() {
   const [invoiceString, setInvoiceString] = useState('');
   const [invoicePollingStatus, setInvoicePollingStatus] = useState('');
 
+  // Perf
+  const [showPerf, setShowPerf] = useState(false);
+  const [perfRunning, setPerfRunning] = useState(false);
+  const [perfResults, setPerfResults] = useState('');
+
   // Debug
   const [debugJson, setDebugJson] = useState('[]');
 
@@ -260,6 +379,7 @@ export default function App() {
       mnemonic: form.mnemonic.trim(),
       network: NETWORK_TO_SPARK_CONFIG[form.network],
       sdkEntry: 'bare',
+      storage: drizzleStorageProvider,
       sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
     };
   }, [form.mnemonic, form.network, form.sspBaseUrl, form.sspIdentityPublicKey]);
@@ -277,6 +397,7 @@ export default function App() {
       ]);
       setBalanceSats(Math.floor(numberFromUnknown(info.sendBalanceMsat) / 1000));
       setTransactions(txs.map(mapTx));
+      saveCachedTransactions(txs);
       setStatus('');
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
@@ -295,14 +416,23 @@ export default function App() {
       const node = createNode({ kind: 'spark', config: buildSparkConfig() });
       nodeRef.current = node;
       setConnected(true);
-      setStatus('Loading...');
+
+      // Show cached transactions instantly while network loads
+      const cached = loadCachedTransactions(transferLimit);
+      if (cached.length > 0) {
+        setTransactions(cached);
+        setStatus('Updating...');
+      } else {
+        setStatus('Loading...');
+      }
+
       await refresh();
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
-  }, [buildSparkConfig, disconnectNode, form, persistForm, refresh, setupRuntime]);
+  }, [buildSparkConfig, disconnectNode, form, persistForm, refresh, setupRuntime, transferLimit]);
 
   // Auto-connect
   useEffect(() => {
@@ -457,6 +587,58 @@ export default function App() {
   const copyDebug = useCallback(async () => {
     try { await Clipboard.setStringAsync(debugJson); setStatus('Log copied'); } catch {}
   }, [debugJson]);
+
+  const copyPerfResults = useCallback(async () => {
+    if (!perfResults) return;
+    try { await Clipboard.setStringAsync(perfResults); setStatus('Results copied'); } catch {}
+  }, [perfResults]);
+
+  // Perf benchmark
+  const runListBenchmark = useCallback(async () => {
+    const node = nodeRef.current;
+    if (!node) return;
+    setPerfRunning(true);
+    setPerfResults('Running...');
+    const limit = transferLimit;
+    const now = Math.floor(Date.now() / 1000);
+    const lines: string[] = [];
+
+    const bench = async (label: string, params: { from: number; limit: number; createdAfter?: number; createdBefore?: number }) => {
+      const t0 = performance.now();
+      try {
+        setupRuntime(form.apiKey);
+        const txs = await node.listTransactions(params);
+        const ms = Math.round(performance.now() - t0);
+        lines.push(`${label}: ${ms}ms (${txs.length} txs)`);
+      } catch (e) {
+        const ms = Math.round(performance.now() - t0);
+        lines.push(`${label}: ${ms}ms ERROR ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+
+    await bench('Full scan (no filter)', { from: 0, limit });
+    await bench('Last 1 hour', { from: 0, limit, createdAfter: now - 3600 });
+    await bench('Last 24 hours', { from: 0, limit, createdAfter: now - 86400 });
+    await bench('Last 7 days', { from: 0, limit, createdAfter: now - 604800 });
+
+    // Run full scan again to show warm-cache effect
+    await bench('Full scan (warm)', { from: 0, limit });
+
+    setPerfResults(lines.join('\n'));
+    setPerfRunning(false);
+  }, [form.apiKey, setupRuntime, transferLimit]);
+
+  const dumpCacheDb = useCallback(() => {
+    const rows = lniDb.select().from(sparkTransactionsCache).all();
+    console.log(`--- spark_transactions_cache dump (${rows.length} rows) ---`);
+    for (const row of rows) {
+      const created = row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt;
+      const updated = row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt;
+      console.log(`  ${row.paymentHash} -> ${row.transferId}  (created: ${created}, updated: ${updated})`);
+    }
+    console.log('--- end dump ---');
+    setStatus(`Dumped ${rows.length} rows to console`);
+  }, []);
 
   // ---------- RENDER ----------
 
@@ -684,6 +866,40 @@ export default function App() {
           )}
         </View>
 
+        {/* Perf benchmark */}
+        <Pressable style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 16 }]} onPress={() => setShowPerf((v) => !v)}>
+          <Text style={s.btnTextLight}>{showPerf ? 'Hide Perf' : 'Perf Benchmark'}</Text>
+        </Pressable>
+
+        {showPerf && (
+          <View style={s.perfSection}>
+            <Text style={s.perfTitle}>listTransactions Benchmark</Text>
+            <Text style={s.perfDesc}>Compares full scan vs date-filtered queries</Text>
+            <Pressable
+              style={[s.btn, s.btnOrange, perfRunning && s.btnDisabled]}
+              onPress={() => void runListBenchmark()}
+              disabled={perfRunning}
+            >
+              {perfRunning ? (
+                <View style={s.btnRow}><ActivityIndicator size="small" color="#000" /><Text style={s.btnTextDark}>Running...</Text></View>
+              ) : (
+                <Text style={s.btnTextDark}>Run Benchmark</Text>
+              )}
+            </Pressable>
+            {perfResults !== '' && (
+              <>
+                <Pressable onPress={() => void copyPerfResults()}>
+                  <Text selectable style={s.perfResults}>{perfResults}</Text>
+                  <Text style={s.copyHint}>Tap to copy</Text>
+                </Pressable>
+              </>
+            )}
+            <Pressable style={[s.btn, s.btnGhost]} onPress={dumpCacheDb}>
+              <Text style={s.btnTextLight}>Dump Cache DB</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Log toggle */}
         <Pressable style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 8 }]} onPress={() => setShowLog((v) => !v)}>
           <Text style={s.btnTextLight}>{showLog ? 'Hide Log' : 'Show Log'}</Text>
@@ -832,6 +1048,12 @@ const s = StyleSheet.create({
   txAmount: { fontSize: 14, fontWeight: '600' },
   txAmountIn: { color: '#4ade80' },
   txAmountOut: { color: '#f1f5f9' },
+
+  // Perf
+  perfSection: { paddingHorizontal: 20, paddingTop: 10, gap: 10 },
+  perfTitle: { color: '#f1f5f9', fontSize: 15, fontWeight: '700' },
+  perfDesc: { color: '#64748b', fontSize: 12 },
+  perfResults: { backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b', borderRadius: 10, padding: 12, fontFamily: 'Courier', fontSize: 13, color: '#4ade80', lineHeight: 22 },
 
   // Log
   logSection: { paddingHorizontal: 20, paddingTop: 10, gap: 8 },

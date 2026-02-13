@@ -112,6 +112,7 @@ const sparkNode = createNode({
     // defaultMaxFeeSats: 20,
     // sparkOptions: { ...sdk options... },
     // sdkEntry: 'auto' | 'bare' | 'native' | 'default'
+    // storage: myStorageProvider, // persistent cache (see below)
   },
 });
 
@@ -152,6 +153,91 @@ Three cryptographic bugs were discovered and fixed during implementation:
 - **Payment completion polling**: The SDK's `payLightningInvoice()` returns immediately after initiating the swap, before the Lightning payment settles. Added polling via `getLightningSendRequest` to wait for the terminal status and return the preimage.
 
 Reference implementation for Spark's FROST behavior: [buildonspark/spark](https://github.com/buildonspark/spark) (uses Rust WASM, not `@frosts`).
+
+### StorageProvider (optional persistent cache)
+
+Spark maintains an internal `paymentHash → transferId` cache that accelerates `lookupInvoice`, `onInvoiceEvents`, and `listTransactions`. By default the cache lives in-memory for the lifetime of the `SparkNode`. Pass a `StorageProvider` to persist it across app restarts.
+
+```ts
+import { type StorageProvider } from '@sunnyln/lni';
+```
+
+The interface is a simple async key-value store:
+
+```ts
+interface StorageProvider {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+```
+
+**Browser — localStorage**
+
+```ts
+const localStorageProvider: StorageProvider = {
+  get: async (key) => localStorage.getItem(key),
+  set: async (key, value) => localStorage.setItem(key, value),
+  remove: async (key) => localStorage.removeItem(key),
+};
+
+const node = createNode({
+  kind: 'spark',
+  config: { mnemonic: '...', storage: localStorageProvider },
+});
+```
+
+**Expo / React Native — Drizzle ORM + expo-sqlite**
+
+```ts
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/expo-sqlite';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { openDatabaseSync } from 'expo-sqlite';
+
+export const sparkTransactionsCache = sqliteTable('spark_transactions_cache', {
+  paymentHash: text('payment_hash').primaryKey(),
+  transferId: text('transfer_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+export type SparkTransactionCache = typeof sparkTransactionsCache.$inferSelect;
+export type NewSparkTransactionCache = typeof sparkTransactionsCache.$inferInsert;
+
+const db = drizzle(openDatabaseSync('lni-cache.db'));
+
+const PREFIX = 'lni:txcache:';
+const drizzleStorageProvider: StorageProvider = {
+  get: async (key) => {
+    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+    const row = db.select().from(sparkTransactionsCache)
+      .where(eq(sparkTransactionsCache.paymentHash, hash)).get();
+    return row?.transferId ?? null;
+  },
+  set: async (key, value) => {
+    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+    db.insert(sparkTransactionsCache)
+      .values({ paymentHash: hash, transferId: value })
+      .onConflictDoUpdate({
+        target: sparkTransactionsCache.paymentHash,
+        set: { transferId: value, updatedAt: new Date() },
+      }).run();
+  },
+  remove: async (key) => {
+    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+    db.delete(sparkTransactionsCache)
+      .where(eq(sparkTransactionsCache.paymentHash, hash)).run();
+  },
+};
+```
+
+When a `StorageProvider` is configured, `lookupInvoice` uses a tiered lookup strategy:
+1. **Cache hit** — O(1) lookup by cached transfer ID
+2. **1-hour scan** — `getTransfers` with a 1-hour lookback window
+3. **24-hour scan** — `getTransfers` with a 24-hour lookback window
+4. **Full scan** — pages through all transfers (last resort)
+
+`onInvoiceEvents` also uses SDK event listeners (`transfer:claimed`) when available, falling back to polling when not.
 
 Spark entrypoint behavior:
 - `sdkEntry: 'auto'` (default) uses a browser-safe bundled Spark bare runtime in browser/Expo and falls back to the default SDK entry in Node.

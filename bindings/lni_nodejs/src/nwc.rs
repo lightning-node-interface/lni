@@ -116,6 +116,8 @@ impl NwcNode {
       limit: params.limit,
       payment_hash: params.payment_hash,
       search: params.search,
+      created_after: params.created_after,
+      created_before: params.created_before,
     };
     let txns = lni::nwc::api::list_transactions(self.inner.clone(), nwc_params)
       .await

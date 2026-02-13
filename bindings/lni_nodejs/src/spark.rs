@@ -215,6 +215,8 @@ impl SparkNode {
             limit: params.limit,
             search: params.search,
             payment_hash: params.payment_hash,
+            created_after: params.created_after,
+            created_before: params.created_before,
         };
         
         node.list_transactions(lni_params)

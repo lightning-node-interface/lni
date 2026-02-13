@@ -28,7 +28,7 @@ import { LniError } from '../errors.js';
 import { bytesToHex, hexToBytes } from '../internal/encoding.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type SparkConfig, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type SparkConfig, type StorageProvider, type Transaction } from '../types.js';
 
 type SparkSdkEntry = 'auto' | 'bare' | 'native' | 'default';
 
@@ -63,7 +63,15 @@ type SparkWalletLike = {
     amountSatsToSend?: number;
     idempotencyKey?: string;
   }): Promise<unknown>;
-  getTransfers(limit?: number, offset?: number): Promise<{ transfers: unknown[]; offset: number }>;
+  getTransfers(
+    limit?: number,
+    offset?: number,
+    createdAfter?: Date,
+    createdBefore?: Date,
+  ): Promise<{ transfers: unknown[]; offset: number }>;
+  getTransfer?(id: string): Promise<unknown | undefined>;
+  on?(event: string, listener: (...args: unknown[]) => void): unknown;
+  off?(event: string, listener: (...args: unknown[]) => void): unknown;
   getLightningSendRequest?(id: string): Promise<{
     status?: string;
     paymentPreimage?: string;
@@ -854,6 +862,31 @@ function extractAmountMsatsFromInvoice(invoice: string): number | undefined {
   return undefined;
 }
 
+class TransferCache {
+  private readonly mem = new Map<string, string>();
+  constructor(private readonly storage?: StorageProvider) {}
+
+  async get(paymentHash: string): Promise<string | undefined> {
+    const hit = this.mem.get(paymentHash);
+    if (hit) return hit;
+    if (this.storage) {
+      const stored = await this.storage.get(`lni:txcache:${paymentHash}`);
+      if (stored) { this.mem.set(paymentHash, stored); return stored; }
+    }
+    return undefined;
+  }
+
+  async set(paymentHash: string, transferId: string): Promise<void> {
+    this.mem.set(paymentHash, transferId);
+    await this.storage?.set(`lni:txcache:${paymentHash}`, transferId);
+  }
+
+  async delete(paymentHash: string): Promise<void> {
+    this.mem.delete(paymentHash);
+    await this.storage?.remove(`lni:txcache:${paymentHash}`);
+  }
+}
+
 async function sha256HexOfHexString(hex: string): Promise<string> {
   if (!hex) {
     return '';
@@ -950,11 +983,13 @@ export class SparkNode implements LightningNode {
   private sdkPromise?: Promise<SparkSdkModuleLike>;
   private walletPromise?: Promise<SparkWalletLike>;
   private pureFrostInstalled = false;
+  private readonly transferCache: TransferCache;
 
   constructor(private readonly config: SparkConfig, _options: NodeRequestOptions = {}) {
     if (!config.mnemonic?.trim()) {
       throw new LniError('InvalidInput', 'Spark mnemonic is required.');
     }
+    this.transferCache = new TransferCache(config.storage);
   }
 
   private async loadSdk(): Promise<SparkSdkModuleLike> {
@@ -1268,6 +1303,8 @@ export class SparkNode implements LightningNode {
       limit: number;
       paymentHash?: string;
       search?: string;
+      createdAfter?: number;
+      createdBefore?: number;
     },
   ): Promise<Transaction[]> {
     const wallet = await this.getWallet();
@@ -1278,8 +1315,11 @@ export class SparkNode implements LightningNode {
     let offset = from;
     let scanned = 0;
 
+    const createdAfterDate = params.createdAfter ? new Date(params.createdAfter * 1000) : undefined;
+    const createdBeforeDate = params.createdBefore ? new Date(params.createdBefore * 1000) : undefined;
+
     while (results.length < limit && scanned < DEFAULT_SCAN_LIMIT) {
-      const page = await wallet.getTransfers(pageSize, offset);
+      const page = await wallet.getTransfers(pageSize, offset, createdAfterDate, createdBeforeDate);
       const transfers = Array.isArray(page.transfers) ? page.transfers : [];
       if (!transfers.length) {
         break;
@@ -1287,6 +1327,10 @@ export class SparkNode implements LightningNode {
 
       for (const transfer of transfers) {
         const tx = mapSparkTransferToTransaction(transfer);
+        const transferId = (transfer as { id?: string })?.id;
+        if (tx.paymentHash && transferId) {
+          this.transferCache.set(tx.paymentHash, transferId).catch(() => {});
+        }
         if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
           continue;
         }
@@ -1310,11 +1354,71 @@ export class SparkNode implements LightningNode {
     return results;
   }
 
+  private async lookupByTransferId(transferId: string): Promise<Transaction | undefined> {
+    const wallet = await this.getWallet();
+    if (typeof wallet.getTransfer !== 'function') {
+      return undefined;
+    }
+    try {
+      const transfer = await wallet.getTransfer(transferId);
+      if (!transfer) {
+        return undefined;
+      }
+      const tx = mapSparkTransferToTransaction(transfer);
+      if (tx.paymentHash) {
+        await this.transferCache.set(tx.paymentHash, transferId);
+      }
+      return tx;
+    } catch {
+      return undefined;
+    }
+  }
+
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
     if (!params.paymentHash && !params.search) {
       throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search for SparkNode.');
     }
 
+    // 1. Cache hit — O(1) direct lookup
+    if (params.paymentHash) {
+      const cachedId = await this.transferCache.get(params.paymentHash);
+      if (cachedId) {
+        const tx = await this.lookupByTransferId(cachedId);
+        if (tx && tx.paymentHash === params.paymentHash) {
+          return tx;
+        }
+        // Stale cache entry — remove and fall through
+        await this.transferCache.delete(params.paymentHash);
+      }
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // 2. 1-hour window
+    const recent = await this.scanTransactions({
+      from: 0,
+      limit: DEFAULT_SCAN_LIMIT,
+      paymentHash: params.paymentHash,
+      search: params.search,
+      createdAfter: now - 3600,
+    });
+    if (recent[0]) {
+      return recent[0];
+    }
+
+    // 3. 24-hour window
+    const day = await this.scanTransactions({
+      from: 0,
+      limit: DEFAULT_SCAN_LIMIT,
+      paymentHash: params.paymentHash,
+      search: params.search,
+      createdAfter: now - 86400,
+    });
+    if (day[0]) {
+      return day[0];
+    }
+
+    // 4. Full scan — last resort
     const txs = await this.scanTransactions({
       from: 0,
       limit: DEFAULT_SCAN_LIMIT,
@@ -1338,6 +1442,8 @@ export class SparkNode implements LightningNode {
       limit: params.limit > 0 ? params.limit : DEFAULT_SCAN_LIMIT,
       paymentHash: params.paymentHash,
       search: params.search,
+      createdAfter: params.createdAfter,
+      createdBefore: params.createdBefore,
     });
 
     return txs.sort((a, b) => b.createdAt - a.createdAt);
@@ -1352,6 +1458,14 @@ export class SparkNode implements LightningNode {
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+    const wallet = await this.getWallet();
+
+    // Try event-based approach if SDK supports it
+    if (typeof wallet.on === 'function' && typeof wallet.off === 'function') {
+      return this.eventBasedInvoiceWatch(wallet, params, callback);
+    }
+
+    // Fallback: polling with optimized lookupInvoice
     await pollInvoiceEvents({
       params,
       callback,
@@ -1360,6 +1474,72 @@ export class SparkNode implements LightningNode {
           paymentHash: params.paymentHash,
           search: params.search,
         }),
+    });
+  }
+
+  private eventBasedInvoiceWatch(
+    wallet: SparkWalletLike,
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback,
+  ): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let settled = false;
+
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        wallet.off!('transfer:claimed', listener);
+      };
+
+      const listener = async (...args: unknown[]) => {
+        if (settled) return;
+        try {
+          const event = (args[0] ?? {}) as { transferId?: string };
+          const transferId = event.transferId ?? (typeof args[0] === 'string' ? args[0] : undefined);
+          if (!transferId) return;
+
+          const tx = await this.lookupByTransferId(transferId);
+          if (!tx) return;
+
+          if (params.paymentHash && tx.paymentHash !== params.paymentHash) return;
+          if (tx.settledAt > 0) {
+            cleanup();
+            callback('success', tx);
+            resolve();
+          }
+        } catch {
+          // Ignore errors from individual events
+        }
+      };
+
+      // Check if already settled before registering listener
+      this.lookupInvoice({
+        paymentHash: params.paymentHash,
+        search: params.search,
+      }).then((tx) => {
+        if (settled) return;
+        if (tx.settledAt > 0) {
+          settled = true;
+          callback('success', tx);
+          resolve();
+          return;
+        }
+        callback('pending', tx);
+      }).catch(() => {
+        if (settled) return;
+        callback('pending');
+      });
+
+      wallet.on!('transfer:claimed', listener);
+
+      // Timeout
+      const timeoutMs = Math.max(params.maxPollingSec, 1) * 1000;
+      setTimeout(() => {
+        if (settled) return;
+        cleanup();
+        callback('failure');
+        resolve();
+      }, timeoutMs);
     });
   }
 

@@ -1,5 +1,12 @@
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+/** Simple async key-value store for caching. */
+export interface StorageProvider {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
 export type InvoiceEventStatus = 'success' | 'pending' | 'failure';
 export type InvoiceEventCallback = (status: InvoiceEventStatus, transaction?: Transaction) => void;
 
@@ -102,6 +109,10 @@ export interface ListTransactionsParams {
   paymentHash?: string;
   // Case-insensitive partial match across common transaction text fields.
   search?: string;
+  // Unix seconds — adapters that don't support this ignore it.
+  createdAfter?: number;
+  // Unix seconds — adapters that don't support this ignore it.
+  createdBefore?: number;
 }
 
 export interface OnInvoiceEventParams {
@@ -191,6 +202,8 @@ export interface SparkConfig {
   defaultMaxFeeSats?: number;
   // Optional spark-sdk wallet options passthrough.
   sparkOptions?: Record<string, unknown>;
+  /** Optional storage for persisting the paymentHash → transferId cache across sessions. */
+  storage?: StorageProvider;
 }
 
 export interface LightningNode {
