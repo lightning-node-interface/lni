@@ -401,12 +401,17 @@ pub async fn list_transactions(
     created_before: Option<i64>,
     cache: Arc<RwLock<HashMap<String, String>>>,
 ) -> Result<Vec<Transaction>, ApiError> {
+    let offset = u32::try_from(from.max(0)).unwrap_or(u32::MAX);
+    let limit = u32::try_from(limit.max(0)).unwrap_or(u32::MAX);
+    let from_timestamp = created_after.and_then(|t| u64::try_from(t).ok());
+    let to_timestamp = created_before.and_then(|t| u64::try_from(t).ok());
+
     let payments = sdk
         .list_payments(ListPaymentsRequest {
-            offset: Some(from as u32),
-            limit: Some(limit as u32),
-            from_timestamp: created_after.map(|t| t as u64),
-            to_timestamp: created_before.map(|t| t as u64),
+            offset: Some(offset),
+            limit: Some(limit),
+            from_timestamp,
+            to_timestamp,
             ..Default::default()
         })
         .await
