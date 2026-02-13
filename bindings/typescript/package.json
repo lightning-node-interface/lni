@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": false,
   "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed, Blink and Spark. Supports BOLT11, BOLT12, LNURL, Lightning Address  (Frontend-first TypeScript support, no wasm, no native node modules)",
   "type": "module",
