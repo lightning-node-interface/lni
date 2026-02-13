@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": false,
   "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed, Blink and Spark. Supports BOLT11, BOLT12, LNURL, Lightning Address  (Frontend-first TypeScript support, no wasm, no native node modules)",
   "type": "module",
@@ -65,7 +65,7 @@
     "test:integration:spark": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/spark.real.test.ts"
   },
   "dependencies": {
-    "@buildonspark/spark-sdk": "^0.6.1",
+    "@buildonspark/spark-sdk": "^0.6.3",
     "@frosts/core": "^0.2.2-alpha.3",
     "@frosts/secp256k1-tr": "^0.2.2-alpha.3",
     "@getalby/sdk": "^7.0.0",
@@ -84,5 +84,6 @@
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "websocket-polyfill": "^0.0.3"
-  }
+  },
+  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
 }
