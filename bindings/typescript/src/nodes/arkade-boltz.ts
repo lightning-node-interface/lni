@@ -1,3 +1,5 @@
+import type { ArkadeSwapsCreateConfig, SwapRepository } from '@arkade-os/boltz-swap';
+import type { StorageConfig } from '@arkade-os/sdk';
 import { asLniError, LniError } from '../errors.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
@@ -240,7 +242,7 @@ export class ArkadeBoltzNode implements LightningNode {
         storage: (this.config.walletStorage ?? {
           walletRepository: new InMemoryWalletRepository(),
           contractRepository: new InMemoryContractRepository(),
-        }) as Awaited<ReturnType<typeof Wallet.create>> extends never ? never : Parameters<typeof Wallet.create>[0]['storage'],
+        }) as StorageConfig,
       });
 
     const network = toArkadeNetwork(this.config.network ?? wallet.networkName);
@@ -254,8 +256,8 @@ export class ArkadeBoltzNode implements LightningNode {
         wallet,
         swapProvider,
         swapManager: this.config.swapManager,
-        swapRepository: (this.config.swapRepository ?? new InMemoryArkadeSwapRepository()) as Parameters<typeof boltz.ArkadeSwaps.create>[0]['swapRepository'],
-      });
+        swapRepository: (this.config.swapRepository ?? new InMemoryArkadeSwapRepository()) as SwapRepository,
+      } satisfies ArkadeSwapsCreateConfig);
 
     return {
       wallet,

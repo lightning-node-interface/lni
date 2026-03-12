@@ -220,4 +220,39 @@ describe('ArkadeBoltzNode', () => {
       settledAt: 300,
     });
   });
+
+  it('wraps initialization failures as LniError', async () => {
+    vi.doMock('@arkade-os/sdk', () => ({
+      MnemonicIdentity: {
+        fromMnemonic: vi.fn(() => ({ kind: 'identity' })),
+      },
+      Wallet: {
+        create: vi.fn(async () => {
+          throw new Error('wallet init failed');
+        }),
+      },
+      InMemoryWalletRepository: class {},
+      InMemoryContractRepository: class {},
+    }));
+    vi.doMock('@arkade-os/boltz-swap', () => ({
+      ArkadeSwaps: {
+        create: vi.fn(),
+      },
+      BoltzSwapProvider: class {},
+      decodeInvoice: vi.fn(),
+      getInvoicePaymentHash: vi.fn(),
+    }));
+
+    const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
+    const node = new ArkadeBoltzNode({
+      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      arkServerUrl: 'https://arkade.example',
+    });
+
+    await expect(node.getInfo()).rejects.toMatchObject({
+      name: 'LniError',
+      code: 'Api',
+      message: 'wallet init failed',
+    });
+  });
 });
