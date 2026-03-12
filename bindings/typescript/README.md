@@ -4,7 +4,7 @@ Remote connect to major Lightning node implementations with one TypeScript inter
 
 - Supports major nodes: CLN, LND, Phoenixd
 - Supports protocols: BOLT11, BOLT12, NWC
-- Includes custodial APIs: Strike, Speed, Blink
+- Includes custodial / hosted APIs: Strike, Speed, Blink, Arkade Boltz
 - Includes Spark (`SparkNode`) with pure TypeScript signer patching (no UniFFI bindings)
 - LNURL + Lightning Address support (`user@domain.com`, `lnurl1...`)
 - Frontend-capable TypeScript runtime (`fetch`-based)
@@ -187,6 +187,32 @@ const node = createNode({
 });
 ```
 
+### Arkade Boltz
+
+```ts
+import { createNode } from '@sunnyln/lni';
+
+const arkadeNode = createNode({
+  kind: 'arkade-boltz',
+  config: {
+    mnemonic: 'abandon ...',
+    arkServerUrl: 'https://mutinynet.arkade.sh',
+    network: 'mutinynet',
+    // optional:
+    // passphrase: '...',
+    // indexerUrl: 'https://...',
+    // esploraUrl: 'https://...',
+    // swapApiUrl: 'https://api.boltz.mutinynet.arkade.sh',
+  },
+});
+
+const arkadeInfo = await arkadeNode.getInfo();
+const arkadeInvoice = await arkadeNode.createInvoice({
+  amountMsats: 10_000,
+  description: 'Arkade invoice',
+});
+```
+
 **Expo / React Native — Drizzle ORM + expo-sqlite**
 
 ```ts
@@ -277,6 +303,7 @@ const bolt11 = await resolveToBolt11(destination, 100_000);
 - `StrikeNode`
 - `SpeedNode`
 - `BlinkNode`
+- `ArkadeBoltzNode`
 - `SparkNode`
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
 
