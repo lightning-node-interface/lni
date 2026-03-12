@@ -11,4 +11,5 @@ export { NwcNode } from './nodes/nwc.js';
 export { StrikeNode } from './nodes/strike.js';
 export { SpeedNode } from './nodes/speed.js';
 export { BlinkNode } from './nodes/blink.js';
+export { ArkadeBoltzNode } from './nodes/arkade-boltz.js';
 export { SparkNode } from './nodes/spark.js';

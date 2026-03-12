@@ -1,3 +1,4 @@
+import { ArkadeBoltzNode } from './nodes/arkade-boltz.js';
 import { BlinkNode } from './nodes/blink.js';
 import { ClnNode } from './nodes/cln.js';
 import { LndNode } from './nodes/lnd.js';
@@ -8,6 +9,7 @@ import { SpeedNode } from './nodes/speed.js';
 import { StrikeNode } from './nodes/strike.js';
 import type {
   BackendNodeConfig,
+  ArkadeBoltzConfig,
   BlinkConfig,
   ClnConfig,
   LightningNode,
@@ -49,6 +51,10 @@ export function createNode(
   options?: NodeRequestOptions,
 ): BlinkNode;
 export function createNode(
+  input: { kind: 'arkade-boltz'; config: ArkadeBoltzConfig },
+  options?: NodeRequestOptions,
+): ArkadeBoltzNode;
+export function createNode(
   input: { kind: 'spark'; config: SparkConfig },
   options?: NodeRequestOptions,
 ): SparkNode;
@@ -69,6 +75,8 @@ export function createNode(input: BackendNodeConfig, options: NodeRequestOptions
       return new SpeedNode(input.config, options);
     case 'blink':
       return new BlinkNode(input.config, options);
+    case 'arkade-boltz':
+      return new ArkadeBoltzNode(input.config, options);
     case 'spark':
       return new SparkNode(input.config, options);
     default:
