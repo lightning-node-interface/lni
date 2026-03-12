@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Spark Wallet</title>
+    <title>LNI Wallet Demo</title>
     <style>
       :root {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -40,6 +40,7 @@
       .advanced-toggle { font-size: 0.85rem; color: var(--text-muted); cursor: pointer; user-select: none; }
       .advanced-toggle:hover { color: var(--text); }
       .advanced-fields { display: flex; flex-direction: column; gap: 12px; }
+      #sparkAdvancedGroup, #arkadeAdvancedGroup, #settingsSparkGroup, #settingsArkadeGroup { display: flex; flex-direction: column; gap: 12px; }
       .secret-field { position: relative; }
       .secret-field input, .secret-field textarea { width: 100%; padding-right: 44px; }
       .eye-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 4px; }
@@ -165,8 +166,16 @@
       <!-- Login View -->
       <div class="login" id="loginView">
         <div>
-          <div class="login-logo">Spark Wallet</div>
-          <div class="login-sub">Pure TypeScript &middot; No WASM</div>
+          <div class="login-logo" id="loginLogo">LNI Wallet</div>
+          <div class="login-sub" id="loginSub">Pure TypeScript &middot; No WASM</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Backend</div>
+          <select id="backend">
+            <option value="spark">Spark</option>
+            <option value="arkade-boltz">Arkade Boltz</option>
+          </select>
         </div>
 
         <div class="field">
@@ -190,20 +199,51 @@
 
         <div class="advanced-toggle" id="advancedToggle">&#9656; Advanced settings</div>
         <div class="advanced-fields hidden" id="advancedFields">
-          <div class="field">
-            <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
-            <div class="secret-field">
-              <input id="apiKey" type="password" placeholder="Optional" />
-              <button class="eye-btn" id="apiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+          <div id="sparkAdvancedGroup">
+            <div class="field">
+              <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
+              <div class="secret-field">
+                <input id="apiKey" type="password" placeholder="Optional" />
+                <button class="eye-btn" id="apiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
+              <input id="sspBaseUrl" type="url" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <div class="field-label">SSP Identity Public Key <span class="optional-tag">(optional)</span></div>
+              <input id="sspIdentityKey" type="text" placeholder="Hex pubkey" />
             </div>
           </div>
-          <div class="field">
-            <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
-            <input id="sspBaseUrl" type="url" placeholder="https://..." />
-          </div>
-          <div class="field">
-            <div class="field-label">SSP Identity Public Key <span class="optional-tag">(optional)</span></div>
-            <input id="sspIdentityKey" type="text" placeholder="Hex pubkey" />
+          <div class="hidden" id="arkadeAdvancedGroup">
+            <div class="field">
+              <div class="field-label">Passphrase <span class="optional-tag">(optional)</span></div>
+              <div class="secret-field">
+                <input id="arkadePassphrase" type="password" placeholder="Optional" />
+                <button class="eye-btn" id="arkadePassphraseEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Ark Server URL</div>
+              <input id="arkServerUrl" type="url" placeholder="https://mutinynet.arkade.sh" />
+            </div>
+            <div class="field">
+              <div class="field-label">Swap API URL <span class="optional-tag">(optional)</span></div>
+              <input id="swapApiUrl" type="url" placeholder="https://api.boltz.mutinynet.arkade.sh" />
+            </div>
+            <div class="field">
+              <div class="field-label">Indexer URL <span class="optional-tag">(optional)</span></div>
+              <input id="indexerUrl" type="url" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <div class="field-label">Esplora URL <span class="optional-tag">(optional)</span></div>
+              <input id="esploraUrl" type="url" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <div class="field-label">Referral ID <span class="optional-tag">(optional)</span></div>
+              <input id="referralId" type="text" placeholder="Optional" />
+            </div>
           </div>
         </div>
 
@@ -214,7 +254,7 @@
       <!-- Wallet View -->
       <div class="wallet hidden" id="walletView">
         <div class="wallet-header">
-          <div class="wallet-title">Spark Wallet</div>
+          <div class="wallet-title" id="walletTitle">Spark Wallet</div>
           <div class="wallet-actions">
             <button class="icon-btn" id="refreshBtn" title="Refresh">&#x21bb;</button>
             <button class="icon-btn" id="settingsBtn" title="Settings">&#x2699;</button>
@@ -267,6 +307,19 @@
 
         <!-- Settings panel (hidden by default) -->
         <div class="settings-panel hidden" id="settingsPanel">
+          <div class="settings-row">
+            <div class="field">
+              <div class="field-label">Backend</div>
+              <select id="settingsBackend">
+                <option value="spark">Spark</option>
+                <option value="arkade-boltz">Arkade Boltz</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="field-label">Network</div>
+              <select id="settingsNetwork"></select>
+            </div>
+          </div>
           <div class="field">
             <div class="field-label">Seed Phrase</div>
             <div class="secret-field">
@@ -274,27 +327,63 @@
               <button class="eye-btn" id="settingsMnemonicEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
             </div>
           </div>
-          <div class="field">
-            <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
-            <div class="secret-field">
-              <input id="settingsApiKey" type="password" placeholder="Optional" />
-              <button class="eye-btn" id="settingsApiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+          <div id="settingsSparkGroup">
+            <div class="field">
+              <div class="field-label">API Key <span class="optional-tag">(optional)</span></div>
+              <div class="secret-field">
+                <input id="settingsApiKey" type="password" placeholder="Optional" />
+                <button class="eye-btn" id="settingsApiKeyEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="field">
+                <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
+                <input id="settingsSspBaseUrl" type="url" placeholder="https://..." />
+              </div>
+              <div class="field">
+                <div class="field-label">SSP Identity Key <span class="optional-tag">(optional)</span></div>
+                <input id="settingsSspIdentityKey" type="text" placeholder="Hex" />
+              </div>
             </div>
           </div>
-          <div class="settings-row">
+          <div class="hidden" id="settingsArkadeGroup">
             <div class="field">
-              <div class="field-label">SSP Base URL <span class="optional-tag">(optional)</span></div>
-              <input id="settingsSspBaseUrl" type="url" placeholder="https://..." />
+              <div class="field-label">Passphrase <span class="optional-tag">(optional)</span></div>
+              <div class="secret-field">
+                <input id="settingsArkadePassphrase" type="password" placeholder="Optional" />
+                <button class="eye-btn" id="settingsArkadePassphraseEye" type="button" title="Show/hide">&bull;&bull;&bull;</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="field">
+                <div class="field-label">Ark Server URL</div>
+                <input id="settingsArkServerUrl" type="url" placeholder="https://mutinynet.arkade.sh" />
+              </div>
+              <div class="field">
+                <div class="field-label">Swap API URL <span class="optional-tag">(optional)</span></div>
+                <input id="settingsSwapApiUrl" type="url" placeholder="https://api.boltz.mutinynet.arkade.sh" />
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="field">
+                <div class="field-label">Indexer URL <span class="optional-tag">(optional)</span></div>
+                <input id="settingsIndexerUrl" type="url" placeholder="https://..." />
+              </div>
+              <div class="field">
+                <div class="field-label">Esplora URL <span class="optional-tag">(optional)</span></div>
+                <input id="settingsEsploraUrl" type="url" placeholder="https://..." />
+              </div>
             </div>
             <div class="field">
-              <div class="field-label">SSP Identity Key <span class="optional-tag">(optional)</span></div>
-              <input id="settingsSspIdentityKey" type="text" placeholder="Hex" />
+              <div class="field-label">Referral ID <span class="optional-tag">(optional)</span></div>
+              <input id="settingsReferralId" type="text" placeholder="Optional" />
             </div>
           </div>
           <div class="field">
             <div class="field-label">Transaction Limit <span class="optional-tag">(optional)</span></div>
             <input id="transferLimit" type="number" min="1" max="100" value="25" />
           </div>
+          <button class="btn btn-ghost hidden" id="resetArkadeStorageBtn" type="button">Reset Arkade Local Data</button>
           <button class="btn btn-ghost" id="saveSettingsBtn">Save Settings</button>
         </div>
 
@@ -319,9 +408,47 @@
 
     <script type="module">
       import { createNode, installSparkRuntime } from '@sunnyln/lni';
+      import { IndexedDBContractRepository, IndexedDBWalletRepository } from '@arkade-os/sdk';
+      import { IndexedDbSwapRepository } from '@arkade-os/boltz-swap';
 
-      const STORAGE_KEY = 'lni.spark.web.demo.v1';
-      const NETWORK_MAP = { MAINNET: 'mainnet', TESTNET: 'testnet', REGTEST: 'regtest', SIGNET: 'signet', LOCAL: 'local' };
+      const STORAGE_KEY = 'lni.spark.web.demo.v2';
+      const LEGACY_STORAGE_KEY = 'lni.spark.web.demo.v1';
+      const NETWORK_OPTIONS = {
+        spark: [
+          { value: 'mainnet', label: 'Mainnet' },
+          { value: 'testnet', label: 'Testnet' },
+          { value: 'regtest', label: 'Regtest' },
+          { value: 'signet', label: 'Signet' },
+          { value: 'local', label: 'Local' },
+        ],
+        'arkade-boltz': [
+          { value: 'mainnet', label: 'Mainnet' },
+          { value: 'testnet', label: 'Testnet' },
+          { value: 'regtest', label: 'Regtest' },
+          { value: 'signet', label: 'Signet' },
+          { value: 'mutinynet', label: 'Mutinynet' },
+        ],
+      };
+      const BACKEND_META = {
+        spark: {
+          walletTitle: 'Spark Wallet',
+          loginLogo: 'LNI Wallet',
+          loginSub: 'Spark backend · Pure TypeScript · No WASM',
+        },
+        'arkade-boltz': {
+          walletTitle: 'Arkade Boltz Wallet',
+          loginLogo: 'LNI Wallet',
+          loginSub: 'Arkade Boltz backend · Pure TypeScript · No WASM',
+        },
+      };
+      const DEFAULTS = {
+        spark: { network: 'mainnet' },
+        'arkade-boltz': {
+          network: 'mutinynet',
+          arkServerUrl: 'https://mutinynet.arkade.sh',
+          swapApiUrl: 'https://api.boltz.mutinynet.arkade.sh',
+        },
+      };
 
       /** StorageProvider backed by localStorage for persisting the transfer cache. */
       const localStorageProvider = {
@@ -330,15 +457,28 @@
         async remove(key) { localStorage.removeItem(key); },
       };
 
-      const state = { node: null, balanceSats: 0, transactions: [] };
+      const state = { node: null, balanceSats: 0, transactions: [], activeConfig: null };
       let sparkRuntimeHandle = null;
 
       // Elements
       const $ = (id) => document.getElementById(id);
       const el = {
         loginView: $('loginView'), walletView: $('walletView'),
-        mnemonic: $('mnemonic'), network: $('network'), apiKey: $('apiKey'),
-        sspBaseUrl: $('sspBaseUrl'), sspIdentityKey: $('sspIdentityKey'),
+        loginLogo: $('loginLogo'), loginSub: $('loginSub'), walletTitle: $('walletTitle'),
+        backend: $('backend'), settingsBackend: $('settingsBackend'),
+        mnemonic: $('mnemonic'), settingsMnemonic: $('settingsMnemonic'),
+        network: $('network'), settingsNetwork: $('settingsNetwork'),
+        apiKey: $('apiKey'), settingsApiKey: $('settingsApiKey'),
+        sspBaseUrl: $('sspBaseUrl'), settingsSspBaseUrl: $('settingsSspBaseUrl'),
+        sspIdentityKey: $('sspIdentityKey'), settingsSspIdentityKey: $('settingsSspIdentityKey'),
+        arkadePassphrase: $('arkadePassphrase'), settingsArkadePassphrase: $('settingsArkadePassphrase'),
+        arkServerUrl: $('arkServerUrl'), settingsArkServerUrl: $('settingsArkServerUrl'),
+        swapApiUrl: $('swapApiUrl'), settingsSwapApiUrl: $('settingsSwapApiUrl'),
+        indexerUrl: $('indexerUrl'), settingsIndexerUrl: $('settingsIndexerUrl'),
+        esploraUrl: $('esploraUrl'), settingsEsploraUrl: $('settingsEsploraUrl'),
+        referralId: $('referralId'), settingsReferralId: $('settingsReferralId'),
+        sparkAdvancedGroup: $('sparkAdvancedGroup'), arkadeAdvancedGroup: $('arkadeAdvancedGroup'),
+        settingsSparkGroup: $('settingsSparkGroup'), settingsArkadeGroup: $('settingsArkadeGroup'),
         advancedToggle: $('advancedToggle'), advancedFields: $('advancedFields'),
         connectBtn: $('connectBtn'), loginStatus: $('loginStatus'),
         balanceValue: $('balanceValue'), walletStatus: $('walletStatus'),
@@ -349,16 +489,134 @@
         payBtn: $('payBtn'), payResult: $('payResult'),
         recvAmountMsats: $('recvAmountMsats'), recvDescription: $('recvDescription'),
         createInvoiceBtn: $('createInvoiceBtn'), invoiceResult: $('invoiceResult'), invoiceStatus: $('invoiceStatus'),
-        settingsPanel: $('settingsPanel'), settingsApiKey: $('settingsApiKey'),
-        settingsSspBaseUrl: $('settingsSspBaseUrl'), settingsSspIdentityKey: $('settingsSspIdentityKey'),
-        transferLimit: $('transferLimit'), saveSettingsBtn: $('saveSettingsBtn'),
+        settingsPanel: $('settingsPanel'),
+        transferLimit: $('transferLimit'), resetArkadeStorageBtn: $('resetArkadeStorageBtn'), saveSettingsBtn: $('saveSettingsBtn'),
         txList: $('txList'), checkOverlay: $('checkOverlay'),
-        settingsMnemonic: $('settingsMnemonic'), settingsMnemonicEye: $('settingsMnemonicEye'),
+        settingsMnemonicEye: $('settingsMnemonicEye'),
         mnemonicEye: $('mnemonicEye'), apiKeyEye: $('apiKeyEye'), settingsApiKeyEye: $('settingsApiKeyEye'),
+        arkadePassphraseEye: $('arkadePassphraseEye'), settingsArkadePassphraseEye: $('settingsArkadePassphraseEye'),
         txDetailOverlay: $('txDetailOverlay'), txDetailIcon: $('txDetailIcon'),
         txDetailAmount: $('txDetailAmount'), txDetailType: $('txDetailType'), txDetailRows: $('txDetailRows'),
         logToggleBtn: $('logToggleBtn'), logSection: $('logSection'), logContent: $('logContent'), copyLogBtn: $('copyLogBtn'),
       };
+
+      function normalizeBackend(value) {
+        return value === 'arkade-boltz' ? 'arkade-boltz' : 'spark';
+      }
+
+      function normalizeNetwork(backend, value) {
+        const normalized = String(value ?? '').toLowerCase();
+        const options = NETWORK_OPTIONS[backend];
+        if (options.some((option) => option.value === normalized)) {
+          return normalized;
+        }
+        return DEFAULTS[backend].network;
+      }
+
+      function setSelectOptions(select, options, value) {
+        select.innerHTML = '';
+        options.forEach((option) => {
+          const node = document.createElement('option');
+          node.value = option.value;
+          node.textContent = option.label;
+          select.appendChild(node);
+        });
+        select.value = options.some((option) => option.value === value) ? value : options[0].value;
+      }
+
+      function syncInputPair(primary, secondary, value) {
+        primary.value = value;
+        secondary.value = value;
+      }
+
+      function slugify(value) {
+        return String(value ?? '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 48) || 'default';
+      }
+
+      async function digestHex(input) {
+        const bytes = new TextEncoder().encode(input);
+        const hash = await crypto.subtle.digest('SHA-256', bytes);
+        return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      }
+
+      async function createArkadePersistence(config) {
+        const identityKey = await digestHex([
+          config.backend,
+          config.network,
+          config.mnemonic,
+          config.arkadePassphrase || '',
+          config.arkServerUrl,
+        ].join('|'));
+        const dbPrefix = `lni-arkade-${slugify(config.network)}-${identityKey.slice(0, 16)}`;
+        const legacyDbName = dbPrefix;
+        const walletDbName = `${dbPrefix}-wallet`;
+        const swapDbName = `${dbPrefix}-swap`;
+        return {
+          legacyDbName,
+          walletDbName,
+          swapDbName,
+          walletStorage: {
+            walletRepository: new IndexedDBWalletRepository(walletDbName),
+            contractRepository: new IndexedDBContractRepository(walletDbName),
+          },
+          swapRepository: new IndexedDbSwapRepository(swapDbName),
+        };
+      }
+
+      async function deleteIndexedDbDatabase(name) {
+        await new Promise((resolve, reject) => {
+          const request = indexedDB.deleteDatabase(name);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error ?? new Error(`Failed to delete IndexedDB database: ${name}`));
+          request.onblocked = () => reject(new Error(`IndexedDB database is blocked and could not be deleted: ${name}`));
+        });
+      }
+
+      function applyArkadeDefaults() {
+        const backend = normalizeBackend(el.backend.value || el.settingsBackend.value);
+        if (backend !== 'arkade-boltz') return;
+        if (!el.arkServerUrl.value.trim() && !el.settingsArkServerUrl.value.trim()) {
+          syncInputPair(el.arkServerUrl, el.settingsArkServerUrl, DEFAULTS['arkade-boltz'].arkServerUrl);
+        }
+        if (!el.swapApiUrl.value.trim() && !el.settingsSwapApiUrl.value.trim()) {
+          syncInputPair(el.swapApiUrl, el.settingsSwapApiUrl, DEFAULTS['arkade-boltz'].swapApiUrl);
+        }
+      }
+
+      function updateBackendUi(backend, preferredNetwork) {
+        const normalizedBackend = normalizeBackend(backend);
+        const normalizedNetwork = normalizeNetwork(normalizedBackend, preferredNetwork);
+        const meta = BACKEND_META[normalizedBackend];
+
+        el.backend.value = normalizedBackend;
+        el.settingsBackend.value = normalizedBackend;
+        setSelectOptions(el.network, NETWORK_OPTIONS[normalizedBackend], normalizedNetwork);
+        setSelectOptions(el.settingsNetwork, NETWORK_OPTIONS[normalizedBackend], normalizedNetwork);
+
+        el.loginLogo.textContent = meta.loginLogo;
+        el.loginSub.textContent = meta.loginSub;
+        el.walletTitle.textContent = meta.walletTitle;
+
+        el.sparkAdvancedGroup.classList.toggle('hidden', normalizedBackend !== 'spark');
+        el.arkadeAdvancedGroup.classList.toggle('hidden', normalizedBackend !== 'arkade-boltz');
+        el.settingsSparkGroup.classList.toggle('hidden', normalizedBackend !== 'spark');
+        el.settingsArkadeGroup.classList.toggle('hidden', normalizedBackend !== 'arkade-boltz');
+        el.resetArkadeStorageBtn.classList.toggle('hidden', normalizedBackend !== 'arkade-boltz');
+
+        const logWrapper = el.logToggleBtn.parentElement;
+        logWrapper.classList.toggle('hidden', normalizedBackend !== 'spark');
+        if (normalizedBackend !== 'spark') {
+          logOpen = false;
+          el.logSection.classList.add('hidden');
+          el.logToggleBtn.textContent = 'Show Log';
+        }
+
+        applyArkadeDefaults();
+      }
 
       function setLoginStatus(msg, err = false) {
         el.loginStatus.textContent = msg;
@@ -395,30 +653,53 @@
 
       function getConfig() {
         return {
+          backend: normalizeBackend(el.backend.value),
           mnemonic: el.mnemonic.value.trim(),
           network: el.network.value,
           apiKey: el.apiKey.value.trim() || el.settingsApiKey.value.trim(),
           sspBaseUrl: el.sspBaseUrl.value.trim() || el.settingsSspBaseUrl.value.trim(),
           sspIdentityKey: el.sspIdentityKey.value.trim() || el.settingsSspIdentityKey.value.trim(),
+          arkadePassphrase: el.arkadePassphrase.value.trim() || el.settingsArkadePassphrase.value.trim(),
+          arkServerUrl: el.arkServerUrl.value.trim() || el.settingsArkServerUrl.value.trim(),
+          swapApiUrl: el.swapApiUrl.value.trim() || el.settingsSwapApiUrl.value.trim(),
+          indexerUrl: el.indexerUrl.value.trim() || el.settingsIndexerUrl.value.trim(),
+          esploraUrl: el.esploraUrl.value.trim() || el.settingsEsploraUrl.value.trim(),
+          referralId: el.referralId.value.trim() || el.settingsReferralId.value.trim(),
           transferLimit: Math.max(1, Number(el.transferLimit.value || 25)),
         };
       }
 
       function loadSaved() {
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
           if (!raw) return;
           const c = JSON.parse(raw);
+          const backend = normalizeBackend(c.backend);
+          const network = normalizeNetwork(backend, c.network);
+          el.backend.value = backend;
+          el.settingsBackend.value = backend;
           el.mnemonic.value = c.mnemonic ?? '';
           el.settingsMnemonic.value = c.mnemonic ?? '';
-          el.network.value = c.network ?? 'MAINNET';
           el.apiKey.value = c.apiKey ?? '';
           el.settingsApiKey.value = c.apiKey ?? '';
           el.sspBaseUrl.value = c.sspBaseUrl ?? '';
           el.settingsSspBaseUrl.value = c.sspBaseUrl ?? '';
           el.sspIdentityKey.value = c.sspIdentityKey ?? '';
           el.settingsSspIdentityKey.value = c.sspIdentityKey ?? '';
+          el.arkadePassphrase.value = c.arkadePassphrase ?? '';
+          el.settingsArkadePassphrase.value = c.arkadePassphrase ?? '';
+          el.arkServerUrl.value = c.arkServerUrl ?? '';
+          el.settingsArkServerUrl.value = c.arkServerUrl ?? '';
+          el.swapApiUrl.value = c.swapApiUrl ?? '';
+          el.settingsSwapApiUrl.value = c.swapApiUrl ?? '';
+          el.indexerUrl.value = c.indexerUrl ?? '';
+          el.settingsIndexerUrl.value = c.indexerUrl ?? '';
+          el.esploraUrl.value = c.esploraUrl ?? '';
+          el.settingsEsploraUrl.value = c.esploraUrl ?? '';
+          el.referralId.value = c.referralId ?? '';
+          el.settingsReferralId.value = c.referralId ?? '';
           el.transferLimit.value = String(c.transferLimit ?? 25);
+          updateBackendUi(backend, network);
         } catch {}
       }
 
@@ -426,9 +707,19 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(getConfig()));
       }
 
-      function setupRuntime(apiKey) {
+      function getRuntimeConfig() {
+        return state.activeConfig ?? getConfig();
+      }
+
+      function setupRuntime(config) {
         sparkRuntimeHandle?.restore();
-        sparkRuntimeHandle = installSparkRuntime({ apiKey, apiKeyHeader: 'x-api-key', apiKeySameOriginOnly: true });
+        sparkRuntimeHandle = null;
+        if (config.backend !== 'spark') return;
+        sparkRuntimeHandle = installSparkRuntime({
+          apiKey: config.apiKey,
+          apiKeyHeader: 'x-api-key',
+          apiKeySameOriginOnly: true,
+        });
       }
 
       function showView(view) {
@@ -525,6 +816,7 @@
       async function disconnectNode() {
         const node = state.node;
         state.node = null;
+        state.activeConfig = null;
         if (node?.cleanupConnections) {
           try { await node.cleanupConnections(); } catch {}
         }
@@ -533,12 +825,16 @@
       async function connectWallet() {
         const cfg = getConfig();
         if (!cfg.mnemonic) { setLoginStatus('Seed phrase is required', true); return; }
+        if (cfg.backend === 'arkade-boltz' && !cfg.arkServerUrl) {
+          setLoginStatus('Ark server URL is required for Arkade Boltz', true);
+          return;
+        }
 
         el.settingsMnemonic.value = cfg.mnemonic;
         saveConfig();
         setLoginStatus('Connecting...');
         el.connectBtn.disabled = true;
-        setupRuntime(cfg.apiKey);
+        setupRuntime(cfg);
 
         const sparkOptions = {};
         if (cfg.sspBaseUrl && cfg.sspIdentityKey) {
@@ -547,16 +843,36 @@
 
         try {
           await disconnectNode();
-          state.node = createNode({
-            kind: 'spark',
-            config: {
-              mnemonic: cfg.mnemonic,
-              network: NETWORK_MAP[cfg.network] ?? 'mainnet',
-              sdkEntry: 'bare',
-              storage: localStorageProvider,
-              sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
-            },
-          });
+          if (cfg.backend === 'spark') {
+            state.node = createNode({
+              kind: 'spark',
+              config: {
+                mnemonic: cfg.mnemonic,
+                network: cfg.network,
+                sdkEntry: 'bare',
+                storage: localStorageProvider,
+                sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
+              },
+            });
+          } else {
+            const persistence = await createArkadePersistence(cfg);
+            state.node = createNode({
+              kind: 'arkade-boltz',
+              config: {
+                mnemonic: cfg.mnemonic,
+                passphrase: cfg.arkadePassphrase || undefined,
+                network: cfg.network,
+                arkServerUrl: cfg.arkServerUrl,
+                swapApiUrl: cfg.swapApiUrl || undefined,
+                indexerUrl: cfg.indexerUrl || undefined,
+                esploraUrl: cfg.esploraUrl || undefined,
+                referralId: cfg.referralId || undefined,
+                walletStorage: persistence.walletStorage,
+                swapRepository: persistence.swapRepository,
+              },
+            });
+          }
+          state.activeConfig = { ...cfg };
 
           showView('wallet');
           setWalletStatus('Loading...');
@@ -570,8 +886,8 @@
 
       async function refreshData() {
         if (!state.node) return;
-        const cfg = getConfig();
-        setupRuntime(cfg.apiKey);
+        const cfg = getRuntimeConfig();
+        setupRuntime(cfg);
         setWalletStatus('Refreshing...');
 
         try {
@@ -624,8 +940,8 @@
         el.invoiceStatus.classList.add('hidden');
 
         try {
-          const cfg = getConfig();
-          setupRuntime(cfg.apiKey);
+          const cfg = getRuntimeConfig();
+          setupRuntime(cfg);
           const tx = await state.node.createInvoice({ amountMsats, description, expiry: 3600 });
 
           el.invoiceResult.textContent = tx.invoice;
@@ -660,8 +976,8 @@
         const parsed = Number(el.payAmountMsats.value.trim());
         const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
 
-        const cfg = getConfig();
-        setupRuntime(cfg.apiKey);
+        const cfg = getRuntimeConfig();
+        setupRuntime(cfg);
         setWalletStatus('Sending...');
         el.payResult.classList.add('hidden');
         el.payBtn.disabled = true;
@@ -700,6 +1016,17 @@
         el.advancedToggle.innerHTML = (open ? '&#9656;' : '&#9662;') + ' Advanced settings';
       });
 
+      el.backend.addEventListener('change', () => updateBackendUi(el.backend.value, el.network.value));
+      el.settingsBackend.addEventListener('change', () => updateBackendUi(el.settingsBackend.value, el.settingsNetwork.value));
+      el.network.addEventListener('change', () => {
+        el.settingsNetwork.value = normalizeNetwork(normalizeBackend(el.backend.value), el.network.value);
+        applyArkadeDefaults();
+      });
+      el.settingsNetwork.addEventListener('change', () => {
+        el.network.value = normalizeNetwork(normalizeBackend(el.settingsBackend.value), el.settingsNetwork.value);
+        applyArkadeDefaults();
+      });
+
       // Disconnect
       async function disconnect() {
         await disconnectNode();
@@ -719,13 +1046,56 @@
       el.payBtn.addEventListener('click', () => payInvoice().catch(() => {}));
       el.saveSettingsBtn.addEventListener('click', () => {
         // Sync settings back to login fields
+        el.backend.value = normalizeBackend(el.settingsBackend.value);
+        updateBackendUi(el.backend.value, el.settingsNetwork.value);
         if (el.settingsMnemonic.value.trim()) el.mnemonic.value = el.settingsMnemonic.value;
         el.apiKey.value = el.settingsApiKey.value;
         el.sspBaseUrl.value = el.settingsSspBaseUrl.value;
         el.sspIdentityKey.value = el.settingsSspIdentityKey.value;
+        el.arkadePassphrase.value = el.settingsArkadePassphrase.value;
+        el.arkServerUrl.value = el.settingsArkServerUrl.value;
+        el.swapApiUrl.value = el.settingsSwapApiUrl.value;
+        el.indexerUrl.value = el.settingsIndexerUrl.value;
+        el.esploraUrl.value = el.settingsEsploraUrl.value;
+        el.referralId.value = el.settingsReferralId.value;
         saveConfig();
         setWalletStatus('Settings saved');
         setTimeout(() => { if (el.walletStatus.textContent === 'Settings saved') setWalletStatus(''); }, 1500);
+      });
+      el.resetArkadeStorageBtn.addEventListener('click', async () => {
+        const draftConfig = getConfig();
+        const targetConfig = state.activeConfig?.backend === 'arkade-boltz' ? state.activeConfig : draftConfig;
+        if (targetConfig.backend !== 'arkade-boltz') {
+          setWalletStatus('Switch the form to Arkade Boltz first', true);
+          return;
+        }
+        if (!targetConfig.mnemonic || !targetConfig.arkServerUrl) {
+          setWalletStatus('Arkade mnemonic and server URL are required to reset local data', true);
+          return;
+        }
+        const confirmed = window.confirm('Delete local Arkade wallet and swap data for this wallet configuration?');
+        if (!confirmed) return;
+
+        try {
+          const persistence = await createArkadePersistence(targetConfig);
+          if (state.activeConfig?.backend === 'arkade-boltz') {
+            await disconnectNode();
+            sparkRuntimeHandle?.restore();
+            sparkRuntimeHandle = null;
+            state.balanceSats = 0;
+            state.transactions = [];
+            el.balanceValue.textContent = '--';
+            renderTransactions([]);
+            showView('login');
+          }
+          await deleteIndexedDbDatabase(persistence.walletDbName);
+          await deleteIndexedDbDatabase(persistence.swapDbName);
+          await deleteIndexedDbDatabase(persistence.legacyDbName).catch(() => {});
+          setLoginStatus('Arkade local data reset. Reconnect to resync.');
+          setWalletStatus('Arkade local data reset');
+        } catch (error) {
+          setWalletStatus(error?.message ?? String(error), true);
+        }
       });
 
       // Decode pasted invoice
@@ -800,6 +1170,8 @@
       }
       togglePasswordEye(el.apiKey, el.apiKeyEye);
       togglePasswordEye(el.settingsApiKey, el.settingsApiKeyEye);
+      togglePasswordEye(el.arkadePassphrase, el.arkadePassphraseEye);
+      togglePasswordEye(el.settingsArkadePassphrase, el.settingsArkadePassphraseEye);
 
       // Settings mnemonic eye (same textarea masking approach)
       let settingsMnemonicVisible = false;
@@ -814,6 +1186,7 @@
 
       // Init
       loadSaved();
+      updateBackendUi(el.backend.value, el.network.value);
       if (el.mnemonic.value.trim()) {
         connectWallet().catch(() => {});
       }

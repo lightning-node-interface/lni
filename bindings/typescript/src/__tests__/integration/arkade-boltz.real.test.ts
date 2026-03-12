@@ -30,9 +30,10 @@ describe('Real integration from crates/lni/.env > ArkadeBoltzNode', () => {
     expect(typeof info.alias).toBe('string');
 
     const invoice = await node.createInvoice({
-      amountMsats: 5_000,
+      amountMsats: 1_000_000,
       description: testInvoiceLabel('arkade-boltz'),
     });
+    console.log('Arkade Boltz Invoice', invoice);
     expect(invoice.invoice.length).toBeGreaterThan(0);
 
     const txs = await node.listTransactions({ from: 0, limit: 25 });

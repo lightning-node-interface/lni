@@ -102,6 +102,8 @@ describe('ArkadeBoltzNode', () => {
       description: 'incoming memo',
     });
 
+    console.log('Arkade Boltz Invoice', tx);
+
     expect(tx).toMatchObject({
       type: 'incoming',
       invoice: 'lnbc1incoming',
