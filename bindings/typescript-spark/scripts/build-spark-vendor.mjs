@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,9 +19,9 @@ const sparkSourcePath = path.resolve(
   'node_modules/@buildonspark/spark-sdk/dist/bare/index.js',
 );
 
-const browserTransportPattern = 'return new ConnectionManagerBrowser(config, BareHttpTransport());';
+const browserTransportPattern = 'return new ConnectionManagerBrowser(config, "identity", BareHttpTransport());';
 const browserTransportReplacement =
-  'return new ConnectionManagerBrowser(config, (0, import_nice_grpc_web.FetchTransport)());';
+  'return new ConnectionManagerBrowser(config, "identity", (0, import_nice_grpc_web.FetchTransport)());';
 
 const browserAlias = {
   http: path.resolve(shimsDir, 'node-http.js'),
@@ -42,6 +42,7 @@ async function bundleRuntimeHelper() {
     platform: 'browser',
     target: 'es2022',
     outfile: runtimeOutputPath,
+    minify: true,
     logLevel: 'silent',
   });
 }
@@ -54,6 +55,7 @@ async function bundleFrostsBridge() {
     platform: 'browser',
     target: 'es2022',
     outfile: frostsBridgeOutputPath,
+    minify: true,
     logLevel: 'silent',
     alias: browserAlias,
   });
@@ -70,6 +72,16 @@ async function bundleSparkBare() {
     logLevel: 'silent',
     alias: browserAlias,
   });
+}
+
+async function minifyFile(filePath) {
+  const source = await readFile(filePath, 'utf8');
+  const result = await transform(source, {
+    minify: true,
+    format: 'esm',
+    target: 'es2022',
+  });
+  await writeFile(filePath, result.code, 'utf8');
 }
 
 async function patchAndValidateSparkBundle() {
@@ -111,6 +123,7 @@ async function main() {
   await bundleFrostsBridge();
   await bundleSparkBare();
   await patchAndValidateSparkBundle();
+  await minifyFile(sparkOutputPath);
   await validateFrostsBundle();
   await validateRuntimeBundle();
 }

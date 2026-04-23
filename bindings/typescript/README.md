@@ -4,8 +4,9 @@ Remote connect to major Lightning node implementations with one TypeScript inter
 
 - Supports major nodes: CLN, LND, Phoenixd
 - Supports protocols: BOLT11, BOLT12, NWC
-- Includes custodial / hosted APIs: Strike, Speed, Blink, Arkade Boltz
-- Includes Spark (`SparkNode`) with pure TypeScript signer patching (no UniFFI bindings)
+- Includes custodial / hosted APIs: Strike, Speed, Blink
+- Experimental Arkade Boltz support lives in the optional `@sunnyln/lni-arkade` package
+- Experimental Spark support lives in the optional `@sunnyln/lni-spark` package
 - LNURL + Lightning Address support (`user@domain.com`, `lnurl1...`)
 - Frontend-capable TypeScript runtime (`fetch`-based)
 
@@ -87,192 +88,6 @@ await node.onInvoiceEvents(
 );
 ```
 
-### Spark (browser + Expo Go oriented)
-
-```ts
-import { createNode, installSparkRuntime } from '@sunnyln/lni';
-
-// One-time runtime setup for browser / React Native / Expo Go.
-// - Adds Buffer + atob/btoa polyfills when missing
-// - Wraps fetch for gRPC-web body reader compatibility
-// - Optionally injects API key header into same-origin Spark HTTP calls
-const sparkRuntime = installSparkRuntime({
-  apiKey: 'optional-api-key',
-  apiKeyHeader: 'x-api-key',
-  apiKeySameOriginOnly: true, // default true; safer for browser CORS
-});
-
-const sparkNode = createNode({
-  kind: 'spark',
-  config: {
-    mnemonic: 'abandon ...', // store securely in production
-    network: 'mainnet', // or regtest/testnet/signet/local
-    // optional:
-    // passphrase: '...',
-    // defaultMaxFeeSats: 20,
-    // sparkOptions: { ...sdk options... },
-    // sdkEntry: 'auto' | 'bare' | 'native' | 'default'
-    // storage: myStorageProvider, // persistent cache (see below)
-  },
-});
-
-const sparkInfo = await sparkNode.getInfo();
-const sparkInvoice = await sparkNode.createInvoice({
-  amountMsats: 25_000,
-  description: 'Spark invoice',
-});
-
-// Optional cleanup (restores original global fetch if installSparkRuntime changed it)
-sparkRuntime.restore();
-```
-
-### How does the pure TypeScript Spark signer work?
-
-The Spark protocol uses **2-of-2 threshold Schnorr signatures (FROST)** for every operation — sending, receiving, even wallet initialization. The official Spark SDK (`@buildonspark/spark-sdk`) ships a **Rust WASM binary** that handles all the FROST cryptography. That works in Node.js, but breaks in **browsers and Expo/React Native** where WASM loading is restricted or unavailable.
-
-We didn't write a FROST library from scratch. We used two existing TypeScript packages:
-- **`@frosts/core`** — generic FROST protocol types and operations
-- **`@frosts/secp256k1-tr`** — secp256k1 + Taproot (BIP-340) specific implementation
-
-Then in `spark.ts`, we wrote two functions that **replace** the SDK's WASM calls:
-
-1. **`pureSignFrost()`** — computes the user's signature share. This is the user's half of the 2-of-2 signing. It takes the user's secret key, nonces, and the signing package (commitments from both the user and the statechain operator), then produces a signature share using the FROST round2 math.
-
-2. **`pureAggregateFrost()`** — combines the user's share with the statechain operator's share into a final Schnorr signature. For the adaptor path (Lightning payments via swap), it also handles adaptor signature construction where the signature is offset by an adaptor point.
-
-These get injected into the Spark SDK via `setSparkFrostOnce()`, which overrides the SDK's default WASM signer with our pure TS implementation.
-
-The tricky part wasn't the basic FROST math — it was matching the exact behavior of Spark's **custom FROST variant** ("nested FROST" from Lightspark's fork). Spark uses nested FROST where the user is always in a singleton participant group, which means the Lagrange interpolation coefficient (lambda) is always 1 for the user. The statechain operators form their own group. This is different from standard FROST where Lagrange coefficients are computed across all participants.
-
-Three cryptographic bugs were discovered and fixed during implementation:
-
-- **Adaptor signature validation key**: The adaptor z-candidate validation was checking against the user's individual public key instead of the aggregated group key. The BIP-340 challenge hash depends on the full group key, so validation was effectively random (~50% correct).
-
-- **Non-adaptor aggregate path**: The `@frosts` library's built-in `aggregateWithTweak()` function broke for two reasons: (a) JavaScript Maps use reference equality for object keys, and different `Identifier` instances for the same logical signer don't match, and (b) the library computed binding factors with a slightly different key than what was used during signing. Fixed by doing manual aggregation — sum the shares and serialize — matching the adaptor path.
-
-- **Payment completion polling**: The SDK's `payLightningInvoice()` returns immediately after initiating the swap, before the Lightning payment settles. Added polling via `getLightningSendRequest` to wait for the terminal status and return the preimage.
-
-Reference implementation for Spark's FROST behavior: [buildonspark/spark](https://github.com/buildonspark/spark) (uses Rust WASM, not `@frosts`).
-
-### StorageProvider (optional persistent cache)
-
-Spark maintains an internal `paymentHash → transferId` cache that accelerates `lookupInvoice`, `onInvoiceEvents`, and `listTransactions`. By default the cache lives in-memory for the lifetime of the `SparkNode`. Pass a `StorageProvider` to persist it across app restarts.
-
-```ts
-import { type StorageProvider } from '@sunnyln/lni';
-```
-
-The interface is a simple async key-value store:
-
-```ts
-interface StorageProvider {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
-  remove(key: string): Promise<void>;
-}
-```
-
-**Browser — localStorage**
-
-```ts
-const localStorageProvider: StorageProvider = {
-  get: async (key) => localStorage.getItem(key),
-  set: async (key, value) => localStorage.setItem(key, value),
-  remove: async (key) => localStorage.removeItem(key),
-};
-
-const node = createNode({
-  kind: 'spark',
-  config: { mnemonic: '...', storage: localStorageProvider },
-});
-```
-
-### Arkade Boltz
-
-```ts
-import { createNode } from '@sunnyln/lni';
-
-const arkadeNode = createNode({
-  kind: 'arkade-boltz',
-  config: {
-    mnemonic: 'abandon ...',
-    arkServerUrl: 'https://mutinynet.arkade.sh',
-    network: 'mutinynet',
-    // optional:
-    // passphrase: '...',
-    // indexerUrl: 'https://...',
-    // esploraUrl: 'https://...',
-    // swapApiUrl: 'https://api.boltz.mutinynet.arkade.sh',
-  },
-});
-
-const arkadeInfo = await arkadeNode.getInfo();
-const arkadeInvoice = await arkadeNode.createInvoice({
-  amountMsats: 10_000,
-  description: 'Arkade invoice',
-});
-```
-
-**Expo / React Native — Drizzle ORM + expo-sqlite**
-
-```ts
-import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/expo-sqlite';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { openDatabaseSync } from 'expo-sqlite';
-
-export const sparkTransactionsCache = sqliteTable('spark_transactions_cache', {
-  paymentHash: text('payment_hash').primaryKey(),
-  transferId: text('transfer_id').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
-export type SparkTransactionCache = typeof sparkTransactionsCache.$inferSelect;
-export type NewSparkTransactionCache = typeof sparkTransactionsCache.$inferInsert;
-
-const db = drizzle(openDatabaseSync('lni-cache.db'));
-
-const PREFIX = 'lni:txcache:';
-const drizzleStorageProvider: StorageProvider = {
-  get: async (key) => {
-    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
-    const row = db.select().from(sparkTransactionsCache)
-      .where(eq(sparkTransactionsCache.paymentHash, hash)).get();
-    return row?.transferId ?? null;
-  },
-  set: async (key, value) => {
-    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
-    db.insert(sparkTransactionsCache)
-      .values({ paymentHash: hash, transferId: value })
-      .onConflictDoUpdate({
-        target: sparkTransactionsCache.paymentHash,
-        set: { transferId: value, updatedAt: new Date() },
-      }).run();
-  },
-  remove: async (key) => {
-    const hash = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
-    db.delete(sparkTransactionsCache)
-      .where(eq(sparkTransactionsCache.paymentHash, hash)).run();
-  },
-};
-```
-
-When a `StorageProvider` is configured, `lookupInvoice` uses a tiered lookup strategy:
-1. **Cache hit** — O(1) lookup by cached transfer ID
-2. **1-hour scan** — `getTransfers` with a 1-hour lookback window
-3. **24-hour scan** — `getTransfers` with a 24-hour lookback window
-4. **Full scan** — pages through all transfers (last resort)
-
-`onInvoiceEvents` also uses SDK event listeners (`transfer:claimed`) when available, falling back to polling when not.
-
-Spark entrypoint behavior:
-- `sdkEntry: 'auto'` (default) uses a browser-safe bundled Spark bare runtime in browser/Expo and falls back to the default SDK entry in Node.
-- `sdkEntry: 'bare'` forces the browser-safe bundled no-WASM/no-native path.
-- `sdkEntry: 'default'` uses the standard SDK export (may load WASM).
-- `sdkEntry: 'native'` uses the React Native native SDK entry.
-
-Node-only note: use `sdkEntry: 'default'` for Node environments.
-
 For NWC specifically, `createNode` returns `NwcNode` when `kind: 'nwc'`, so you can close it:
 
 ```ts
@@ -294,6 +109,69 @@ const info = await getPaymentInfo(destination, 100_000);
 const bolt11 = await resolveToBolt11(destination, 100_000);
 ```
 
+## Experimental Adapters
+
+`@sunnyln/lni-arkade` and `@sunnyln/lni-spark` are currently experimental packages. Expect API and packaging changes while the adapter split settles.
+
+### Spark
+
+Install:
+
+```bash
+npm install @sunnyln/lni @sunnyln/lni-spark
+```
+
+Use:
+
+```ts
+import { SparkNode, installSparkRuntime } from '@sunnyln/lni-spark';
+
+const runtime = installSparkRuntime({
+  apiKey: 'optional-api-key',
+  apiKeyHeader: 'x-api-key',
+});
+
+const sparkNode = new SparkNode({
+  mnemonic: 'abandon ...',
+  network: 'mainnet',
+  sdkEntry: 'bare',
+});
+
+const info = await sparkNode.getInfo();
+const invoice = await sparkNode.createInvoice({
+  amountMsats: 25_000,
+  description: 'Spark invoice',
+});
+
+runtime.restore();
+```
+
+### Arkade Boltz
+
+Install:
+
+```bash
+npm install @sunnyln/lni @sunnyln/lni-arkade
+```
+
+Use:
+
+```ts
+import { ArkadeBoltzNode } from '@sunnyln/lni-arkade';
+
+const arkadeNode = new ArkadeBoltzNode({
+  mnemonic: 'abandon ...',
+  arkServerUrl: 'https://mutinynet.arkade.sh',
+  network: 'mutinynet',
+});
+
+const info = await arkadeNode.getInfo();
+const invoice = await arkadeNode.createInvoice({
+  amountMsats: 10_000,
+  description: 'Arkade invoice',
+});
+```
+
 ## Implemented in this package
 
 - `PhoenixdNode`
@@ -303,19 +181,27 @@ const bolt11 = await resolveToBolt11(destination, 100_000);
 - `StrikeNode`
 - `SpeedNode`
 - `BlinkNode`
-- `ArkadeBoltzNode`
-- `SparkNode`
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
 
 ## Frontend Runtime Notes
 
 - Uses `fetch`, no Node-native runtime dependency required.
-- Spark no longer requires project-level Spark shims/vendor bundles; those are packaged in `@sunnyln/lni`.
+- Use `@sunnyln/lni-spark` when Spark support is needed.
+- Use `@sunnyln/lni-arkade` when Arkade Boltz support is needed.
 - For local `file:` package development with Expo, build the package first (`bindings/typescript`: `npm run build`) and use the Expo example `metro.config.js` pattern for `./dist/*` resolution.
-- If Expo shows `Invalid call ... import(specifier)` in `dist/nodes/spark.js`, rebuild `bindings/typescript` and restart Metro with cache clear (`npx expo start --clear`).
 - You can inject custom fetch via constructor options:
   - `new LndNode(config, { fetch: customFetch })`
 - Most backends require secrets (API keys, macaroons, runes, passwords). For production web apps, use a backend proxy/BFF to protect credentials.
+
+## Example App
+
+From `bindings/typescript`, run:
+
+```bash
+npm run example
+```
+
+This builds `@sunnyln/lni`, `@sunnyln/lni-arkade`, and `@sunnyln/lni-spark`, installs the web example dependencies, and starts the Vite app from `bindings/typescript-spark/examples/spark-web`.
 
 ## Build and Publish (package maintainers)
 
@@ -323,6 +209,18 @@ const bolt11 = await resolveToBolt11(destination, 100_000);
 npm run prepack
 npm run pack:dry-run
 npm run publish:public
+```
+
+To dry-run all published TypeScript packages in release order from `bindings/typescript`:
+
+```bash
+npm run release:dry-run
+```
+
+To publish all three packages in order (`@sunnyln/lni`, `@sunnyln/lni-arkade`, `@sunnyln/lni-spark`):
+
+```bash
+npm run release:public
 ```
 
 ## Integration tests

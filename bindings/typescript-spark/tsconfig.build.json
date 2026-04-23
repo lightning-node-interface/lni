@@ -8,9 +8,6 @@
   "exclude": [
     "dist",
     "node_modules",
-    "src/nodes/spark.ts",
-    "src/spark-runtime.ts",
-    "src/vendor/**",
     "src/**/__tests__/**"
   ]
 }

@@ -181,73 +181,6 @@ export interface BlinkConfig {
   httpTimeout?: number;
 }
 
-export type ArkadeBoltzNetwork = 'mainnet' | 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest';
-
-export interface ArkadeBoltzSwapFilter {
-  id?: string | string[];
-  status?: string | string[];
-  type?: string | string[];
-  orderBy?: 'createdAt';
-  orderDirection?: 'asc' | 'desc';
-}
-
-export interface ArkadeBoltzSwapRepository {
-  readonly version: 1;
-  saveSwap<T = unknown>(swap: T): Promise<void>;
-  deleteSwap(id: string): Promise<void>;
-  getAllSwaps<T = unknown>(filter?: ArkadeBoltzSwapFilter): Promise<T[]>;
-  clear(): Promise<void>;
-  [Symbol.asyncDispose]?: () => Promise<void>;
-}
-
-export interface ArkadeBoltzWalletStorage {
-  walletRepository: unknown;
-  contractRepository: unknown;
-}
-
-export interface ArkadeBoltzConfig {
-  mnemonic: string;
-  passphrase?: string;
-  network?: ArkadeBoltzNetwork;
-  arkServerUrl: string;
-  indexerUrl?: string;
-  esploraUrl?: string;
-  arkServerPublicKey?: string;
-  swapApiUrl?: string;
-  referralId?: string;
-  swapManager?: boolean | Record<string, unknown>;
-  swapRepository?: ArkadeBoltzSwapRepository;
-  walletStorage?: ArkadeBoltzWalletStorage;
-  socks5Proxy?: string;
-  acceptInvalidCerts?: boolean;
-  httpTimeout?: number;
-}
-
-export type SparkNetwork = 'mainnet' | 'regtest' | 'testnet' | 'signet' | 'local';
-
-export interface SparkConfig {
-  // 12/24-word seed phrase.
-  mnemonic: string;
-  // Optional passphrase applied to mnemonic->seed derivation.
-  passphrase?: string;
-  // Spark account index. If omitted, spark-sdk applies its default per-network.
-  accountNumber?: number;
-  // Spark network. Defaults to 'mainnet'.
-  network?: SparkNetwork;
-  // Optional override for spark-sdk runtime entrypoint loading strategy.
-  // - auto: browser/Expo uses packaged no-WASM bare vendor; Node uses '@buildonspark/spark-sdk'
-  // - bare: force packaged no-WASM bare vendor path
-  // - native: force '@buildonspark/spark-sdk/native'
-  // - default: force '@buildonspark/spark-sdk' (may load WASM depending on runtime)
-  sdkEntry?: 'auto' | 'bare' | 'native' | 'default';
-  // Optional max fee used by payInvoice when no fee limit is provided.
-  defaultMaxFeeSats?: number;
-  // Optional spark-sdk wallet options passthrough.
-  sparkOptions?: Record<string, unknown>;
-  /** Optional storage for persisting the paymentHash → transferId cache across sessions. */
-  storage?: StorageProvider;
-}
-
 export interface LightningNode {
   getInfo(): Promise<NodeInfo>;
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>;
@@ -269,9 +202,7 @@ export type BackendNodeKind =
   | 'nwc'
   | 'strike'
   | 'speed'
-  | 'blink'
-  | 'arkade-boltz'
-  | 'spark';
+  | 'blink';
 
 export type BackendNodeConfig =
   | { kind: 'phoenixd'; config: PhoenixdConfig }
@@ -280,9 +211,7 @@ export type BackendNodeConfig =
   | { kind: 'nwc'; config: NwcConfig }
   | { kind: 'strike'; config: StrikeConfig }
   | { kind: 'speed'; config: SpeedConfig }
-  | { kind: 'blink'; config: BlinkConfig }
-  | { kind: 'arkade-boltz'; config: ArkadeBoltzConfig }
-  | { kind: 'spark'; config: SparkConfig };
+  | { kind: 'blink'; config: BlinkConfig };
 
 export interface PaymentInfo {
   destinationType: 'bolt11' | 'bolt12' | 'lnurl' | 'lightning_address';

@@ -1,14 +1,9 @@
 import type { ArkadeSwapsCreateConfig, SwapRepository } from '@arkade-os/boltz-swap';
 import type { StorageConfig } from '@arkade-os/sdk';
-import { asLniError, LniError } from '../errors.js';
-import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
 import {
+  asLniError,
   InvoiceType,
-  type ArkadeBoltzConfig,
-  type ArkadeBoltzNetwork,
-  type ArkadeBoltzSwapFilter,
-  type ArkadeBoltzSwapRepository,
+  LniError,
   type CreateInvoiceParams,
   type CreateOfferParams,
   type InvoiceEventCallback,
@@ -22,6 +17,14 @@ import {
   type PayInvoiceParams,
   type PayInvoiceResponse,
   type Transaction,
+} from '@sunnyln/lni';
+import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
+import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '@sunnyln/lni/internal/transform';
+import type {
+  ArkadeBoltzConfig,
+  ArkadeBoltzNetwork,
+  ArkadeBoltzSwapFilter,
+  ArkadeBoltzSwapRepository,
 } from '../types.js';
 
 type ArkadeRuntimeNetwork = 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest';
@@ -233,34 +236,34 @@ export class ArkadeBoltzNode implements LightningNode {
       passphrase: this.config.passphrase,
     });
 
-      const wallet = await Wallet.create({
-        identity,
-        arkServerUrl: this.config.arkServerUrl,
-        indexerUrl: this.config.indexerUrl,
-        esploraUrl: this.config.esploraUrl,
-        arkServerPublicKey: this.config.arkServerPublicKey,
-        storage: (this.config.walletStorage ?? {
-          walletRepository: new InMemoryWalletRepository(),
-          contractRepository: new InMemoryContractRepository(),
-        }) as StorageConfig,
-      });
+    const wallet = await Wallet.create({
+      identity,
+      arkServerUrl: this.config.arkServerUrl,
+      indexerUrl: this.config.indexerUrl,
+      esploraUrl: this.config.esploraUrl,
+      arkServerPublicKey: this.config.arkServerPublicKey,
+      storage: (this.config.walletStorage ?? {
+        walletRepository: new InMemoryWalletRepository(),
+        contractRepository: new InMemoryContractRepository(),
+      }) as StorageConfig,
+    });
 
-    const network = toArkadeNetwork(this.config.network ?? wallet.networkName);
+    const network = toArkadeNetwork(this.config.network ?? (wallet as ArkadeWalletLike).networkName);
     const swapProvider = new boltz.BoltzSwapProvider({
       network,
       apiUrl: this.config.swapApiUrl,
       referralId: this.config.referralId,
     });
 
-      const swaps = await boltz.ArkadeSwaps.create({
-        wallet,
-        swapProvider,
-        swapManager: this.config.swapManager,
-        swapRepository: (this.config.swapRepository ?? new InMemoryArkadeSwapRepository()) as SwapRepository,
-      } satisfies ArkadeSwapsCreateConfig);
+    const swaps = await boltz.ArkadeSwaps.create({
+      wallet,
+      swapProvider,
+      swapManager: this.config.swapManager,
+      swapRepository: (this.config.swapRepository ?? new InMemoryArkadeSwapRepository()) as SwapRepository,
+    } satisfies ArkadeSwapsCreateConfig);
 
     return {
-      wallet,
+      wallet: wallet as ArkadeWalletLike,
       swaps,
       decodeInvoice: boltz.decodeInvoice,
       getInvoicePaymentHash: boltz.getInvoicePaymentHash,

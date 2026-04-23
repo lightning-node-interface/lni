@@ -407,7 +407,9 @@
     </div>
 
     <script type="module">
-      import { createNode, installSparkRuntime } from '@sunnyln/lni';
+      import { createNode } from '@sunnyln/lni';
+      import { ArkadeBoltzNode } from '@sunnyln/lni-arkade';
+      import { SparkNode, installSparkRuntime } from '@sunnyln/lni-spark';
       import { IndexedDBContractRepository, IndexedDBWalletRepository } from '@arkade-os/sdk';
       import { IndexedDbSwapRepository } from '@arkade-os/boltz-swap';
 
@@ -844,32 +846,26 @@
         try {
           await disconnectNode();
           if (cfg.backend === 'spark') {
-            state.node = createNode({
-              kind: 'spark',
-              config: {
-                mnemonic: cfg.mnemonic,
-                network: cfg.network,
-                sdkEntry: 'bare',
-                storage: localStorageProvider,
-                sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
-              },
+            state.node = new SparkNode({
+              mnemonic: cfg.mnemonic,
+              network: cfg.network,
+              sdkEntry: 'bare',
+              storage: localStorageProvider,
+              sparkOptions: Object.keys(sparkOptions).length ? sparkOptions : undefined,
             });
           } else {
             const persistence = await createArkadePersistence(cfg);
-            state.node = createNode({
-              kind: 'arkade-boltz',
-              config: {
-                mnemonic: cfg.mnemonic,
-                passphrase: cfg.arkadePassphrase || undefined,
-                network: cfg.network,
-                arkServerUrl: cfg.arkServerUrl,
-                swapApiUrl: cfg.swapApiUrl || undefined,
-                indexerUrl: cfg.indexerUrl || undefined,
-                esploraUrl: cfg.esploraUrl || undefined,
-                referralId: cfg.referralId || undefined,
-                walletStorage: persistence.walletStorage,
-                swapRepository: persistence.swapRepository,
-              },
+            state.node = new ArkadeBoltzNode({
+              mnemonic: cfg.mnemonic,
+              passphrase: cfg.arkadePassphrase || undefined,
+              network: cfg.network,
+              arkServerUrl: cfg.arkServerUrl,
+              swapApiUrl: cfg.swapApiUrl || undefined,
+              indexerUrl: cfg.indexerUrl || undefined,
+              esploraUrl: cfg.esploraUrl || undefined,
+              referralId: cfg.referralId || undefined,
+              walletStorage: persistence.walletStorage,
+              swapRepository: persistence.swapRepository,
             });
           }
           state.activeConfig = { ...cfg };

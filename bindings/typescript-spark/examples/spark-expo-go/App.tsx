@@ -7,15 +7,16 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import * as Clipboard from 'expo-clipboard';
 import { openDatabaseSync } from 'expo-sqlite';
 import {
-  createNode,
-  installSparkRuntime,
   type InvoiceEventStatus,
-  type SparkConfig,
-  type SparkNode,
-  type SparkRuntimeHandle,
   type StorageProvider,
   type Transaction,
 } from '@sunnyln/lni';
+import {
+  SparkNode,
+  installSparkRuntime,
+  type SparkConfig,
+  type SparkRuntimeHandle,
+} from '@sunnyln/lni-spark';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -413,7 +414,7 @@ export default function App() {
       await persistForm(form);
       setupRuntime(form.apiKey);
       await disconnectNode();
-      const node = createNode({ kind: 'spark', config: buildSparkConfig() });
+      const node = new SparkNode(buildSparkConfig());
       nodeRef.current = node;
       setConnected(true);
 

@@ -16,13 +16,5 @@
     "exactOptionalPropertyTypes": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "src/nodes/spark.ts",
-    "src/spark-runtime.ts",
-    "src/vendor/**",
-    "src/__tests__/spark-*.test.ts",
-    "src/__tests__/integration/spark.real.test.ts"
-  ]
+  "exclude": ["dist", "node_modules"]
 }

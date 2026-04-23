@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createStreamCompatibleFetch, installSparkRuntime, withHeaderFetch } from '../spark-runtime.js';
-import type { FetchLike } from '../types.js';
+import type { FetchLike } from '@sunnyln/lni';
 
 const globalRuntime = globalThis as typeof globalThis & { fetch?: typeof fetch };
 
