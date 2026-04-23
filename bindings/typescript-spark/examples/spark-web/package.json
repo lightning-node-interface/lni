@@ -9,7 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@sunnyln/lni": "file:../.."
+    "@arkade-os/boltz-swap": "^0.3.3",
+    "@arkade-os/sdk": "^0.4.4",
+    "@sunnyln/lni": "file:../../../typescript",
+    "@sunnyln/lni-arkade": "file:../../../typescript-arkade",
+    "@sunnyln/lni-spark": "file:../.."
   },
   "devDependencies": {
     "vite": "^7.1.9"

@@ -1,0 +1,69 @@
+{
+  "name": "@sunnyln/lni-arkade",
+  "version": "0.1.8",
+  "private": false,
+  "description": "Optional Arkade Boltz adapter for @sunnyln/lni.",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/typescript-arkade"
+  },
+  "homepage": "https://github.com/lightning-node-interface/lni/tree/master/bindings/typescript-arkade",
+  "bugs": {
+    "url": "https://github.com/lightning-node-interface/lni/issues"
+  },
+  "keywords": [
+    "lightning",
+    "bitcoin",
+    "arkade",
+    "boltz",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "npm run clean && npm run typecheck && npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:public": "npm publish --access public",
+    "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/arkade-boltz.real.test.ts"
+  },
+  "peerDependencies": {
+    "@sunnyln/lni": "^0.1.8"
+  },
+  "dependencies": {
+    "@arkade-os/boltz-swap": "^0.3.3",
+    "@arkade-os/sdk": "^0.4.4"
+  },
+  "devDependencies": {
+    "@sunnyln/lni": "file:../typescript",
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "websocket-polyfill": "^0.0.3"
+  },
+  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
+}

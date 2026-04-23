@@ -1,0 +1,82 @@
+{
+  "name": "@sunnyln/lni-spark",
+  "version": "0.1.8",
+  "private": false,
+  "description": "Optional Spark adapter for @sunnyln/lni with browser and Expo compatible pure TypeScript signer patching.",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/typescript-spark"
+  },
+  "homepage": "https://github.com/lightning-node-interface/lni/tree/master/bindings/typescript-spark",
+  "bugs": {
+    "url": "https://github.com/lightning-node-interface/lni/issues"
+  },
+  "keywords": [
+    "lightning",
+    "bitcoin",
+    "spark",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./spark-runtime": {
+      "types": "./dist/spark-runtime.d.ts",
+      "import": "./dist/spark-runtime.js",
+      "default": "./dist/spark-runtime.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json && node ./scripts/build-spark-vendor.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "npm run clean && npm run typecheck && npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:public": "npm publish --access public",
+    "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/spark.real.test.ts"
+  },
+  "peerDependencies": {
+    "@sunnyln/lni": "^0.1.8"
+  },
+  "dependencies": {
+    "@buildonspark/spark-sdk": "^0.6.3",
+    "@frosts/core": "^0.2.2-alpha.3",
+    "@frosts/secp256k1-tr": "^0.2.2-alpha.3",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.7.0",
+    "@scure/bip39": "^1.5.4",
+    "@scure/btc-signer": "^1.8.1",
+    "buffer": "^6.0.3",
+    "eciesjs": "^0.4.17",
+    "light-bolt11-decoder": "^3.2.0"
+  },
+  "devDependencies": {
+    "@sunnyln/lni": "file:../typescript",
+    "@types/node": "^22.13.5",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "websocket-polyfill": "^0.0.3"
+  },
+  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
+}

@@ -1,7 +1,7 @@
 # Spark Expo Go Example (No WASM)
 
 This app is a minimal Expo Go example that connects to Spark using a no-WASM vendor bundle.
-It uses the public LNI API end-to-end (`createNode({ kind: 'spark' })`) plus `installSparkRuntime(...)`.
+It uses `SparkNode` plus `installSparkRuntime(...)` from `@sunnyln/lni-spark`.
 
 ## Prerequisites
 
@@ -10,11 +10,14 @@ It uses the public LNI API end-to-end (`createNode({ kind: 'spark' })`) plus `in
 
 ## Setup
 
-From `bindings/typescript/examples/spark-expo-go`:
+From `bindings/typescript-spark/examples/spark-expo-go`:
 
 ```bash
-# from repo root, build the local @sunnyln/lni package first
-cd ../../
+# from repo root, build the local packages first
+cd bindings/typescript
+npm run build
+
+cd ../typescript-spark
 npm run build
 
 # then run the Expo app
@@ -29,15 +32,15 @@ Then scan the QR code in Expo Go.
 
 ### Hermes error: `Invalid call at line 280: import(specifier)`
 
-This means Metro is still using an old cached `dist/nodes/spark.js` build.
+This means Metro is still using an old cached Spark package build.
 
-From `bindings/typescript`:
+From `bindings/typescript-spark`:
 
 ```bash
 npm run build
 ```
 
-From `bindings/typescript/examples/spark-expo-go`:
+From `bindings/typescript-spark/examples/spark-expo-go`:
 
 ```bash
 npx expo start --clear
@@ -45,25 +48,25 @@ npx expo start --clear
 
 If it still persists, stop all Expo/Metro processes and start again with `--clear`.
 
-### `Unable to resolve module '@sunnyln/lni'`
+### `Unable to resolve module '@sunnyln/lni-spark'`
 
 - Ensure the local package is installed in the example app:
 
 ```bash
-cd bindings/typescript/examples/spark-expo-go
+cd bindings/typescript-spark/examples/spark-expo-go
 npm install
 ```
 
-- Confirm `bindings/typescript` was built first (`npm run build`), since this example resolves from local `dist/*`.
+- Confirm `bindings/typescript` and `bindings/typescript-spark` were built first (`npm run build`), since this example resolves from local `dist/*`.
 
 ### `Failed to load Spark SDK entry ... Unable to resolve .../dist/vendor/...`
 
-This means the Spark vendor bundle files are missing from `bindings/typescript/dist/vendor`.
+This means the Spark vendor bundle files are missing from `bindings/typescript-spark/dist/vendor`.
 
 Regenerate them:
 
 ```bash
-cd bindings/typescript
+cd bindings/typescript-spark
 npm run build
 ```
 
@@ -79,9 +82,9 @@ npx expo start --clear
 - Accepts Spark mnemonic, network, optional API key, and optional SSP settings.
 - Persists form values in AsyncStorage.
 - Uses `installSparkRuntime({ apiKey })` to set up Buffer/base64/fetch compatibility.
-- Uses `createNode({ kind: 'spark' })` + `getInfo()` + `listTransactions()`.
+- Uses `new SparkNode(...)` + `getInfo()` + `listTransactions()`.
 - Includes a `payInvoice` test section (paste a BOLT11 invoice and optionally amount for zero-amount invoices).
-- Uses the Spark browser-safe vendor bundle packaged inside `@sunnyln/lni` (no app-level shims/vendor needed).
+- Uses the Spark browser-safe vendor bundle packaged inside `@sunnyln/lni-spark` (no app-level shims/vendor needed).
 - Includes Metro resolver handling for `./dist/*` imports from the linked package (`metro.config.js`).
 
 ## Security

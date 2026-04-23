@@ -1,6 +1,5 @@
 import { Buffer as NodeBuffer } from 'buffer';
-import { LniError } from './errors.js';
-import type { FetchLike } from './types.js';
+import { LniError, type FetchLike } from '@sunnyln/lni';
 
 type FetchRuntime = typeof globalThis & {
   Buffer?: typeof NodeBuffer;

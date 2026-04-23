@@ -1,6 +1,6 @@
 # LNI Web Demo (No WASM)
 
-This demo is a Vite-served web page that uses LNI's public API directly from `@sunnyln/lni`.
+This demo is a Vite-served web page that uses `@sunnyln/lni` plus optional Spark and Arkade adapter packages.
 
 It supports two browser-selectable backends:
 
@@ -15,6 +15,12 @@ It does **not** import WASM modules.
 cd bindings/typescript
 npm run build
 
+cd ../typescript-arkade
+npm run build
+
+cd ../typescript-spark
+npm run build
+
 cd examples/spark-web
 npm install
 npm run dev
@@ -24,7 +30,7 @@ Open:
 
 - http://localhost:5173
 
-`npm run build` generates and validates both vendor bundles in `dist/vendor`.
+The `bindings/typescript-spark` build generates and validates the Spark vendor bundles in `dist/vendor`.
 
 ## Manual pay-invoice test
 

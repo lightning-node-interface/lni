@@ -2,7 +2,7 @@
   "name": "@sunnyln/lni",
   "version": "0.1.8",
   "private": false,
-  "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed, Blink, Arkade Boltz and Spark. Supports BOLT11, BOLT12, LNURL, Lightning Address  (Frontend-first TypeScript support, no wasm, no native node modules)",
+  "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed and Blink. Supports BOLT11, BOLT12, LNURL and Lightning Address.",
   "type": "module",
   "sideEffects": false,
   "repository": {
@@ -36,10 +36,20 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./spark-runtime": {
-      "types": "./dist/spark-runtime.d.ts",
-      "import": "./dist/spark-runtime.js",
-      "default": "./dist/spark-runtime.js"
+    "./internal/encoding": {
+      "types": "./dist/internal/encoding.d.ts",
+      "import": "./dist/internal/encoding.js",
+      "default": "./dist/internal/encoding.js"
+    },
+    "./internal/polling": {
+      "types": "./dist/internal/polling.d.ts",
+      "import": "./dist/internal/polling.js",
+      "default": "./dist/internal/polling.js"
+    },
+    "./internal/transform": {
+      "types": "./dist/internal/transform.d.ts",
+      "import": "./dist/internal/transform.js",
+      "default": "./dist/internal/transform.js"
     }
   },
   "files": [
@@ -48,7 +58,10 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json && node ./scripts/build-spark-vendor.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "example": "npm run build && npm --prefix ../typescript-arkade run build && npm --prefix ../typescript-spark run build && npm --prefix ../typescript-spark/examples/spark-web install && npm --prefix ../typescript-spark/examples/spark-web run dev",
+    "release:dry-run": "npm run pack:dry-run && npm --prefix ../typescript-arkade run pack:dry-run && npm --prefix ../typescript-spark run pack:dry-run",
+    "release:public": "npm run publish:public && npm --prefix ../typescript-arkade run publish:public && npm --prefix ../typescript-spark run publish:public",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "npm run clean && npm run typecheck && npm run build",
@@ -61,24 +74,11 @@
     "test:integration:strike": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/strike.real.test.ts",
     "test:integration:speed": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/speed.real.test.ts",
     "test:integration:blink": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/blink.real.test.ts",
-    "test:integration:nwc": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/nwc.real.test.ts",
-    "test:integration:arkade-boltz": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/arkade-boltz.real.test.ts",
-    "test:integration:spark": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/spark.real.test.ts"
+    "test:integration:nwc": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/nwc.real.test.ts"
   },
   "dependencies": {
-    "@arkade-os/boltz-swap": "^0.3.3",
-    "@arkade-os/sdk": "^0.4.4",
-    "@buildonspark/spark-sdk": "^0.6.3",
-    "@frosts/core": "^0.2.2-alpha.3",
-    "@frosts/secp256k1-tr": "^0.2.2-alpha.3",
     "@getalby/sdk": "^7.0.0",
-    "@noble/curves": "^1.9.7",
-    "@noble/hashes": "^1.7.0",
     "@scure/base": "^2.0.0",
-    "@scure/bip39": "^1.5.4",
-    "@scure/btc-signer": "^1.8.1",
-    "buffer": "^6.0.3",
-    "eciesjs": "^0.4.17",
     "light-bolt11-decoder": "^3.2.0"
   },
   "devDependencies": {

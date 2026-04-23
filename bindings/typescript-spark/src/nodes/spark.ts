@@ -24,11 +24,11 @@ import {
 } from '../vendor/frosts-bridge.js';
 import { decrypt as eciesDecrypt, encrypt as eciesEncrypt } from 'eciesjs';
 import { decode as decodeBolt11 } from 'light-bolt11-decoder';
-import { LniError } from '../errors.js';
-import { bytesToHex, hexToBytes } from '../internal/encoding.js';
-import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type SparkConfig, type StorageProvider, type Transaction } from '../types.js';
+import { LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type StorageProvider, type Transaction } from '@sunnyln/lni';
+import { bytesToHex, hexToBytes } from '@sunnyln/lni/internal/encoding';
+import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
+import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '@sunnyln/lni/internal/transform';
+import type { SparkConfig } from '../types.js';
 
 type SparkSdkEntry = 'auto' | 'bare' | 'native' | 'default';
 
@@ -119,6 +119,18 @@ type SparkFrostLike = {
   createDummyTx(address: string, amountSats: bigint): Promise<{ tx: Uint8Array; txid: string }>;
   encryptEcies(msg: Uint8Array, publicKey: Uint8Array): Promise<Uint8Array>;
   decryptEcies(encryptedMsg: Uint8Array, privateKey: Uint8Array): Promise<Uint8Array>;
+  splitSecretWithProofs(
+    secret: Uint8Array,
+    threshold: number,
+    numShares: number,
+  ): Promise<Array<{ threshold: number; index: number; share: Uint8Array; proofs: Uint8Array[] }>>;
+  recoverSecret(shares: Array<{ threshold: number; index: number; share: Uint8Array }>): Promise<Uint8Array>;
+  validateShare(
+    share: Uint8Array,
+    index: number,
+    threshold: number,
+    proofs: Uint8Array[],
+  ): Promise<void>;
 };
 
 const DEFAULT_MAX_FEE_SATS = 20;
@@ -581,6 +593,196 @@ function emitSparkDebugCheckpoint(phase: string, meta: Record<string, unknown> =
   } catch {}
 }
 
+const SECP256K1_ORDER = secp256k1.CURVE.n;
+
+function scalarMod(value: bigint): bigint {
+  const modded = value % SECP256K1_ORDER;
+  return modded >= 0n ? modded : modded + SECP256K1_ORDER;
+}
+
+function scalarPow(base: bigint, exponent: number): bigint {
+  let result = 1n;
+  let factor = scalarMod(base);
+  let power = exponent;
+  while (power > 0) {
+    if (power & 1) {
+      result = scalarMod(result * factor);
+    }
+    factor = scalarMod(factor * factor);
+    power >>= 1;
+  }
+  return result;
+}
+
+function scalarInverse(value: bigint): bigint {
+  let t = 0n;
+  let newT = 1n;
+  let r = SECP256K1_ORDER;
+  let newR = scalarMod(value);
+
+  while (newR !== 0n) {
+    const quotient = r / newR;
+    [t, newT] = [newT, t - quotient * newT];
+    [r, newR] = [newR, r - quotient * newR];
+  }
+
+  if (r !== 1n) {
+    throw new LniError('InvalidInput', 'Value is not invertible in secp256k1 scalar field.');
+  }
+
+  return scalarMod(t);
+}
+
+function scalarToBytes32(value: bigint): Uint8Array {
+  const hex = scalarMod(value).toString(16).padStart(64, '0');
+  return hexToBytes(hex);
+}
+
+function scalarFromBytes32(bytes: Uint8Array, label: string): bigint {
+  if (bytes.length !== 32) {
+    throw new LniError('InvalidInput', `${label} must be 32 bytes.`);
+  }
+  return scalarMod(BigInt(`0x${bytesToHex(bytes)}`));
+}
+
+function evaluatePolynomial(coefficients: bigint[], x: bigint): bigint {
+  let result = 0n;
+  let xPower = 1n;
+  for (const coefficient of coefficients) {
+    result = scalarMod(result + coefficient * xPower);
+    xPower = scalarMod(xPower * x);
+  }
+  return result;
+}
+
+function lagrangeCoefficientAtZero(indices: bigint[], current: bigint): bigint {
+  let numerator = 1n;
+  let denominator = 1n;
+  for (const index of indices) {
+    if (index === current) {
+      continue;
+    }
+    numerator = scalarMod(numerator * index);
+    denominator = scalarMod(denominator * (index - current));
+  }
+  return scalarMod(numerator * scalarInverse(denominator));
+}
+
+function computeExpectedSharePoint(index: number, proofs: Uint8Array[]): InstanceType<typeof secp256k1.Point> {
+  if (!Number.isInteger(index) || index <= 0) {
+    throw new LniError('InvalidInput', 'Secret share index must be a positive integer.');
+  }
+  if (!proofs.length) {
+    throw new LniError('InvalidInput', 'Secret share proofs are required.');
+  }
+
+  const x = BigInt(index);
+  let expected = secp256k1.Point.ZERO;
+  proofs.forEach((proof, proofIndex) => {
+    const point = secp256k1.Point.fromHex(proof);
+    const factor = scalarPow(x, proofIndex);
+    expected = expected.add(point.multiply(factor));
+  });
+  return expected;
+}
+
+async function pureSplitSecretWithProofs(
+  secret: Uint8Array,
+  threshold: number,
+  numShares: number,
+): Promise<Array<{ threshold: number; index: number; share: Uint8Array; proofs: Uint8Array[] }>> {
+  if (secret.length !== 32) {
+    throw new LniError('InvalidInput', 'Spark splitSecretWithProofs expects a 32-byte secret.');
+  }
+  if (!Number.isInteger(threshold) || threshold <= 0) {
+    throw new LniError('InvalidInput', 'Spark splitSecretWithProofs threshold must be a positive integer.');
+  }
+  if (!Number.isInteger(numShares) || numShares < threshold) {
+    throw new LniError('InvalidInput', 'Spark splitSecretWithProofs numShares must be >= threshold.');
+  }
+
+  const coefficients: bigint[] = [scalarFromBytes32(secret, 'Spark secret')];
+  for (let i = 1; i < threshold; i += 1) {
+    coefficients.push(scalarFromBytes32(secp256k1.utils.randomPrivateKey(), `Spark coefficient ${i}`));
+  }
+
+  const proofs = coefficients.map((coefficient) =>
+    Uint8Array.from(secp256k1.getPublicKey(scalarToBytes32(coefficient), true)),
+  );
+
+  return Array.from({ length: numShares }, (_, offset) => {
+    const index = offset + 1;
+    const shareScalar = evaluatePolynomial(coefficients, BigInt(index));
+    return {
+      threshold,
+      index,
+      share: scalarToBytes32(shareScalar),
+      proofs,
+    };
+  });
+}
+
+async function pureRecoverSecret(
+  shares: Array<{ threshold: number; index: number; share: Uint8Array }>,
+): Promise<Uint8Array> {
+  if (!shares.length) {
+    throw new LniError('InvalidInput', 'recoverSecret requires at least one share.');
+  }
+
+  const threshold = shares[0]?.threshold ?? 0;
+  if (!Number.isInteger(threshold) || threshold <= 0) {
+    throw new LniError('InvalidInput', 'recoverSecret requires a valid threshold on the provided shares.');
+  }
+
+  const uniqueShares = new Map<number, Uint8Array>();
+  for (const share of shares) {
+    if (share.threshold !== threshold) {
+      throw new LniError('InvalidInput', 'recoverSecret requires all shares to use the same threshold.');
+    }
+    if (!Number.isInteger(share.index) || share.index <= 0) {
+      throw new LniError('InvalidInput', 'recoverSecret requires positive share indices.');
+    }
+    uniqueShares.set(share.index, share.share);
+  }
+
+  if (uniqueShares.size < threshold) {
+    throw new LniError('InvalidInput', `recoverSecret requires at least ${threshold} unique shares.`);
+  }
+
+  const selectedEntries = Array.from(uniqueShares.entries()).slice(0, threshold);
+  const indices = selectedEntries.map(([index]) => BigInt(index));
+
+  let secret = 0n;
+  for (const [index, shareBytes] of selectedEntries) {
+    const shareScalar = scalarFromBytes32(shareBytes, `Spark share ${index}`);
+    const lambda = lagrangeCoefficientAtZero(indices, BigInt(index));
+    secret = scalarMod(secret + shareScalar * lambda);
+  }
+
+  return scalarToBytes32(secret);
+}
+
+async function pureValidateShare(
+  share: Uint8Array,
+  index: number,
+  threshold: number,
+  proofs: Uint8Array[],
+): Promise<void> {
+  if (!Number.isInteger(threshold) || threshold <= 0) {
+    throw new LniError('InvalidInput', 'Spark share threshold must be a positive integer.');
+  }
+  if (proofs.length !== threshold) {
+    throw new LniError('InvalidInput', 'Spark share proof count must equal threshold.');
+  }
+
+  const expectedPoint = computeExpectedSharePoint(index, proofs);
+  const actualPoint = secp256k1.Point.BASE.multiply(scalarFromBytes32(share, `Spark share ${index}`));
+
+  if (!expectedPoint.equals(actualPoint)) {
+    throw new LniError('InvalidInput', `Spark share validation failed for index ${index}.`);
+  }
+}
+
 async function pureSignFrost(params: SignFrostBindingParamsLike): Promise<Uint8Array> {
   const commitmentKeys = Object.keys(params.statechainCommitments ?? {});
   emitSparkDebugCheckpoint('sign_frost:start', {
@@ -1040,10 +1242,12 @@ export class SparkNode implements LightningNode {
     const applyPureMethods = (sparkFrost: SparkFrostLike): SparkFrostLike => {
       sparkFrost.signFrost = async (params) => pureSignFrost(params);
       sparkFrost.aggregateFrost = async (params) => pureAggregateFrost(params);
-
       sparkFrost.createDummyTx = pureCreateDummyTx;
       sparkFrost.encryptEcies = pureEncryptEcies;
       sparkFrost.decryptEcies = pureDecryptEcies;
+      sparkFrost.splitSecretWithProofs = pureSplitSecretWithProofs;
+      sparkFrost.recoverSecret = pureRecoverSecret;
+      sparkFrost.validateShare = pureValidateShare;
       return sparkFrost;
     };
 
