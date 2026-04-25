@@ -4,12 +4,12 @@
   "private": true,
   "types": "../lib/typescript/commonjs/src/index.d.ts",
   "scripts": {
-    "android": "../scripts/patch-android.sh && react-native run-android",
-    "ios": "react-native run-ios",
-    "start": "react-native start",
+    "android": "../scripts/patch-android.sh && rnc-cli run-android",
+    "ios": "rnc-cli run-ios",
+    "start": "rnc-cli start",
     "adb": "adb reverse tcp:9740 tcp:9740",
-    "build:android": "react-native build-android --extra-params \"--no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a\"",
-    "build:ios": "react-native build-ios --scheme LniReactNativeExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\"",
+    "build:android": "rnc-cli build-android --extra-params \"--no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a\"",
+    "build:ios": "rnc-cli build-ios --scheme LniReactNativeExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\"",
     "clean:android": "cd android && ./gradlew clean && cd .."
   },
   "dependencies": {
@@ -29,7 +29,7 @@
     "@react-native/metro-config": "0.78.1",
     "@react-native/typescript-config": "0.78.1",
     "@types/react": "^19.0.0",
-    "react-native-builder-bob": "^0.39.0"
+    "react-native-builder-bob": "0.39.1"
   },
   "engines": {
     "node": ">=18"

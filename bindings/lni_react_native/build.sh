@@ -1,3 +1,4 @@
+yarn install
 yarn ubrn:clean
 rm -rf rust_modules
 rm -rf lib

@@ -1,5 +1,4 @@
 import { it } from 'vitest';
-import 'websocket-polyfill';
 
 export const timeout = 120_000;
 type ConditionalIt = (name: string, fn: () => Promise<void> | void, timeout?: number) => void;

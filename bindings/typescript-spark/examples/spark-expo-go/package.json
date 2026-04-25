@@ -13,7 +13,7 @@
     "@sunnyln/lni": "file:../../../typescript",
     "@sunnyln/lni-spark": "file:../..",
     "@react-native-async-storage/async-storage": "^2.2.0",
-    "drizzle-orm": "^0.39.0",
+    "drizzle-orm": "^0.45.2",
     "expo": "~54.0.33",
     "expo-clipboard": "~8.0.7",
     "expo-sqlite": "~16.0.8",

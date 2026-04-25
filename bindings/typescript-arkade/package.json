@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-arkade",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": false,
   "description": "Optional Arkade Boltz adapter for @sunnyln/lni.",
   "type": "module",
@@ -62,8 +62,7 @@
     "@sunnyln/lni": "file:../typescript",
     "@types/node": "^22.13.5",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8",
-    "websocket-polyfill": "^0.0.3"
+    "vitest": "^3.2.4"
   },
   "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
 }
