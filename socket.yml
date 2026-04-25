@@ -1,0 +1,7 @@
+version: 2
+
+# @sunnyln/lni is a network client for Lightning node HTTP APIs, LNURL,
+# Lightning Address, and hosted provider APIs. Socket's networkAccess alert is
+# expected for this repository and is documented in bindings/typescript/README.md.
+issueRules:
+  networkAccess: false

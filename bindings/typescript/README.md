@@ -193,6 +193,12 @@ const invoice = await arkadeNode.createInvoice({
   - `new LndNode(config, { fetch: customFetch })`
 - Most backends require secrets (API keys, macaroons, runes, passwords). For production web apps, use a backend proxy/BFF to protect credentials.
 
+## Security Scanner Notes
+
+Socket may report `networkAccess` for this package because `@sunnyln/lni` is intentionally a network client. The TypeScript runtime resolves `globalThis.fetch` in `dist/internal/http.js` and uses it to call configured Lightning node APIs, LNURL / Lightning Address endpoints, and supported hosted provider APIs.
+
+This network access is expected package behavior. Consumers should still review which backend URLs and credentials they configure, and browser applications should avoid shipping node credentials directly to untrusted clients.
+
 ## Example App
 
 From `bindings/typescript`, run:
