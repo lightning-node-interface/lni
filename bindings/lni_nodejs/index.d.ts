@@ -96,6 +96,19 @@ export interface SparkConfig {
   /** Network: "mainnet" or "regtest" */
   network?: string
 }
+export interface Permissions {
+  getInfo: boolean
+  createInvoice: boolean
+  payInvoice: boolean
+  createOffer: boolean
+  getOffer: boolean
+  listOffers: boolean
+  payOffer: boolean
+  lookupInvoice: boolean
+  listTransactions: boolean
+  decode: boolean
+  onInvoiceEvents: boolean
+}
 export const enum InvoiceType {
   Bolt11 = 'Bolt11',
   Bolt12 = 'Bolt12'
@@ -239,6 +252,8 @@ export interface ListTransactionsParams {
   limit: number
   paymentHash?: string
   search?: string
+  createdAfter?: number
+  createdBefore?: number
 }
 export interface LookupInvoiceParams {
   paymentHash?: string
@@ -342,6 +357,7 @@ export declare class PhoenixdNode {
   getUrl(): string
   getPassword(): string
   getConfig(): PhoenixdConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -357,6 +373,7 @@ export declare class ClnNode {
   getUrl(): string
   getRune(): string
   getConfig(): ClnConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -374,6 +391,7 @@ export declare class LndNode {
   getUrl(): string
   getMacaroon(): string
   getConfig(): LndConfig
+  getPermissions(): Promise<Permissions>
   createOffer(params: CreateOfferParams): Offer
   getOffer(search?: string | undefined | null): Promise<Offer>
   listOffers(search?: string | undefined | null): Promise<Array<Offer>>
@@ -396,6 +414,7 @@ export declare class BlinkNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): BlinkConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -413,6 +432,7 @@ export declare class NwcNode {
   getNwcUri(): string
   getSocks5Proxy(): string | null
   getConfig(): NwcConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -430,6 +450,7 @@ export declare class StrikeNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): StrikeConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -447,6 +468,7 @@ export declare class SpeedNode {
   getBaseUrl(): string
   getApiKey(): string
   getConfig(): SpeedConfig
+  getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
@@ -478,6 +500,7 @@ export declare class SparkNode {
   /** Get a Bitcoin address for on-chain deposits */
   getDepositAddress(): Promise<string>
   getInfo(): Promise<NodeInfo>
+  getPermissions(): Promise<Permissions>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   createOffer(params: CreateOfferParams): Promise<Offer>

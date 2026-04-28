@@ -36,6 +36,14 @@ impl LndNode {
     }
   }
 
+  #[napi]
+  pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
+    lni::lnd::LndNode::new(self.inner.clone())
+      .get_permissions()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
   // These BOLT12 functions are still synchronous
   #[napi]
   pub fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::types::Offer> {

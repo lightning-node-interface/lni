@@ -30,6 +30,14 @@ impl BlinkNode {
   }
 
   #[napi]
+  pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
+    lni::blink::BlinkNode::new(self.inner.clone())
+      .get_permissions()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
     let info = lni::blink::api::get_info(&self.inner)
       .await
