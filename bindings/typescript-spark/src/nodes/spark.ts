@@ -1300,6 +1300,13 @@ export class SparkNode implements LightningNode {
     return this.walletPromise;
   }
 
+  async getPermissions(): Promise<string[]> {
+    throw new LniError(
+      'InvalidInput',
+      'Spark wallet credentials cannot be introspected. Manually test permissions against Spark wallet operations.',
+    );
+  }
+
   async getInfo(): Promise<NodeInfo> {
     const wallet = await this.getWallet();
     const [balance, identityPublicKey] = await Promise.all([

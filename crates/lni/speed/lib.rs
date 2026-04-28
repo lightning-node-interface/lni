@@ -54,6 +54,12 @@ impl SpeedNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl SpeedNode {
+    pub async fn get_permissions(&self) -> Result<Vec<String>, ApiError> {
+        Err(ApiError::InvalidInput(
+            "Speed API keys cannot be introspected. Manually test permissions against Speed REST endpoints.".to_string(),
+        ))
+    }
+
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::speed::api::get_info(&self.config).await
     }

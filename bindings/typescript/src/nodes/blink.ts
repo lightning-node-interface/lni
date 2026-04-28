@@ -1,5 +1,6 @@
 import { LniError } from '../errors.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
+import { getBlinkTokenPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
 import { InvoiceType, type BlinkConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Transaction } from '../types.js';
@@ -211,6 +212,18 @@ export class BlinkNode implements LightningNode {
     const wallet = await this.getBtcWallet();
     this.cachedWalletId = wallet.id;
     return wallet.id;
+  }
+
+  async getPermissions(): Promise<string[]> {
+    const permissions = getBlinkTokenPermissions(this.config.apiKey);
+    if (!permissions) {
+      throw new LniError(
+        'InvalidInput',
+        'Blink API keys cannot be introspected. Use a JWT-style token with scopes or manually test permissions against Blink GraphQL operations.',
+      );
+    }
+
+    return permissions;
   }
 
   async getInfo(): Promise<NodeInfo> {

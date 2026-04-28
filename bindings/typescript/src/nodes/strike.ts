@@ -1,5 +1,7 @@
+import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 import { LniError } from '../errors.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
+import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
 import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type StrikeConfig, type Transaction } from '../types.js';
@@ -69,6 +71,16 @@ interface StrikePaymentsResponse {
   data: StrikePaymentResponse[];
 }
 
+function paymentHashFromInvoice(invoice: string): string {
+  try {
+    const decoded = decodeBolt11(invoice);
+    const section = decoded.sections.find((item) => item.name === 'payment_hash');
+    return section?.name === 'payment_hash' ? section.value : '';
+  } catch {
+    return '';
+  }
+}
+
 export class StrikeNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -115,6 +127,18 @@ export class StrikeNode implements LightningNode {
 
   private isNotFoundError(error: unknown): boolean {
     return error instanceof LniError && error.code === 'Http' && error.status === 404;
+  }
+
+  async getPermissions(): Promise<string[]> {
+    const permissions = getStrikeOauthPermissions(this.config.apiKey);
+    if (!permissions) {
+      throw new LniError(
+        'InvalidInput',
+        'Strike API keys cannot be introspected. Use an OAuth access token or manually test permissions against Strike REST endpoints.',
+      );
+    }
+
+    return permissions;
   }
 
   async getInfo(): Promise<NodeInfo> {
@@ -184,21 +208,17 @@ export class StrikeNode implements LightningNode {
     });
 
     const execution = await this.patchJson<StrikePaymentExecutionResponse>(`/payment-quotes/${quote.paymentQuoteId}/execute`);
-    let payment: StrikePaymentResponse;
+    let payment: StrikePaymentResponse | undefined;
     try {
       payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
-    } catch (error) {
-      throw new LniError(
-        'Api',
-        `Strike payment executed but status lookup failed. paymentId=${execution.paymentId}`,
-        { cause: error },
-      );
+    } catch {
+      // payment.read is optional for payInvoice; without it we still know the payment was executed.
     }
 
-    const feeMsats = payment.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0;
+    const feeMsats = payment?.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0;
 
     return {
-      paymentHash: payment.lightning?.paymentHash ?? '',
+      paymentHash: payment?.lightning?.paymentHash ?? paymentHashFromInvoice(params.invoice),
       preimage: '',
       feeMsats,
     };

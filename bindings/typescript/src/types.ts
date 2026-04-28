@@ -182,6 +182,7 @@ export interface BlinkConfig {
 }
 
 export interface LightningNode {
+  getPermissions(): Promise<string[]>;
   getInfo(): Promise<NodeInfo>;
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>;
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>;

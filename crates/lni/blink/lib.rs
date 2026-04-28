@@ -55,6 +55,14 @@ impl BlinkNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl BlinkNode {
+    pub async fn get_permissions(&self) -> Result<Vec<String>, ApiError> {
+        crate::permissions::parse_blink_token_permissions(&self.config.api_key).ok_or_else(|| {
+            ApiError::InvalidInput(
+                "Blink API keys cannot be introspected. Use a JWT-style token with scopes or manually test permissions against Blink GraphQL operations.".to_string(),
+            )
+        })
+    }
+
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::blink::api::get_info(&self.config).await
     }

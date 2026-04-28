@@ -89,6 +89,13 @@ export class PhoenixdNode implements LightningNode {
     });
   }
 
+  async getPermissions(): Promise<string[]> {
+    throw new LniError(
+      'InvalidInput',
+      'Phoenixd passwords cannot be introspected. Manually test permissions against Phoenixd REST endpoints.',
+    );
+  }
+
   async getInfo(): Promise<NodeInfo> {
     const [info, balance] = await Promise.all([
       this.requestJson<PhoenixdInfoResponse>('/getinfo', { method: 'GET' }),

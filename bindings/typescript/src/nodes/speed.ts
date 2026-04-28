@@ -106,6 +106,13 @@ export class SpeedNode implements LightningNode {
     });
   }
 
+  async getPermissions(): Promise<string[]> {
+    throw new LniError(
+      'InvalidInput',
+      'Speed API keys cannot be introspected. Manually test permissions against Speed REST endpoints.',
+    );
+  }
+
   async getInfo(): Promise<NodeInfo> {
     const payload = await this.getJson<SpeedBalanceResponse>('/balances');
     const sats = payload.available.find((item) => item.target_currency === 'SATS');

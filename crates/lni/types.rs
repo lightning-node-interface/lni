@@ -20,6 +20,7 @@ pub enum LightningNodeEnum {
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 #[async_trait]
 pub trait LightningNode: Send + Sync {
+    async fn get_permissions(&self) -> Result<Vec<String>, crate::ApiError>;
     async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
     async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;

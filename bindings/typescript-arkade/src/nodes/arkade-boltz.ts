@@ -29,6 +29,16 @@ import type {
 
 type ArkadeRuntimeNetwork = 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest';
 
+const ARKADE_BOLTZ_NODE_PERMISSIONS = [
+  'getInfo',
+  'createInvoice',
+  'payInvoice',
+  'lookupInvoice',
+  'listTransactions',
+  'decode',
+  'onInvoiceEvents',
+] as const;
+
 type ArkadeWalletLike = {
   networkName?: ArkadeRuntimeNetwork;
   getBalance(): Promise<{ available?: unknown }>;
@@ -342,6 +352,10 @@ export class ArkadeBoltzNode implements LightningNode {
     }
 
     return txs;
+  }
+
+  async getPermissions(): Promise<string[]> {
+    return [...ARKADE_BOLTZ_NODE_PERMISSIONS];
   }
 
   async getInfo(): Promise<NodeInfo> {

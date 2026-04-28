@@ -1,5 +1,6 @@
 import { LniError } from '../errors.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
+import { parseClnRunePermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, parseOptionalNumber } from '../internal/transform.js';
 import { InvoiceType, type ClnConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Transaction } from '../types.js';
@@ -125,6 +126,10 @@ export class ClnNode implements LightningNode {
     }
 
     return payload.invoice;
+  }
+
+  async getPermissions(): Promise<string[]> {
+    return parseClnRunePermissions(this.config.rune);
   }
 
   private invoiceToTransaction(invoice: ClnInvoice): Transaction {
