@@ -20,7 +20,7 @@ pub enum LightningNodeEnum {
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 #[async_trait]
 pub trait LightningNode: Send + Sync {
-    async fn get_permissions(&self) -> Result<Vec<String>, crate::ApiError>;
+    async fn get_permissions(&self) -> Result<Permissions, crate::ApiError>;
     async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
     async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
     async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;
@@ -44,6 +44,39 @@ pub trait LightningNode: Send + Sync {
         params: crate::types::OnInvoiceEventParams,
         callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
     );
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Permissions {
+    pub get_info: bool,
+    pub create_invoice: bool,
+    pub pay_invoice: bool,
+    pub create_offer: bool,
+    pub get_offer: bool,
+    pub list_offers: bool,
+    pub pay_offer: bool,
+    pub lookup_invoice: bool,
+    pub list_transactions: bool,
+    pub decode: bool,
+    pub on_invoice_events: bool,
+}
+
+impl Permissions {
+    pub fn is_empty(&self) -> bool {
+        !self.get_info
+            && !self.create_invoice
+            && !self.pay_invoice
+            && !self.create_offer
+            && !self.get_offer
+            && !self.list_offers
+            && !self.pay_offer
+            && !self.lookup_invoice
+            && !self.list_transactions
+            && !self.decode
+            && !self.on_invoice_events
+    }
 }
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]

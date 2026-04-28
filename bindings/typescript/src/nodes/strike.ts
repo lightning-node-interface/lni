@@ -4,7 +4,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type StrikeConfig, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StrikeConfig, type Transaction } from '../types.js';
 
 interface StrikeBalance {
   currency: string;
@@ -129,7 +129,7 @@ export class StrikeNode implements LightningNode {
     return error instanceof LniError && error.code === 'Http' && error.status === 404;
   }
 
-  async getPermissions(): Promise<string[]> {
+  async getPermissions(): Promise<Permissions> {
     const permissions = getStrikeOauthPermissions(this.config.apiKey);
     if (!permissions) {
       throw new LniError(

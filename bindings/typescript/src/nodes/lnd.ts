@@ -1,10 +1,10 @@
 import { LniError } from '../errors.js';
 import { encodeBase64Bytes, hexToBytes } from '../internal/encoding.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
-import { normalizePermissions, parseLndMacaroonPermissions } from '../internal/permissions.js';
+import { isEmptyPermissions, normalizeLndPermissions, parseLndMacaroonPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, parseOptionalNumber, rHashToHex } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type Transaction } from '../types.js';
 
 interface LndGetInfoResponse {
   alias: string;
@@ -111,7 +111,7 @@ export class LndNode implements LightningNode {
     });
   }
 
-  async getPermissions(): Promise<string[]> {
+  async getPermissions(): Promise<Permissions> {
     const macaroonBytes = hexToBytes(this.config.macaroon);
 
     try {
@@ -133,10 +133,10 @@ export class LndNode implements LightningNode {
         }),
       );
 
-      return normalizePermissions(granted);
+      return normalizeLndPermissions(granted);
     } catch (error) {
       const parsed = parseLndMacaroonPermissions(macaroonBytes);
-      if (parsed.length) {
+      if (!isEmptyPermissions(parsed)) {
         return parsed;
       }
       throw error;

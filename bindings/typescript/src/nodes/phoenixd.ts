@@ -3,7 +3,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats, toUnixSeconds } from '../internal/transform.js';
 import { encodeBase64 } from '../internal/encoding.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type PhoenixdConfig, type Transaction, type NodeInfo } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type PhoenixdConfig, type Transaction, type NodeInfo } from '../types.js';
 
 interface PhoenixdInfoResponse {
   nodeId: string;
@@ -89,7 +89,7 @@ export class PhoenixdNode implements LightningNode {
     });
   }
 
-  async getPermissions(): Promise<string[]> {
+  async getPermissions(): Promise<Permissions> {
     throw new LniError(
       'InvalidInput',
       'Phoenixd passwords cannot be introspected. Manually test permissions against Phoenixd REST endpoints.',

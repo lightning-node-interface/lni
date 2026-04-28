@@ -53,7 +53,7 @@ impl LndNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl LndNode {
-    pub async fn get_permissions(&self) -> Result<Vec<String>, ApiError> {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
         crate::lnd::api::get_permissions(self.config.clone()).await
     }
 

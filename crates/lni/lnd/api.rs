@@ -176,7 +176,7 @@ struct LndCheckMacaroonPermissionsResponse {
     valid: Option<bool>,
 }
 
-pub async fn get_permissions(config: LndConfig) -> Result<Vec<String>, ApiError> {
+pub async fn get_permissions(config: LndConfig) -> Result<crate::Permissions, ApiError> {
     let macaroon_bytes = hex::decode(config.macaroon.trim()).map_err(|e| ApiError::InvalidInput(
         format!("Invalid LND macaroon hex: {}", e),
     ))?;
@@ -197,7 +197,7 @@ pub async fn get_permissions(config: LndConfig) -> Result<Vec<String>, ApiError>
 async fn get_lnd_remote_permissions(
     config: &LndConfig,
     macaroon_bytes: &[u8],
-) -> Result<Vec<String>, ApiError> {
+) -> Result<crate::Permissions, ApiError> {
     let client = async_client(config);
     let permissions_url = format!("{}/v1/macaroon/permissions", config.url);
     let permissions_response = client
@@ -236,7 +236,7 @@ async fn get_lnd_remote_permissions(
         }
     }
 
-    Ok(crate::permissions::normalize_permissions(granted))
+    Ok(crate::permissions::normalize_lnd_permissions(granted))
 }
 
 // get the one with the offer_id or label or get the first offer in the list or

@@ -181,8 +181,22 @@ export interface BlinkConfig {
   httpTimeout?: number;
 }
 
+export interface Permissions {
+  getInfo: boolean;
+  createInvoice: boolean;
+  payInvoice: boolean;
+  createOffer: boolean;
+  getOffer: boolean;
+  listOffers: boolean;
+  payOffer: boolean;
+  lookupInvoice: boolean;
+  listTransactions: boolean;
+  decode: boolean;
+  onInvoiceEvents: boolean;
+}
+
 export interface LightningNode {
-  getPermissions(): Promise<string[]>;
+  getPermissions(): Promise<Permissions>;
   getInfo(): Promise<NodeInfo>;
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>;
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>;

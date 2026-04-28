@@ -53,7 +53,7 @@ impl ClnNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl ClnNode {
-    pub async fn get_permissions(&self) -> Result<Vec<String>, ApiError> {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
         Ok(crate::permissions::parse_cln_rune_permissions(&self.config.rune))
     }
 

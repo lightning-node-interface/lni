@@ -80,7 +80,7 @@ macro_rules! impl_lightning_node {
     ($node_type:ty) => {
         #[async_trait::async_trait]
         impl crate::LightningNode for $node_type {
-            async fn get_permissions(&self) -> Result<Vec<String>, crate::ApiError> {
+            async fn get_permissions(&self) -> Result<crate::Permissions, crate::ApiError> {
                 let this = self.clone();
                 crate::TOKIO_RUNTIME.spawn(async move {
                     <$node_type>::get_permissions(&this).await

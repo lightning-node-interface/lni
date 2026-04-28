@@ -54,7 +54,7 @@ impl PhoenixdNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl PhoenixdNode {
-    pub async fn get_permissions(&self) -> Result<Vec<String>, ApiError> {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
         Err(ApiError::InvalidInput(
             "Phoenixd passwords cannot be introspected. Manually test permissions against Phoenixd REST endpoints.".to_string(),
         ))

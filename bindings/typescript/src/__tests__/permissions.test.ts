@@ -6,18 +6,21 @@ import { LndNode } from '../nodes/lnd.js';
 import { PhoenixdNode } from '../nodes/phoenixd.js';
 import { SpeedNode } from '../nodes/speed.js';
 import { StrikeNode } from '../nodes/strike.js';
+import type { Permissions } from '../types.js';
 
 describe('permissions helpers', () => {
   it('expands CLN method prefix rune restrictions to known methods', () => {
     const raw = new TextEncoder().encode('unique-id&method^list|method=getinfo');
     const rune = encodeBase64Bytes(raw).replace(/\+/g, '-').replace(/\//g, '_');
 
-    expect(parseClnRunePermissions(rune)).toEqual([
-      'getinfo',
-      'listfunds',
-      'listinvoices',
-      'listoffers',
-    ]);
+    expect(parseClnRunePermissions(rune)).toEqual(permissions({
+      getInfo: true,
+      getOffer: true,
+      listOffers: true,
+      lookupInvoice: true,
+      listTransactions: true,
+      onInvoiceEvents: true,
+    }));
   });
 
   it('checks LND macaroon permissions against the node permission map', async () => {
@@ -36,6 +39,9 @@ describe('permissions helpers', () => {
                 '/lnrpc.Lightning/GetInfo': {
                   permissions: [{ entity: 'info', action: 'read' }],
                 },
+                '/lnrpc.Lightning/ChannelBalance': {
+                  permissions: [{ entity: 'offchain', action: 'read' }],
+                },
                 '/lnrpc.Lightning/AddInvoice': {
                   permissions: [{ entity: 'invoices', action: 'write' }],
                 },
@@ -46,7 +52,7 @@ describe('permissions helpers', () => {
           if (url.endsWith('/v1/macaroon/checkpermissions')) {
             const body = JSON.parse(String(init?.body));
             return Response.json({
-              valid: body.permissions?.[0]?.entity === 'info',
+              valid: ['info', 'offchain'].includes(body.permissions?.[0]?.entity),
             });
           }
 
@@ -55,7 +61,9 @@ describe('permissions helpers', () => {
       },
     );
 
-    await expect(node.getPermissions()).resolves.toEqual(['/lnrpc.Lightning/GetInfo']);
+    await expect(node.getPermissions()).resolves.toEqual(permissions({
+      getInfo: true,
+    }));
   });
 
   it('maps Strike OAuth JWT scopes to LNI permissions', () => {
@@ -74,14 +82,14 @@ describe('permissions helpers', () => {
       'signature',
     ].join('.');
 
-    expect(getStrikeOauthPermissions(accessToken)).toEqual([
-      'createInvoice',
-      'decode',
-      'getInfo',
-      'lookupInvoice',
-      'onInvoiceEvents',
-      'payInvoice',
-    ]);
+    expect(getStrikeOauthPermissions(accessToken)).toEqual(permissions({
+      getInfo: true,
+      createInvoice: true,
+      payInvoice: true,
+      lookupInvoice: true,
+      decode: true,
+      onInvoiceEvents: true,
+    }));
   });
 
   it('rejects opaque Strike API keys for permission introspection', async () => {
@@ -99,15 +107,15 @@ describe('permissions helpers', () => {
       'signature',
     ].join('.');
 
-    expect(getBlinkTokenPermissions(token)).toEqual([
-      'createInvoice',
-      'decode',
-      'getInfo',
-      'listTransactions',
-      'lookupInvoice',
-      'onInvoiceEvents',
-      'payInvoice',
-    ]);
+    expect(getBlinkTokenPermissions(token)).toEqual(permissions({
+      getInfo: true,
+      createInvoice: true,
+      payInvoice: true,
+      lookupInvoice: true,
+      listTransactions: true,
+      decode: true,
+      onInvoiceEvents: true,
+    }));
   });
 
   it('rejects opaque Blink API keys for permission introspection', async () => {
@@ -140,4 +148,27 @@ function encodeJwtPart(value: unknown): string {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
+}
+
+function permissions(overrides: Partial<Permissions>): Permissions {
+  return {
+    ...emptyPermissions(),
+    ...overrides,
+  };
+}
+
+function emptyPermissions() {
+  return {
+    getInfo: false,
+    createInvoice: false,
+    payInvoice: false,
+    createOffer: false,
+    getOffer: false,
+    listOffers: false,
+    payOffer: false,
+    lookupInvoice: false,
+    listTransactions: false,
+    decode: false,
+    onInvoiceEvents: false,
+  };
 }

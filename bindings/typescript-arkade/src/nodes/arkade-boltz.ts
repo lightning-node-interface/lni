@@ -16,6 +16,7 @@ import {
   type OnInvoiceEventParams,
   type PayInvoiceParams,
   type PayInvoiceResponse,
+  type Permissions,
   type Transaction,
 } from '@sunnyln/lni';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
@@ -29,15 +30,19 @@ import type {
 
 type ArkadeRuntimeNetwork = 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest';
 
-const ARKADE_BOLTZ_NODE_PERMISSIONS = [
-  'getInfo',
-  'createInvoice',
-  'payInvoice',
-  'lookupInvoice',
-  'listTransactions',
-  'decode',
-  'onInvoiceEvents',
-] as const;
+const ARKADE_BOLTZ_NODE_PERMISSIONS: Permissions = {
+  getInfo: true,
+  createInvoice: true,
+  payInvoice: true,
+  createOffer: false,
+  getOffer: false,
+  listOffers: false,
+  payOffer: false,
+  lookupInvoice: true,
+  listTransactions: true,
+  decode: true,
+  onInvoiceEvents: true,
+};
 
 type ArkadeWalletLike = {
   networkName?: ArkadeRuntimeNetwork;
@@ -354,8 +359,8 @@ export class ArkadeBoltzNode implements LightningNode {
     return txs;
   }
 
-  async getPermissions(): Promise<string[]> {
-    return [...ARKADE_BOLTZ_NODE_PERMISSIONS];
+  async getPermissions(): Promise<Permissions> {
+    return { ...ARKADE_BOLTZ_NODE_PERMISSIONS };
   }
 
   async getInfo(): Promise<NodeInfo> {
