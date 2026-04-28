@@ -1,9 +1,10 @@
 import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
 import { LniError } from '../errors.js';
 import { bytesToHex, hexToBytes } from '../internal/encoding.js';
+import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
-import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction } from '../types.js';
+import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
 
 function extractPubkeyFromNwcUri(uri: string): string {
   try {
@@ -59,6 +60,14 @@ export class NwcNode implements LightningNode {
 
   close(): void {
     this.client.close();
+  }
+
+  async getPermissions(): Promise<Permissions> {
+    const info = await this.client.getInfo().catch((error) => {
+      throw new LniError('Api', `Failed to get NWC permissions: ${(error as Error)?.message ?? 'unknown error'}`);
+    });
+    const methods = (info as Nip47GetInfoResponse & { methods?: string[] }).methods;
+    return normalizeNwcPermissions(methods?.length ? methods : NWC_METHOD_PERMISSIONS);
   }
 
   async getInfo(): Promise<NodeInfo> {

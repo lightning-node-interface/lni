@@ -12,6 +12,7 @@ use crate::{
     DEFAULT_INVOICE_EXPIRY,
 };
 use reqwest::header;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 // Docs
@@ -146,6 +147,96 @@ pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
     // Use shared logic to create NodeInfo
     let node_info = process_node_info_responses(info, balance);
     Ok(node_info)
+}
+
+#[derive(Debug, Deserialize)]
+struct LndListPermissionsResponse {
+    method_permissions: Option<std::collections::HashMap<String, LndPermissionList>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LndPermissionList {
+    permissions: Option<Vec<LndMacaroonPermission>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LndMacaroonPermission {
+    entity: String,
+    action: String,
+}
+
+#[derive(Debug, Serialize)]
+struct LndCheckMacaroonPermissionsRequest {
+    macaroon: String,
+    permissions: Vec<LndMacaroonPermission>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LndCheckMacaroonPermissionsResponse {
+    valid: Option<bool>,
+}
+
+pub async fn get_permissions(config: LndConfig) -> Result<crate::Permissions, ApiError> {
+    let macaroon_bytes = hex::decode(config.macaroon.trim()).map_err(|e| ApiError::InvalidInput(
+        format!("Invalid LND macaroon hex: {}", e),
+    ))?;
+
+    match get_lnd_remote_permissions(&config, &macaroon_bytes).await {
+        Ok(permissions) => Ok(permissions),
+        Err(error) => {
+            let parsed = crate::permissions::parse_lnd_macaroon_permissions(&macaroon_bytes);
+            if parsed.is_empty() {
+                Err(error)
+            } else {
+                Ok(parsed)
+            }
+        }
+    }
+}
+
+async fn get_lnd_remote_permissions(
+    config: &LndConfig,
+    macaroon_bytes: &[u8],
+) -> Result<crate::Permissions, ApiError> {
+    let client = async_client(config);
+    let permissions_url = format!("{}/v1/macaroon/permissions", config.url);
+    let permissions_response = client
+        .get(&permissions_url)
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to list LND macaroon permissions: {}", e),
+        })?;
+    let permissions_text = permissions_response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read LND permissions response: {}", e),
+    })?;
+    let permissions_payload: LndListPermissionsResponse = serde_json::from_str(&permissions_text)?;
+    let macaroon = base64::encode(macaroon_bytes);
+    let check_url = format!("{}/v1/macaroon/checkpermissions", config.url);
+    let mut granted = Vec::new();
+
+    for (method, permission_list) in permissions_payload.method_permissions.unwrap_or_default() {
+        let check_response = client
+            .post(&check_url)
+            .json(&LndCheckMacaroonPermissionsRequest {
+                macaroon: macaroon.clone(),
+                permissions: permission_list.permissions.unwrap_or_default(),
+            })
+            .send()
+            .await
+            .map_err(|e| ApiError::Http {
+                reason: format!("Failed to check LND macaroon permission for {method}: {e}"),
+            })?;
+        let check_text = check_response.text().await.map_err(|e| ApiError::Http {
+            reason: format!("Failed to read LND permission check response for {method}: {e}"),
+        })?;
+        let check_payload: LndCheckMacaroonPermissionsResponse = serde_json::from_str(&check_text)?;
+        if check_payload.valid.unwrap_or(false) {
+            granted.push(method);
+        }
+    }
+
+    Ok(crate::permissions::normalize_lnd_permissions(granted))
 }
 
 // get the one with the offer_id or label or get the first offer in the list or

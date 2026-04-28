@@ -38,6 +38,7 @@ const backend: BackendNodeConfig = {
 const node = createNode(backend);
 
 const info = await node.getInfo();
+const permissions = await node.getPermissions();
 
 const invoiceParams = {
   invoiceType: InvoiceType.Bolt11,

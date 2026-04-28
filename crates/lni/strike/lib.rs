@@ -55,6 +55,14 @@ impl StrikeNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl StrikeNode {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
+        crate::permissions::parse_strike_oauth_permissions(&self.config.api_key).ok_or_else(|| {
+            ApiError::InvalidInput(
+                "Strike API keys cannot be introspected. Use an OAuth access token or manually test permissions against Strike REST endpoints.".to_string(),
+            )
+        })
+    }
+
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::strike::api::get_info(self.config.clone()).await
     }

@@ -24,7 +24,7 @@ import {
 } from '../vendor/frosts-bridge.js';
 import { decrypt as eciesDecrypt, encrypt as eciesEncrypt } from 'eciesjs';
 import { decode as decodeBolt11 } from 'light-bolt11-decoder';
-import { LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type StorageProvider, type Transaction } from '@sunnyln/lni';
+import { LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StorageProvider, type Transaction } from '@sunnyln/lni';
 import { bytesToHex, hexToBytes } from '@sunnyln/lni/internal/encoding';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '@sunnyln/lni/internal/transform';
@@ -1298,6 +1298,13 @@ export class SparkNode implements LightningNode {
     })();
 
     return this.walletPromise;
+  }
+
+  async getPermissions(): Promise<Permissions> {
+    throw new LniError(
+      'InvalidInput',
+      'Spark wallet credentials cannot be introspected. Manually test permissions against Spark wallet operations.',
+    );
   }
 
   async getInfo(): Promise<NodeInfo> {

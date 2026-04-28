@@ -53,6 +53,10 @@ impl ClnNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl ClnNode {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
+        Ok(crate::permissions::parse_cln_rune_permissions(&self.config.rune))
+    }
+
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::cln::api::get_info(self.config.clone()).await
     }

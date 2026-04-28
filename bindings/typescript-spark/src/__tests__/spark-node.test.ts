@@ -41,6 +41,16 @@ describe('SparkNode payInvoice', () => {
     ).rejects.toThrow('Spark amountless invoice requires amountMsats.');
   });
 
+  it('rejects permission introspection for wallet credentials', async () => {
+    const { SparkNode } = await import('../nodes/spark.js');
+    const node = new SparkNode({
+      mnemonic: TEST_MNEMONIC,
+      sdkEntry: 'bare',
+    });
+
+    await expect(node.getPermissions()).rejects.toThrow('Spark wallet credentials cannot be introspected.');
+  });
+
   it('does not send amountSatsToSend for fixed-amount invoice', async () => {
     mockBolt11Decoder({ amountMsats: '118000' });
     const { SparkNode } = await import('../nodes/spark.js');

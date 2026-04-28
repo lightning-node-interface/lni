@@ -3,7 +3,7 @@ import { buildUrl, requestJson, resolveFetch, toTimeoutMs } from '../internal/ht
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, satsToMsats } from '../internal/transform.js';
 import { encodeBase64 } from '../internal/encoding.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type SpeedConfig, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type SpeedConfig, type Transaction } from '../types.js';
 
 interface SpeedBalanceResponse {
   available: Array<{
@@ -104,6 +104,13 @@ export class SpeedNode implements LightningNode {
       payerNote: send.note,
       externalId: send.id,
     });
+  }
+
+  async getPermissions(): Promise<Permissions> {
+    throw new LniError(
+      'InvalidInput',
+      'Speed API keys cannot be introspected. Manually test permissions against Speed REST endpoints.',
+    );
   }
 
   async getInfo(): Promise<NodeInfo> {

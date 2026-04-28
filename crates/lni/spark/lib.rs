@@ -152,6 +152,12 @@ impl SparkNode {
 // All node methods - UniFFI exports these directly when the feature is enabled
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl SparkNode {
+    pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
+        Err(ApiError::InvalidInput(
+            "Spark wallet credentials cannot be introspected. Manually test permissions against Spark wallet operations.".to_string(),
+        ))
+    }
+
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         let network = self.config.network.as_deref().unwrap_or("mainnet");
         crate::spark::api::get_info(self.sdk.clone(), network).await

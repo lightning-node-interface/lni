@@ -77,6 +77,19 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
         }
 }
 
+pub async fn get_permissions(config: NwcConfig) -> Result<crate::Permissions, ApiError> {
+    let nwc = create_nwc_client(&config).await?;
+    let info = nwc.get_info().await.map_err(|e| ApiError::Api {
+        reason: format!("Failed to get NWC permissions: {}", e),
+    })?;
+
+    if info.methods.is_empty() {
+        Ok(crate::permissions::nwc_method_permissions())
+    } else {
+        Ok(crate::permissions::normalize_nwc_permissions(info.methods))
+    }
+}
+
 pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
     let nwc = create_nwc_client(&config).await?;
     
@@ -316,4 +329,3 @@ pub async fn on_invoice_events(
     })
     .await;
 }
-

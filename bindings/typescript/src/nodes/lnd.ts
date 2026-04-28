@@ -1,8 +1,10 @@
 import { LniError } from '../errors.js';
+import { encodeBase64Bytes, hexToBytes } from '../internal/encoding.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
+import { isEmptyPermissions, normalizeLndPermissions, parseLndMacaroonPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, parseOptionalNumber, rHashToHex } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type Transaction } from '../types.js';
 
 interface LndGetInfoResponse {
   alias: string;
@@ -59,6 +61,23 @@ interface LndPayResponseWrapper {
   };
 }
 
+interface LndMacaroonPermission {
+  entity: string;
+  action: string;
+}
+
+interface LndPermissionList {
+  permissions?: LndMacaroonPermission[];
+}
+
+interface LndListPermissionsResponse {
+  method_permissions?: Record<string, LndPermissionList>;
+}
+
+interface LndCheckMacaroonPermissionsResponse {
+  valid?: boolean;
+}
+
 export class LndNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -90,6 +109,38 @@ export class LndNode implements LightningNode {
       json,
       timeoutMs: this.timeoutMs,
     });
+  }
+
+  async getPermissions(): Promise<Permissions> {
+    const macaroonBytes = hexToBytes(this.config.macaroon);
+
+    try {
+      const payload = await this.getJson<LndListPermissionsResponse>('/v1/macaroon/permissions');
+      const methodPermissions = Object.entries(payload.method_permissions ?? {});
+      const macaroon = encodeBase64Bytes(macaroonBytes);
+      const granted: string[] = [];
+
+      await Promise.all(
+        methodPermissions.map(async ([method, permissionList]) => {
+          const response = await this.postJson<LndCheckMacaroonPermissionsResponse>('/v1/macaroon/checkpermissions', {
+            macaroon,
+            permissions: permissionList.permissions ?? [],
+          });
+
+          if (response.valid) {
+            granted.push(method);
+          }
+        }),
+      );
+
+      return normalizeLndPermissions(granted);
+    } catch (error) {
+      const parsed = parseLndMacaroonPermissions(macaroonBytes);
+      if (!isEmptyPermissions(parsed)) {
+        return parsed;
+      }
+      throw error;
+    }
   }
 
   private isPermissionDenied(error: unknown): boolean {

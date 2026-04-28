@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-spark",
-  "version": "0.2.2",
+  "version": "0.2.5",
   "private": false,
   "description": "Optional Spark adapter for @sunnyln/lni with browser and Expo compatible pure TypeScript signer patching.",
   "type": "module",
