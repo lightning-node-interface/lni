@@ -34,6 +34,14 @@ impl StrikeNode {
     self.inner.clone()
   }
 
+  #[napi]
+  pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
+    lni::strike::StrikeNode::new(self.inner.clone())
+      .get_permissions()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
   // Async methods using tokio runtime
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {

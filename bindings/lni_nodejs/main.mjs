@@ -217,6 +217,32 @@ async function nwc() {
   await testAsyncNode("Nwc", node, process.env.NWC_TEST_PAYMENT_HASH);
 }
 
+async function nwcPermissions() {
+  const config = {
+    nwcUri: process.env.NWC_URI,
+  };
+
+  if (!config.nwcUri) {
+    console.log("Skipping Nwc permissions test - NWC_URI not set");
+    return;
+  }
+
+  console.log("\n=== Testing Nwc permissions ===");
+  const node = new NwcNode(config);
+
+  try {
+    const permissions = await node.getPermissions();
+    const enabledPermissions = Object.entries(permissions)
+      .filter(([, enabled]) => enabled)
+      .map(([permission]) => permission);
+
+    console.log("Nwc permissions:", permissions);
+    console.log("Nwc enabled permissions:", enabledPermissions);
+  } catch (error) {
+    console.error("Nwc permissions test failed:", error.message);
+  }
+}
+
 async function spark() {
   const mnemonic = process.env.SPARK_MNEMONIC;
   const apiKey = process.env.SPARK_API_KEY;
@@ -300,6 +326,9 @@ function showEnvironmentHelp() {
   console.log("  STRIKE_BASE_URL=https://api.strike.me (optional, defaults to this)");
   console.log("  STRIKE_SOCKS5_PROXY=socks5h://127.0.0.1:9150 (optional)");
   console.log("  STRIKE_TEST_PAYMENT_HASH=existing_payment_hash (optional)");
+  console.log("");
+  console.log("For NWC permissions testing:");
+  console.log("  NWC_URI=nostr+walletconnect://... (kept out of logs)");
   console.log("=======================================\n");
 }
 
@@ -332,6 +361,7 @@ async function main() {
   // await blink();
   // await speed();
   // await nwc();
+  await nwcPermissions();
   await spark();
   
   console.log("\n=== All tests completed ===");

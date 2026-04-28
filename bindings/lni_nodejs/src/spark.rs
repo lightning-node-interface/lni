@@ -103,6 +103,18 @@ impl SparkNode {
     }
 
     #[napi]
+    pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
+        let inner = self.inner.read().await;
+        let node = inner
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
+
+        node.get_permissions()
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
     pub async fn create_invoice(
         &self,
         params: CreateInvoiceParams,
@@ -248,13 +260,35 @@ impl SparkNode {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
             let guard = inner.read().await;
             if let Some(node) = guard.as_ref() {
-                let sdk = node.get_sdk();
-                lni::spark::api::poll_invoice_events(sdk, params, move |status, tx| {
-                    let _ = callback(status.clone(), tx.clone())
-                        .map_err(|err| napi::Error::from_reason(err.to_string()));
-                })
-                .await;
+                let start_time = std::time::Instant::now();
+
+                while start_time.elapsed().as_secs() < params.max_polling_sec as u64 {
+                    let lookup_params = lni::LookupInvoiceParams {
+                        payment_hash: params.payment_hash.clone(),
+                        search: params.search.clone(),
+                    };
+
+                    match node.lookup_invoice(lookup_params).await {
+                        Ok(transaction) if transaction.settled_at > 0 => {
+                            let _ = callback("success".to_string(), Some(transaction));
+                            return;
+                        }
+                        Ok(transaction) => {
+                            let _ = callback("pending".to_string(), Some(transaction));
+                        }
+                        Err(_) => {
+                            let _ = callback("pending".to_string(), None);
+                        }
+                    }
+
+                    tokio::time::sleep(tokio::time::Duration::from_secs(
+                        params.polling_delay_sec as u64,
+                    ))
+                    .await;
+                }
             }
+
+            let _ = callback("failure".to_string(), None);
         });
 
         Ok(())
