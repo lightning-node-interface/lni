@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": false,
   "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed and Blink. Supports BOLT11, BOLT12, LNURL and Lightning Address.",
   "type": "module",
@@ -59,9 +59,10 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
+    "types:sync": "npm run clean && npm run typecheck && npm run build",
     "example": "npm run build && npm --prefix ../typescript-arkade run build && npm --prefix ../typescript-spark run build && npm --prefix ../typescript-spark/examples/spark-web install && npm --prefix ../typescript-spark/examples/spark-web run dev",
-    "release:dry-run": "npm run pack:dry-run && npm --prefix ../typescript-arkade run pack:dry-run && npm --prefix ../typescript-spark run pack:dry-run",
-    "release:public": "npm run publish:public && npm --prefix ../typescript-arkade run publish:public && npm --prefix ../typescript-spark run publish:public",
+    "release:dry-run": "npm run types:sync && npm run pack:dry-run && npm --prefix ../typescript-arkade run pack:dry-run && npm --prefix ../typescript-spark run pack:dry-run",
+    "release:public": "npm run types:sync && npm run publish:public && npm --prefix ../typescript-arkade run publish:public && npm --prefix ../typescript-spark run publish:public",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "npm run clean && npm run typecheck && npm run build",
