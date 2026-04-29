@@ -1,10 +1,21 @@
 import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
+import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 import { LniError } from '../errors.js';
 import { bytesToHex, hexToBytes } from '../internal/encoding.js';
 import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
 import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
+
+type NwcListTransaction = Partial<Omit<Nip47Transaction, 'type' | 'payment_hash'>> & {
+  type?: Nip47Transaction['type'];
+  payment_hash?: string;
+};
+
+type NwcListTransactionsResponse = Omit<Nip47ListTransactionsResponse, 'transactions' | 'total_count'> & {
+  transactions: NwcListTransaction[];
+  total_count?: number;
+};
 
 function extractPubkeyFromNwcUri(uri: string): string {
   try {
@@ -22,6 +33,20 @@ function extractPubkeyFromNwcUri(uri: string): string {
   return '';
 }
 
+function paymentHashFromInvoice(invoice: string): string {
+  if (!invoice) {
+    return '';
+  }
+
+  try {
+    const decoded = decodeBolt11(invoice);
+    const section = decoded.sections.find((item) => item.name === 'payment_hash');
+    return section?.name === 'payment_hash' ? section.value : '';
+  } catch {
+    return '';
+  }
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   if (!globalThis.crypto?.subtle) {
     throw new LniError('Api', 'Web Crypto API is required to hash NWC preimages.');
@@ -31,14 +56,16 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-function nwcTransactionToLniTransaction(tx: Nip47Transaction): Transaction {
+function nwcTransactionToLniTransaction(tx: Nip47Transaction | NwcListTransaction): Transaction {
+  const invoice = tx.invoice ?? '';
+
   return emptyTransaction({
     type: tx.type === 'outgoing' ? 'outgoing' : 'incoming',
-    invoice: tx.invoice ?? '',
+    invoice,
     description: tx.description ?? '',
     descriptionHash: tx.description_hash ?? '',
     preimage: tx.preimage ?? '',
-    paymentHash: tx.payment_hash ?? '',
+    paymentHash: tx.payment_hash ?? paymentHashFromInvoice(invoice),
     amountMsats: parseOptionalNumber(tx.amount),
     feesPaid: parseOptionalNumber(tx.fees_paid),
     createdAt: parseOptionalNumber(tx.created_at),
@@ -47,6 +74,34 @@ function nwcTransactionToLniTransaction(tx: Nip47Transaction): Transaction {
     payerNote: '',
     externalId: '',
   });
+}
+
+async function bufferGetAlbyLookupInvoiceErrors<T>(
+  fn: () => Promise<T>,
+  errorLogs: unknown[][],
+): Promise<T> {
+  const originalError = console.error;
+
+  console.error = (...args: unknown[]) => {
+    if (args[0] === 'Failed to request lookup_invoice') {
+      errorLogs.push(args);
+      return;
+    }
+
+    originalError(...args);
+  };
+
+  try {
+    return await fn();
+  } finally {
+    console.error = originalError;
+  }
+}
+
+function replayConsoleErrors(errorLogs: unknown[][]): void {
+  for (const args of errorLogs) {
+    console.error(...args);
+  }
 }
 
 export class NwcNode implements LightningNode {
@@ -167,23 +222,59 @@ export class NwcNode implements LightningNode {
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
-    const paymentHash = params.paymentHash;
+    const paymentHash = params.paymentHash ?? paymentHashFromInvoice(params.search ?? '');
     const invoice = params.search;
 
     if (!paymentHash && !invoice) {
       throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search (invoice) for NwcNode.');
     }
 
-    const tx = await this.client
-      .lookupInvoice({
-        payment_hash: paymentHash,
-        invoice,
-      })
-      .catch((error) => {
-        throw new LniError('Api', `Failed to lookup invoice: ${(error as Error)?.message ?? 'unknown error'}`);
-      });
+    const errorLogs: unknown[][] = [];
+    try {
+      const tx = await bufferGetAlbyLookupInvoiceErrors(
+        () =>
+          this.client.lookupInvoice({
+            payment_hash: paymentHash || undefined,
+            invoice: paymentHash ? undefined : invoice,
+          }),
+        errorLogs,
+      );
 
-    return nwcTransactionToLniTransaction(tx);
+      return nwcTransactionToLniTransaction(tx);
+    } catch (error) {
+      const fallback = await this.lookupInvoiceFromTransactions(paymentHash, invoice);
+      if (fallback) {
+        return fallback;
+      }
+
+      replayConsoleErrors(errorLogs);
+      throw new LniError('Api', `Failed to lookup invoice: ${(error as Error)?.message ?? 'unknown error'}`);
+    }
+  }
+
+  private async lookupInvoiceFromTransactions(
+    paymentHash: string,
+    invoice: string | undefined,
+  ): Promise<Transaction | undefined> {
+    try {
+      const response = await this.client.listTransactions({
+        from: 0,
+        limit: 100,
+      });
+      const transactions = (response as NwcListTransactionsResponse).transactions.map((tx) =>
+        nwcTransactionToLniTransaction(tx),
+      );
+
+      return transactions.find((tx) => {
+        if (paymentHash && tx.paymentHash === paymentHash) {
+          return true;
+        }
+
+        return Boolean(invoice && tx.invoice === invoice);
+      });
+    } catch {
+      return undefined;
+    }
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
@@ -196,11 +287,11 @@ export class NwcNode implements LightningNode {
         throw new LniError('Api', `Failed to list transactions: ${(error as Error)?.message ?? 'unknown error'}`);
       });
 
-    return this.filterTransactions(response, params);
+    return this.filterTransactions(response as NwcListTransactionsResponse, params);
   }
 
   private filterTransactions(
-    response: Nip47ListTransactionsResponse,
+    response: NwcListTransactionsResponse,
     params: ListTransactionsParams,
   ): Transaction[] {
     const mapped = response.transactions.map((tx) => nwcTransactionToLniTransaction(tx));

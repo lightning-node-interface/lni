@@ -106,16 +106,17 @@ pub struct LookupInvoiceRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LookupInvoiceResponse {
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: Option<String>,
     pub invoice: Option<String>,
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub preimage: Option<String>,
-    pub payment_hash: String,
+    #[serde(default)]
+    pub payment_hash: Option<String>,
     pub amount: i64, // in msats
     pub fees_paid: i64, // in msats
     pub created_at: i64, // unix timestamp
-    pub expires_at: i64, // unix timestamp
+    pub expires_at: Option<i64>, // unix timestamp
     pub settled_at: Option<i64>, // unix timestamp
     pub metadata: Option<serde_json::Value>,
 }
@@ -144,7 +145,8 @@ pub struct NwcTransaction {
     pub description: Option<String>,
     pub description_hash: Option<String>,
     pub preimage: Option<String>,
-    pub payment_hash: String,
+    #[serde(default)]
+    pub payment_hash: Option<String>,
     pub amount: i64, // in msats
     pub fees_paid: i64, // in msats
     pub created_at: i64, // unix timestamp
