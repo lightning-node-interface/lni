@@ -11,13 +11,15 @@ describe('Real integration from crates/lni/.env > NwcNode', async () => {
     const node = makeNode();
 
 
-    const invoice = await node.lookupInvoice({ paymentHash: process.env.NWC_TEST_PAYMENT_HASH! });
-    console.log('NWC Invoice Lookup by Hash:', invoice);
-    expect(invoice.paymentHash.length).toBeGreaterThan(0);
+    
 
     try {
       const info = await node.getInfo();
       expect(typeof info.alias).toBe('string');
+
+      const invoice1 = await node.lookupInvoice({ paymentHash: process.env.NWC_TEST_PAYMENT_HASH! });
+      console.log('NWC Invoice Lookup by Hash:', invoice1);
+      expect(invoice1.paymentHash.length).toBeGreaterThan(0);
 
       const invoice = await node.createInvoice({
         amountMsats: 3_000,

@@ -256,22 +256,37 @@ export class NwcNode implements LightningNode {
     paymentHash: string,
     invoice: string | undefined,
   ): Promise<Transaction | undefined> {
-    try {
-      const response = await this.client.listTransactions({
-        from: 0,
-        limit: 100,
-      });
-      const transactions = (response as NwcListTransactionsResponse).transactions.map((tx) =>
-        nwcTransactionToLniTransaction(tx),
-      );
+    const pageSize = 100;
+    let offset = 0;
 
-      return transactions.find((tx) => {
-        if (paymentHash && tx.paymentHash === paymentHash) {
-          return true;
+    try {
+      while (true) {
+        const response = await this.client.listTransactions({
+          from: 0,
+          limit: pageSize,
+          offset,
+        });
+        const page = response as NwcListTransactionsResponse;
+        const transactions = page.transactions.map((tx) => nwcTransactionToLniTransaction(tx));
+
+        const found = transactions.find((tx) => {
+          if (paymentHash && tx.paymentHash === paymentHash) {
+            return true;
+          }
+
+          return Boolean(invoice && tx.invoice === invoice);
+        });
+
+        if (found) {
+          return found;
         }
 
-        return Boolean(invoice && tx.invoice === invoice);
-      });
+        if (page.transactions.length < pageSize) {
+          return undefined;
+        }
+
+        offset += page.transactions.length;
+      }
     } catch {
       return undefined;
     }

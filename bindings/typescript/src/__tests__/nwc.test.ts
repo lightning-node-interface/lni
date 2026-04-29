@@ -118,7 +118,30 @@ describe('NwcNode.lookupInvoice', () => {
 
     expect(tx.paymentHash).toBe(PAYMENT_HASH);
     expect(tx.amountMsats).toBe(5000);
-    expect(nwcMocks.listTransactions).toHaveBeenCalledWith({ from: 0, limit: 100 });
+    expect(nwcMocks.listTransactions).toHaveBeenCalledWith({ from: 0, limit: 100, offset: 0 });
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it('paginates list_transactions fallback until it finds a matching transaction', async () => {
+    const lookupError = new Error('BAD_DECRYPT');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockLookupFailure(lookupError);
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      nwcTransaction({
+        payment_hash: `${OTHER_PAYMENT_HASH.slice(0, -2)}${String(index).padStart(2, '0')}`,
+        invoice: `lnbc1other${index}`,
+      }),
+    );
+    nwcMocks.listTransactions
+      .mockResolvedValueOnce({ transactions: firstPage })
+      .mockResolvedValueOnce({ transactions: [nwcTransaction({ amount: 7000 })] });
+
+    const tx = await makeNode().lookupInvoice({ paymentHash: PAYMENT_HASH });
+
+    expect(tx.paymentHash).toBe(PAYMENT_HASH);
+    expect(tx.amountMsats).toBe(7000);
+    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(1, { from: 0, limit: 100, offset: 0 });
+    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(2, { from: 0, limit: 100, offset: 100 });
     expect(consoleError).not.toHaveBeenCalled();
   });
 

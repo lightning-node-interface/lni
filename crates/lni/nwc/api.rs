@@ -214,27 +214,36 @@ async fn lookup_invoice_from_transactions(
         return Ok(None);
     }
 
-    let transactions = list_transactions(
-        config,
-        ListTransactionsParams {
-            from: 0,
-            limit: 100,
-            payment_hash: None,
-            search: None,
-            created_after: None,
-            created_before: None,
-        },
-    )
-    .await?;
+    let params = ListTransactionsParams {
+        from: 0,
+        limit: 100,
+        payment_hash: payment_hash.map(ToOwned::to_owned),
+        search: invoice.map(ToOwned::to_owned),
+        created_after: None,
+        created_before: None,
+    };
+    let limit = normalized_limit(params.limit);
+    let mut offset = 0;
 
-    Ok(transactions.into_iter().find(|transaction| {
-        payment_hash
-            .map(|target| transaction.payment_hash == target)
-            .unwrap_or(false)
-            || invoice
-                .map(|target| transaction.invoice == target)
-                .unwrap_or(false)
-    }))
+    loop {
+        let page = list_transactions_page_raw(&config, &params, Some(offset)).await?;
+        let page_len = page.len();
+
+        if let Some(transaction) = page
+            .into_iter()
+            .find(|transaction| transaction_matches_lookup(transaction, payment_hash, invoice))
+        {
+            return Ok(Some(transaction));
+        }
+
+        if page_len < limit {
+            break;
+        }
+
+        offset += page_len as u64;
+    }
+
+    Ok(None)
 }
 
 fn lookup_response_to_transaction(
@@ -266,23 +275,51 @@ fn lookup_response_to_transaction(
 }
 
 pub async fn list_transactions(config: NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
-    let request = ListTransactionsRequest {
-        from: Some(Timestamp::from(params.from as u64)),
-        until: None,
-        limit: Some(params.limit as u64),
-        offset: None,
+    list_transactions_page(&config, &params, None).await
+}
+
+async fn list_transactions_page(
+    config: &NwcConfig,
+    params: &ListTransactionsParams,
+    offset: Option<u64>,
+) -> Result<Vec<Transaction>, ApiError> {
+    Ok(list_transactions_page_raw(config, params, offset)
+        .await?
+        .into_iter()
+        .filter(|transaction| transaction_matches_params(transaction, params))
+        .collect())
+}
+
+async fn list_transactions_page_raw(
+    config: &NwcConfig,
+    params: &ListTransactionsParams,
+    offset: Option<u64>,
+) -> Result<Vec<Transaction>, ApiError> {
+    let request = list_transactions_request(params, offset);
+    let response = send_list_transactions_request(config, request).await?;
+
+    Ok(response
+        .transactions
+        .into_iter()
+        .map(nwc_transaction_to_transaction)
+        .collect())
+}
+
+fn list_transactions_request(params: &ListTransactionsParams, offset: Option<u64>) -> ListTransactionsRequest {
+    let from = params.created_after.unwrap_or(params.from).max(0) as u64;
+    let until = params
+        .created_before
+        .filter(|created_before| *created_before >= 0)
+        .map(|created_before| Timestamp::from(created_before as u64));
+
+    ListTransactionsRequest {
+        from: Some(Timestamp::from(from)),
+        until,
+        limit: Some(normalized_limit(params.limit) as u64),
+        offset,
         unpaid: None,
         transaction_type: None,
-    };
-
-    let response = send_list_transactions_request(&config, request).await?;
-
-    let mut transactions = Vec::new();
-    for tx in response.transactions {
-        transactions.push(nwc_transaction_to_transaction(tx));
     }
-
-    Ok(transactions)
 }
 
 fn nwc_transaction_to_transaction(tx: NwcTransaction) -> Transaction {
@@ -307,6 +344,63 @@ fn nwc_transaction_to_transaction(tx: NwcTransaction) -> Transaction {
         payer_note: None,
         external_id: None,
     }
+}
+
+fn normalized_limit(limit: i64) -> usize {
+    limit.max(1) as usize
+}
+
+fn transaction_matches_lookup(
+    transaction: &Transaction,
+    payment_hash: Option<&str>,
+    invoice: Option<&str>,
+) -> bool {
+    if let Some(target) = payment_hash {
+        return transaction.payment_hash == target;
+    }
+
+    invoice
+        .map(|target| transaction.invoice == target)
+        .unwrap_or(false)
+}
+
+fn transaction_matches_params(transaction: &Transaction, params: &ListTransactionsParams) -> bool {
+    if let Some(payment_hash) = params.payment_hash.as_deref() {
+        if transaction.payment_hash != payment_hash {
+            return false;
+        }
+    }
+
+    if let Some(search) = params.search.as_deref() {
+        let search = search.to_lowercase();
+        let matches_search = transaction.payment_hash.to_lowercase().contains(&search)
+            || transaction.invoice.to_lowercase().contains(&search)
+            || transaction.description.to_lowercase().contains(&search)
+            || transaction
+                .payer_note
+                .as_deref()
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(&search);
+
+        if !matches_search {
+            return false;
+        }
+    }
+
+    if let Some(created_after) = params.created_after {
+        if transaction.created_at < created_after {
+            return false;
+        }
+    }
+
+    if let Some(created_before) = params.created_before {
+        if transaction.created_at > created_before {
+            return false;
+        }
+    }
+
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -366,10 +460,28 @@ async fn send_nwc_request_result(
         .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
     let pool = RelayPool::default();
 
+    let mut added_relays = 0;
+    let mut relay_errors = Vec::new();
+
     for url in uri.relays.iter() {
-        pool.add_relay(url, RelayOptions::default())
-            .await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to add NWC relay: {}", e) })?;
+        match pool.add_relay(url, RelayOptions::default()).await {
+            Ok(_) => {
+                added_relays += 1;
+            }
+            Err(e) => {
+                relay_errors.push(format!("{}: {}", url, e));
+            }
+        }
+    }
+
+    if added_relays == 0 {
+        let reason = if relay_errors.is_empty() {
+            "Failed to add NWC relay: no relays configured".to_string()
+        } else {
+            format!("Failed to add any NWC relay: {}", relay_errors.join("; "))
+        };
+
+        return Err(ApiError::Api { reason });
     }
 
     pool.connect().await;
@@ -559,5 +671,49 @@ mod tests {
 
         assert_eq!(status, "pending");
         assert!(transaction.is_none());
+    }
+
+    #[test]
+    fn list_transactions_request_sets_offset_and_bounds() {
+        let request = list_transactions_request(
+            &ListTransactionsParams {
+                from: 10,
+                limit: 25,
+                payment_hash: None,
+                search: None,
+                created_after: Some(20),
+                created_before: Some(30),
+            },
+            Some(50),
+        );
+
+        assert_eq!(request.from.map(|timestamp| timestamp.as_u64()), Some(20));
+        assert_eq!(request.until.map(|timestamp| timestamp.as_u64()), Some(30));
+        assert_eq!(request.limit, Some(25));
+        assert_eq!(request.offset, Some(50));
+    }
+
+    #[test]
+    fn transaction_lookup_match_prefers_payment_hash_over_invoice() {
+        let transaction = Transaction {
+            type_: "incoming".to_string(),
+            payment_hash: "hash".to_string(),
+            invoice: "invoice".to_string(),
+            description: String::new(),
+            description_hash: String::new(),
+            preimage: String::new(),
+            amount_msats: 0,
+            fees_paid: 0,
+            created_at: 0,
+            expires_at: 0,
+            settled_at: 0,
+            payer_note: None,
+            external_id: None,
+        };
+
+        assert!(transaction_matches_lookup(&transaction, Some("hash"), None));
+        assert!(!transaction_matches_lookup(&transaction, Some("other"), Some("invoice")));
+        assert!(transaction_matches_lookup(&transaction, None, Some("invoice")));
+        assert!(!transaction_matches_lookup(&transaction, Some("other"), Some("other")));
     }
 }
