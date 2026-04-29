@@ -207,34 +207,34 @@ mod tests {
     //     }
     // }
 
-    // #[tokio::test]
-    // async fn test_lookup_invoice() {
-    //     match NODE.lookup_invoice(LookupInvoiceParams {
-    //         payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-    //         ..Default::default()
-    //     }).await {
-    //         Ok(txn) => {
-    //             dbg!(&txn);
-    //             assert!(
-    //                 txn.amount_msats >= 0,
-    //                 "Invoice should contain a valid amount"
-    //             );
-    //         }
-    //         Err(e) => {
-    //             if e.to_string().contains("not found") {
-    //                 assert!(true, "Invoice not found as expected");
-    //             } else {
-    //                 panic!("Failed to lookup invoice: {:?}", e);
-    //             }
-    //         }
-    //     }
-    // }
+    #[tokio::test]
+    async fn test_lookup_invoice() {
+        match NODE.lookup_invoice(LookupInvoiceParams {
+            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+            ..Default::default()
+        }).await {
+            Ok(txn) => {
+                dbg!(&txn);
+                assert!(
+                    txn.amount_msats >= 0,
+                    "Invoice should contain a valid amount"
+                );
+            }
+            Err(e) => {
+                if e.to_string().contains("not found") {
+                    assert!(true, "Invoice not found as expected");
+                } else {
+                    panic!("Failed to lookup invoice: {:?}", e);
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_list_transactions() {
         let params = ListTransactionsParams {
             from: 0,
-            limit: 10,
+            limit: 25,
             payment_hash: None,
             search: None,
             created_after: None,

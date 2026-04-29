@@ -2,16 +2,24 @@ import { describe, expect } from 'vitest';
 import { NwcNode } from '../../nodes/nwc.js';
 import { hasEnv, itIf, testInvoiceLabel, timeout } from './helpers.js';
 
-describe('Real integration from crates/lni/.env > NwcNode', () => {
+describe('Real integration from crates/lni/.env > NwcNode', async () => {
   const enabled = hasEnv('NWC_URI');
 
   const makeNode = () => new NwcNode({ nwcUri: process.env.NWC_URI! });
-
+ 
   itIf(enabled)('getInfo + createInvoice + listTransactions + lookupInvoice', async () => {
     const node = makeNode();
+
+
+    
+
     try {
       const info = await node.getInfo();
       expect(typeof info.alias).toBe('string');
+
+      const invoice1 = await node.lookupInvoice({ paymentHash: process.env.NWC_TEST_PAYMENT_HASH! });
+      console.log('NWC Invoice Lookup by Hash:', invoice1);
+      expect(invoice1.paymentHash.length).toBeGreaterThan(0);
 
       const invoice = await node.createInvoice({
         amountMsats: 3_000,
