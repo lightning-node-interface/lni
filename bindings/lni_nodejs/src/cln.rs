@@ -19,13 +19,14 @@ impl ClnNode {
   }
 
   #[napi]
-  pub fn get_rune(&self) -> String {
-    self.inner.rune.clone()
-  }
-
-  #[napi]
   pub fn get_config(&self) -> ClnConfig {
-    self.inner.clone()
+    ClnConfig {
+      url: self.inner.url.clone(),
+      rune: "<redacted>".to_string(),
+      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
+    }
   }
 
   #[napi]

@@ -355,7 +355,6 @@ export declare function sayAfterWithTokio(ms: number, who: string, url: string, 
 export declare class PhoenixdNode {
   constructor(config: PhoenixdConfig)
   getUrl(): string
-  getPassword(): string
   getConfig(): PhoenixdConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -371,7 +370,6 @@ export declare class PhoenixdNode {
 export declare class ClnNode {
   constructor(config: ClnConfig)
   getUrl(): string
-  getRune(): string
   getConfig(): ClnConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -389,7 +387,6 @@ export declare class ClnNode {
 export declare class LndNode {
   constructor(config: LndConfig)
   getUrl(): string
-  getMacaroon(): string
   getConfig(): LndConfig
   getPermissions(): Promise<Permissions>
   createOffer(params: CreateOfferParams): Offer
@@ -412,7 +409,6 @@ export declare class LndNode {
 export declare class BlinkNode {
   constructor(config: BlinkConfig)
   getBaseUrl(): string
-  getApiKey(): string
   getConfig(): BlinkConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -429,8 +425,6 @@ export declare class BlinkNode {
 }
 export declare class NwcNode {
   constructor(config: NwcConfig)
-  getNwcUri(): string
-  getSocks5Proxy(): string | null
   getConfig(): NwcConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -448,7 +442,6 @@ export declare class NwcNode {
 export declare class StrikeNode {
   constructor(config: StrikeConfig)
   getBaseUrl(): string
-  getApiKey(): string
   getConfig(): StrikeConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -466,7 +459,6 @@ export declare class StrikeNode {
 export declare class SpeedNode {
   constructor(config: SpeedConfig)
   getBaseUrl(): string
-  getApiKey(): string
   getConfig(): SpeedConfig
   getPermissions(): Promise<Permissions>
   getInfo(): Promise<NodeInfo>
@@ -493,7 +485,6 @@ export declare class SparkNode {
   disconnect(): Promise<void>
   /** Check if the node is connected */
   isConnected(): Promise<boolean>
-  getMnemonic(): string
   getConfig(): SparkConfig
   /** Get the Spark address for receiving payments */
   getSparkAddress(): Promise<string>

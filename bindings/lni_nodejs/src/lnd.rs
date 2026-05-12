@@ -21,16 +21,11 @@ impl LndNode {
   }
 
   #[napi]
-  pub fn get_macaroon(&self) -> String {
-    self.inner.macaroon.clone()
-  }
-
-  #[napi]
   pub fn get_config(&self) -> LndConfig {
     LndConfig {
       url: self.inner.url.clone(),
-      macaroon: self.inner.macaroon.clone(),
-      socks5_proxy: self.inner.socks5_proxy.clone(),
+      macaroon: "<redacted>".to_string(),
+      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }

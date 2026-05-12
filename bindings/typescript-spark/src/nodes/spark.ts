@@ -1712,7 +1712,9 @@ export class SparkNode implements LightningNode {
           const tx = await this.lookupByTransferId(transferId);
           if (!tx) return;
 
+          if (!params.paymentHash && !params.search) return;
           if (params.paymentHash && tx.paymentHash !== params.paymentHash) return;
+          if (!matchesSearch(tx, params.search)) return;
           if (tx.settledAt > 0) {
             cleanup();
             callback('success', tx);

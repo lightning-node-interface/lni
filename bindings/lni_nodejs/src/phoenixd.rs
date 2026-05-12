@@ -22,13 +22,14 @@ impl PhoenixdNode {
   }
 
   #[napi]
-  pub fn get_password(&self) -> String {
-    self.inner.password.clone()
-  }
-
-  #[napi]
   pub fn get_config(&self) -> PhoenixdConfig {
-    self.inner.clone()
+    PhoenixdConfig {
+      url: self.inner.url.clone(),
+      password: "<redacted>".to_string(),
+      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
+    }
   }
 
   #[napi]

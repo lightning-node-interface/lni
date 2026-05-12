@@ -11,24 +11,37 @@ use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ClnConfig {
     pub url: String,
     pub rune: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // socks5h://127.0.0.1:9150
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
+
+impl std::fmt::Debug for ClnConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClnConfig")
+            .field("url", &self.url)
+            .field("rune", &"<redacted>")
+            .field("socks5_proxy", &"<redacted>")
+            .field("accept_invalid_certs", &self.accept_invalid_certs)
+            .field("http_timeout", &self.http_timeout)
+            .finish()
+    }
+}
+
 impl Default for ClnConfig {
     fn default() -> Self {
         Self {
             url: "https://127.0.0.1:8080".to_string(),
             rune: "".to_string(),
             socks5_proxy: None,
-            accept_invalid_certs: Some(true),
+            accept_invalid_certs: Some(false),
             http_timeout: Some(60),
         }
     }
@@ -188,10 +201,14 @@ mod tests {
                 url: URL.clone(),
                 rune: RUNE.clone(),
                 // socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
-                // accept_invalid_certs: Some(true)
                 ..Default::default()
             })
         };
+    }
+
+    #[test]
+    fn default_config_validates_tls_certs() {
+        assert_eq!(ClnConfig::default().accept_invalid_certs, Some(false));
     }
 
     #[tokio::test]

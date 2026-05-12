@@ -84,11 +84,10 @@ function shouldAttachApiKeyHeader(
     return true;
   }
 
-  // In non-browser contexts (Node.js), there is no cross-origin XSS risk,
-  // so attach the key. In browser-like environments without a proper origin
-  // (e.g., workers), err on the side of caution and don't attach.
+  // If no origin is available (Node.js, workers), same-origin semantics cannot
+  // be established for arbitrary URLs, so do not attach credentials.
   if (typeof window === 'undefined') {
-    return true;
+    return false;
   }
   if (!window.location?.origin) {
     return false;

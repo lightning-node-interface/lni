@@ -17,18 +17,13 @@ impl NwcNode {
   }
 
   #[napi]
-  pub fn get_nwc_uri(&self) -> String {
-    self.inner.nwc_uri.clone()
-  }
-
-  #[napi]
-  pub fn get_socks5_proxy(&self) -> Option<String> {
-    self.inner.socks5_proxy.clone()
-  }
-
-  #[napi]
   pub fn get_config(&self) -> NwcConfig {
-    self.inner.clone()
+    NwcConfig {
+      nwc_uri: "<redacted>".to_string(),
+      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
+    }
   }
 
   #[napi]

@@ -17,5 +17,6 @@
   },
   "devDependencies": {
     "vite": "^7.3.2"
-  }
+  },
+  "packageManager": "npm@11.14.0"
 }

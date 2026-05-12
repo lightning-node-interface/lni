@@ -55,13 +55,14 @@ impl SparkNode {
     }
 
     #[napi]
-    pub fn get_mnemonic(&self) -> String {
-        self.config.mnemonic.clone()
-    }
-
-    #[napi]
     pub fn get_config(&self) -> SparkConfig {
-        self.config.clone()
+        SparkConfig {
+            mnemonic: "<redacted>".to_string(),
+            passphrase: self.config.passphrase.as_ref().map(|_| "<redacted>".to_string()),
+            api_key: self.config.api_key.as_ref().map(|_| "<redacted>".to_string()),
+            storage_dir: "<redacted>".to_string(),
+            network: self.config.network.clone(),
+        }
     }
 
     /// Get the Spark address for receiving payments
