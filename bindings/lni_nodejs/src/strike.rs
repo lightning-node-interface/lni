@@ -25,13 +25,14 @@ impl StrikeNode {
   }
 
   #[napi]
-  pub fn get_api_key(&self) -> String {
-    self.inner.api_key.clone()
-  }
-
-  #[napi]
   pub fn get_config(&self) -> StrikeConfig {
-    self.inner.clone()
+    StrikeConfig {
+      base_url: self.inner.base_url.clone(),
+      api_key: "<redacted>".to_string(),
+      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      accept_invalid_certs: self.inner.accept_invalid_certs,
+      http_timeout: self.inner.http_timeout,
+    }
   }
 
   #[napi]
