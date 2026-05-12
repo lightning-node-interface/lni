@@ -3,13 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "devEngines": {
-    "packageManager": {
-      "name": "npm",
-      "version": ">=11.10.0",
-      "onFail": "error"
-    }
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

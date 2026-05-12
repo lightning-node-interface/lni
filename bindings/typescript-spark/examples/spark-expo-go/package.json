@@ -2,13 +2,6 @@
   "name": "spark-expo-go",
   "version": "1.0.0",
   "main": "index.ts",
-  "devEngines": {
-    "packageManager": {
-      "name": "npm",
-      "version": ">=11.10.0",
-      "onFail": "error"
-    }
-  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
