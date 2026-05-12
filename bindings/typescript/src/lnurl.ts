@@ -1,4 +1,5 @@
 import { bech32 } from '@scure/base';
+import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 import { LniError } from './errors.js';
 import type { FetchLike, PaymentInfo } from './types.js';
 import { resolveFetch, requestJson } from './internal/http.js';
@@ -239,7 +240,51 @@ async function requestInvoice(
     throw new LniError('Json', 'Invalid LNURL invoice response: missing pr field');
   }
 
+  validateInvoiceAmount(invoiceResponse.pr, amountMsats);
+
   return invoiceResponse.pr;
+}
+
+function invoiceAmountMsats(invoice: string): number | null {
+  const decoded = decodeBolt11(invoice);
+  const amount = decoded.sections.find((section) => section.name === 'amount');
+  if (!amount || amount.name !== 'amount') {
+    return null;
+  }
+
+  const parsed = Number(amount.value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new LniError('InvalidInput', 'LNURL invoice amount is invalid.');
+  }
+
+  return parsed;
+}
+
+function validateInvoiceAmount(invoice: string, expectedAmountMsats: number): void {
+  if (!Number.isSafeInteger(expectedAmountMsats) || expectedAmountMsats < 0) {
+    throw new LniError('InvalidInput', 'LNURL invoice amount must be a non-negative safe integer.');
+  }
+
+  let actualAmountMsats: number | null;
+  try {
+    actualAmountMsats = invoiceAmountMsats(invoice);
+  } catch (error) {
+    if (error instanceof LniError) {
+      throw error;
+    }
+    throw new LniError('InvalidInput', `Invalid LNURL invoice: ${(error as Error)?.message ?? 'unknown error'}`);
+  }
+
+  if (actualAmountMsats === null) {
+    throw new LniError('InvalidInput', 'LNURL invoice is missing an amount.');
+  }
+
+  if (actualAmountMsats !== expectedAmountMsats) {
+    throw new LniError(
+      'InvalidInput',
+      `LNURL invoice amount ${actualAmountMsats} msats does not match requested amount ${expectedAmountMsats} msats.`,
+    );
+  }
 }
 
 function parseLightningAddress(input: string): { user: string; domain: string } {

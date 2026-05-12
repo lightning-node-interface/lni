@@ -4,8 +4,10 @@
 //! - Lightning Address (user@domain) → LNURL-pay
 //! - LNURL-pay (lnurl1...) → BOLT11 invoice
 
-use serde::{Deserialize, Serialize};
 use crate::ApiError;
+use lightning_invoice::Bolt11Invoice;
+use serde::Deserialize;
+use std::str::FromStr;
 
 /// LNURL-pay response from the service
 #[derive(Debug, Deserialize)]
@@ -173,7 +175,33 @@ pub async fn request_invoice(callback_url: &str, amount_msats: i64) -> Result<St
     let invoice_resp: LnurlInvoiceResponse = serde_json::from_str(&text)
         .map_err(|e| ApiError::InvalidInput(format!("Invalid invoice response: {} - {}", e, &text[..text.len().min(200)])))?;
     
+    validate_invoice_amount(&invoice_resp.pr, amount_msats)?;
+
     Ok(invoice_resp.pr)
+}
+
+fn validate_invoice_amount(invoice: &str, expected_amount_msats: i64) -> Result<(), ApiError> {
+    if expected_amount_msats < 0 {
+        return Err(ApiError::InvalidInput(
+            "LNURL invoice amount must be non-negative".to_string(),
+        ));
+    }
+
+    let invoice = Bolt11Invoice::from_str(invoice)
+        .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL invoice: {}", e)))?;
+    let actual_amount = invoice.amount_milli_satoshis().ok_or_else(|| {
+        ApiError::InvalidInput("LNURL invoice is missing an amount".to_string())
+    })?;
+    let expected_amount = expected_amount_msats as u64;
+
+    if actual_amount != expected_amount {
+        return Err(ApiError::InvalidInput(format!(
+            "LNURL invoice amount {} msats does not match requested amount {} msats",
+            actual_amount, expected_amount
+        )));
+    }
+
+    Ok(())
 }
 
 /// Resolve any payment destination to a BOLT11 invoice
@@ -376,5 +404,20 @@ mod tests {
     fn test_lightning_address_to_url() {
         let url = lightning_address_to_url("nick", "strike.me");
         assert_eq!(url, "https://strike.me/.well-known/lnurlp/nick");
+    }
+
+    #[test]
+    fn test_validate_lnurl_invoice_amount_matches_requested_amount() {
+        let invoice = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
+
+        assert!(validate_invoice_amount(invoice, 250_000_000).is_ok());
+    }
+
+    #[test]
+    fn test_validate_lnurl_invoice_amount_rejects_mismatch() {
+        let invoice = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
+
+        let error = validate_invoice_amount(invoice, 1_000).expect_err("amount mismatch should fail");
+        assert!(format!("{:?}", error).contains("does not match requested amount"));
     }
 }

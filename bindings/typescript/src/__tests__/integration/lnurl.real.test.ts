@@ -6,6 +6,8 @@ import { itIf, timeout } from './helpers.js';
 
 const realLnurlAddress = process.env.LNI_REAL_LNURL_ADDRESS?.trim() || 'bluerobin15@primal.net';
 const runRealLnurlTest = process.env.LNI_REAL_LNURL === '1' || Boolean(process.env.LNI_REAL_LNURL_ADDRESS?.trim());
+const BOLT11_250_000_000_MSATS =
+  'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
 
 function encodeLnurl(url: string): string {
   const bytes = new TextEncoder().encode(url);
@@ -53,7 +55,7 @@ function jsonResponse(response: http.ServerResponse, body: unknown): void {
 function lnurlPayResponse(callback: string) {
   return {
     callback,
-    maxSendable: 100_000,
+    maxSendable: 500_000_000,
     minSendable: 1,
     metadata: '[["text/plain","real lnurl test"]]',
     tag: 'payRequest',
@@ -90,8 +92,8 @@ describe('real LNURL SSRF protections', () => {
         return;
       }
 
-      if (request.url === '/callback?amount=1000') {
-        jsonResponse(response, { pr: 'lnbc1dummyinvoice' });
+      if (request.url === '/callback?amount=250000000') {
+        jsonResponse(response, { pr: BOLT11_250_000_000_MSATS });
         return;
       }
 
@@ -104,11 +106,11 @@ describe('real LNURL SSRF protections', () => {
       const lnurl = encodeLnurl(`http://127.0.0.1:${port}/lnurl`);
 
       await expect(
-        resolveToBolt11(lnurl, 1000, {
+        resolveToBolt11(lnurl, 250_000_000, {
           allowUnsafeUrls: true,
         }),
-      ).resolves.toBe('lnbc1dummyinvoice');
-      expect(requests).toEqual(['/lnurl', '/callback?amount=1000']);
+      ).resolves.toBe(BOLT11_250_000_000_MSATS);
+      expect(requests).toEqual(['/lnurl', '/callback?amount=250000000']);
     } finally {
       await close(server);
     }
