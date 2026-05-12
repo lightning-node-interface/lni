@@ -114,6 +114,8 @@ describe('SparkNode payInvoice', () => {
 function makeTransfer(overrides: {
   id?: string;
   paymentHash?: string;
+  memo?: string;
+  invoice?: string;
   status?: string;
   direction?: string;
   createdTime?: string;
@@ -125,10 +127,10 @@ function makeTransfer(overrides: {
     createdTime: overrides.createdTime ?? new Date().toISOString(),
     transferDirection: overrides.direction ?? 'INCOMING',
     userRequest: {
-      encodedInvoice: '',
+      encodedInvoice: overrides.invoice ?? '',
       invoice: {
         paymentHash: overrides.paymentHash ?? 'abc123',
-        memo: 'test',
+        memo: overrides.memo ?? 'test',
       },
     },
   };
@@ -317,6 +319,55 @@ describe('SparkNode onInvoiceEvents', () => {
     // Simulate event
     capturedListener!({ transferId: 'tf-event' });
 
+    await promise;
+
+    expect(statuses).toContain('success');
+    expect(off).toHaveBeenCalledWith('transfer:claimed', expect.any(Function));
+  });
+
+  it('ignores unrelated claimed transfers for search-only watches', async () => {
+    mockBolt11Decoder();
+    const { SparkNode } = await import('../nodes/spark.js');
+    const unrelatedTransfer = makeTransfer({
+      id: 'tf-unrelated',
+      paymentHash: 'hash-unrelated',
+      memo: 'unrelated order',
+      status: 'COMPLETED',
+    });
+    const targetTransfer = makeTransfer({
+      id: 'tf-target',
+      paymentHash: 'hash-target',
+      memo: 'target order',
+      status: 'COMPLETED',
+    });
+
+    let capturedListener: ((...args: unknown[]) => Promise<void>) | undefined;
+    const on = vi.fn((event: string, listener: (...args: unknown[]) => Promise<void>) => {
+      if (event === 'transfer:claimed') capturedListener = listener;
+    });
+    const off = vi.fn();
+    const getTransfer = vi.fn(async (transferId: string) =>
+      transferId === 'tf-target' ? targetTransfer : unrelatedTransfer,
+    );
+    const wallet = createMockWallet({ transfers: [], getTransfer, on, off });
+
+    const node = new SparkNode({ mnemonic: TEST_MNEMONIC, sdkEntry: 'bare' });
+    overrideWallet(node, wallet);
+
+    const statuses: string[] = [];
+    const promise = node.onInvoiceEvents(
+      { search: 'target order', pollingDelaySec: 1, maxPollingSec: 5 },
+      (status) => { statuses.push(status); },
+    );
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(capturedListener).toBeDefined();
+
+    await capturedListener!({ transferId: 'tf-unrelated' });
+    expect(statuses).not.toContain('success');
+    expect(off).not.toHaveBeenCalled();
+
+    await capturedListener!({ transferId: 'tf-target' });
     await promise;
 
     expect(statuses).toContain('success');
