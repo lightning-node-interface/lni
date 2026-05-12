@@ -1,25 +1,29 @@
-use crate::{ApiError, CreateInvoiceParams, PayInvoiceParams, Offer, Transaction, PayInvoiceResponse, NodeInfo, ListTransactionsParams};
 use crate::nwc::NwcConfig;
-use crate::nwc::types::{
-    ListTransactionsResponse as LocalListTransactionsResponse,
-    LookupInvoiceResponse as LocalLookupInvoiceResponse, NwcTransaction,
+use crate::types::{OnInvoiceEventCallback, OnInvoiceEventParams};
+use crate::{
+    ApiError, CreateInvoiceParams, ListTransactionsParams, NodeInfo, Offer, PayInvoiceParams,
+    PayInvoiceResponse, Transaction,
 };
-use crate::types::{OnInvoiceEventParams, OnInvoiceEventCallback};
 use lightning_invoice::Bolt11Invoice;
 use nwc::prelude::*;
-use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::time::Duration;
-use sha2::{Digest, Sha256};
 
 // Helper function to create NWC client
 async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
     let uri = NostrWalletConnectURI::from_str(&config.nwc_uri)
         .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
-    
-    let opts = NostrWalletConnectOptions::default();
+
+    let relay_opts = RelayOptions::default()
+        .verify_subscriptions(true)
+        .ban_relay_on_mismatch(true);
+    let timeout = Duration::from_secs(config.http_timeout.unwrap_or(60).max(1) as u64);
+    let opts = NostrWalletConnectOptions::default()
+        .relay(relay_opts)
+        .timeout(timeout);
     let nwc = NWC::with_opts(uri, opts);
-    
+
     Ok(nwc)
 }
 
@@ -184,8 +188,9 @@ pub async fn lookup_invoice(
         payment_hash: lookup_payment_hash.clone(),
         invoice: if lookup_payment_hash.is_some() { None } else { invoice.clone() },
     };
+    let nwc = create_nwc_client(&config).await?;
 
-    let response = match send_lookup_invoice_request(&config, request).await {
+    let response = match nwc.lookup_invoice(request).await {
         Ok(response) => response,
         Err(error) => {
             if let Some(transaction) = lookup_invoice_from_transactions(
@@ -198,7 +203,9 @@ pub async fn lookup_invoice(
                 return Ok(transaction);
             }
 
-            return Err(error);
+            return Err(ApiError::Api {
+                reason: format!("Failed to lookup invoice: {}", error),
+            });
         }
     };
 
@@ -247,28 +254,42 @@ async fn lookup_invoice_from_transactions(
 }
 
 fn lookup_response_to_transaction(
-    response: LocalLookupInvoiceResponse,
+    response: LookupInvoiceResponse,
     requested_payment_hash: Option<String>,
 ) -> Transaction {
     let invoice = response.invoice.unwrap_or_default();
-    let payment_hash = response
-        .payment_hash
+    let response_payment_hash = if response.payment_hash.is_empty() {
+        None
+    } else {
+        Some(response.payment_hash)
+    };
+    let payment_hash = response_payment_hash
         .or(requested_payment_hash)
         .or_else(|| invoice_payment_hash(Some(&invoice)))
         .unwrap_or_default();
 
     Transaction {
-        type_: response.type_.unwrap_or_else(|| "unknown".to_string()),
+        type_: match response.transaction_type {
+            Some(TransactionType::Incoming) => "incoming".to_string(),
+            Some(TransactionType::Outgoing) => "outgoing".to_string(),
+            None => "unknown".to_string(),
+        },
         invoice,
         description: response.description.unwrap_or_default(),
         description_hash: response.description_hash.unwrap_or_default(),
         preimage: response.preimage.unwrap_or_default(),
         payment_hash,
-        amount_msats: response.amount,
-        fees_paid: response.fees_paid,
-        created_at: response.created_at,
-        expires_at: response.expires_at.unwrap_or(0),
-        settled_at: response.settled_at.unwrap_or(0),
+        amount_msats: response.amount as i64,
+        fees_paid: response.fees_paid as i64,
+        created_at: response.created_at.as_u64() as i64,
+        expires_at: response
+            .expires_at
+            .map(|timestamp| timestamp.as_u64() as i64)
+            .unwrap_or(0),
+        settled_at: response
+            .settled_at
+            .map(|timestamp| timestamp.as_u64() as i64)
+            .unwrap_or(0),
         payer_note: None,
         external_id: None,
     }
@@ -296,12 +317,17 @@ async fn list_transactions_page_raw(
     offset: Option<u64>,
 ) -> Result<Vec<Transaction>, ApiError> {
     let request = list_transactions_request(params, offset);
-    let response = send_list_transactions_request(config, request).await?;
+    let nwc = create_nwc_client(config).await?;
+    let response = nwc
+        .list_transactions(request)
+        .await
+        .map_err(|e| ApiError::Api {
+            reason: format!("Failed to list transactions: {}", e),
+        })?;
 
     Ok(response
-        .transactions
         .into_iter()
-        .map(nwc_transaction_to_transaction)
+        .map(lookup_response_to_transaction_from_list)
         .collect())
 }
 
@@ -322,28 +348,8 @@ fn list_transactions_request(params: &ListTransactionsParams, offset: Option<u64
     }
 }
 
-fn nwc_transaction_to_transaction(tx: NwcTransaction) -> Transaction {
-    let invoice = tx.invoice.unwrap_or_default();
-    let payment_hash = tx
-        .payment_hash
-        .or_else(|| invoice_payment_hash(Some(&invoice)))
-        .unwrap_or_default();
-
-    Transaction {
-        type_: tx.type_,
-        invoice,
-        description: tx.description.unwrap_or_default(),
-        description_hash: tx.description_hash.unwrap_or_default(),
-        preimage: tx.preimage.unwrap_or_default(),
-        payment_hash,
-        amount_msats: tx.amount,
-        fees_paid: tx.fees_paid,
-        created_at: tx.created_at,
-        expires_at: tx.expires_at.unwrap_or(0),
-        settled_at: tx.settled_at.unwrap_or(0),
-        payer_note: None,
-        external_id: None,
-    }
+fn lookup_response_to_transaction_from_list(response: LookupInvoiceResponse) -> Transaction {
+    lookup_response_to_transaction(response, None)
 }
 
 fn normalized_limit(limit: i64) -> usize {
@@ -401,146 +407,6 @@ fn transaction_matches_params(transaction: &Transaction, params: &ListTransactio
     }
 
     true
-}
-
-#[derive(Debug, Deserialize)]
-struct RawNwcResponse {
-    result_type: String,
-    error: Option<RawNwcError>,
-    result: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RawNwcError {
-    code: String,
-    message: String,
-}
-
-async fn send_list_transactions_request(
-    config: &NwcConfig,
-    request: ListTransactionsRequest,
-) -> Result<LocalListTransactionsResponse, ApiError> {
-    let result = send_nwc_request_result(
-        config,
-        Request::list_transactions(request),
-        "list_transactions",
-        "list transactions",
-    )
-    .await?;
-
-    serde_json::from_value(result).map_err(|e| ApiError::Api {
-        reason: format!("Failed to deserialize list_transactions result: {}", e),
-    })
-}
-
-async fn send_lookup_invoice_request(
-    config: &NwcConfig,
-    request: LookupInvoiceRequest,
-) -> Result<LocalLookupInvoiceResponse, ApiError> {
-    let result = send_nwc_request_result(
-        config,
-        Request::lookup_invoice(request),
-        "lookup_invoice",
-        "lookup invoice",
-    )
-    .await?;
-
-    serde_json::from_value(result).map_err(|e| ApiError::Api {
-        reason: format!("Failed to deserialize lookup_invoice result: {}", e),
-    })
-}
-
-async fn send_nwc_request_result(
-    config: &NwcConfig,
-    req: Request,
-    expected_result_type: &str,
-    operation: &str,
-) -> Result<serde_json::Value, ApiError> {
-    let uri = NostrWalletConnectURI::from_str(&config.nwc_uri)
-        .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
-    let pool = RelayPool::default();
-
-    let mut added_relays = 0;
-    let mut relay_errors = Vec::new();
-
-    for url in uri.relays.iter() {
-        match pool.add_relay(url, RelayOptions::default()).await {
-            Ok(_) => {
-                added_relays += 1;
-            }
-            Err(e) => {
-                relay_errors.push(format!("{}: {}", url, e));
-            }
-        }
-    }
-
-    if added_relays == 0 {
-        let reason = if relay_errors.is_empty() {
-            "Failed to add NWC relay: no relays configured".to_string()
-        } else {
-            format!("Failed to add any NWC relay: {}", relay_errors.join("; "))
-        };
-
-        return Err(ApiError::Api { reason });
-    }
-
-    pool.connect().await;
-
-    let event = req
-        .to_event(&uri)
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create NWC request: {}", e) })?;
-    let filter = Filter::new()
-        .author(uri.public_key)
-        .kind(Kind::WalletConnectResponse)
-        .event(event.id);
-    let timeout = Duration::from_secs(config.http_timeout.unwrap_or(60).max(1) as u64);
-    let mut stream = pool
-        .stream_events(filter, timeout, ReqExitPolicy::WaitForEvents(5))
-        .await
-        .map_err(|e| ApiError::Api { reason: format!("Failed to subscribe for NWC response: {}", e) })?;
-
-    pool.send_event(&event)
-        .await
-        .map_err(|e| ApiError::Api { reason: format!("Failed to send NWC request: {}", e) })?;
-
-    let mut last_error = None;
-
-    while let Some(received_event) = stream.next().await {
-        let decrypted = match nip04::decrypt(&uri.secret, &received_event.pubkey, &received_event.content) {
-            Ok(decrypted) => decrypted,
-            Err(e) => {
-                last_error = Some(format!("Failed to decrypt NWC response: {}", e));
-                continue;
-            }
-        };
-
-        let response: RawNwcResponse = match serde_json::from_str(&decrypted) {
-            Ok(response) => response,
-            Err(e) => {
-                last_error = Some(format!("Failed to deserialize NWC response: {}", e));
-                continue;
-            }
-        };
-
-        if response.result_type != expected_result_type {
-            last_error = Some(format!("Unexpected NWC response type: {}", response.result_type));
-            continue;
-        }
-
-        if let Some(error) = response.error {
-            return Err(ApiError::Api {
-                reason: format!("NWC error {}: {}", error.code, error.message),
-            });
-        }
-
-        return response.result.ok_or_else(|| ApiError::Api {
-            reason: format!("Missing {} result", expected_result_type),
-        });
-    }
-
-    Err(ApiError::Api {
-        reason: last_error.unwrap_or_else(|| format!("Failed to {}: no NWC response received", operation)),
-    })
 }
 
 fn invoice_payment_hash(invoice: Option<&str>) -> Option<String> {
@@ -643,24 +509,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deserializes_list_transactions_without_payment_hash() {
-        let response: LocalListTransactionsResponse = serde_json::from_value(serde_json::json!({
-            "transactions": [{
-                "type": "incoming",
-                "amount": 1000,
-                "fees_paid": 0,
-                "created_at": 1777416147
-            }]
-        }))
-        .expect("NWC transactions without payment_hash should deserialize");
-
-        let transaction = nwc_transaction_to_transaction(
-            response.transactions.into_iter().next().expect("transaction"),
-        );
+    fn maps_upstream_list_transaction_response() {
+        let transaction = lookup_response_to_transaction_from_list(LookupInvoiceResponse {
+            transaction_type: Some(TransactionType::Incoming),
+            invoice: Some("invoice".to_string()),
+            description: Some("description".to_string()),
+            description_hash: None,
+            preimage: None,
+            payment_hash: "hash".to_string(),
+            amount: 1000,
+            fees_paid: 25,
+            created_at: Timestamp::from(1777416147),
+            expires_at: None,
+            settled_at: Some(Timestamp::from(1777416150)),
+            metadata: None,
+        });
 
         assert_eq!(transaction.type_, "incoming");
-        assert_eq!(transaction.payment_hash, "");
+        assert_eq!(transaction.payment_hash, "hash");
         assert_eq!(transaction.amount_msats, 1000);
+        assert_eq!(transaction.fees_paid, 25);
+        assert_eq!(transaction.created_at, 1777416147);
+        assert_eq!(transaction.settled_at, 1777416150);
     }
 
     #[test]
