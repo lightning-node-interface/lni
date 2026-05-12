@@ -73,6 +73,7 @@ describe('spark-runtime helpers', () => {
     const handle = installSparkRuntime({
       fetch: fetchMock as unknown as typeof fetch,
       apiKey: 'abc',
+      apiKeySameOriginOnly: false,
       useStreamCompat: false,
     });
 
@@ -86,5 +87,20 @@ describe('spark-runtime helpers', () => {
 
     handle.restore();
     expect(globalRuntime.fetch).toBe(initialFetch);
+  });
+
+  it('does not attach api key by default in non-browser same-origin mode', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => new Response('{}'));
+    const handle = installSparkRuntime({
+      fetch: fetchMock as unknown as typeof fetch,
+      apiKey: 'abc',
+      useStreamCompat: false,
+    });
+
+    await handle.fetch('https://example.com');
+
+    const init = (fetchMock.mock.calls[0]?.[1] ?? {}) as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get('x-api-key')).toBeNull();
   });
 });
