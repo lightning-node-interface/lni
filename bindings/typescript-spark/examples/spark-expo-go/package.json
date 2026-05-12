@@ -2,6 +2,13 @@
   "name": "spark-expo-go",
   "version": "1.0.0",
   "main": "index.ts",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.10.0",
+      "onFail": "error"
+    }
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -26,5 +33,6 @@
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "packageManager": "npm@11.14.0"
 }

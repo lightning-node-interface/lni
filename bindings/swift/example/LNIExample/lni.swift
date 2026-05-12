@@ -4703,7 +4703,7 @@ public struct ClnConfig {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(url: String, rune: String, socks5Proxy: String? = "", acceptInvalidCerts: Bool? = true, httpTimeout: Int64? = Int64(120)) {
+    public init(url: String, rune: String, socks5Proxy: String? = "", acceptInvalidCerts: Bool? = false, httpTimeout: Int64? = Int64(120)) {
         self.url = url
         self.rune = rune
         self.socks5Proxy = socks5Proxy
