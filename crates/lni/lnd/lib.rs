@@ -11,7 +11,7 @@ use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LndConfig {
     pub url: String,
     pub macaroon: String,
@@ -22,6 +22,19 @@ pub struct LndConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
+
+impl std::fmt::Debug for LndConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LndConfig")
+            .field("url", &self.url)
+            .field("macaroon", &"<redacted>")
+            .field("socks5_proxy", &"<redacted>")
+            .field("accept_invalid_certs", &self.accept_invalid_certs)
+            .field("http_timeout", &self.http_timeout)
+            .finish()
+    }
+}
+
 impl Default for LndConfig {
     fn default() -> Self {
         Self {

@@ -11,7 +11,7 @@ use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NwcConfig {
     pub nwc_uri: String, // The full NWC URI string like "nostr+walletconnect://pubkey?relay=...&secret=..."
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
@@ -20,6 +20,17 @@ pub struct NwcConfig {
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
+}
+
+impl std::fmt::Debug for NwcConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NwcConfig")
+            .field("nwc_uri", &"<redacted>")
+            .field("socks5_proxy", &"<redacted>")
+            .field("accept_invalid_certs", &self.accept_invalid_certs)
+            .field("http_timeout", &self.http_timeout)
+            .finish()
+    }
 }
 
 impl Default for NwcConfig {

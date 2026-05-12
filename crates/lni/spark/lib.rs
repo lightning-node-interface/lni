@@ -19,7 +19,7 @@ use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SparkConfig {
     /// 12 or 24 word mnemonic phrase
     pub mnemonic: String,
@@ -34,6 +34,18 @@ pub struct SparkConfig {
     /// Network: "mainnet" or "regtest"
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("mainnet")))]
     pub network: Option<String>,
+}
+
+impl std::fmt::Debug for SparkConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SparkConfig")
+            .field("mnemonic", &"<redacted>")
+            .field("passphrase", &"<redacted>")
+            .field("api_key", &"<redacted>")
+            .field("storage_dir", &"<redacted>")
+            .field("network", &self.network)
+            .finish()
+    }
 }
 
 impl Default for SparkConfig {

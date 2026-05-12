@@ -11,7 +11,7 @@ use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ClnConfig {
     pub url: String,
     pub rune: String,
@@ -22,6 +22,19 @@ pub struct ClnConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
 }
+
+impl std::fmt::Debug for ClnConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClnConfig")
+            .field("url", &self.url)
+            .field("rune", &"<redacted>")
+            .field("socks5_proxy", &"<redacted>")
+            .field("accept_invalid_certs", &self.accept_invalid_certs)
+            .field("http_timeout", &self.http_timeout)
+            .finish()
+    }
+}
+
 impl Default for ClnConfig {
     fn default() -> Self {
         Self {

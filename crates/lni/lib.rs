@@ -354,3 +354,172 @@ pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn Lig
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
+
+#[cfg(test)]
+mod debug_redaction_tests {
+    fn assert_redacted(label: &str, output: &str, secrets: &[&str]) {
+        assert!(
+            output.contains("<redacted>"),
+            "{} Debug output should include a redaction marker: {}",
+            label,
+            output
+        );
+        for secret in secrets {
+            assert!(
+                !output.contains(secret),
+                "{} Debug output leaked secret {:?}: {}",
+                label,
+                secret,
+                output
+            );
+        }
+    }
+
+    #[test]
+    fn debug_output_redacts_secret_config_fields() {
+        let proxy = "socks5h://proxy-user:proxy-pass@127.0.0.1:9150";
+
+        let lnd = crate::lnd::LndConfig {
+            url: "https://lnd.example".to_string(),
+            macaroon: "lnd-macaroon-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "LndConfig",
+            &format!("{:?}", lnd),
+            &["lnd-macaroon-secret", proxy],
+        );
+        assert_redacted(
+            "LndNode",
+            &format!("{:?}", crate::lnd::LndNode::new(lnd)),
+            &["lnd-macaroon-secret", proxy],
+        );
+
+        let cln = crate::cln::ClnConfig {
+            url: "https://cln.example".to_string(),
+            rune: "cln-rune-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "ClnConfig",
+            &format!("{:?}", cln),
+            &["cln-rune-secret", proxy],
+        );
+        assert_redacted(
+            "ClnNode",
+            &format!("{:?}", crate::cln::ClnNode::new(cln)),
+            &["cln-rune-secret", proxy],
+        );
+
+        let nwc = crate::nwc::NwcConfig {
+            nwc_uri: "nostr+walletconnect://wallet-pubkey?relay=wss://relay.example&secret=nwc-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "NwcConfig",
+            &format!("{:?}", nwc),
+            &["nwc-secret", proxy],
+        );
+        assert_redacted(
+            "NwcNode",
+            &format!("{:?}", crate::nwc::NwcNode::new(nwc)),
+            &["nwc-secret", proxy],
+        );
+
+        let phoenixd = crate::phoenixd::PhoenixdConfig {
+            url: "https://phoenixd.example".to_string(),
+            password: "phoenixd-password-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "PhoenixdConfig",
+            &format!("{:?}", phoenixd),
+            &["phoenixd-password-secret", proxy],
+        );
+        assert_redacted(
+            "PhoenixdNode",
+            &format!("{:?}", crate::phoenixd::PhoenixdNode::new(phoenixd)),
+            &["phoenixd-password-secret", proxy],
+        );
+
+        let strike = crate::strike::StrikeConfig {
+            base_url: Some("https://strike.example".to_string()),
+            api_key: "strike-api-key-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "StrikeConfig",
+            &format!("{:?}", strike),
+            &["strike-api-key-secret", proxy],
+        );
+        assert_redacted(
+            "StrikeNode",
+            &format!("{:?}", crate::strike::StrikeNode::new(strike)),
+            &["strike-api-key-secret", proxy],
+        );
+
+        let blink = crate::blink::BlinkConfig {
+            base_url: Some("https://blink.example".to_string()),
+            api_key: "blink-api-key-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "BlinkConfig",
+            &format!("{:?}", blink),
+            &["blink-api-key-secret", proxy],
+        );
+        assert_redacted(
+            "BlinkNode",
+            &format!("{:?}", crate::blink::BlinkNode::new(blink)),
+            &["blink-api-key-secret", proxy],
+        );
+
+        let speed = crate::speed::SpeedConfig {
+            base_url: Some("https://speed.example".to_string()),
+            api_key: "speed-api-key-secret".to_string(),
+            socks5_proxy: Some(proxy.to_string()),
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(30),
+        };
+        assert_redacted(
+            "SpeedConfig",
+            &format!("{:?}", speed),
+            &["speed-api-key-secret", proxy],
+        );
+        assert_redacted(
+            "SpeedNode",
+            &format!("{:?}", crate::speed::SpeedNode::new(speed)),
+            &["speed-api-key-secret", proxy],
+        );
+
+        let spark = crate::spark::SparkConfig {
+            mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
+            passphrase: Some("spark-passphrase-secret".to_string()),
+            api_key: Some("spark-api-key-secret".to_string()),
+            storage_dir: "/tmp/lni-spark-secret-path".to_string(),
+            network: Some("mainnet".to_string()),
+        };
+        assert_redacted(
+            "SparkConfig",
+            &format!("{:?}", spark),
+            &[
+                "abandon abandon abandon",
+                "spark-passphrase-secret",
+                "spark-api-key-secret",
+                "/tmp/lni-spark-secret-path",
+            ],
+        );
+    }
+}
