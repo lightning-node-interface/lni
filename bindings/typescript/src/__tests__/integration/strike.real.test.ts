@@ -55,4 +55,21 @@ describe('Real integration from crates/lni/.env > StrikeNode', () => {
       }
     }, ['no receive found', 'http 404']);
   }, timeout);
+
+  itIf(enabled && hasEnv('STRIKE_ONCHAIN_TEST_ADDRESS'))('prepareOnchainTransaction quote only', async () => {
+    await runOrSkipKnownError(async () => {
+      const node = makeNode();
+      const transaction = await node.prepareOnchainTransaction({
+        address: process.env.STRIKE_ONCHAIN_TEST_ADDRESS!,
+        amountMsats: 1_000,
+        fee: { type: 'speed', speed: 'free' },
+        feePayer: 'sender',
+        description: testInvoiceLabel('strike onchain quote'),
+      });
+
+      expect(transaction.id?.length).toBeGreaterThan(0);
+      expect(transaction.address).toBe(process.env.STRIKE_ONCHAIN_TEST_ADDRESS);
+      expect(transaction.amountMsats).toBe(1_000);
+    }, ['forbidden', 'scope', 'minimum amount', 'not supported', 'invalid bitcoin address']);
+  }, timeout);
 });

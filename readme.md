@@ -125,11 +125,79 @@ lnurl::get_payment_info(destination, amount_msats) -> Result<PaymentInfo, ApiErr
 lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: bolt11|bolt12|lnurl|lightning_address
 lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
 
+// On-chain Bitcoin payments (currently implemented for Strike)
+node.prepare_onchain_transaction(PrepareOnchainTransactionParams) -> Result<OnchainTransaction, ApiError>
+node.pay_onchain(OnchainTransaction) -> Result<PayOnchainResponse, ApiError>
+
 // Lookup
 node.decode(str: String) -> Result<String, ApiError> 
 node.lookup_invoice(payment_hash: String) -> Result<Transaction, ApiError>
 node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 ```
+
+#### On-chain Bitcoin payments
+
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. `fee_payer` answers who pays the mining/provider fee:
+
+- `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
+- `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
+
+Amounts are still expressed in msats for API consistency, but on-chain sends must be whole sats, so `amount_msats` must be divisible by `1000`.
+
+**Rust (Strike)**
+```rust
+use lni::{
+    OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType, OnchainFeeSpeed,
+    PrepareOnchainTransactionParams, StrikeConfig, StrikeNode,
+};
+
+let node = StrikeNode::new(StrikeConfig {
+    api_key: "...".to_string(),
+    ..Default::default()
+});
+
+let transaction = node
+    .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+        address: "bc1q...".to_string(),
+        amount_msats: 100_000_000, // 100,000 sats
+        fee: Some(OnchainFeePreference {
+            preference_type: OnchainFeePreferenceType::Speed,
+            speed: Some(OnchainFeeSpeed::Normal),
+            target_conf: None,
+            sats_per_vbyte: None,
+            backend: None,
+        }),
+        fee_payer: Some(OnchainFeePayer::Sender),
+        description: Some("cold storage".to_string()),
+        idempotency_key: None,
+    })
+    .await?;
+
+// Show transaction.fee_msats, transaction.total_amount_msats, and transaction.expires_at to the user.
+
+let payment = node.pay_onchain(transaction).await?;
+```
+
+**TypeScript (Strike)**
+```typescript
+import { StrikeNode } from '@sunnyln/lni';
+
+const node = new StrikeNode({ apiKey: '...' });
+
+const transaction = await node.prepareOnchainTransaction({
+    address: 'bc1q...',
+    amountMsats: 100_000_000, // 100,000 sats
+    fee: { type: 'speed', speed: 'normal' },
+    feePayer: 'sender',
+    description: 'cold storage',
+});
+
+// Show transaction.feeMsats, transaction.totalAmountMsats, and transaction.expiresAt to the user.
+
+const payment = await node.payOnchain(transaction);
+```
+
+For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: "backend", value: "tier_..." }` in TypeScript, or `OnchainFeePreferenceType::Backend` with `backend: Some("tier_...")` in Rust, to pass a Strike tier id directly.
 
 #### Node Management
 ```rust

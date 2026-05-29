@@ -75,7 +75,7 @@ export interface PrepareOnchainTransactionParams {
   idempotencyKey?: string;
 }
 
-export interface PreparedOnchainTransaction {
+export interface OnchainTransaction {
   id?: string;
   address: string;
   amountMsats: number;
@@ -88,10 +88,6 @@ export interface PreparedOnchainTransaction {
   estimatedDeliverySeconds?: number;
   raw?: unknown;
 }
-
-export type PayOnchainParams =
-  | PrepareOnchainTransactionParams
-  | { prepared: PreparedOnchainTransaction };
 
 export interface PayOnchainResponse {
   paymentId?: string;
@@ -262,8 +258,8 @@ export interface LightningNode {
 }
 
 export interface OnchainPayments {
-  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<PreparedOnchainTransaction>;
-  payOnchain(params: PayOnchainParams): Promise<PayOnchainResponse>;
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>;
+  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>;
 }
 
 export type BackendNodeKind =

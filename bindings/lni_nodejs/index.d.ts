@@ -268,7 +268,7 @@ export interface PrepareOnchainTransactionParams {
   description?: string
   idempotencyKey?: string
 }
-export interface PreparedOnchainTransaction {
+export interface OnchainTransaction {
   id?: string
   address: string
   amountMsats: number
@@ -280,15 +280,6 @@ export interface PreparedOnchainTransaction {
   expiresAt?: number
   estimatedDeliverySeconds?: number
   raw?: string
-}
-export interface PayOnchainParams {
-  prepared?: PreparedOnchainTransaction
-  address?: string
-  amountMsats?: number
-  fee?: OnchainFeePreference
-  feePayer?: OnchainFeePayer
-  description?: string
-  idempotencyKey?: string
 }
 export interface PayOnchainResponse {
   paymentId?: string
@@ -303,8 +294,8 @@ export interface PayOnchainResponse {
   raw?: string
 }
 export interface OnchainPayments {
-  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<PreparedOnchainTransaction>
-  payOnchain(params: PayOnchainParams): Promise<PayOnchainResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>
 }
 export interface PayKeysendResponse {
   fee: number
@@ -517,6 +508,8 @@ export declare class StrikeNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Offer
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>

@@ -300,7 +300,8 @@ pub struct PayInvoiceResponse {
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
 #[serde(rename_all = "lowercase")]
 pub enum OnchainFeeSpeed {
     Fast,
@@ -311,7 +312,8 @@ pub enum OnchainFeeSpeed {
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
 #[serde(rename_all = "lowercase")]
 pub enum OnchainFeePayer {
     Sender,
@@ -326,7 +328,8 @@ impl Default for OnchainFeePayer {
 
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
 #[serde(rename_all = "camelCase")]
 pub enum OnchainFeePreferenceType {
     Default,
@@ -376,7 +379,7 @@ pub struct PrepareOnchainTransactionParams {
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreparedOnchainTransaction {
+pub struct OnchainTransaction {
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub id: Option<String>,
     pub address: String,
@@ -395,26 +398,6 @@ pub struct PreparedOnchainTransaction {
     pub estimated_delivery_seconds: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub raw: Option<String>,
-}
-
-#[cfg_attr(feature = "napi_rs", napi(object))]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PayOnchainParams {
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub prepared: Option<PreparedOnchainTransaction>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub address: Option<String>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub amount_msats: Option<i64>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub fee: Option<OnchainFeePreference>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub fee_payer: Option<OnchainFeePayer>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub description: Option<String>,
-    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub idempotency_key: Option<String>,
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]

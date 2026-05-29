@@ -3,7 +3,9 @@ use lni::{
   CreateInvoiceParams,
   CreateOfferParams,
   LookupInvoiceParams,
+  OnchainTransaction,
   PayInvoiceParams,
+  PrepareOnchainTransactionParams,
 };
 use napi_derive::napi;
 
@@ -63,6 +65,28 @@ impl StrikeNode {
     let invoice = lni::strike::api::pay_invoice(self.inner.clone(), params).await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> napi::Result<lni::types::OnchainTransaction> {
+    let transaction = lni::strike::api::prepare_onchain_transaction(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(transaction)
+  }
+
+  #[napi]
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+  ) -> napi::Result<lni::types::PayOnchainResponse> {
+    let payment = lni::strike::api::pay_onchain(self.inner.clone(), transaction)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(payment)
   }
 
   #[napi]

@@ -4,7 +4,8 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    Offer, PayInvoiceParams, PayInvoiceResponse, PayOnchainResponse, OnchainTransaction,
+    PrepareOnchainTransactionParams, Transaction,
 };
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
@@ -85,6 +86,17 @@ impl StrikeNode {
 
     pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
+    }
+
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::strike::api::prepare_onchain_transaction(self.config.clone(), params).await
+    }
+
+    pub async fn pay_onchain(&self, transaction: OnchainTransaction) -> Result<PayOnchainResponse, ApiError> {
+        crate::strike::api::pay_onchain(self.config.clone(), transaction).await
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {

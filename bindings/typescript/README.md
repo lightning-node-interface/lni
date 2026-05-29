@@ -62,6 +62,34 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### On-chain Bitcoin Payments
+
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`.
+
+```ts
+import { StrikeNode } from '@sunnyln/lni';
+
+const node = new StrikeNode({ apiKey: '...' });
+
+const transaction = await node.prepareOnchainTransaction({
+  address: 'bc1q...',
+  amountMsats: 100_000_000, // 100,000 sats
+  fee: { type: 'speed', speed: 'normal' },
+  feePayer: 'sender',
+  description: 'cold storage',
+});
+
+// Show transaction.feeMsats, transaction.totalAmountMsats, and transaction.expiresAt to the user.
+
+const payment = await node.payOnchain(transaction);
+```
+
+`feePayer: 'sender'` means the recipient receives the full requested amount and the sender pays fees on top. `feePayer: 'recipient'` means fees are deducted from the requested amount.
+
+Amounts are still expressed in msats for consistency with the rest of LNI, but on-chain sends must be whole sats, so `amountMsats` must be divisible by `1000`.
+
+For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: 'backend', value: 'tier_...' }` to pass a Strike tier id directly.
+
 ### Invoice Event Polling
 
 Poll for invoice settlement after creating an invoice. The callback fires with `'success'`, `'pending'`, or `'failure'`.
