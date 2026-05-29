@@ -55,6 +55,57 @@ export interface PayInvoiceResponse {
   feeMsats: number;
 }
 
+export type OnchainFeeSpeed = 'fast' | 'normal' | 'slow' | 'free';
+
+export type OnchainFeePreference =
+  | { type: 'default' }
+  | { type: 'speed'; speed: OnchainFeeSpeed }
+  | { type: 'targetConf'; blocks: number }
+  | { type: 'satsPerVbyte'; satsPerVbyte: number }
+  | { type: 'backend'; value: string };
+
+export type OnchainFeePayer = 'sender' | 'recipient';
+
+export interface PrepareOnchainTransactionParams {
+  address: string;
+  amountMsats: number;
+  fee?: OnchainFeePreference;
+  feePayer?: OnchainFeePayer;
+  description?: string;
+  idempotencyKey?: string;
+}
+
+export interface PreparedOnchainTransaction {
+  id?: string;
+  address: string;
+  amountMsats: number;
+  feeMsats?: number;
+  totalAmountMsats?: number;
+  recipientAmountMsats?: number;
+  feePayer: OnchainFeePayer;
+  fee: OnchainFeePreference;
+  expiresAt?: number;
+  estimatedDeliverySeconds?: number;
+  raw?: unknown;
+}
+
+export type PayOnchainParams =
+  | PrepareOnchainTransactionParams
+  | { prepared: PreparedOnchainTransaction };
+
+export interface PayOnchainResponse {
+  paymentId?: string;
+  txid?: string;
+  state: 'pending' | 'completed' | 'failed' | string;
+  address: string;
+  amountMsats: number;
+  feeMsats?: number;
+  totalAmountMsats?: number;
+  recipientAmountMsats?: number;
+  createdAt?: number;
+  raw?: unknown;
+}
+
 export interface Offer {
   offerId: string;
   bolt12: string;
@@ -208,6 +259,11 @@ export interface LightningNode {
   listTransactions(params: ListTransactionsParams): Promise<Transaction[]>;
   decode(str: string): Promise<string>;
   onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void>;
+}
+
+export interface OnchainPayments {
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<PreparedOnchainTransaction>;
+  payOnchain(params: PayOnchainParams): Promise<PayOnchainResponse>;
 }
 
 export type BackendNodeKind =

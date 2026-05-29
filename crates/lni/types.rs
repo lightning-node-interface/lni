@@ -298,6 +298,148 @@ pub struct PayInvoiceResponse {
     pub fee_msats: i64,
 }
 
+#[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OnchainFeeSpeed {
+    Fast,
+    Normal,
+    Slow,
+    Free,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OnchainFeePayer {
+    Sender,
+    Recipient,
+}
+
+impl Default for OnchainFeePayer {
+    fn default() -> Self {
+        Self::Sender
+    }
+}
+
+#[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum OnchainFeePreferenceType {
+    Default,
+    Speed,
+    TargetConf,
+    SatsPerVbyte,
+    Backend,
+}
+
+impl Default for OnchainFeePreferenceType {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct OnchainFeePreference {
+    pub preference_type: OnchainFeePreferenceType,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub speed: Option<OnchainFeeSpeed>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub target_conf: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub sats_per_vbyte: Option<f64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub backend: Option<String>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PrepareOnchainTransactionParams {
+    pub address: String,
+    pub amount_msats: i64,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee: Option<OnchainFeePreference>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee_payer: Option<OnchainFeePayer>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub description: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub idempotency_key: Option<String>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreparedOnchainTransaction {
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub id: Option<String>,
+    pub address: String,
+    pub amount_msats: i64,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub total_amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub recipient_amount_msats: Option<i64>,
+    pub fee_payer: OnchainFeePayer,
+    pub fee: OnchainFeePreference,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub expires_at: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub estimated_delivery_seconds: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub raw: Option<String>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayOnchainParams {
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub prepared: Option<PreparedOnchainTransaction>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub address: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee: Option<OnchainFeePreference>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee_payer: Option<OnchainFeePayer>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub description: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub idempotency_key: Option<String>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayOnchainResponse {
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub payment_id: Option<String>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub txid: Option<String>,
+    pub state: String,
+    pub address: String,
+    pub amount_msats: i64,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub total_amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub recipient_amount_msats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub created_at: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub raw: Option<String>,
+}
+
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize)]
