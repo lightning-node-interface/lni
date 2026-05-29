@@ -236,6 +236,76 @@ export interface PayInvoiceResponse {
   preimage: string
   feeMsats: number
 }
+export const enum OnchainFeeSpeed {
+  Fast = 'Fast',
+  Normal = 'Normal',
+  Slow = 'Slow',
+  Free = 'Free'
+}
+export const enum OnchainFeePayer {
+  Sender = 'Sender',
+  Recipient = 'Recipient'
+}
+export const enum OnchainFeePreferenceType {
+  Default = 'Default',
+  Speed = 'Speed',
+  TargetConf = 'TargetConf',
+  SatsPerVbyte = 'SatsPerVbyte',
+  Backend = 'Backend'
+}
+export interface OnchainFeePreference {
+  preferenceType: OnchainFeePreferenceType
+  speed?: OnchainFeeSpeed
+  targetConf?: number
+  satsPerVbyte?: number
+  backend?: string
+}
+export interface PrepareOnchainTransactionParams {
+  address: string
+  amountMsats: number
+  fee?: OnchainFeePreference
+  feePayer?: OnchainFeePayer
+  description?: string
+  idempotencyKey?: string
+}
+export interface PreparedOnchainTransaction {
+  id?: string
+  address: string
+  amountMsats: number
+  feeMsats?: number
+  totalAmountMsats?: number
+  recipientAmountMsats?: number
+  feePayer: OnchainFeePayer
+  fee: OnchainFeePreference
+  expiresAt?: number
+  estimatedDeliverySeconds?: number
+  raw?: string
+}
+export interface PayOnchainParams {
+  prepared?: PreparedOnchainTransaction
+  address?: string
+  amountMsats?: number
+  fee?: OnchainFeePreference
+  feePayer?: OnchainFeePayer
+  description?: string
+  idempotencyKey?: string
+}
+export interface PayOnchainResponse {
+  paymentId?: string
+  txid?: string
+  state: string
+  address: string
+  amountMsats: number
+  feeMsats?: number
+  totalAmountMsats?: number
+  recipientAmountMsats?: number
+  createdAt?: number
+  raw?: string
+}
+export interface OnchainPayments {
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<PreparedOnchainTransaction>
+  payOnchain(params: PayOnchainParams): Promise<PayOnchainResponse>
+}
 export interface PayKeysendResponse {
   fee: number
 }
