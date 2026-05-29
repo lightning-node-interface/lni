@@ -68,7 +68,7 @@ export type OnchainFeePayer = 'sender' | 'recipient';
 
 export interface PrepareOnchainTransactionParams {
   address: string;
-  amountMsats: number;
+  amountSats: number;
   fee?: OnchainFeePreference;
   feePayer?: OnchainFeePayer;
   description?: string;
@@ -78,10 +78,10 @@ export interface PrepareOnchainTransactionParams {
 export interface OnchainTransaction {
   id?: string;
   address: string;
-  amountMsats: number;
-  feeMsats?: number;
-  totalAmountMsats?: number;
-  recipientAmountMsats?: number;
+  amountSats: number;
+  feeSats?: number;
+  totalAmountSats?: number;
+  recipientAmountSats?: number;
   feePayer: OnchainFeePayer;
   fee: OnchainFeePreference;
   expiresAt?: number;
@@ -94,10 +94,10 @@ export interface PayOnchainResponse {
   txid?: string;
   state: 'pending' | 'completed' | 'failed' | string;
   address: string;
-  amountMsats: number;
-  feeMsats?: number;
-  totalAmountMsats?: number;
-  recipientAmountMsats?: number;
+  amountSats: number;
+  feeSats?: number;
+  totalAmountSats?: number;
+  recipientAmountSats?: number;
   createdAt?: number;
   raw?: unknown;
 }

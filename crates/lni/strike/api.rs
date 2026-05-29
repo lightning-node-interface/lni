@@ -78,26 +78,20 @@ fn get_base_url(config: &StrikeConfig) -> &str {
     config.base_url.as_deref().unwrap_or("https://api.strike.me/v1")
 }
 
-fn msats_to_btc_amount(amount_msats: i64) -> Result<Amount, ApiError> {
-    if amount_msats <= 0 {
+fn sats_to_btc_amount(amount_sats: i64) -> Result<Amount, ApiError> {
+    if amount_sats <= 0 {
         return Err(ApiError::InvalidInput(
-            "pay_onchain requires a positive amount_msats".to_string(),
-        ));
-    }
-
-    if amount_msats % 1000 != 0 {
-        return Err(ApiError::InvalidInput(
-            "pay_onchain amount_msats must be divisible by 1000 for on-chain sats".to_string(),
+            "pay_onchain requires a positive amount_sats".to_string(),
         ));
     }
 
     Ok(Amount {
-        amount: format!("{:.8}", amount_msats as f64 / 100_000_000_000.0),
+        amount: format!("{:.8}", amount_sats as f64 / 100_000_000.0),
         currency: "BTC".to_string(),
     })
 }
 
-fn amount_to_msats(amount: Option<&Amount>) -> Option<i64> {
+fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
     let amount = amount?;
     if amount.currency != "BTC" {
         return None;
@@ -107,7 +101,7 @@ fn amount_to_msats(amount: Option<&Amount>) -> Option<i64> {
         .amount
         .parse::<f64>()
         .ok()
-        .map(|btc| (btc * 100_000_000_000.0).round() as i64)
+        .map(|btc| (btc * 100_000_000.0).round() as i64)
 }
 
 fn default_onchain_fee() -> OnchainFeePreference {
@@ -431,7 +425,7 @@ pub async fn prepare_onchain_transaction(
     let client = async_client(&config);
     let fee = params.fee.clone().unwrap_or_else(default_onchain_fee);
     let fee_payer = resolve_onchain_fee_payer(params.fee_payer.clone());
-    let amount = msats_to_btc_amount(params.amount_msats)?;
+    let amount = sats_to_btc_amount(params.amount_sats)?;
     let onchain_tier_id =
         resolve_onchain_tier_id(&client, &config, &params.address, &amount, &fee).await?;
 
@@ -476,7 +470,7 @@ pub async fn prepare_onchain_transaction(
 
     Ok(onchain_transaction_from_quote(
         params.address,
-        params.amount_msats,
+        params.amount_sats,
         fee,
         fee_payer,
         quote,
@@ -610,7 +604,7 @@ async fn resolve_onchain_tier_id(
 
 fn onchain_transaction_from_quote(
     address: String,
-    amount_msats: i64,
+    amount_sats: i64,
     fee: OnchainFeePreference,
     fee_payer: OnchainFeePayer,
     quote: OnchainPaymentQuoteResponse,
@@ -619,10 +613,10 @@ fn onchain_transaction_from_quote(
     OnchainTransaction {
         id: Some(quote.payment_quote_id),
         address,
-        amount_msats,
-        fee_msats: amount_to_msats(quote.total_fee.as_ref()),
-        total_amount_msats: amount_to_msats(Some(&quote.total_amount)),
-        recipient_amount_msats: amount_to_msats(Some(&quote.amount)),
+        amount_sats,
+        fee_sats: amount_to_sats(quote.total_fee.as_ref()),
+        total_amount_sats: amount_to_sats(Some(&quote.total_amount)),
+        recipient_amount_sats: amount_to_sats(Some(&quote.amount)),
         fee_payer,
         fee,
         expires_at: quote
@@ -674,27 +668,27 @@ fn pay_onchain_response_from_payment(
             .and_then(|p| p.state.as_ref())
             .or(execution.state.as_ref()),
     );
-    let amount_msats = amount_to_msats(
+    let amount_sats = amount_to_sats(
         payment
             .as_ref()
             .and_then(|p| p.amount.as_ref())
             .or(execution.amount.as_ref()),
     )
-    .unwrap_or(transaction.amount_msats);
-    let fee_msats = amount_to_msats(
+    .unwrap_or(transaction.amount_sats);
+    let fee_sats = amount_to_sats(
         payment
             .as_ref()
             .and_then(|p| p.total_fee.as_ref())
             .or(execution.total_fee.as_ref()),
     )
-    .or(transaction.fee_msats);
-    let total_amount_msats = amount_to_msats(
+    .or(transaction.fee_sats);
+    let total_amount_sats = amount_to_sats(
         payment
             .as_ref()
             .and_then(|p| p.total_amount.as_ref())
             .or(execution.total_amount.as_ref()),
     )
-    .or(transaction.total_amount_msats);
+    .or(transaction.total_amount_sats);
     let created_at = payment
         .as_ref()
         .and_then(|p| p.created.as_ref())
@@ -706,10 +700,10 @@ fn pay_onchain_response_from_payment(
         txid,
         state,
         address: transaction.address,
-        amount_msats,
-        fee_msats,
-        total_amount_msats,
-        recipient_amount_msats: transaction.recipient_amount_msats,
+        amount_sats,
+        fee_sats,
+        total_amount_sats,
+        recipient_amount_sats: transaction.recipient_amount_sats,
         created_at,
         raw: payment_raw.or(Some(execute_raw)),
     }

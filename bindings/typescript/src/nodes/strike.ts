@@ -126,7 +126,11 @@ function normalizeOnchainState(state?: string): PayOnchainResponse['state'] {
   }
 }
 
-function onchainAmountToMsats(amount?: StrikeAmount): number | undefined {
+function satsToBtc(amountSats: number): string {
+  return (amountSats / 100_000_000).toFixed(8);
+}
+
+function onchainAmountToSats(amount?: StrikeAmount): number | undefined {
   if (!amount) {
     return undefined;
   }
@@ -135,7 +139,8 @@ function onchainAmountToMsats(amount?: StrikeAmount): number | undefined {
     return undefined;
   }
 
-  return btcToMsats(amount.amount);
+  const btc = Number.parseFloat(amount.amount);
+  return Number.isFinite(btc) ? Math.round(btc * 100_000_000) : undefined;
 }
 
 function defaultOnchainFee(): OnchainFeePreference {
@@ -170,13 +175,9 @@ function normalizeStrikeTierSpeed(fee: OnchainFeePreference): 'fast' | 'standard
   }
 }
 
-function assertValidOnchainAmount(amountMsats: number): void {
-  if (!Number.isSafeInteger(amountMsats) || amountMsats <= 0) {
-    throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountMsats.');
-  }
-
-  if (amountMsats % 1000 !== 0) {
-    throw new LniError('InvalidInput', 'payOnchain amountMsats must be divisible by 1000 for on-chain sats.');
+function assertValidOnchainAmount(amountSats: number): void {
+  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
+    throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountSats.');
   }
 }
 
@@ -324,12 +325,12 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
-    const amountMsats = params.amountMsats;
-    assertValidOnchainAmount(amountMsats);
+    const amountSats = params.amountSats;
+    assertValidOnchainAmount(amountSats);
 
     const fee = params.fee ?? defaultOnchainFee();
     const feePayer = resolveOnchainFeePayer(params.feePayer);
-    const onchainTierId = await this.resolveOnchainTierId(params.address, amountMsats, fee);
+    const onchainTierId = await this.resolveOnchainTierId(params.address, amountSats, fee);
 
     const quote = await this.postJson<StrikeOnchainPaymentQuoteResponse>(
       '/payment-quotes/onchain',
@@ -338,7 +339,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         sourceCurrency: 'BTC',
         description: params.description,
         amount: {
-          amount: msatsToBtc(amountMsats),
+          amount: satsToBtc(amountSats),
           currency: 'BTC',
         },
         feePolicy: strikeFeePolicy(feePayer),
@@ -347,7 +348,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined,
     );
 
-    return this.onchainTransactionFromQuote(params.address, amountMsats, fee, feePayer, quote);
+    return this.onchainTransactionFromQuote(params.address, amountSats, fee, feePayer, quote);
   }
 
   async payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse> {
@@ -366,7 +367,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     return this.payOnchainResponseFromPayment(transaction, execution, payment);
   }
 
-  private async resolveOnchainTierId(address: string, amountMsats: number, fee: OnchainFeePreference): Promise<string> {
+  private async resolveOnchainTierId(address: string, amountSats: number, fee: OnchainFeePreference): Promise<string> {
     if (fee.type === 'backend') {
       if (!fee.value) {
         throw new LniError('InvalidInput', 'Strike backend fee preference requires a tier id value.');
@@ -378,7 +379,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const tiers = await this.postJson<StrikeOnchainTierResponse[]>('/payment-quotes/onchain/tiers', {
       btcAddress: address,
       amount: {
-        amount: msatsToBtc(amountMsats),
+        amount: satsToBtc(amountSats),
         currency: 'BTC',
       },
     });
@@ -395,7 +396,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
   private onchainTransactionFromQuote(
     address: string,
-    amountMsats: number,
+    amountSats: number,
     fee: OnchainFeePreference,
     feePayer: OnchainFeePayer,
     quote: StrikeOnchainPaymentQuoteResponse,
@@ -403,10 +404,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     return {
       id: quote.paymentQuoteId,
       address,
-      amountMsats,
-      feeMsats: onchainAmountToMsats(quote.totalFee),
-      totalAmountMsats: onchainAmountToMsats(quote.totalAmount),
-      recipientAmountMsats: onchainAmountToMsats(quote.amount),
+      amountSats,
+      feeSats: onchainAmountToSats(quote.totalFee),
+      totalAmountSats: onchainAmountToSats(quote.totalAmount),
+      recipientAmountSats: onchainAmountToSats(quote.amount),
       feePayer,
       fee,
       expiresAt: quote.validUntil ? toUnixSeconds(Date.parse(quote.validUntil)) : undefined,
@@ -422,9 +423,9 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     execution: StrikePaymentExecutionResponse,
     payment?: StrikePaymentResponse,
   ): PayOnchainResponse {
-    const amountMsats = onchainAmountToMsats(payment?.amount ?? execution.amount) ?? transaction.amountMsats;
-    const feeMsats = onchainAmountToMsats(payment?.totalFee ?? execution.totalFee) ?? transaction.feeMsats;
-    const totalAmountMsats = onchainAmountToMsats(payment?.totalAmount ?? execution.totalAmount) ?? transaction.totalAmountMsats;
+    const amountSats = onchainAmountToSats(payment?.amount ?? execution.amount) ?? transaction.amountSats;
+    const feeSats = onchainAmountToSats(payment?.totalFee ?? execution.totalFee) ?? transaction.feeSats;
+    const totalAmountSats = onchainAmountToSats(payment?.totalAmount ?? execution.totalAmount) ?? transaction.totalAmountSats;
     const createdAt = payment?.created ? toUnixSeconds(Date.parse(payment.created)) : undefined;
 
     return {
@@ -432,10 +433,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       txid: payment?.onchain?.txnId ?? execution.onchain?.txnId,
       state: normalizeOnchainState(payment?.state ?? execution.state),
       address: transaction.address,
-      amountMsats,
-      feeMsats,
-      totalAmountMsats,
-      recipientAmountMsats: transaction.recipientAmountMsats,
+      amountSats,
+      feeSats,
+      totalAmountSats,
+      recipientAmountSats: transaction.recipientAmountSats,
       createdAt,
       raw: payment ?? execution,
     };

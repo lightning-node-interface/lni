@@ -73,20 +73,20 @@ const node = new StrikeNode({ apiKey: '...' });
 
 const transaction = await node.prepareOnchainTransaction({
   address: 'bc1q...',
-  amountMsats: 100_000_000, // 100,000 sats
+  amountSats: 100_000,
   fee: { type: 'speed', speed: 'normal' },
   feePayer: 'sender',
   description: 'cold storage',
 });
 
-// Show transaction.feeMsats, transaction.totalAmountMsats, and transaction.expiresAt to the user.
+// Show transaction.feeSats, transaction.totalAmountSats, and transaction.expiresAt to the user.
 
 const payment = await node.payOnchain(transaction);
 ```
 
 `feePayer: 'sender'` means the recipient receives the full requested amount and the sender pays fees on top. `feePayer: 'recipient'` means fees are deducted from the requested amount.
 
-Amounts are still expressed in msats for consistency with the rest of LNI, but on-chain sends must be whole sats, so `amountMsats` must be divisible by `1000`.
+On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
 
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: 'backend', value: 'tier_...' }` to pass a Strike tier id directly.
 

@@ -262,7 +262,7 @@ export interface OnchainFeePreference {
 }
 export interface PrepareOnchainTransactionParams {
   address: string
-  amountMsats: number
+  amountSats: number
   fee?: OnchainFeePreference
   feePayer?: OnchainFeePayer
   description?: string
@@ -271,10 +271,10 @@ export interface PrepareOnchainTransactionParams {
 export interface OnchainTransaction {
   id?: string
   address: string
-  amountMsats: number
-  feeMsats?: number
-  totalAmountMsats?: number
-  recipientAmountMsats?: number
+  amountSats: number
+  feeSats?: number
+  totalAmountSats?: number
+  recipientAmountSats?: number
   feePayer: OnchainFeePayer
   fee: OnchainFeePreference
   expiresAt?: number
@@ -286,10 +286,10 @@ export interface PayOnchainResponse {
   txid?: string
   state: string
   address: string
-  amountMsats: number
-  feeMsats?: number
-  totalAmountMsats?: number
-  recipientAmountMsats?: number
+  amountSats: number
+  feeSats?: number
+  totalAmountSats?: number
+  recipientAmountSats?: number
   createdAt?: number
   raw?: string
 }

@@ -142,7 +142,7 @@ On-chain payments use a prepare-then-pay flow so apps can show fees before execu
 - `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
 - `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
 
-Amounts are still expressed in msats for API consistency, but on-chain sends must be whole sats, so `amount_msats` must be divisible by `1000`.
+On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
 
 **Rust (Strike)**
 ```rust
@@ -159,7 +159,7 @@ let node = StrikeNode::new(StrikeConfig {
 let transaction = node
     .prepare_onchain_transaction(PrepareOnchainTransactionParams {
         address: "bc1q...".to_string(),
-        amount_msats: 100_000_000, // 100,000 sats
+        amount_sats: 100_000,
         fee: Some(OnchainFeePreference {
             preference_type: OnchainFeePreferenceType::Speed,
             speed: Some(OnchainFeeSpeed::Normal),
@@ -173,7 +173,7 @@ let transaction = node
     })
     .await?;
 
-// Show transaction.fee_msats, transaction.total_amount_msats, and transaction.expires_at to the user.
+// Show transaction.fee_sats, transaction.total_amount_sats, and transaction.expires_at to the user.
 
 let payment = node.pay_onchain(transaction).await?;
 ```
@@ -186,13 +186,13 @@ const node = new StrikeNode({ apiKey: '...' });
 
 const transaction = await node.prepareOnchainTransaction({
     address: 'bc1q...',
-    amountMsats: 100_000_000, // 100,000 sats
+    amountSats: 100_000,
     fee: { type: 'speed', speed: 'normal' },
     feePayer: 'sender',
     description: 'cold storage',
 });
 
-// Show transaction.feeMsats, transaction.totalAmountMsats, and transaction.expiresAt to the user.
+// Show transaction.feeSats, transaction.totalAmountSats, and transaction.expiresAt to the user.
 
 const payment = await node.payOnchain(transaction);
 ```

@@ -77,7 +77,7 @@ describe('StrikeNode on-chain payments', () => {
 
     const transaction = await node.prepareOnchainTransaction({
       address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-      amountMsats: 10_000_000,
+      amountSats: 10_000,
       fee: { type: 'speed', speed: 'normal' },
       feePayer: 'sender',
       description: 'cold storage',
@@ -87,10 +87,10 @@ describe('StrikeNode on-chain payments', () => {
     expect(transaction).toMatchObject({
       id: 'quote-1',
       address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-      amountMsats: 10_000_000,
-      feeMsats: 1_000_000,
-      totalAmountMsats: 11_000_000,
-      recipientAmountMsats: 10_000_000,
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
       feePayer: 'sender',
       fee: { type: 'speed', speed: 'normal' },
       estimatedDeliverySeconds: 3600,
@@ -135,10 +135,10 @@ describe('StrikeNode on-chain payments', () => {
     const payment = await node.payOnchain({
       id: 'quote-1',
       address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-      amountMsats: 10_000_000,
-      feeMsats: 1_000_000,
-      totalAmountMsats: 11_000_000,
-      recipientAmountMsats: 10_000_000,
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
       feePayer: 'sender',
       fee: { type: 'speed', speed: 'normal' },
     });
@@ -148,10 +148,10 @@ describe('StrikeNode on-chain payments', () => {
       txid: 'txid-1',
       state: 'completed',
       address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-      amountMsats: 10_000_000,
-      feeMsats: 1_000_000,
-      totalAmountMsats: 11_000_000,
-      recipientAmountMsats: 10_000_000,
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -166,7 +166,7 @@ describe('StrikeNode on-chain payments', () => {
     await expect(
       node.prepareOnchainTransaction({
         address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-        amountMsats: 10_000_000,
+        amountSats: 10_000,
         fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
       }),
     ).rejects.toMatchObject({

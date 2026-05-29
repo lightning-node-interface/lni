@@ -365,7 +365,7 @@ pub struct OnchainFeePreference {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PrepareOnchainTransactionParams {
     pub address: String,
-    pub amount_msats: i64,
+    pub amount_sats: i64,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub fee: Option<OnchainFeePreference>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
@@ -383,13 +383,13 @@ pub struct OnchainTransaction {
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub id: Option<String>,
     pub address: String,
-    pub amount_msats: i64,
+    pub amount_sats: i64,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub fee_msats: Option<i64>,
+    pub fee_sats: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub total_amount_msats: Option<i64>,
+    pub total_amount_sats: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub recipient_amount_msats: Option<i64>,
+    pub recipient_amount_sats: Option<i64>,
     pub fee_payer: OnchainFeePayer,
     pub fee: OnchainFeePreference,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
@@ -410,13 +410,13 @@ pub struct PayOnchainResponse {
     pub txid: Option<String>,
     pub state: String,
     pub address: String,
-    pub amount_msats: i64,
+    pub amount_sats: i64,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub fee_msats: Option<i64>,
+    pub fee_sats: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub total_amount_msats: Option<i64>,
+    pub total_amount_sats: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub recipient_amount_msats: Option<i64>,
+    pub recipient_amount_sats: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub created_at: Option<i64>,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
