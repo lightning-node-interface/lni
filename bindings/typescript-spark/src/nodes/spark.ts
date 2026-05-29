@@ -24,7 +24,7 @@ import {
 } from '../vendor/frosts-bridge.js';
 import { decrypt as eciesDecrypt, encrypt as eciesEncrypt } from 'eciesjs';
 import { decode as decodeBolt11 } from 'light-bolt11-decoder';
-import { LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StorageProvider, type Transaction } from '@sunnyln/lni';
+import { decodeOfferToJson, LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StorageProvider, type Transaction } from '@sunnyln/lni';
 import { bytesToHex, hexToBytes } from '@sunnyln/lni/internal/encoding';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '@sunnyln/lni/internal/transform';
@@ -1661,11 +1661,11 @@ export class SparkNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    try {
-      return JSON.stringify(decodeBolt11(str));
-    } catch {
-      return str;
-    }
+    return JSON.stringify(decodeBolt11(str));
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

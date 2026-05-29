@@ -62,6 +62,46 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### BOLT11 Decode
+
+```ts
+import { decode } from '@sunnyln/lni';
+
+const decoded = decode(invoice);
+console.log(decoded.paymentRequest);
+console.log(decoded.sections.map((section) => section.name));
+```
+
+`decode` is exported from the package root and returns the same object shape as `light-bolt11-decoder`.
+Node adapters also expose `await node.decode(invoice)`, which returns the decoded BOLT11 object serialized as JSON.
+
+### BOLT12 Offer Decode
+
+```ts
+import { decodeOffer } from '@sunnyln/lni';
+
+const decodedOffer = decodeOffer(offer);
+console.log(decodedOffer.description);
+console.log(decodedOffer.paths?.[0]?.blindedHops);
+```
+
+`decodeOffer` decodes BOLT12 offers without requiring node config. Blinded paths are normalized when present:
+
+```ts
+type DecodedBlindedPath = {
+  introductionNode:
+    | { type: 'node_id'; nodeId: string }
+    | { type: 'directed_short_channel_id'; direction: 'node_one' | 'node_two'; shortChannelId: string };
+  blindingPoint: string;
+  blindedHops: Array<{
+    blindedNodeId: string;
+    encryptedPayload: string;
+  }>;
+};
+```
+
+Node adapters expose `await node.decodeOffer(offer)`, which returns the decoded BOLT12 offer serialized as JSON.
+
 ### Invoice Event Polling
 
 Poll for invoice settlement after creating an invoice. The callback fires with `'success'`, `'pending'`, or `'failure'`.
@@ -183,6 +223,7 @@ const invoice = await arkadeNode.createInvoice({
 - `SpeedNode`
 - `BlinkNode`
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
+- Decode helpers (`decode` for BOLT11, `decodeOffer` for BOLT12 offers)
 
 ## Frontend Runtime Notes
 

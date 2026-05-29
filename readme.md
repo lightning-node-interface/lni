@@ -105,6 +105,50 @@ const listTxnParams = {
 const txns = await node.listTransactions(listTxnParams);
 ```
 
+#### Decode
+
+Decode helpers are pure local functions. They do not require node config.
+
+**TypeScript**
+```typescript
+import { decode, decodeOffer } from '@sunnyln/lni';
+
+const decodedBolt11 = decode('lnbc...');
+const decodedOffer = decodeOffer('lno1...');
+
+console.log(decodedBolt11.paymentRequest);
+console.log(decodedOffer.paths?.[0]?.blindedHops);
+```
+
+TypeScript node adapters also expose:
+
+```typescript
+await node.decode('lnbc...'); // BOLT11 JSON string
+await node.decodeOffer('lno1...'); // BOLT12 offer JSON string
+```
+
+**Rust**
+```rust
+let decoded_bolt11 = node.decode("lnbc...".to_string()).await?;
+let decoded_offer = node.decode_offer("lno1...".to_string()).await?;
+```
+
+BOLT12 offer decode includes normalized blinded paths when present:
+
+```json
+{
+  "paths": [
+    {
+      "introductionNode": { "type": "node_id", "nodeId": "..." },
+      "blindingPoint": "...",
+      "blindedHops": [
+        { "blindedNodeId": "...", "encryptedPayload": "..." }
+      ]
+    }
+  ]
+}
+```
+
 
 #### Payments
 ```rust
@@ -126,7 +170,8 @@ lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: b
 lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
 
 // Lookup
-node.decode(str: String) -> Result<String, ApiError> 
+node.decode(str: String) -> Result<String, ApiError> // Decode BOLT11
+node.decode_offer(offer: String) -> Result<String, ApiError> // Decode BOLT12 offer
 node.lookup_invoice(payment_hash: String) -> Result<Transaction, ApiError>
 node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 ```

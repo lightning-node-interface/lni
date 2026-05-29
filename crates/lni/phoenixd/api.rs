@@ -255,10 +255,12 @@ pub async fn pay_invoice(
     })
 }
 
-// TODO decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
-// Not supported by Phoenixd api so maybe we can use ldk to decode the bolt12 offer?
 pub fn decode(str: String) -> Result<String, ApiError> {
-    Ok(str)
+    crate::utils::decode_bolt11(str)
+}
+
+pub fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 // Create a new BOLT12 offer

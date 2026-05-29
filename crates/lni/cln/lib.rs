@@ -146,7 +146,11 @@ impl ClnNode {
     }
 
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
-        crate::cln::api::decode(self.config.clone(), str).await
+        crate::utils::decode_bolt11(str)
+    }
+
+    pub async fn decode_offer(&self, offer: String) -> Result<String, ApiError> {
+        crate::utils::decode_offer(offer)
     }
 
     pub async fn on_invoice_events(

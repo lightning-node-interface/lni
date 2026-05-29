@@ -298,9 +298,12 @@ pub async fn pay_invoice(
     })
 }
 
-pub async fn decode(_config: &SpeedConfig, str: String) -> Result<String, ApiError> {
-    // Speed doesn't have a decode endpoint, return raw string
-    Ok(str)
+pub async fn decode(str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(str)
+}
+
+pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 pub async fn get_offer(_config: &SpeedConfig, _search: Option<String>) -> Result<Offer, ApiError> {

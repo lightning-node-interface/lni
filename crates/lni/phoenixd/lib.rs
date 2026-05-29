@@ -130,8 +130,12 @@ impl PhoenixdNode {
         crate::phoenixd::api::list_transactions(self.config.clone(), params).await
     }
 
-    pub async fn decode(&self, _str: String) -> Result<String, ApiError> {
-        Ok("".to_string())
+    pub async fn decode(&self, str: String) -> Result<String, ApiError> {
+        crate::utils::decode_bolt11(str)
+    }
+
+    pub async fn decode_offer(&self, offer: String) -> Result<String, ApiError> {
+        crate::utils::decode_offer(offer)
     }
 
     pub async fn on_invoice_events(

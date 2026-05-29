@@ -314,26 +314,12 @@ pub async fn pay_invoice(
     })
 }
 
-// decode - bolt11 invoice (lnbc) bolt12 invoice (lni) or bolt12 offer (lno)
-pub async fn decode(config: ClnConfig, str: String) -> Result<String, ApiError> {
-    let client = clnrest_client(&config);
-    let req_url = format!("{}/v1/decode", config.url);
-    let response = client
-        .post(&req_url)
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({
-            "string": str,
-        }))
-        .send()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to decode: {}", e),
-        })?;
-    // TODO parse JSON response
-    let decoded = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read decode response: {}", e),
-    })?;
-    Ok(decoded)
+pub async fn decode(str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(str)
+}
+
+pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 // get the one with the offer_id or label or get the first offer in the list

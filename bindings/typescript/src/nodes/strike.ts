@@ -1,4 +1,5 @@
 import { decode as decodeBolt11 } from 'light-bolt11-decoder';
+import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError } from '../errors.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
@@ -344,7 +345,11 @@ export class StrikeNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return str;
+    return decodeBolt11ToJson(str);
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

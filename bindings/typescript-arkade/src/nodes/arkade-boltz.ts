@@ -2,6 +2,8 @@ import type { ArkadeSwapsCreateConfig, SwapRepository } from '@arkade-os/boltz-s
 import type { StorageConfig } from '@arkade-os/sdk';
 import {
   asLniError,
+  decode as decodeBolt11,
+  decodeOfferToJson,
   InvoiceType,
   LniError,
   type CreateInvoiceParams,
@@ -506,7 +508,11 @@ export class ArkadeBoltzNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return str;
+    return JSON.stringify(decodeBolt11(str));
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

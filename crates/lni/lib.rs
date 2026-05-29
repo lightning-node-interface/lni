@@ -165,6 +165,13 @@ macro_rules! impl_lightning_node {
                 }).await.unwrap()
             }
 
+            async fn decode_offer(&self, offer: String) -> Result<String, crate::ApiError> {
+                let this = self.clone();
+                crate::TOKIO_RUNTIME.spawn(async move {
+                    <$node_type>::decode_offer(&this, offer).await
+                }).await.unwrap()
+            }
+
             async fn on_invoice_events(
                 &self,
                 params: crate::types::OnInvoiceEventParams,

@@ -1,5 +1,6 @@
 import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
 import { decode as decodeBolt11 } from 'light-bolt11-decoder';
+import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError } from '../errors.js';
 import { bytesToHex, hexToBytes } from '../internal/encoding.js';
 import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
@@ -321,7 +322,11 @@ export class NwcNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return str;
+    return decodeBolt11ToJson(str);
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
