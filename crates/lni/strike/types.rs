@@ -7,10 +7,12 @@ pub struct Balance {
     pub reserved: Amount,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Amount {
     pub amount: String,
     pub currency: String,
+    #[serde(rename = "feePolicy", skip_serializing_if = "Option::is_none")]
+    pub fee_policy: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,6 +139,7 @@ pub struct LightningPayment {
 
 #[derive(Debug, Deserialize)]
 pub struct OnchainPayment {
+    #[serde(rename = "txnId")]
     pub txn_id: Option<String>,
 }
 
@@ -205,6 +208,86 @@ pub struct PaymentExecutionResponse {
     #[serde(rename = "totalAmount")]
     pub total_amount: Amount,
     pub lightning: Option<LightningDetails>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OnchainTiersRequest {
+    #[serde(rename = "btcAddress")]
+    pub btc_address: String,
+    pub amount: Amount,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnchainTierResponse {
+    pub id: String,
+    #[serde(rename = "estimatedDeliveryDurationInMin")]
+    pub estimated_delivery_duration_in_min: Option<i64>,
+    #[serde(rename = "estimatedFee")]
+    pub estimated_fee: Option<Amount>,
+    #[serde(rename = "minimumAmount")]
+    pub minimum_amount: Option<Amount>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OnchainPaymentQuoteRequest {
+    #[serde(rename = "btcAddress")]
+    pub btc_address: String,
+    #[serde(rename = "sourceCurrency")]
+    pub source_currency: String,
+    pub description: Option<String>,
+    pub amount: Amount,
+    #[serde(rename = "onchainTierId")]
+    pub onchain_tier_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnchainPaymentQuoteResponse {
+    #[serde(rename = "estimatedDeliveryDurationInMin")]
+    pub estimated_delivery_duration_in_min: Option<i64>,
+    #[serde(rename = "paymentQuoteId")]
+    pub payment_quote_id: String,
+    pub description: Option<String>,
+    #[serde(rename = "validUntil")]
+    pub valid_until: Option<String>,
+    pub amount: Amount,
+    #[serde(rename = "totalFee")]
+    pub total_fee: Option<Amount>,
+    #[serde(rename = "totalAmount")]
+    pub total_amount: Amount,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnchainDetails {
+    #[serde(rename = "txnId")]
+    pub txn_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnchainPaymentExecutionResponse {
+    #[serde(rename = "paymentId")]
+    pub payment_id: String,
+    pub state: Option<String>,
+    pub amount: Option<Amount>,
+    #[serde(rename = "totalFee")]
+    pub total_fee: Option<Amount>,
+    #[serde(rename = "totalAmount")]
+    pub total_amount: Option<Amount>,
+    pub onchain: Option<OnchainDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StrikePaymentByIdResponse {
+    #[serde(rename = "paymentId")]
+    pub payment_id: Option<String>,
+    pub id: Option<String>,
+    pub state: Option<String>,
+    pub created: Option<String>,
+    pub amount: Option<Amount>,
+    #[serde(rename = "totalFee")]
+    pub total_fee: Option<Amount>,
+    #[serde(rename = "totalAmount")]
+    pub total_amount: Option<Amount>,
+    pub onchain: Option<OnchainDetails>,
 }
 
 #[derive(Debug, Deserialize)]

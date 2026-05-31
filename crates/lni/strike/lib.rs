@@ -2,12 +2,13 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
-use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
-};
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
+use crate::{
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
+    Offer, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -79,16 +80,47 @@ impl StrikeNode {
         crate::strike::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::strike::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::strike::api::prepare_onchain_transaction(self.config.clone(), params).await
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::strike::api::pay_onchain(self.config.clone(), transaction).await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::strike::api::pay_onchain_with_options(self.config.clone(), transaction, options)
+            .await
+    }
+
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for StrikeNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for StrikeNode".to_string(),
+        })
     }
 
     pub async fn lookup_invoice(
@@ -158,11 +190,16 @@ crate::impl_lightning_node!(StrikeNode);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InvoiceType;
+    use crate::{
+        InvoiceType, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+        OnchainFeeSpeed,
+    };
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
+
+    const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -311,6 +348,72 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    #[ignore = "broadcasts an on-chain bitcoin payment"]
+    async fn test_pay_onchain_e2e() {
+        dotenv().ok();
+
+        if env::var("STRIKE_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("STRIKE_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some(ONCHAIN_SEND_CONFIRMATION)
+        {
+            panic!("Refusing to broadcast without explicit STRIKE on-chain send confirmation");
+        }
+
+        let address = env::var("STRIKE_ONCHAIN_TEST_ADDRESS")
+            .expect("STRIKE_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("STRIKE_ONCHAIN_AMOUNT_SATS")
+            .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be set")
+            .parse::<i64>()
+            .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        assert!(
+            amount_sats > 0,
+            "STRIKE_ONCHAIN_AMOUNT_SATS must be positive"
+        );
+
+        let idempotency_key = uuid::Uuid::new_v4().to_string();
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address: address.clone(),
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::Speed,
+                    speed: Some(OnchainFeeSpeed::Free),
+                    target_conf: None,
+                    sats_per_vbyte: None,
+                    backend: None,
+                }),
+                fee_payer: Some(OnchainFeePayer::Sender),
+                description: Some("strike rust onchain e2e".to_string()),
+                idempotency_key: Some(idempotency_key),
+            })
+            .await
+            .expect("prepare_onchain_transaction should create a quote");
+
+        assert_eq!(transaction.address, address);
+        assert_eq!(transaction.amount_sats, amount_sats);
+        assert!(
+            transaction.id.as_ref().map_or(false, |id| !id.is_empty()),
+            "on-chain transaction should include a quote id"
+        );
+
+        // TODO: have user validate fees before broadcasting in case of unexpectedly high fees
+
+        let payment = NODE
+            .pay_onchain(transaction)
+            .await
+            .expect("pay_onchain should execute quote");
+
+        assert_eq!(payment.address, address);
+        assert_eq!(payment.amount_sats, amount_sats);
+        assert!(
+            matches!(payment.state.as_str(), "pending" | "completed"),
+            "unexpected on-chain payment state: {}",
+            payment.state
+        );
+    }
+
     // #[test]
     // fn test_decode() {
     //     match NODE.decode(TEST_PAYMENT_REQUEST.to_string()) {
@@ -360,7 +463,8 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();

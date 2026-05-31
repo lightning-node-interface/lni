@@ -1,0 +1,320 @@
+import { describe, expect, it, vi } from 'vitest';
+import { StrikeNode } from '../nodes/strike.js';
+import type { FetchLike } from '../types.js';
+
+function jsonResponse(body: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers: {
+      'content-type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+describe('StrikeNode on-chain payments', () => {
+  it('prepares an on-chain transaction using Strike tiers and fee policy', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+      const url = String(input);
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain/tiers') {
+        expect(body).toEqual({
+          btcAddress: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+          amount: {
+            amount: '0.00010000',
+            currency: 'BTC',
+          },
+        });
+
+        return jsonResponse([
+          {
+            id: 'tier_fast',
+            estimatedDeliveryDurationInMin: 20,
+            estimatedFee: { amount: '0.00002000', currency: 'BTC' },
+          },
+          {
+            id: 'tier_standard',
+            estimatedDeliveryDurationInMin: 60,
+            estimatedFee: { amount: '0.00001000', currency: 'BTC' },
+          },
+        ]);
+      }
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain') {
+        expect(Object.fromEntries(new Headers(init?.headers).entries())).toMatchObject({
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+          'idempotency-key': '00000000-0000-4000-8000-000000000001',
+        });
+        expect(body).toEqual({
+          btcAddress: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+          sourceCurrency: 'BTC',
+          description: 'cold storage',
+          amount: {
+            amount: '0.00010000',
+            currency: 'BTC',
+            feePolicy: 'INCLUSIVE',
+          },
+          onchainTierId: 'tier_standard',
+        });
+
+        return jsonResponse({
+          paymentQuoteId: 'quote-1',
+          estimatedDeliveryDurationInMin: 60,
+          validUntil: '2026-05-29T12:34:56Z',
+          amount: { amount: '0.00010000', currency: 'BTC' },
+          totalFee: { amount: '0.00001000', currency: 'BTC' },
+          totalAmount: { amount: '0.00011000', currency: 'BTC' },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      fee: { type: 'speed', speed: 'normal' },
+      feePayer: 'recipient',
+      description: 'cold storage',
+      idempotencyKey: '00000000-0000-4000-8000-000000000001',
+    });
+
+    expect(transaction).toMatchObject({
+      id: 'quote-1',
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
+      feePayer: 'recipient',
+      fee: { type: 'speed', speed: 'normal' },
+      estimatedDeliverySeconds: 3600,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers the original on-chain quote id when Strike reports a duplicate idempotency key', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain/tiers') {
+        return jsonResponse([
+          {
+            id: 'tier_standard',
+            estimatedDeliveryDurationInMin: 60,
+            estimatedFee: { amount: '0.00001000', currency: 'BTC' },
+          },
+        ]);
+      }
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain') {
+        return jsonResponse(
+          {
+            code: 'DUPLICATE_PAYMENT_QUOTE',
+            message: 'A payment quote for the specified idempotency key already exists.',
+            data: {
+              paymentQuoteId: 'quote-original',
+            },
+          },
+          { status: 422 },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      fee: { type: 'speed', speed: 'normal' },
+      feePayer: 'sender',
+      idempotencyKey: '00000000-0000-4000-8000-000000000001',
+    });
+
+    expect(transaction).toMatchObject({
+      id: 'quote-original',
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      feePayer: 'sender',
+      fee: { type: 'speed', speed: 'normal' },
+    });
+    expect(transaction.feeSats).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('executes an on-chain transaction and returns txid when available', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          state: 'PENDING',
+          amount: { amount: '0.00010000', currency: 'BTC' },
+          totalFee: { amount: '0.00001000', currency: 'BTC' },
+          totalAmount: { amount: '0.00011000', currency: 'BTC' },
+        });
+      }
+
+      if (url === 'https://api.strike.test/v1/payments/payment-1') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          state: 'COMPLETED',
+          created: '2026-05-29T12:00:00Z',
+          amount: { amount: '0.00010000', currency: 'BTC' },
+          totalFee: { amount: '0.00001000', currency: 'BTC' },
+          totalAmount: { amount: '0.00011000', currency: 'BTC' },
+          onchain: { txnId: 'txid-1' },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const payment = await node.payOnchain({
+      id: 'quote-1',
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
+      feePayer: 'sender',
+      fee: { type: 'speed', speed: 'normal' },
+    });
+
+    expect(payment).toMatchObject({
+      paymentId: 'payment-1',
+      txid: 'txid-1',
+      state: 'completed',
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      feeSats: 1_000,
+      totalAmountSats: 11_000,
+      recipientAmountSats: 10_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks on-chain execution when the quoted fee exceeds the default guardrail', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.payOnchain({
+        id: 'quote-1',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feeSats: 3_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'normal' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows on-chain execution to bypass the default fee guardrail only with the dangerous opt-out', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          state: 'PENDING',
+          amount: { amount: '0.00010000', currency: 'BTC' },
+          totalFee: { amount: '0.00003000', currency: 'BTC' },
+          totalAmount: { amount: '0.00013000', currency: 'BTC' },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const payment = await node.payOnchain(
+      {
+        id: 'quote-1',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feeSats: 3_000,
+        totalAmountSats: 13_000,
+        recipientAmountSats: 10_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'normal' },
+      },
+      { dangerouslyDisableFeeGuardrail: true },
+    );
+
+    expect(payment).toMatchObject({
+      paymentId: 'payment-1',
+      state: 'pending',
+      feeSats: 3_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when the on-chain fee is unknown', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.payOnchain({
+        id: 'quote-original',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'free' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects fee preferences Strike cannot map to on-chain tiers', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.prepareOnchainTransaction({
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
+      }),
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

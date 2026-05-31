@@ -236,6 +236,75 @@ export interface PayInvoiceResponse {
   preimage: string
   feeMsats: number
 }
+export const enum OnchainFeeSpeed {
+  Fast = 'Fast',
+  Normal = 'Normal',
+  Slow = 'Slow',
+  Free = 'Free'
+}
+export const enum OnchainFeePayer {
+  Sender = 'Sender',
+  Recipient = 'Recipient'
+}
+export const enum OnchainFeePreferenceType {
+  Default = 'Default',
+  Speed = 'Speed',
+  TargetConf = 'TargetConf',
+  SatsPerVbyte = 'SatsPerVbyte',
+  Backend = 'Backend'
+}
+export interface OnchainFeePreference {
+  preferenceType: OnchainFeePreferenceType
+  speed?: OnchainFeeSpeed
+  targetConf?: number
+  satsPerVbyte?: number
+  backend?: string
+}
+export interface PrepareOnchainTransactionParams {
+  address: string
+  amountSats: number
+  fee?: OnchainFeePreference
+  feePayer?: OnchainFeePayer
+  description?: string
+  idempotencyKey?: string
+}
+export interface OnchainTransaction {
+  id?: string
+  address: string
+  amountSats: number
+  feeSats?: number
+  totalAmountSats?: number
+  recipientAmountSats?: number
+  feePayer: OnchainFeePayer
+  fee: OnchainFeePreference
+  expiresAt?: number
+  estimatedDeliverySeconds?: number
+  raw?: string
+}
+export interface OnchainFeeGuardrail {
+  maxFeeSats?: number
+  maxFeePercent?: number
+}
+export interface PayOnchainOptions {
+  feeGuardrail?: OnchainFeeGuardrail
+  dangerouslyDisableFeeGuardrail?: boolean
+}
+export interface PayOnchainResponse {
+  paymentId?: string
+  txid?: string
+  state: string
+  address: string
+  amountSats: number
+  feeSats?: number
+  totalAmountSats?: number
+  recipientAmountSats?: number
+  createdAt?: number
+  raw?: string
+}
+export interface OnchainPayments {
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
+}
 export interface PayKeysendResponse {
   fee: number
 }
@@ -414,6 +483,8 @@ export declare class BlinkNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Promise<Offer>
   getOffer(search?: string | undefined | null): Promise<Offer>
   listOffers(search?: string | undefined | null): Promise<Array<Offer>>
@@ -447,6 +518,8 @@ export declare class StrikeNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Offer
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>

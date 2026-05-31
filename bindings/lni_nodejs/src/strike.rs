@@ -1,9 +1,6 @@
 use lni::{
-  strike::lib::StrikeConfig,
-  CreateInvoiceParams,
-  CreateOfferParams,
-  LookupInvoiceParams,
-  PayInvoiceParams,
+  strike::lib::StrikeConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  OnchainTransaction, PayInvoiceParams, PayOnchainOptions, PrepareOnchainTransactionParams,
 };
 use napi_derive::napi;
 
@@ -29,7 +26,11 @@ impl StrikeNode {
     StrikeConfig {
       base_url: self.inner.base_url.clone(),
       api_key: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -46,39 +47,81 @@ impl StrikeNode {
   // Async methods using tokio runtime
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info = lni::strike::api::get_info(self.inner.clone()).await
+    let info = lni::strike::api::get_info(self.inner.clone())
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn = lni::strike::api::create_invoice(self.inner.clone(), params).await
+  pub async fn create_invoice(
+    &self,
+    params: CreateInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let txn = lni::strike::api::create_invoice(self.inner.clone(), params)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> napi::Result<lni::types::PayInvoiceResponse> {
-    let invoice = lni::strike::api::pay_invoice(self.inner.clone(), params).await
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> napi::Result<lni::types::PayInvoiceResponse> {
+    let invoice = lni::strike::api::pay_invoice(self.inner.clone(), params)
+      .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
-  pub fn create_offer(&self, _params: CreateOfferParams) -> napi::Result<lni::Offer> {
-    Err(napi::Error::from_reason("Bolt12 not implemented for Strike".to_string()))
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> napi::Result<lni::types::OnchainTransaction> {
+    let transaction = lni::strike::api::prepare_onchain_transaction(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(transaction)
   }
 
   #[napi]
-  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+    options: Option<PayOnchainOptions>,
+  ) -> napi::Result<lni::types::PayOnchainResponse> {
+    let payment = lni::strike::api::pay_onchain_with_options(
+      self.inner.clone(),
+      transaction,
+      options.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(payment)
+  }
+
+  #[napi]
+  pub fn create_offer(&self, _params: CreateOfferParams) -> napi::Result<lni::Offer> {
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented for Strike".to_string(),
+    ))
+  }
+
+  #[napi]
+  pub async fn lookup_invoice(
+    &self,
+    params: LookupInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
     let txn = lni::strike::api::lookup_invoice(
       self.inner.clone(),
       params.payment_hash,
       None,
       None,
       params.search,
-    ).await
+    )
+    .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
@@ -88,8 +131,14 @@ impl StrikeNode {
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::strike::api::list_transactions(self.inner.clone(), params.from, params.limit, params.search).await
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::strike::api::list_transactions(
+      self.inner.clone(),
+      params.from,
+      params.limit,
+      params.search,
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
@@ -103,7 +152,8 @@ impl StrikeNode {
   #[napi]
   pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
     let offers = lni::strike::api::list_offers(&self.inner, search)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
@@ -121,15 +171,15 @@ impl StrikeNode {
 
   #[napi]
   pub fn decode(&self, str: String) -> napi::Result<String> {
-    let decoded = lni::strike::api::decode(str)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let decoded =
+      lni::strike::api::decode(str).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
   #[napi]
   pub fn decode_offer(&self, offer: String) -> napi::Result<String> {
-    let decoded = lni::strike::api::decode_offer(offer)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let decoded =
+      lni::strike::api::decode_offer(offer).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
@@ -141,13 +191,14 @@ impl StrikeNode {
   ) -> napi::Result<()> {
     let config = self.inner.clone();
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     rt.block_on(async move {
       lni::strike::api::poll_invoice_events(config, params, move |status, transaction| {
         let _ = callback(status, transaction);
-      }).await;
+      })
+      .await;
     });
-    
+
     Ok(())
   }
 }

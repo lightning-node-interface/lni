@@ -4,7 +4,7 @@ import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getBlinkTokenPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
-import { InvoiceType, type BlinkConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type Transaction } from '../types.js';
+import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type BlinkConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type OnchainTransaction, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type PrepareOnchainTransactionParams, type Transaction } from '../types.js';
 
 interface GraphQLError {
   message: string;
@@ -54,6 +54,29 @@ interface BlinkPaymentSendResponse {
   };
 }
 
+interface BlinkOnchainTxFeeResponse {
+  onChainTxFee: {
+    amount?: number;
+  };
+}
+
+interface BlinkOnchainPaymentSendResponse {
+  onChainPaymentSend: {
+    status: string;
+    transaction?: {
+      id?: string;
+      settlementAmount?: number;
+      settlementCurrency?: string;
+      settlementFee?: number;
+      settlementVia?: {
+        __typename: string;
+        transactionHash?: string;
+      };
+    };
+    errors?: GraphQLError[];
+  };
+}
+
 interface BlinkTransactionsQuery {
   me: {
     defaultAccount: {
@@ -95,7 +118,139 @@ interface BlinkTransactionsPage {
   nextCursor: string | null;
 }
 
-export class BlinkNode implements LightningNode {
+function defaultOnchainFee(): OnchainFeePreference {
+  return { type: 'default' };
+}
+
+function resolveBlinkFeeSpeed(fee: OnchainFeePreference): 'FAST' | 'MEDIUM' | 'SLOW' {
+  if (fee.type === 'default') {
+    return 'FAST';
+  }
+
+  if (fee.type !== 'speed') {
+    throw new LniError('InvalidInput', `Blink payOnchain does not support ${fee.type} fee preferences.`);
+  }
+
+  switch (fee.speed) {
+    case 'fast':
+      return 'FAST';
+    case 'normal':
+      return 'MEDIUM';
+    case 'slow':
+      return 'SLOW';
+    case 'free':
+      throw new LniError('InvalidInput', 'Blink payOnchain does not support free on-chain fee speed.');
+  }
+}
+
+function resolveBlinkFeePayer(feePayer?: OnchainFeePayer): OnchainFeePayer {
+  if (feePayer === 'recipient') {
+    throw new LniError('InvalidInput', 'Blink payOnchain only supports sender-paid on-chain fees.');
+  }
+
+  return 'sender';
+}
+
+function normalizeOnchainState(state?: string): PayOnchainResponse['state'] {
+  switch (state?.toUpperCase()) {
+    case 'PENDING':
+      return 'pending';
+    case 'SUCCESS':
+    case 'ALREADY_PAID':
+      return 'completed';
+    case 'FAILED':
+    case 'FAILURE':
+      return 'failed';
+    default:
+      return state?.toLowerCase() ?? 'pending';
+  }
+}
+
+function assertValidOnchainAmount(amountSats: number): void {
+  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
+    throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountSats.');
+  }
+}
+
+function assertValidGuardrailLimit(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new LniError('InvalidInput', `${name} must be a non-negative finite number.`);
+  }
+
+  if (name.endsWith('maxFeeSats') && !Number.isSafeInteger(value)) {
+    throw new LniError('InvalidInput', `${name} must be a safe integer.`);
+  }
+}
+
+function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<OnchainFeeGuardrail> | undefined {
+  if (options?.dangerouslyDisableFeeGuardrail) {
+    return undefined;
+  }
+
+  const guardrail = {
+    maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
+    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+  };
+
+  assertValidGuardrailLimit(guardrail.maxFeeSats, 'feeGuardrail.maxFeeSats');
+  assertValidGuardrailLimit(guardrail.maxFeePercent, 'feeGuardrail.maxFeePercent');
+
+  return guardrail;
+}
+
+function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+  const guardrail = resolveOnchainFeeGuardrail(options);
+  if (!guardrail) {
+    return;
+  }
+
+  const { feeSats } = transaction;
+  if (feeSats === undefined) {
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.',
+    );
+  }
+
+  if (!Number.isSafeInteger(feeSats) || feeSats < 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+  }
+
+  if (!Number.isSafeInteger(transaction.amountSats) || transaction.amountSats <= 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+  }
+
+  if (feeSats > guardrail.maxFeeSats) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`,
+    );
+  }
+
+  const feePercent = (feeSats / transaction.amountSats) * 100;
+  if (feePercent > guardrail.maxFeePercent) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`,
+    );
+  }
+}
+
+function blinkTransactionAmountToSats(amount: number | undefined, currency: string | undefined): number | undefined {
+  return currency === 'BTC' && amount !== undefined ? Math.abs(amount) : undefined;
+}
+
+function blinkTransactionMemo(transaction: OnchainTransaction): string | undefined {
+  const raw = transaction.raw;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return undefined;
+  }
+
+  const memo = (raw as { memo?: unknown }).memo;
+  return typeof memo === 'string' && memo.length > 0 ? memo : undefined;
+}
+
+export class BlinkNode implements LightningNode, OnchainPayments {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
   private readonly baseUrl: string;
@@ -348,6 +503,117 @@ export class BlinkNode implements LightningNode {
       paymentHash: '',
       preimage: '',
       feeMsats: satsToMsats(feeProbe.lnInvoiceFeeProbe.amount ?? 0),
+    };
+  }
+
+  async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
+    const amountSats = params.amountSats;
+    assertValidOnchainAmount(amountSats);
+
+    const fee = params.fee ?? defaultOnchainFee();
+    const feePayer = resolveBlinkFeePayer(params.feePayer);
+    const speed = resolveBlinkFeeSpeed(fee);
+    const walletId = await this.getBtcWalletId();
+
+    const response = await this.gql<BlinkOnchainTxFeeResponse>(
+      `
+      query onChainTxFee($walletId: WalletId!, $address: OnChainAddress!, $amount: SatAmount!, $speed: PayoutSpeed!) {
+        onChainTxFee(walletId: $walletId, address: $address, amount: $amount, speed: $speed) {
+          amount
+        }
+      }
+      `,
+      {
+        walletId,
+        address: params.address,
+        amount: amountSats,
+        speed,
+      },
+    );
+
+    const feeSats = response.onChainTxFee.amount;
+
+    return {
+      address: params.address,
+      amountSats,
+      feeSats,
+      totalAmountSats: feeSats === undefined ? undefined : amountSats + feeSats,
+      recipientAmountSats: amountSats,
+      feePayer,
+      fee,
+      raw: {
+        walletId,
+        speed,
+        memo: params.description,
+        fee: response.onChainTxFee,
+      },
+    };
+  }
+
+  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
+    assertValidOnchainAmount(transaction.amountSats);
+    resolveBlinkFeePayer(transaction.feePayer);
+    const speed = resolveBlinkFeeSpeed(transaction.fee);
+    assertOnchainFeeGuardrail(transaction, options);
+
+    const walletId = await this.getBtcWalletId();
+    const memo = blinkTransactionMemo(transaction);
+    const payment = await this.gql<BlinkOnchainPaymentSendResponse>(
+      `
+      mutation onChainPaymentSend($input: OnChainPaymentSendInput!) {
+        onChainPaymentSend(input: $input) {
+          status
+          transaction {
+            id
+            settlementAmount
+            settlementCurrency
+            settlementFee
+            settlementVia {
+              __typename
+              ... on SettlementViaOnChain {
+                transactionHash
+              }
+            }
+          }
+          errors {
+            message
+          }
+        }
+      }
+      `,
+      {
+        input: {
+          address: transaction.address,
+          amount: transaction.amountSats,
+          walletId,
+          memo,
+          speed,
+        },
+      },
+    );
+
+    if (payment.onChainPaymentSend.errors?.length) {
+      throw new LniError('Api', payment.onChainPaymentSend.errors.map((error) => error.message).join(', '));
+    }
+
+    const paymentTransaction = payment.onChainPaymentSend.transaction;
+    const feeSats =
+      blinkTransactionAmountToSats(paymentTransaction?.settlementFee, paymentTransaction?.settlementCurrency)
+        ?? transaction.feeSats;
+    const amountSats =
+      blinkTransactionAmountToSats(paymentTransaction?.settlementAmount, paymentTransaction?.settlementCurrency)
+        ?? transaction.amountSats;
+
+    return {
+      paymentId: paymentTransaction?.id,
+      txid: paymentTransaction?.settlementVia?.transactionHash,
+      state: normalizeOnchainState(payment.onChainPaymentSend.status),
+      address: transaction.address,
+      amountSats,
+      feeSats,
+      totalAmountSats: feeSats === undefined ? transaction.totalAmountSats : amountSats + feeSats,
+      recipientAmountSats: transaction.recipientAmountSats ?? transaction.amountSats,
+      raw: payment.onChainPaymentSend,
     };
   }
 

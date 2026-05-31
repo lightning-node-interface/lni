@@ -55,6 +55,70 @@ export interface PayInvoiceResponse {
   feeMsats: number;
 }
 
+export type OnchainFeeSpeed = 'fast' | 'normal' | 'slow' | 'free';
+
+export type OnchainFeePreference =
+  | { type: 'default' }
+  | { type: 'speed'; speed: OnchainFeeSpeed }
+  | { type: 'targetConf'; blocks: number }
+  | { type: 'satsPerVbyte'; satsPerVbyte: number }
+  | { type: 'backend'; value: string };
+
+export type OnchainFeePayer = 'sender' | 'recipient';
+
+export interface PrepareOnchainTransactionParams {
+  address: string;
+  amountSats: number;
+  fee?: OnchainFeePreference;
+  feePayer?: OnchainFeePayer;
+  description?: string;
+  idempotencyKey?: string;
+}
+
+export interface OnchainTransaction {
+  id?: string;
+  address: string;
+  amountSats: number;
+  feeSats?: number;
+  totalAmountSats?: number;
+  recipientAmountSats?: number;
+  feePayer: OnchainFeePayer;
+  fee: OnchainFeePreference;
+  expiresAt?: number;
+  estimatedDeliverySeconds?: number;
+  raw?: unknown;
+}
+
+export interface OnchainFeeGuardrail {
+  maxFeeSats?: number;
+  maxFeePercent?: number;
+}
+
+export const DEFAULT_ONCHAIN_MAX_FEE_SATS = 25_000;
+export const DEFAULT_ONCHAIN_MAX_FEE_PERCENT = 25;
+export const DEFAULT_ONCHAIN_FEE_GUARDRAIL: Required<OnchainFeeGuardrail> = {
+  maxFeeSats: DEFAULT_ONCHAIN_MAX_FEE_SATS,
+  maxFeePercent: DEFAULT_ONCHAIN_MAX_FEE_PERCENT,
+};
+
+export interface PayOnchainOptions {
+  feeGuardrail?: OnchainFeeGuardrail;
+  dangerouslyDisableFeeGuardrail?: boolean;
+}
+
+export interface PayOnchainResponse {
+  paymentId?: string;
+  txid?: string;
+  state: 'pending' | 'completed' | 'failed' | string;
+  address: string;
+  amountSats: number;
+  feeSats?: number;
+  totalAmountSats?: number;
+  recipientAmountSats?: number;
+  createdAt?: number;
+  raw?: unknown;
+}
+
 export interface Offer {
   offerId: string;
   bolt12: string;
@@ -209,6 +273,11 @@ export interface LightningNode {
   decode(str: string): Promise<string>;
   decodeOffer(offer: string): Promise<string>;
   onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void>;
+}
+
+export interface OnchainPayments {
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>;
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse>;
 }
 
 export type BackendNodeKind =

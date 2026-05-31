@@ -111,6 +111,46 @@ pub struct LnInvoicePaymentResult {
     pub errors: Option<Vec<GraphQLError>>,
 }
 
+// On-chain payment structures
+#[derive(Debug, Deserialize)]
+pub struct OnChainTxFeeResponse {
+    #[serde(rename = "onChainTxFee")]
+    pub on_chain_tx_fee: OnChainTxFee,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnChainTxFee {
+    pub amount: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnChainPaymentSendResponse {
+    #[serde(rename = "onChainPaymentSend")]
+    pub on_chain_payment_send: OnChainPaymentSendResult,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnChainPaymentSendResult {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<OnChainPaymentTransaction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OnChainPaymentTransaction {
+    pub id: Option<String>,
+    #[serde(rename = "settlementAmount")]
+    pub settlement_amount: Option<i64>,
+    #[serde(rename = "settlementCurrency")]
+    pub settlement_currency: Option<String>,
+    #[serde(rename = "settlementFee")]
+    pub settlement_fee: Option<i64>,
+    #[serde(rename = "settlementVia")]
+    pub settlement_via: Option<SettlementVia>,
+}
+
 // Fee probe structures
 #[derive(Debug, Serialize)]
 pub struct LnInvoiceFeeProbeInput {

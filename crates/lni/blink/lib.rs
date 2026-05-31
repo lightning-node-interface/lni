@@ -4,7 +4,8 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    Offer, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
@@ -87,6 +88,28 @@ impl BlinkNode {
         crate::blink::api::pay_invoice(&self.config, params).await
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::blink::api::prepare_onchain_transaction(&self.config, params).await
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::blink::api::pay_onchain(&self.config, transaction).await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::blink::api::pay_onchain_with_options(&self.config, transaction, options).await
+    }
+
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
         Err(ApiError::Api { reason: "create_offer not implemented for BlinkNode".to_string() })
     }
@@ -149,12 +172,16 @@ crate::impl_lightning_node!(BlinkNode);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InvoiceType;
+    use crate::{
+        InvoiceType, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+        OnchainFeeSpeed, PrepareOnchainTransactionParams,
+    };
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
-    use std::thread;
+
+    const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -302,6 +329,70 @@ mod tests {
                 // Don't panic as this requires valid API key
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_pay_onchain_e2e() {
+        dotenv().ok();
+
+        let address = env::var("BLINK_ONCHAIN_TEST_ADDRESS")
+            .expect("BLINK_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("BLINK_ONCHAIN_AMOUNT_SATS")
+            .unwrap_or_else(|_| "10000".to_string())
+            .parse::<i64>()
+            .expect("BLINK_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        assert!(
+            amount_sats > 0,
+            "BLINK_ONCHAIN_AMOUNT_SATS must be positive"
+        );
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address: address.clone(),
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::Speed,
+                    speed: Some(OnchainFeeSpeed::Normal),
+                    target_conf: None,
+                    sats_per_vbyte: None,
+                    backend: None,
+                }),
+                fee_payer: Some(OnchainFeePayer::Sender),
+                description: Some("blink rust onchain quote".to_string()),
+                idempotency_key: None,
+            })
+            .await
+            .expect("prepare_onchain_transaction should create a Blink on-chain quote");
+
+        dbg!("Onchain txn", &transaction);
+        assert_eq!(transaction.address, address);
+        assert_eq!(transaction.amount_sats, amount_sats);
+        assert_eq!(transaction.fee_payer, OnchainFeePayer::Sender);
+        assert!(
+            transaction.fee_sats.map_or(false, |fee_sats| fee_sats >= 0),
+            "on-chain transaction should include a non-negative fee quote"
+        );
+
+        if env::var("BLINK_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("BLINK_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some(ONCHAIN_SEND_CONFIRMATION)
+        {
+            println!("Prepared Blink on-chain quote; skipping broadcast without explicit confirmation");
+            return;
+        }
+
+        let payment = NODE
+            .pay_onchain(transaction)
+            .await
+            .expect("pay_onchain should execute Blink on-chain send");
+
+        assert_eq!(payment.address, address);
+        assert_eq!(payment.amount_sats, amount_sats);
+        assert!(
+            matches!(payment.state.as_str(), "pending" | "completed"),
+            "unexpected on-chain payment state: {}",
+            payment.state
+        );
     }
 
     #[tokio::test]

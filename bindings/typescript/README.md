@@ -62,6 +62,51 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### On-chain Bitcoin Payments
+
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and `BlinkNode`.
+
+```ts
+import { StrikeNode } from '@sunnyln/lni';
+
+const node = new StrikeNode({ apiKey: '...' });
+
+const transaction = await node.prepareOnchainTransaction({
+  address: 'bc1q...',
+  amountSats: 100_000,
+  fee: { type: 'speed', speed: 'normal' },
+  feePayer: 'sender',
+  description: 'cold storage',
+});
+
+// Show transaction.feeSats, transaction.totalAmountSats, and transaction.expiresAt to the user.
+
+const payment = await node.payOnchain(transaction);
+```
+
+`feePayer: 'sender'` means the recipient receives the full requested amount and the sender pays fees on top. `feePayer: 'recipient'` means fees are deducted from the requested amount.
+
+On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
+
+Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
+
+`payOnchain` enforces the shared `DEFAULT_ONCHAIN_FEE_GUARDRAIL`: `25_000` sats and `25%` of the send amount. It fails closed when `feeSats` is unknown, such as a recovered duplicate quote that only includes a quote id.
+
+```ts
+await node.payOnchain(transaction, {
+  feeGuardrail: {
+    maxFeeSats: 5_000,
+    maxFeePercent: 10,
+  },
+});
+
+await node.payOnchain(transaction, {
+  dangerouslyDisableFeeGuardrail: true,
+});
+```
+
+For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: 'backend', value: 'tier_...' }` to pass a Strike tier id directly.
+
 ### BOLT11 Decode
 
 ```ts

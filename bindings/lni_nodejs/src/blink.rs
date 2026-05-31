@@ -1,4 +1,7 @@
-use lni::{blink::lib::BlinkConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{
+  blink::lib::BlinkConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  OnchainTransaction, PayInvoiceParams, PayOnchainOptions, PrepareOnchainTransactionParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -66,6 +69,33 @@ impl BlinkNode {
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> napi::Result<lni::types::OnchainTransaction> {
+    let transaction = lni::blink::api::prepare_onchain_transaction(&self.inner, params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(transaction)
+  }
+
+  #[napi]
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+    options: Option<PayOnchainOptions>,
+  ) -> napi::Result<lni::types::PayOnchainResponse> {
+    let payment = lni::blink::api::pay_onchain_with_options(
+      &self.inner,
+      transaction,
+      options.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(payment)
   }
 
   #[napi]
