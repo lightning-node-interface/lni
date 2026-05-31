@@ -1,3 +1,4 @@
+import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError } from '../errors.js';
 import { encodeBase64Bytes, hexToBytes } from '../internal/encoding.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
@@ -348,11 +349,11 @@ export class LndNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return requestText(this.fetchFn, buildUrl(this.config.url, `/v1/payreq/${encodeURIComponent(str)}`), {
-      method: 'GET',
-      headers: this.headers(),
-      timeoutMs: this.timeoutMs,
-    });
+    return decodeBolt11ToJson(str);
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

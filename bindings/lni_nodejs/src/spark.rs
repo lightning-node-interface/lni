@@ -239,13 +239,14 @@ impl SparkNode {
 
     #[napi]
     pub async fn decode(&self, str: String) -> napi::Result<String> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.decode(str)
+        lni::spark::api::decode(str)
             .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn decode_offer(&self, offer: String) -> napi::Result<String> {
+        lni::spark::api::decode_offer(offer)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 

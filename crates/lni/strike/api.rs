@@ -336,9 +336,12 @@ pub async fn pay_invoice(
     })
 }
 
-pub fn decode(_config: &StrikeConfig, str: String) -> Result<String, ApiError> {
-    // Strike doesn't have a decode endpoint, return raw string
-    Ok(str)
+pub fn decode(str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(str)
+}
+
+pub fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 pub fn get_offer(_config: &StrikeConfig, _search: Option<String>) -> Result<Offer, ApiError> {

@@ -23,8 +23,10 @@ vi.mock('@getalby/sdk/nwc', () => ({
   ),
 }));
 
-vi.mock('light-bolt11-decoder', () => ({
+vi.mock('../decode.js', () => ({
   decode: bolt11Mocks.decode,
+  decodeBolt11ToJson: vi.fn((invoice: string) => JSON.stringify(bolt11Mocks.decode(invoice))),
+  decodeOfferToJson: vi.fn(),
 }));
 
 import { NwcNode } from '../nodes/nwc.js';
@@ -64,7 +66,7 @@ function mockBolt11Decode() {
     }
 
     return {
-      sections: [{ name: 'payment_hash', value: PAYMENT_HASH }],
+      payment_hash: PAYMENT_HASH,
     };
   });
 }

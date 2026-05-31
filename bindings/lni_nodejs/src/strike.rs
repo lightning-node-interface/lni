@@ -121,7 +121,14 @@ impl StrikeNode {
 
   #[napi]
   pub fn decode(&self, str: String) -> napi::Result<String> {
-    let decoded = lni::strike::api::decode(&self.inner, str)
+    let decoded = lni::strike::api::decode(str)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub fn decode_offer(&self, offer: String) -> napi::Result<String> {
+    let decoded = lni::strike::api::decode_offer(offer)
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }

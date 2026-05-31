@@ -392,9 +392,12 @@ pub async fn pay_invoice(
     })
 }
 
-pub async fn decode(_config: &BlinkConfig, str: String) -> Result<String, ApiError> {
-    // Blink doesn't have a decode endpoint, return raw string
-    Ok(str)
+pub async fn decode(str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(str)
+}
+
+pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<Offer, ApiError> {

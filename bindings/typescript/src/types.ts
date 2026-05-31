@@ -207,6 +207,7 @@ export interface LightningNode {
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>;
   listTransactions(params: ListTransactionsParams): Promise<Transaction[]>;
   decode(str: string): Promise<string>;
+  decodeOffer(offer: string): Promise<string>;
   onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void>;
 }
 

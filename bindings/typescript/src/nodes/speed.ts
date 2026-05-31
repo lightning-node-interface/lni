@@ -1,4 +1,5 @@
 import { LniError } from '../errors.js';
+import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { buildUrl, requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, satsToMsats } from '../internal/transform.js';
@@ -235,7 +236,11 @@ export class SpeedNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return str;
+    return decodeBolt11ToJson(str);
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

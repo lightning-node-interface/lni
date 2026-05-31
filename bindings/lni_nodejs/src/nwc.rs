@@ -130,11 +130,20 @@ impl NwcNode {
 
   #[napi]
   pub async fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::nwc::api::decode(self.inner.clone(), str)
+    let decoded = lni::nwc::api::decode(str)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
+
+  #[napi]
+  pub async fn decode_offer(&self, offer: String) -> Result<String> {
+    let decoded = lni::nwc::api::decode_offer(offer)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
   #[napi]
   pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
     &self,

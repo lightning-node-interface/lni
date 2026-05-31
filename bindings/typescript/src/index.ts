@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './errors.js';
+export * from './decode.js';
 export * from './lnurl.js';
 export * from './factory.js';
 

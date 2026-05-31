@@ -141,7 +141,15 @@ impl LndNode {
 
   #[napi]
   pub async fn decode(&self, invoice_str: String) -> Result<String> {
-    let decoded = lni::lnd::api::decode(self.inner.clone(), invoice_str)
+    let decoded = lni::lnd::api::decode(invoice_str)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub async fn decode_offer(&self, offer: String) -> Result<String> {
+    let decoded = lni::lnd::api::decode_offer(offer)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)

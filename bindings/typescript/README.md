@@ -62,6 +62,49 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### BOLT11 Decode
+
+```ts
+import { decode } from '@sunnyln/lni';
+
+const decoded = decode(invoice);
+console.log(decoded.paymentRequest);
+console.log(decoded.payment_hash);
+console.log(decoded.amountMsats);
+```
+
+`decode` is exported from the package root and returns a normalized keyed object. BOLT11 tags are exposed by name, such as `payment_hash`, `payment_secret`, `description`, `expiry`, `feature_bits`, and `route_hints`. The raw invoice is available as `paymentRequest`; `amount` is a millisatoshi string, `amountMsats` is a number when safely representable, and `expiresAt` is the absolute expiry timestamp.
+Node adapters also expose `await node.decode(invoice)`, which returns the decoded BOLT11 object serialized as JSON.
+
+### BOLT12 Offer Decode
+
+```ts
+import { decodeOffer } from '@sunnyln/lni';
+
+const decodedOffer = decodeOffer(offer);
+console.log(decodedOffer.description);
+console.log(decodedOffer.paths?.[0]?.blindedHops);
+```
+
+`decodeOffer` decodes BOLT12 offers without requiring node config. Blinded paths are normalized when present:
+
+If an offer amount is denominated in bitcoin, `amountMsats` is set. If the offer includes `currency`, `amount` is denominated in that ISO-4217 currency's minor unit and `amountMsats` is omitted; the payable msats come from the fetched BOLT12 invoice.
+
+```ts
+type DecodedBlindedPath = {
+  introductionNode:
+    | { type: 'node_id'; nodeId: string }
+    | { type: 'directed_short_channel_id'; direction: 'node_one' | 'node_two'; shortChannelId: string };
+  blindingPoint: string;
+  blindedHops: Array<{
+    blindedNodeId: string;
+    encryptedPayload: string;
+  }>;
+};
+```
+
+Node adapters expose `await node.decodeOffer(offer)`, which returns the decoded BOLT12 offer serialized as JSON.
+
 ### Invoice Event Polling
 
 Poll for invoice settlement after creating an invoice. The callback fires with `'success'`, `'pending'`, or `'failure'`.
@@ -183,6 +226,7 @@ const invoice = await arkadeNode.createInvoice({
 - `SpeedNode`
 - `BlinkNode`
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
+- Decode helpers (`decode` for BOLT11, `decodeOffer` for BOLT12 offers)
 
 ## Frontend Runtime Notes
 
