@@ -94,6 +94,13 @@ export interface OnchainFeeGuardrail {
   maxFeePercent?: number;
 }
 
+export const DEFAULT_ONCHAIN_MAX_FEE_SATS = 25_000;
+export const DEFAULT_ONCHAIN_MAX_FEE_PERCENT = 25;
+export const DEFAULT_ONCHAIN_FEE_GUARDRAIL: Required<OnchainFeeGuardrail> = {
+  maxFeeSats: DEFAULT_ONCHAIN_MAX_FEE_SATS,
+  maxFeePercent: DEFAULT_ONCHAIN_MAX_FEE_PERCENT,
+};
+
 export interface PayOnchainOptions {
   feeGuardrail?: OnchainFeeGuardrail;
   dangerouslyDisableFeeGuardrail?: boolean;

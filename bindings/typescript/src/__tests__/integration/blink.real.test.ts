@@ -2,8 +2,23 @@ import { describe, expect } from 'vitest';
 import { BlinkNode } from '../../nodes/blink.js';
 import { hasEnv, itIf, nonEmpty, runOrSkipKnownError, testInvoiceLabel, timeout, uniqueValues } from './helpers.js';
 
+const ONCHAIN_SEND_CONFIRMATION = 'I_UNDERSTAND_THIS_BROADCASTS_BITCOIN';
+const DEFAULT_ONCHAIN_QUOTE_AMOUNT_SATS = 10_000;
+
 describe('Real integration from crates/lni/.env > BlinkNode', () => {
   const enabled = hasEnv('BLINK_API_KEY');
+  const onchainSendAmountSats = Number.parseInt(process.env.BLINK_ONCHAIN_AMOUNT_SATS ?? '', 10);
+  const quoteOnlyAmountSats =
+    Number.isSafeInteger(onchainSendAmountSats) && onchainSendAmountSats > 0
+      ? onchainSendAmountSats
+      : DEFAULT_ONCHAIN_QUOTE_AMOUNT_SATS;
+  const runOnchainSend =
+    enabled
+    && process.env.BLINK_RUN_ONCHAIN_SEND === 'true'
+    && process.env.BLINK_ONCHAIN_SEND_CONFIRM === ONCHAIN_SEND_CONFIRMATION
+    && hasEnv('BLINK_ONCHAIN_TEST_ADDRESS', 'BLINK_ONCHAIN_AMOUNT_SATS')
+    && Number.isSafeInteger(onchainSendAmountSats)
+    && onchainSendAmountSats > 0;
 
   const makeNode = () =>
     new BlinkNode({
@@ -53,5 +68,47 @@ describe('Real integration from crates/lni/.env > BlinkNode', () => {
         throw lastError;
       }
     }, ['transaction not found', 'http 404']);
+  }, timeout);
+
+  itIf(enabled && hasEnv('BLINK_ONCHAIN_TEST_ADDRESS'))('prepareOnchainTransaction + optionally payOnchain', async () => {
+    const node = makeNode();
+    let transaction: Awaited<ReturnType<BlinkNode['prepareOnchainTransaction']>> | undefined;
+
+    await runOrSkipKnownError(async () => {
+      transaction = await node.prepareOnchainTransaction({
+        address: process.env.BLINK_ONCHAIN_TEST_ADDRESS!,
+        amountSats: quoteOnlyAmountSats,
+        fee: { type: 'speed', speed: runOnchainSend ? 'fast' : 'normal' },
+        feePayer: 'sender',
+        description: testInvoiceLabel(runOnchainSend ? 'blink onchain e2e' : 'blink onchain quote'),
+      });
+
+      expect(transaction.address).toBe(process.env.BLINK_ONCHAIN_TEST_ADDRESS);
+      expect(transaction.amountSats).toBe(quoteOnlyAmountSats);
+      expect(transaction.feePayer).toBe('sender');
+      expect(transaction.feeSats).toBeGreaterThanOrEqual(0);
+    }, ['insufficient balance', 'invalid address', 'amount']);
+
+    console.log('Prepared Blink on-chain transaction:', transaction);
+    if (!transaction) {
+      return;
+    }
+
+    if (!runOnchainSend) {
+      console.log('Prepared Blink on-chain quote; skipping broadcast without explicit confirmation');
+      return;
+    }
+
+    // Blink can quote high miner/provider fees for small test sends; keep the absolute guardrail
+    // default, but allow this real test up to 52% before broadcasting.
+    const payment = await node.payOnchain(transaction, {
+      feeGuardrail: {
+        maxFeePercent: 52,
+      },
+    });
+    console.log('Blink on-chain payment result:', payment);
+
+    expect(['pending', 'completed']).toContain(payment.state);
+    expect(payment.address).toBe(process.env.BLINK_ONCHAIN_TEST_ADDRESS);
   }, timeout);
 });

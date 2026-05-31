@@ -175,7 +175,7 @@ lnurl::get_payment_info(destination, amount_msats) -> Result<PaymentInfo, ApiErr
 lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: bolt11|bolt12|lnurl|lightning_address
 lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
 
-// On-chain Bitcoin payments (currently implemented for Strike)
+// On-chain Bitcoin payments (currently implemented for Strike and Blink)
 node.prepare_onchain_transaction(PrepareOnchainTransactionParams) -> Result<OnchainTransaction, ApiError>
 node.pay_onchain(OnchainTransaction) -> Result<PayOnchainResponse, ApiError>
 node.pay_onchain_with_options(OnchainTransaction, PayOnchainOptions) -> Result<PayOnchainResponse, ApiError>
@@ -190,7 +190,7 @@ node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 On-chain Bitcoin payments
 -------------------------
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. `fee_payer` answers who pays the mining/provider fee:
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for Strike and Blink. `fee_payer` answers who pays the mining/provider fee:
 
 - `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
 - `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
@@ -250,7 +250,7 @@ const transaction = await node.prepareOnchainTransaction({
 const payment = await node.payOnchain(transaction);
 ```
 
-`pay_onchain` / `payOnchain` enforces a default fee guardrail of `25_000` sats and `25%` of the send amount. It fails closed when the prepared transaction has no fee quote, such as a recovered duplicate quote that only includes the original quote id.
+`pay_onchain` / `payOnchain` enforces the shared default fee guardrail: `DEFAULT_ONCHAIN_MAX_FEE_SATS` / `DEFAULT_ONCHAIN_MAX_FEE_PERCENT` in Rust and `DEFAULT_ONCHAIN_FEE_GUARDRAIL` in TypeScript. The current defaults are `25_000` sats and `25%` of the send amount. It fails closed when the prepared transaction has no fee quote, such as a recovered duplicate quote that only includes the original quote id.
 
 Use custom limits to make the guardrail stricter or looser:
 
@@ -290,48 +290,70 @@ let payment = node
 
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: "backend", value: "tier_..." }` in TypeScript, or `OnchainFeePreferenceType::Backend` with `backend: Some("tier_...")` in Rust, to pass a Strike tier id directly.
 
-Testing Strike on-chain payments
---------------------------------
+For Blink, LNI maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
 
-The Strike on-chain integration tests include a safe quote-only path and an opt-in broadcast path. The broadcast tests send real bitcoin and only run when explicit confirmation variables are present.
+Testing on-chain payments
+-------------------------
 
-Add the shared Strike test values to `crates/lni/.env`:
+On-chain integration tests should use the same safety pattern for every provider LNI supports now or adds later, such as Strike, Blink, LND, or CLN:
+
+- Quote-only tests are safe to run with normal provider credentials and a test address.
+- Broadcast tests send real bitcoin, must be marked ignored where the test runner supports it, and must require explicit confirmation env vars.
+- Provider-specific env vars should use the provider prefix, for example `STRIKE_...`, `BLINK_...`, `LND_...`, or `CLN_...`.
+
+Add the provider values to `crates/lni/.env`:
 
 ```env
+# Strike
 STRIKE_API_KEY=...
 STRIKE_ONCHAIN_TEST_ADDRESS=bc1q...
 STRIKE_ONCHAIN_AMOUNT_SATS=76000
+
+# Blink
+BLINK_API_KEY=...
+BLINK_BASE_URL=https://api.blink.sv/graphql
+BLINK_ONCHAIN_TEST_ADDRESS=bc1q...
+BLINK_ONCHAIN_AMOUNT_SATS=10000
 ```
 
-Run the TypeScript quote-only integration test:
+Run TypeScript integration tests:
 
 ```bash
 cd bindings/typescript
 npm run test:integration:strike
+npm run test:integration:blink
 ```
 
-To intentionally run the TypeScript broadcast test, add the confirmation values:
+Blink's TypeScript and Rust tests prepare a quote first, then skip the broadcast unless the confirmation variables are set. Run Rust tests from `crates/lni` so `dotenv` loads `crates/lni/.env`:
+
+```bash
+cd crates/lni
+cargo test blink::lib::tests::test_pay_onchain_e2e -- --nocapture
+```
+
+Broadcast tests require a second pair of env vars for the provider being tested:
 
 ```env
 STRIKE_RUN_ONCHAIN_SEND=true
 STRIKE_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
+
+BLINK_RUN_ONCHAIN_SEND=true
+BLINK_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
 ```
 
-Then run:
+Run broadcast tests only when you intentionally want to send real bitcoin:
 
 ```bash
 cd bindings/typescript
 npm run test:integration:strike
-```
+npm run test:integration:blink
 
-For Rust, run from `crates/lni` so `dotenv` loads `crates/lni/.env`:
-
-```bash
 cd crates/lni
 cargo test strike::lib::tests::test_pay_onchain_e2e -- --ignored --nocapture
+cargo test blink::lib::tests::test_pay_onchain_e2e -- --nocapture
 ```
 
-Without `-- --ignored`, the Rust broadcast test is discovered but skipped. Without `STRIKE_RUN_ONCHAIN_SEND=true` and `STRIKE_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN`, it refuses to broadcast.
+Without `-- --ignored`, Strike's Rust broadcast test is discovered but skipped. Blink's Rust test is not ignored; it prepares a quote and returns before broadcasting unless confirmation is present. TypeScript broadcast tests are skipped unless the provider-specific confirmation variables are present. Without the provider-specific `*_RUN_ONCHAIN_SEND=true` and `*_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN`, broadcast tests refuse to broadcast.
 
 #### Node Management
 ```rust

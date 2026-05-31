@@ -64,7 +64,7 @@ const txs = await node.listTransactions({ from: 0, limit: 10 });
 
 ### On-chain Bitcoin Payments
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`.
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and `BlinkNode`.
 
 ```ts
 import { StrikeNode } from '@sunnyln/lni';
@@ -88,7 +88,9 @@ const payment = await node.payOnchain(transaction);
 
 On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
 
-`payOnchain` enforces a default fee guardrail of `25_000` sats and `25%` of the send amount. It fails closed when `feeSats` is unknown, such as a recovered duplicate quote that only includes a quote id.
+Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
+
+`payOnchain` enforces the shared `DEFAULT_ONCHAIN_FEE_GUARDRAIL`: `25_000` sats and `25%` of the send amount. It fails closed when `feeSats` is unknown, such as a recovered duplicate quote that only includes a quote id.
 
 ```ts
 await node.payOnchain(transaction, {

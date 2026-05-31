@@ -4,7 +4,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type OnchainTransaction, type PrepareOnchainTransactionParams, type StrikeConfig, type Transaction } from '../types.js';
+import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type OnchainTransaction, type PrepareOnchainTransactionParams, type StrikeConfig, type Transaction } from '../types.js';
 
 interface StrikeBalance {
   currency: string;
@@ -84,11 +84,6 @@ interface DuplicatePaymentQuote {
   paymentQuoteId: string;
   raw: unknown;
 }
-
-const DEFAULT_ONCHAIN_FEE_GUARDRAIL: Required<OnchainFeeGuardrail> = {
-  maxFeeSats: 25_000,
-  maxFeePercent: 25,
-};
 
 interface StrikeReceivesResponse {
   items: Array<{

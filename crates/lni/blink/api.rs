@@ -8,7 +8,9 @@ use super::BlinkConfig;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
+    OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType, OnchainFeeSpeed,
+    OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 use reqwest::header;
 
@@ -155,6 +157,155 @@ async fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
         })?;
 
     Ok(btc_wallet.id)
+}
+
+fn assert_valid_onchain_amount(amount_sats: i64) -> Result<(), ApiError> {
+    if amount_sats <= 0 {
+        return Err(ApiError::InvalidInput(
+            "pay_onchain requires a positive amount_sats".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn default_onchain_fee() -> OnchainFeePreference {
+    OnchainFeePreference {
+        preference_type: OnchainFeePreferenceType::Default,
+        speed: None,
+        target_conf: None,
+        sats_per_vbyte: None,
+        backend: None,
+    }
+}
+
+fn resolve_blink_fee_speed(fee: &OnchainFeePreference) -> Result<&'static str, ApiError> {
+    match fee.preference_type {
+        OnchainFeePreferenceType::Default => Ok("FAST"),
+        OnchainFeePreferenceType::Speed => match fee.speed.clone().unwrap_or(OnchainFeeSpeed::Fast) {
+            OnchainFeeSpeed::Fast => Ok("FAST"),
+            OnchainFeeSpeed::Normal => Ok("MEDIUM"),
+            OnchainFeeSpeed::Slow => Ok("SLOW"),
+            OnchainFeeSpeed::Free => Err(ApiError::InvalidInput(
+                "Blink pay_onchain does not support free on-chain fee speed".to_string(),
+            )),
+        },
+        OnchainFeePreferenceType::Backend
+        | OnchainFeePreferenceType::TargetConf
+        | OnchainFeePreferenceType::SatsPerVbyte => Err(ApiError::InvalidInput(format!(
+            "Blink pay_onchain does not support {:?} fee preferences",
+            fee.preference_type
+        ))),
+    }
+}
+
+fn resolve_blink_fee_payer(fee_payer: Option<OnchainFeePayer>) -> Result<OnchainFeePayer, ApiError> {
+    match fee_payer.unwrap_or(OnchainFeePayer::Sender) {
+        OnchainFeePayer::Sender => Ok(OnchainFeePayer::Sender),
+        OnchainFeePayer::Recipient => Err(ApiError::InvalidInput(
+            "Blink pay_onchain only supports sender-paid on-chain fees".to_string(),
+        )),
+    }
+}
+
+fn assert_valid_guardrail_limit(value: f64, name: &str) -> Result<(), ApiError> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(ApiError::InvalidInput(format!(
+            "{} must be a non-negative finite number",
+            name
+        )));
+    }
+
+    Ok(())
+}
+
+fn assert_onchain_fee_guardrail(
+    transaction: &OnchainTransaction,
+    options: PayOnchainOptions,
+) -> Result<(), ApiError> {
+    if options.dangerously_disable_fee_guardrail {
+        return Ok(());
+    }
+
+    let default_guardrail = crate::types::OnchainFeeGuardrail::default();
+    let guardrail = options.fee_guardrail.unwrap_or_default();
+    let max_fee_sats = guardrail
+        .max_fee_sats
+        .or(default_guardrail.max_fee_sats)
+        .unwrap_or(crate::types::DEFAULT_ONCHAIN_MAX_FEE_SATS);
+    let max_fee_percent = guardrail
+        .max_fee_percent
+        .or(default_guardrail.max_fee_percent)
+        .unwrap_or(crate::types::DEFAULT_ONCHAIN_MAX_FEE_PERCENT);
+
+    if max_fee_sats < 0 {
+        return Err(ApiError::InvalidInput(
+            "fee_guardrail.max_fee_sats must be non-negative".to_string(),
+        ));
+    }
+    assert_valid_guardrail_limit(max_fee_percent, "fee_guardrail.max_fee_percent")?;
+
+    let fee_sats = transaction.fee_sats.ok_or_else(|| {
+        ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because fee_sats is unknown. Re-prepare the transaction or pass dangerously_disable_fee_guardrail: true.".to_string(),
+        )
+    })?;
+
+    if fee_sats < 0 {
+        return Err(ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because fee_sats is invalid".to_string(),
+        ));
+    }
+
+    if transaction.amount_sats <= 0 {
+        return Err(ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because amount_sats is invalid".to_string(),
+        ));
+    }
+
+    if fee_sats > max_fee_sats {
+        return Err(ApiError::InvalidInput(format!(
+            "On-chain fee {} sats exceeds guardrail max_fee_sats {}",
+            fee_sats, max_fee_sats
+        )));
+    }
+
+    let fee_percent = (fee_sats as f64 / transaction.amount_sats as f64) * 100.0;
+    if fee_percent > max_fee_percent {
+        return Err(ApiError::InvalidInput(format!(
+            "On-chain fee {:.2}% exceeds guardrail max_fee_percent {}%",
+            fee_percent, max_fee_percent
+        )));
+    }
+
+    Ok(())
+}
+
+fn normalize_onchain_state(status: &str) -> String {
+    match status.to_uppercase().as_str() {
+        "PENDING" => "pending".to_string(),
+        "SUCCESS" | "ALREADY_PAID" => "completed".to_string(),
+        "FAILED" | "FAILURE" => "failed".to_string(),
+        state => state.to_lowercase(),
+    }
+}
+
+fn blink_transaction_amount_to_sats(amount: Option<i64>, currency: Option<&String>) -> Option<i64> {
+    if currency.map(|currency| currency == "BTC").unwrap_or(false) {
+        amount.map(|amount| amount.abs())
+    } else {
+        None
+    }
+}
+
+fn blink_transaction_memo(transaction: &OnchainTransaction) -> Option<String> {
+    let raw = transaction.raw.as_deref()?;
+    let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+    value
+        .get("memo")
+        .and_then(|memo| memo.as_str())
+        .filter(|memo| !memo.is_empty())
+        .map(|memo| memo.to_string())
 }
 
 pub async fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
@@ -389,6 +540,165 @@ pub async fn pay_invoice(
         payment_hash,
         preimage: "".to_string(), // Blink doesn't expose preimage
         fee_msats,
+    })
+}
+
+pub async fn prepare_onchain_transaction(
+    config: &BlinkConfig,
+    params: PrepareOnchainTransactionParams,
+) -> Result<OnchainTransaction, ApiError> {
+    assert_valid_onchain_amount(params.amount_sats)?;
+
+    let fee = params.fee.clone().unwrap_or_else(default_onchain_fee);
+    let fee_payer = resolve_blink_fee_payer(params.fee_payer.clone())?;
+    let speed = resolve_blink_fee_speed(&fee)?;
+    let wallet_id = get_btc_wallet_id(config).await?;
+
+    let query = r#"
+        query onChainTxFee($walletId: WalletId!, $address: OnChainAddress!, $amount: SatAmount!, $speed: PayoutSpeed!) {
+            onChainTxFee(walletId: $walletId, address: $address, amount: $amount, speed: $speed) {
+                amount
+            }
+        }
+    "#;
+
+    let variables = serde_json::json!({
+        "walletId": wallet_id,
+        "address": params.address.clone(),
+        "amount": params.amount_sats,
+        "speed": speed,
+    });
+
+    let response: OnChainTxFeeResponse =
+        execute_graphql_query(config, query, Some(variables)).await?;
+    let fee_sats = response.on_chain_tx_fee.amount;
+
+    Ok(OnchainTransaction {
+        id: None,
+        address: params.address,
+        amount_sats: params.amount_sats,
+        fee_sats,
+        total_amount_sats: fee_sats.map(|fee_sats| params.amount_sats + fee_sats),
+        recipient_amount_sats: Some(params.amount_sats),
+        fee_payer,
+        fee,
+        expires_at: None,
+        estimated_delivery_seconds: None,
+        raw: Some(
+            serde_json::json!({
+                "speed": speed,
+                "memo": params.description,
+            })
+            .to_string(),
+        ),
+    })
+}
+
+pub async fn pay_onchain(
+    config: &BlinkConfig,
+    transaction: OnchainTransaction,
+) -> Result<PayOnchainResponse, ApiError> {
+    pay_onchain_with_options(config, transaction, PayOnchainOptions::default()).await
+}
+
+pub async fn pay_onchain_with_options(
+    config: &BlinkConfig,
+    transaction: OnchainTransaction,
+    options: PayOnchainOptions,
+) -> Result<PayOnchainResponse, ApiError> {
+    assert_valid_onchain_amount(transaction.amount_sats)?;
+    let _fee_payer = resolve_blink_fee_payer(Some(transaction.fee_payer.clone()))?;
+    let speed = resolve_blink_fee_speed(&transaction.fee)?;
+    assert_onchain_fee_guardrail(&transaction, options)?;
+
+    let wallet_id = get_btc_wallet_id(config).await?;
+    let memo = blink_transaction_memo(&transaction);
+    let query = r#"
+        mutation onChainPaymentSend($input: OnChainPaymentSendInput!) {
+            onChainPaymentSend(input: $input) {
+                status
+                transaction {
+                    id
+                    settlementAmount
+                    settlementCurrency
+                    settlementFee
+                    settlementVia {
+                        __typename
+                        ... on SettlementViaOnChain {
+                            transactionHash
+                        }
+                    }
+                }
+                errors {
+                    message
+                }
+            }
+        }
+    "#;
+
+    let variables = serde_json::json!({
+        "input": {
+            "address": transaction.address.clone(),
+            "amount": transaction.amount_sats,
+            "walletId": wallet_id,
+            "memo": memo,
+            "speed": speed,
+        }
+    });
+
+    let response: OnChainPaymentSendResponse =
+        execute_graphql_query(config, query, Some(variables)).await?;
+    let payment = response.on_chain_payment_send;
+
+    if let Some(errors) = &payment.errors {
+        if !errors.is_empty() {
+            return Err(ApiError::Api {
+                reason: format!(
+                    "On-chain payment errors: {}",
+                    errors
+                        .iter()
+                        .map(|e| e.message.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            });
+        }
+    }
+
+    let payment_transaction = payment.transaction;
+    let payment_id = payment_transaction.as_ref().and_then(|tx| tx.id.clone());
+    let txid = payment_transaction.as_ref().and_then(|tx| match tx.settlement_via.as_ref() {
+        Some(SettlementVia::SettlementViaOnChain { transaction_hash }) => {
+            transaction_hash.clone()
+        }
+        _ => None,
+    });
+    let fee_sats = payment_transaction
+        .as_ref()
+        .and_then(|tx| {
+            blink_transaction_amount_to_sats(tx.settlement_fee, tx.settlement_currency.as_ref())
+        })
+        .or(transaction.fee_sats);
+    let amount_sats = payment_transaction
+        .as_ref()
+        .and_then(|tx| {
+            blink_transaction_amount_to_sats(tx.settlement_amount, tx.settlement_currency.as_ref())
+        })
+        .unwrap_or(transaction.amount_sats);
+
+    Ok(PayOnchainResponse {
+        payment_id,
+        txid,
+        state: normalize_onchain_state(&payment.status),
+        address: transaction.address,
+        amount_sats,
+        fee_sats,
+        total_amount_sats: fee_sats
+            .map(|fee_sats| transaction.amount_sats + fee_sats)
+            .or(transaction.total_amount_sats),
+        recipient_amount_sats: transaction.recipient_amount_sats.or(Some(transaction.amount_sats)),
+        created_at: None,
+        raw: None,
     })
 }
 
