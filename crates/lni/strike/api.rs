@@ -93,6 +93,7 @@ fn sats_to_btc_amount(amount_sats: i64) -> Result<Amount, ApiError> {
     Ok(Amount {
         amount: format!("{:.8}", amount_sats as f64 / 100_000_000.0),
         currency: "BTC".to_string(),
+        fee_policy: None,
     })
 }
 
@@ -304,6 +305,7 @@ pub async fn create_invoice(
                 Amount {
                     amount: format!("{:.8}", btc_amount),
                     currency: "BTC".to_string(),
+                    fee_policy: None,
                 }
             });
 
@@ -506,14 +508,15 @@ pub async fn prepare_onchain_transaction(
     let amount = sats_to_btc_amount(params.amount_sats)?;
     let onchain_tier_id =
         resolve_onchain_tier_id(&client, &config, &params.address, &amount, &fee).await?;
+    let mut quote_amount = amount;
+    quote_amount.fee_policy = Some(strike_fee_policy(&fee_payer).to_string());
 
     let quote_url = format!("{}/payment-quotes/onchain", get_base_url(&config));
     let quote_request = OnchainPaymentQuoteRequest {
         btc_address: params.address.clone(),
         source_currency: "BTC".to_string(),
         description: params.description.clone(),
-        amount,
-        fee_policy: strike_fee_policy(&fee_payer).to_string(),
+        amount: quote_amount,
         onchain_tier_id,
     };
 

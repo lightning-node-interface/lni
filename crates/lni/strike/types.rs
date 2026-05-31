@@ -11,6 +11,8 @@ pub struct Balance {
 pub struct Amount {
     pub amount: String,
     pub currency: String,
+    #[serde(rename = "feePolicy", skip_serializing_if = "Option::is_none")]
+    pub fee_policy: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,8 +236,6 @@ pub struct OnchainPaymentQuoteRequest {
     pub source_currency: String,
     pub description: Option<String>,
     pub amount: Amount,
-    #[serde(rename = "feePolicy")]
-    pub fee_policy: String,
     #[serde(rename = "onchainTierId")]
     pub onchain_tier_id: String,
 }

@@ -14,6 +14,7 @@ interface StrikeBalance {
 interface StrikeAmount {
   amount: string;
   currency: string;
+  feePolicy?: 'EXCLUSIVE' | 'INCLUSIVE';
 }
 
 interface StrikeCreateReceiveResponse {
@@ -488,8 +489,8 @@ export class StrikeNode implements LightningNode, OnchainPayments {
           amount: {
             amount: satsToBtc(amountSats),
             currency: 'BTC',
+            feePolicy: strikeFeePolicy(feePayer),
           },
-          feePolicy: strikeFeePolicy(feePayer),
           onchainTierId,
         },
         params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined,

@@ -54,8 +54,8 @@ describe('StrikeNode on-chain payments', () => {
           amount: {
             amount: '0.00010000',
             currency: 'BTC',
+            feePolicy: 'INCLUSIVE',
           },
-          feePolicy: 'EXCLUSIVE',
           onchainTierId: 'tier_standard',
         });
 
@@ -81,7 +81,7 @@ describe('StrikeNode on-chain payments', () => {
       address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
       amountSats: 10_000,
       fee: { type: 'speed', speed: 'normal' },
-      feePayer: 'sender',
+      feePayer: 'recipient',
       description: 'cold storage',
       idempotencyKey: '00000000-0000-4000-8000-000000000001',
     });
@@ -93,7 +93,7 @@ describe('StrikeNode on-chain payments', () => {
       feeSats: 1_000,
       totalAmountSats: 11_000,
       recipientAmountSats: 10_000,
-      feePayer: 'sender',
+      feePayer: 'recipient',
       fee: { type: 'speed', speed: 'normal' },
       estimatedDeliverySeconds: 3600,
     });
