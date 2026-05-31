@@ -1,4 +1,5 @@
 import { LniError } from '../errors.js';
+import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getBlinkTokenPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -505,7 +506,11 @@ export class BlinkNode implements LightningNode {
   }
 
   async decode(str: string): Promise<string> {
-    return str;
+    return decodeBolt11ToJson(str);
+  }
+
+  async decodeOffer(offer: string): Promise<string> {
+    return decodeOfferToJson(offer);
   }
 
   async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {

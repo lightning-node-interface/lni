@@ -118,6 +118,20 @@ impl PhoenixdNode {
   }
 
   #[napi]
+  pub fn decode(&self, str: String) -> Result<String> {
+    let decoded = lni::phoenixd::api::decode(str)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub fn decode_offer(&self, offer: String) -> Result<String> {
+    let decoded = lni::phoenixd::api::decode_offer(offer)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
   pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
     &self,
     params: lni::types::OnInvoiceEventParams,

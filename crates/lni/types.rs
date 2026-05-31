@@ -39,6 +39,7 @@ pub trait LightningNode: Send + Sync {
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, crate::ApiError>;
     async fn decode(&self, str: String) -> Result<String, crate::ApiError>;
+    async fn decode_offer(&self, offer: String) -> Result<String, crate::ApiError>;
     async fn on_invoice_events(
         &self,
         params: crate::types::OnInvoiceEventParams,

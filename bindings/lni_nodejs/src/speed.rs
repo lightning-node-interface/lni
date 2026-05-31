@@ -128,7 +128,15 @@ impl SpeedNode {
 
   #[napi]
   pub async fn decode(&self, str: String) -> napi::Result<String> {
-    let decoded = lni::speed::api::decode(&self.inner, str)
+    let decoded = lni::speed::api::decode(str)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub async fn decode_offer(&self, offer: String) -> napi::Result<String> {
+    let decoded = lni::speed::api::decode_offer(offer)
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)

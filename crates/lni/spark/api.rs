@@ -434,14 +434,12 @@ pub async fn list_transactions(
 
 // ── Decode / Offers ──────────────────────────────────────────────────
 
-/// Decode a payment request using the SDK's parse functionality
-pub async fn decode(sdk: Arc<BreezSdk>, input: String) -> Result<String, ApiError> {
-    match sdk.parse(&input).await {
-        Ok(parsed) => Ok(format!("{:?}", parsed)),
-        Err(e) => Err(ApiError::Api {
-            reason: format!("Failed to decode input: {}", e),
-        }),
-    }
+pub async fn decode(input: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(input)
+}
+
+pub fn decode_offer(input: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(input)
 }
 
 /// Get offer (not implemented for Spark yet)

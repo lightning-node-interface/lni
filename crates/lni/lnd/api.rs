@@ -590,26 +590,14 @@ pub async fn pay_invoice(
     Ok(pay_response)
 }
 
-// Async version of decode
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-pub async fn decode(config: LndConfig, invoice_str: String) -> Result<String, ApiError> {
-    let client = async_client(&config);
-    
-    let req_url = format!("{}/v1/payreq/{}", config.url, invoice_str);
-    let response = client
-        .get(&req_url)
-        .header("Grpc-Metadata-macaroon", &config.macaroon)
-        .send()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to decode invoice: {}", e),
-        })?;
+pub async fn decode(invoice_str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(invoice_str)
+}
 
-    let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read decode response: {}", e),
-    })?;
-
-    Ok(response_text)
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 // Async version of list_transactions

@@ -415,9 +415,12 @@ fn invoice_payment_hash(invoice: Option<&str>) -> Option<String> {
         .map(|invoice| format!("{:x}", invoice.payment_hash()))
 }
 
-pub async fn decode(_config: NwcConfig, str: String) -> Result<String, ApiError> {
-    // NWC doesn't have a decode method, just return the input
-    Ok(str)
+pub async fn decode(str: String) -> Result<String, ApiError> {
+    crate::utils::decode_bolt11(str)
+}
+
+pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
+    crate::utils::decode_offer(offer)
 }
 
 // Core logic shared with other implementations - processes lookup result and determines status

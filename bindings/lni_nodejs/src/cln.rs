@@ -119,9 +119,16 @@ impl ClnNode {
   }
 
   #[napi]
-  pub async fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::cln::api::decode(self.inner.clone(), str)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub fn decode(&self, str: String) -> Result<String> {
+    let decoded = lni::cln::api::decode(str)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(decoded)
+  }
+
+  #[napi]
+  pub fn decode_offer(&self, offer: String) -> Result<String> {
+    let decoded = lni::cln::api::decode_offer(offer)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
