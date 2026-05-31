@@ -89,6 +89,16 @@ export interface OnchainTransaction {
   raw?: unknown;
 }
 
+export interface OnchainFeeGuardrail {
+  maxFeeSats?: number;
+  maxFeePercent?: number;
+}
+
+export interface PayOnchainOptions {
+  feeGuardrail?: OnchainFeeGuardrail;
+  dangerouslyDisableFeeGuardrail?: boolean;
+}
+
 export interface PayOnchainResponse {
   paymentId?: string;
   txid?: string;
@@ -260,7 +270,7 @@ export interface LightningNode {
 
 export interface OnchainPayments {
   prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>;
-  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>;
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse>;
 }
 
 export type BackendNodeKind =

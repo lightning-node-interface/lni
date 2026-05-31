@@ -1,9 +1,9 @@
+use async_trait::async_trait;
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 
-use crate::{cln::ClnNode, lnd::LndNode, phoenixd::PhoenixdNode, nwc::NwcNode};
+use crate::{cln::ClnNode, lnd::LndNode, nwc::NwcNode, phoenixd::PhoenixdNode};
 
 /// Enum for polymorphic node access in non-UniFFI builds
 #[cfg(not(feature = "uniffi"))]
@@ -22,8 +22,14 @@ pub enum LightningNodeEnum {
 pub trait LightningNode: Send + Sync {
     async fn get_permissions(&self) -> Result<Permissions, crate::ApiError>;
     async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError>;
-    async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, crate::ApiError>;
-    async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, crate::ApiError>;
+    async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, crate::ApiError>;
+    async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, crate::ApiError>;
     async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, crate::ApiError>;
     async fn get_offer(&self, search: Option<String>) -> Result<Offer, crate::ApiError>;
     async fn list_offers(&self, search: Option<String>) -> Result<Vec<Offer>, crate::ApiError>;
@@ -33,7 +39,10 @@ pub trait LightningNode: Send + Sync {
         amount_msats: i64,
         payer_note: Option<String>,
     ) -> Result<PayInvoiceResponse, crate::ApiError>;
-    async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, crate::ApiError>;
+    async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, crate::ApiError>;
     async fn list_transactions(
         &self,
         params: ListTransactionsParams,
@@ -151,7 +160,7 @@ pub struct Transaction {
     pub created_at: i64,
     pub expires_at: i64,
     pub settled_at: i64, // 0 means not paid yet TODO maybe add status field
-    pub payer_note: Option<String>,  // used in bolt12 (on phoenixd)
+    pub payer_note: Option<String>, // used in bolt12 (on phoenixd)
     pub external_id: Option<String>, // used in bolt11 (on phoenixd)
 }
 
@@ -401,6 +410,38 @@ pub struct OnchainTransaction {
     pub raw: Option<String>,
 }
 
+pub const DEFAULT_ONCHAIN_MAX_FEE_SATS: i64 = 25_000;
+pub const DEFAULT_ONCHAIN_MAX_FEE_PERCENT: f64 = 25.0;
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OnchainFeeGuardrail {
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub max_fee_sats: Option<i64>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub max_fee_percent: Option<f64>,
+}
+
+impl Default for OnchainFeeGuardrail {
+    fn default() -> Self {
+        Self {
+            max_fee_sats: Some(DEFAULT_ONCHAIN_MAX_FEE_SATS),
+            max_fee_percent: Some(DEFAULT_ONCHAIN_MAX_FEE_PERCENT),
+        }
+    }
+}
+
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PayOnchainOptions {
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub fee_guardrail: Option<OnchainFeeGuardrail>,
+    #[cfg_attr(feature = "uniffi", uniffi(default = false))]
+    pub dangerously_disable_fee_guardrail: bool,
+}
+
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -460,9 +501,9 @@ pub struct ListTransactionsParams {
     pub payment_hash: Option<String>,
     pub search: Option<String>, // searches the payer_note/memo/decription
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub created_after: Option<i64>,   // unix seconds
+    pub created_after: Option<i64>, // unix seconds
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
-    pub created_before: Option<i64>,  // unix seconds
+    pub created_before: Option<i64>, // unix seconds
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]

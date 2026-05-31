@@ -4,7 +4,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainResponse, type Permissions, type OnchainTransaction, type PrepareOnchainTransactionParams, type StrikeConfig, type Transaction } from '../types.js';
+import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type OnchainTransaction, type PrepareOnchainTransactionParams, type StrikeConfig, type Transaction } from '../types.js';
 
 interface StrikeBalance {
   currency: string;
@@ -84,6 +84,11 @@ interface DuplicatePaymentQuote {
   paymentQuoteId: string;
   raw: unknown;
 }
+
+const DEFAULT_ONCHAIN_FEE_GUARDRAIL: Required<OnchainFeeGuardrail> = {
+  maxFeeSats: 25_000,
+  maxFeePercent: 25,
+};
 
 interface StrikeReceivesResponse {
   items: Array<{
@@ -260,6 +265,70 @@ function duplicatePaymentQuoteFromError(error: unknown): DuplicatePaymentQuote |
 
   const paymentQuoteId = findStringProperty(raw, 'paymentQuoteId');
   return paymentQuoteId ? { paymentQuoteId, raw } : undefined;
+}
+
+function assertValidGuardrailLimit(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new LniError('InvalidInput', `${name} must be a non-negative finite number.`);
+  }
+
+  if (name.endsWith('maxFeeSats') && !Number.isSafeInteger(value)) {
+    throw new LniError('InvalidInput', `${name} must be a safe integer.`);
+  }
+}
+
+function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<OnchainFeeGuardrail> | undefined {
+  if (options?.dangerouslyDisableFeeGuardrail) {
+    return undefined;
+  }
+
+  const guardrail = {
+    maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
+    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+  };
+
+  assertValidGuardrailLimit(guardrail.maxFeeSats, 'feeGuardrail.maxFeeSats');
+  assertValidGuardrailLimit(guardrail.maxFeePercent, 'feeGuardrail.maxFeePercent');
+
+  return guardrail;
+}
+
+function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+  const guardrail = resolveOnchainFeeGuardrail(options);
+  if (!guardrail) {
+    return;
+  }
+
+  const { feeSats } = transaction;
+  if (feeSats === undefined) {
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.',
+    );
+  }
+
+  if (!Number.isSafeInteger(feeSats) || feeSats < 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+  }
+
+  if (!Number.isSafeInteger(transaction.amountSats) || transaction.amountSats <= 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+  }
+
+  if (feeSats > guardrail.maxFeeSats) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`,
+    );
+  }
+
+  const feePercent = (feeSats / transaction.amountSats) * 100;
+  if (feePercent > guardrail.maxFeePercent) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`,
+    );
+  }
 }
 
 export class StrikeNode implements LightningNode, OnchainPayments {
@@ -442,10 +511,12 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     return this.onchainTransactionFromQuote(params.address, amountSats, fee, feePayer, quote);
   }
 
-  async payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse> {
+  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
     if (!transaction.id) {
       throw new LniError('InvalidInput', 'payOnchain requires an on-chain transaction id.');
     }
+
+    assertOnchainFeeGuardrail(transaction, options);
 
     const execution = await this.patchJson<StrikePaymentExecutionResponse>(`/payment-quotes/${transaction.id}/execute`);
     let payment: StrikePaymentResponse | undefined;

@@ -2,13 +2,13 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
-use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, PayOnchainResponse, OnchainTransaction,
-    PrepareOnchainTransactionParams, Transaction,
-};
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
+use crate::{
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
+    Offer, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -80,11 +80,17 @@ impl StrikeNode {
         crate::strike::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::strike::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::strike::api::pay_invoice(self.config.clone(), params).await
     }
 
@@ -95,12 +101,26 @@ impl StrikeNode {
         crate::strike::api::prepare_onchain_transaction(self.config.clone(), params).await
     }
 
-    pub async fn pay_onchain(&self, transaction: OnchainTransaction) -> Result<PayOnchainResponse, ApiError> {
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
         crate::strike::api::pay_onchain(self.config.clone(), transaction).await
     }
 
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::strike::api::pay_onchain_with_options(self.config.clone(), transaction, options)
+            .await
+    }
+
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for StrikeNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for StrikeNode".to_string(),
+        })
     }
 
     pub async fn lookup_invoice(
@@ -346,7 +366,10 @@ mod tests {
             .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be set")
             .parse::<i64>()
             .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be a positive integer");
-        assert!(amount_sats > 0, "STRIKE_ONCHAIN_AMOUNT_SATS must be positive");
+        assert!(
+            amount_sats > 0,
+            "STRIKE_ONCHAIN_AMOUNT_SATS must be positive"
+        );
 
         let idempotency_key = uuid::Uuid::new_v4().to_string();
 
@@ -440,7 +463,8 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();

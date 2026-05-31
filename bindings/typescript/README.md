@@ -88,7 +88,23 @@ const payment = await node.payOnchain(transaction);
 
 On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
 
+`payOnchain` enforces a default fee guardrail of `25_000` sats and `25%` of the send amount. It fails closed when `feeSats` is unknown, such as a recovered duplicate quote that only includes a quote id.
+
+```ts
+await node.payOnchain(transaction, {
+  feeGuardrail: {
+    maxFeeSats: 5_000,
+    maxFeePercent: 10,
+  },
+});
+
+await node.payOnchain(transaction, {
+  dangerouslyDisableFeeGuardrail: true,
+});
+```
+
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: 'backend', value: 'tier_...' }` to pass a Strike tier id directly.
+
 ### BOLT11 Decode
 
 ```ts

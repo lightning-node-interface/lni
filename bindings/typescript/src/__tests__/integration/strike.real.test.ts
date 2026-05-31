@@ -128,7 +128,7 @@ describe('Real integration from crates/lni/.env > StrikeNode', () => {
     expect(transaction.address).toBe(address);
     expect(transaction.amountSats).toBe(onchainSendAmountSats);
 
-    // TODO: have user validate fees before broadcasting in case of unexpectedly high fees
+    // payOnchain enforces the default fee guardrail before broadcasting.
 
     const payment = await node.payOnchain(transaction);
 

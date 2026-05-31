@@ -178,6 +178,7 @@ lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution neede
 // On-chain Bitcoin payments (currently implemented for Strike)
 node.prepare_onchain_transaction(PrepareOnchainTransactionParams) -> Result<OnchainTransaction, ApiError>
 node.pay_onchain(OnchainTransaction) -> Result<PayOnchainResponse, ApiError>
+node.pay_onchain_with_options(OnchainTransaction, PayOnchainOptions) -> Result<PayOnchainResponse, ApiError>
 
 // Lookup
 node.decode(str: String) -> Result<String, ApiError> // Decode BOLT11
@@ -247,6 +248,44 @@ const transaction = await node.prepareOnchainTransaction({
 // Show transaction.feeSats, transaction.totalAmountSats, and transaction.expiresAt to the user.
 
 const payment = await node.payOnchain(transaction);
+```
+
+`pay_onchain` / `payOnchain` enforces a default fee guardrail of `25_000` sats and `25%` of the send amount. It fails closed when the prepared transaction has no fee quote, such as a recovered duplicate quote that only includes the original quote id.
+
+Use custom limits to make the guardrail stricter or looser:
+
+```typescript
+await node.payOnchain(transaction, {
+    feeGuardrail: {
+        maxFeeSats: 5_000,
+        maxFeePercent: 10,
+    },
+});
+```
+
+Disable it only when the caller has shown the fee another way and intentionally accepts the risk:
+
+```typescript
+await node.payOnchain(transaction, {
+    dangerouslyDisableFeeGuardrail: true,
+});
+```
+
+```rust
+use lni::{OnchainFeeGuardrail, PayOnchainOptions};
+
+let payment = node
+    .pay_onchain_with_options(
+        transaction,
+        PayOnchainOptions {
+            fee_guardrail: Some(OnchainFeeGuardrail {
+                max_fee_sats: Some(5_000),
+                max_fee_percent: Some(10.0),
+            }),
+            dangerously_disable_fee_guardrail: false,
+        },
+    )
+    .await?;
 ```
 
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: "backend", value: "tier_..." }` in TypeScript, or `OnchainFeePreferenceType::Backend` with `backend: Some("tier_...")` in Rust, to pass a Strike tier id directly.

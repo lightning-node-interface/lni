@@ -212,6 +212,92 @@ describe('StrikeNode on-chain payments', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('blocks on-chain execution when the quoted fee exceeds the default guardrail', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.payOnchain({
+        id: 'quote-1',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feeSats: 3_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'normal' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows on-chain execution to bypass the default fee guardrail only with the dangerous opt-out', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          state: 'PENDING',
+          amount: { amount: '0.00010000', currency: 'BTC' },
+          totalFee: { amount: '0.00003000', currency: 'BTC' },
+          totalAmount: { amount: '0.00013000', currency: 'BTC' },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const payment = await node.payOnchain(
+      {
+        id: 'quote-1',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feeSats: 3_000,
+        totalAmountSats: 13_000,
+        recipientAmountSats: 10_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'normal' },
+      },
+      { dangerouslyDisableFeeGuardrail: true },
+    );
+
+    expect(payment).toMatchObject({
+      paymentId: 'payment-1',
+      state: 'pending',
+      feeSats: 3_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when the on-chain fee is unknown', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.payOnchain({
+        id: 'quote-original',
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        feePayer: 'sender',
+        fee: { type: 'speed', speed: 'free' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('rejects fee preferences Strike cannot map to on-chain tiers', async () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new StrikeNode(

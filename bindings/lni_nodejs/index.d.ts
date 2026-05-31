@@ -281,6 +281,14 @@ export interface OnchainTransaction {
   estimatedDeliverySeconds?: number
   raw?: string
 }
+export interface OnchainFeeGuardrail {
+  maxFeeSats?: number
+  maxFeePercent?: number
+}
+export interface PayOnchainOptions {
+  feeGuardrail?: OnchainFeeGuardrail
+  dangerouslyDisableFeeGuardrail?: boolean
+}
 export interface PayOnchainResponse {
   paymentId?: string
   txid?: string
@@ -295,7 +303,7 @@ export interface PayOnchainResponse {
 }
 export interface OnchainPayments {
   prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
-  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
 }
 export interface PayKeysendResponse {
   fee: number
@@ -509,7 +517,7 @@ export declare class StrikeNode {
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
   prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
-  payOnchain(transaction: OnchainTransaction): Promise<PayOnchainResponse>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Offer
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
