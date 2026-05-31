@@ -16,6 +16,8 @@ const BOLT12_OFFER_WITH_CURRENCY_AMOUNT =
 const BOLT12_OFFER_WITH_PATH =
   'lno1pgx9getnwss8vetrw3hhyucs5ypjgef743p5fzqq9nqxh0ah7y87rzv3ud0eleps9kl2d5348hq2k8qzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqpqqqqqqqqqqqqqqqqqqqqqqqqqqqzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqqzq3zyg3zyg3zyg3vggzamrjghtt05kvkvpcp0a79gmy3nt6jsn98ad2xs8de6sl9qmgvcvs';
 
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
 describe('decode helpers', () => {
   it('decodes BOLT11 invoices into keyed fields', () => {
     const decoded = decode(BOLT11);
@@ -65,4 +67,78 @@ describe('decode helpers', () => {
     expect(decoded.paths?.[0]?.blindedHops[0]?.encryptedPayload).toMatch(/^[0-9a-f]+$/);
     expect(decoded.sections.find((section) => section.name === 'paths')?.value).toEqual(decoded.paths);
   });
+
+  it('rejects BOLT12 blinded paths with too many hops', () => {
+    expect(() => decodeOffer(makeOfferWithBlindedPathHopCount(21))).toThrow(/too many hops/);
+  });
+
+  it('rejects BOLT12 blinded path payload lengths above the safe integer range', () => {
+    expect(() => decodeOffer(makeOfferWithOversizedPayloadLength())).toThrow(/collection length exceeds safe integer range/);
+  });
 });
+
+function makeOfferWithBlindedPathHopCount(numHops: number): string {
+  const path = [
+    2,
+    ...new Array(32).fill(0),
+    2,
+    ...new Array(32).fill(1),
+    numHops,
+    ...Array.from({ length: numHops }, () => [
+      2,
+      ...new Array(32).fill(2),
+      0,
+      0,
+    ]).flat(),
+  ];
+  const tlv = [16, ...encodeBigSize(path.length), ...path];
+  return `lno1${bytesToBech32Words(tlv)}`;
+}
+
+function makeOfferWithOversizedPayloadLength(): string {
+  const path = [
+    2,
+    ...new Array(32).fill(0),
+    2,
+    ...new Array(32).fill(1),
+    1,
+    2,
+    ...new Array(32).fill(2),
+    0xff,
+    0xff,
+    ...new Array(8).fill(0xff),
+  ];
+  const tlv = [16, ...encodeBigSize(path.length), ...path];
+  return `lno1${bytesToBech32Words(tlv)}`;
+}
+
+function encodeBigSize(value: number): number[] {
+  if (value < 0xfd) {
+    return [value];
+  }
+  if (value <= 0xffff) {
+    return [0xfd, value >> 8, value & 0xff];
+  }
+  throw new Error('Test BigSize value is too large.');
+}
+
+function bytesToBech32Words(bytes: number[]): string {
+  let acc = 0;
+  let bits = 0;
+  const words: number[] = [];
+
+  for (const byte of bytes) {
+    acc = (acc << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      words.push((acc >> bits) & 31);
+    }
+  }
+
+  if (bits > 0) {
+    words.push((acc << (5 - bits)) & 31);
+  }
+
+  return words.map((word) => BECH32_CHARSET[word]).join('');
+}

@@ -34,6 +34,8 @@ export interface DecodedInvoice {
 }
 
 const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const MAX_BLINDED_PATH_HOPS = 20;
+const MAX_COLLECTION_LENGTH = BigInt(Number.MAX_SAFE_INTEGER);
 
 export interface DecodedOfferSection {
   name: string;
@@ -426,6 +428,9 @@ function parseBlindedPath(bytes: Uint8Array, offset: number): { path: DecodedBli
   if (numHops === 0) {
     throw new Error('Invalid BOLT12 offer blinded path: zero hops.');
   }
+  if (numHops > MAX_BLINDED_PATH_HOPS) {
+    throw new Error(`Invalid BOLT12 offer blinded path: too many hops (${numHops}).`);
+  }
 
   const blindedHops: DecodedBlindedPath['blindedHops'] = [];
   for (let index = 0; index < numHops; index += 1) {
@@ -465,6 +470,9 @@ function readCollectionLength(bytes: Uint8Array, offset: number): { value: bigin
   }
 
   const extended = integerFromBytes(readBytes(bytes, offset + 2, 8, 'extended collection length'));
+  if (extended < 0n || extended > MAX_COLLECTION_LENGTH - 0xffffn) {
+    throw new Error('BOLT12 offer collection length exceeds safe integer range.');
+  }
   value = extended + 0xffffn;
   return { value, offset: offset + 10 };
 }

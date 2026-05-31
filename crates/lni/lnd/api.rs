@@ -595,6 +595,7 @@ pub async fn decode(invoice_str: String) -> Result<String, ApiError> {
     crate::utils::decode_bolt11(invoice_str)
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
     crate::utils::decode_offer(offer)
 }
