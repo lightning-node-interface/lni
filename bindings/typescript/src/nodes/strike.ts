@@ -1,5 +1,4 @@
-import { decode as decodeBolt11 } from 'light-bolt11-decoder';
-import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
+import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError } from '../errors.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
@@ -75,8 +74,7 @@ interface StrikePaymentsResponse {
 function paymentHashFromInvoice(invoice: string): string {
   try {
     const decoded = decodeBolt11(invoice);
-    const section = decoded.sections.find((item) => item.name === 'payment_hash');
-    return section?.name === 'payment_hash' ? section.value : '';
+    return decoded.payment_hash ?? '';
   } catch {
     return '';
   }

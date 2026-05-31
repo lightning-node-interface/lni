@@ -1,5 +1,5 @@
 import { bech32 } from '@scure/base';
-import { decode as decodeBolt11 } from 'light-bolt11-decoder';
+import { decode as decodeBolt11 } from './decode.js';
 import { LniError } from './errors.js';
 import type { FetchLike, PaymentInfo } from './types.js';
 import { resolveFetch, requestJson } from './internal/http.js';
@@ -247,17 +247,14 @@ async function requestInvoice(
 
 function invoiceAmountMsats(invoice: string): number | null {
   const decoded = decodeBolt11(invoice);
-  const amount = decoded.sections.find((section) => section.name === 'amount');
-  if (!amount || amount.name !== 'amount') {
+  if (decoded.amountMsats === undefined) {
     return null;
   }
-
-  const parsed = Number(amount.value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+  if (!Number.isSafeInteger(decoded.amountMsats) || decoded.amountMsats < 0) {
     throw new LniError('InvalidInput', 'LNURL invoice amount is invalid.');
   }
 
-  return parsed;
+  return decoded.amountMsats;
 }
 
 function validateInvoiceAmount(invoice: string, expectedAmountMsats: number): void {

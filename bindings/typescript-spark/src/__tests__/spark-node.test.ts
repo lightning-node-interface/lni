@@ -4,20 +4,23 @@ import type { StorageProvider } from '@sunnyln/lni';
 const TEST_MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
 function mockBolt11Decoder(options: { amountMsats?: string } = {}): void {
-  vi.doMock('light-bolt11-decoder', () => ({
-    decode: vi.fn((invoice: string) => {
-      if (invoice === 'with-amount' && options.amountMsats) {
+  vi.doMock('@sunnyln/lni', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@sunnyln/lni')>();
+    return {
+      ...actual,
+      decode: vi.fn((invoice: string) => {
+        if (invoice === 'with-amount' && options.amountMsats) {
+          return {
+            amountMsats: Number(options.amountMsats),
+            expiresAt: 3600,
+          };
+        }
         return {
-          sections: [{ name: 'amount', value: options.amountMsats }],
-          expiry: 3600,
+          expiresAt: 3600,
         };
-      }
-      return {
-        sections: [],
-        expiry: 3600,
-      };
-    }),
-  }));
+      }),
+    };
+  });
 }
 
 describe('SparkNode payInvoice', () => {

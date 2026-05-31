@@ -26,6 +26,7 @@ import { decode, decodeOffer } from '@sunnyln/lni';
 const decodedBolt11 = decode('lnbc...');
 const decodedOffer = decodeOffer('lno1...');
 
+console.log(decodedBolt11.payment_hash);
 console.log(decodedOffer.paths?.[0]?.blindedHops);
 ```
 

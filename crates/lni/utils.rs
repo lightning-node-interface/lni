@@ -2,7 +2,7 @@ use lightning::blinded_path::message::BlindedMessagePath;
 use lightning::blinded_path::{Direction, IntroductionNode};
 use lightning::offers::offer::{Amount, Offer as Bolt12Offer, Quantity};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use std::error::Error;
 use std::str::FromStr;
 
@@ -43,56 +43,40 @@ pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
     let invoice = Bolt11Invoice::from_str(&str)
         .map_err(|e| crate::ApiError::InvalidInput(format!("Failed to parse BOLT11 invoice: {}", e)))?;
 
-    let mut sections = vec![json!({
-        "name": "paymentRequest",
-        "value": str,
-    })];
+    let mut decoded = Map::new();
+    decoded.insert("paymentRequest".to_string(), json!(str));
+    decoded.insert("type".to_string(), json!("bolt11_invoice"));
 
     if let Some(amount_msats) = invoice.amount_milli_satoshis() {
-        sections.push(json!({
-            "name": "amount",
-            "value": amount_msats.to_string(),
-        }));
+        decoded.insert("amount".to_string(), json!(amount_msats.to_string()));
+        decoded.insert("amountMsats".to_string(), json!(amount_msats));
     }
 
-    sections.push(json!({
-        "name": "timestamp",
-        "value": invoice.duration_since_epoch().as_secs(),
-    }));
-    sections.push(json!({
-        "name": "payment_hash",
-        "value": invoice.payment_hash().to_string(),
-    }));
+    let timestamp = invoice.duration_since_epoch().as_secs();
+    let expiry = invoice.expiry_time().as_secs();
+    decoded.insert("timestamp".to_string(), json!(timestamp));
+    decoded.insert("expiresAt".to_string(), json!(timestamp + expiry));
+    decoded.insert("payment_hash".to_string(), json!(invoice.payment_hash().to_string()));
 
     match invoice.description() {
-        Bolt11InvoiceDescriptionRef::Direct(description) => sections.push(json!({
-            "name": "description",
-            "value": description.to_string(),
-        })),
-        Bolt11InvoiceDescriptionRef::Hash(hash) => sections.push(json!({
-            "name": "description_hash",
-            "value": hash.0.to_string(),
-        })),
+        Bolt11InvoiceDescriptionRef::Direct(description) => {
+            decoded.insert("description".to_string(), json!(description.to_string()));
+        }
+        Bolt11InvoiceDescriptionRef::Hash(hash) => {
+            decoded.insert("description_hash".to_string(), json!(hash.0.to_string()));
+        }
     }
 
-    sections.push(json!({
-        "name": "payment_secret",
-        "value": hex::encode(invoice.payment_secret().0),
-    }));
-    sections.push(json!({
-        "name": "expiry",
-        "value": invoice.expiry_time().as_secs(),
-    }));
-    sections.push(json!({
-        "name": "min_final_cltv_expiry",
-        "value": invoice.min_final_cltv_expiry_delta(),
-    }));
+    decoded.insert("payment_secret".to_string(), json!(hex::encode(invoice.payment_secret().0)));
+    decoded.insert("expiry".to_string(), json!(expiry));
+    decoded.insert(
+        "min_final_cltv_expiry".to_string(),
+        json!(invoice.min_final_cltv_expiry_delta()),
+    );
 
     if let Some(payee) = invoice.payee_pub_key() {
-        sections.push(json!({
-            "name": "payee_pub_key",
-            "value": payee.to_string(),
-        }));
+        decoded.insert("payee_node_key".to_string(), json!(payee.to_string()));
+        decoded.insert("payeeNodeKey".to_string(), json!(payee.to_string()));
     }
 
     let route_hints: Vec<String> = invoice
@@ -100,13 +84,9 @@ pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
         .into_iter()
         .map(|hint| format!("{:?}", hint))
         .collect();
+    decoded.insert("route_hints".to_string(), json!(route_hints));
 
-    serde_json::to_string(&json!({
-        "paymentRequest": str,
-        "sections": sections,
-        "expiry": invoice.expiry_time().as_secs(),
-        "route_hints": route_hints,
-    }))
+    serde_json::to_string(&Value::Object(decoded))
     .map_err(crate::ApiError::from)
 }
 
@@ -284,6 +264,7 @@ fn normalize_blinded_paths(paths: &[BlindedMessagePath]) -> Vec<serde_json::Valu
 mod decode_tests {
     const BOLT11: &str = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
     const BOLT12_OFFER: &str = "lno1pgx9getnwss8vetrw3hhyuckyypwa3eyt44h6txtxquqh7lz5djge4afgfjn7k4rgrkuag0jsd5xvxg";
+    const BOLT12_OFFER_WITH_CURRENCY_AMOUNT: &str = "lno1qcp4256ypqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj";
     const BOLT12_OFFER_WITH_PATH: &str = "lno1pgx9getnwss8vetrw3hhyucs5ypjgef743p5fzqq9nqxh0ah7y87rzv3ud0eleps9kl2d5348hq2k8qzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqpqqqqqqqqqqqqqqqqqqqqqqqqqqqzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqqzq3zyg3zyg3zyg3vggzamrjghtt05kvkvpcp0a79gmy3nt6jsn98ad2xs8de6sl9qmgvcvs";
 
     #[test]
@@ -291,9 +272,15 @@ mod decode_tests {
         let decoded = super::decode_bolt11(BOLT11.to_string()).unwrap();
         let value: serde_json::Value = serde_json::from_str(&decoded).unwrap();
         assert_eq!(value["paymentRequest"], BOLT11);
-        assert!(value["sections"].as_array().unwrap().iter().any(|section| {
-            section["name"] == "payment_hash"
-        }));
+        assert_eq!(value["type"], "bolt11_invoice");
+        assert_eq!(
+            value["payment_hash"],
+            "0001020304050607080900010203040506070809000102030405060708090102"
+        );
+        assert_eq!(value["description"], "1 cup coffee");
+        assert_eq!(value["amount"], "250000000");
+        assert_eq!(value["amountMsats"], 250000000);
+        assert!(value["sections"].is_null());
     }
 
     #[test]
@@ -303,6 +290,15 @@ mod decode_tests {
         assert_eq!(value["offer"], BOLT12_OFFER);
         assert_eq!(value["type"], "bolt12_offer");
         assert!(value["issuerSigningPubkey"].as_str().unwrap_or_default().len() > 0);
+    }
+
+    #[test]
+    fn decodes_bolt12_currency_amount_without_msats() {
+        let decoded = super::decode_offer(BOLT12_OFFER_WITH_CURRENCY_AMOUNT.to_string()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&decoded).unwrap();
+        assert_eq!(value["currency"], "USD");
+        assert_eq!(value["amount"], "10000");
+        assert!(value["amountMsats"].is_null());
     }
 
     #[test]

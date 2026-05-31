@@ -7,14 +7,27 @@ const BOLT11 =
 const BOLT12_OFFER =
   'lno1pgx9getnwss8vetrw3hhyuckyypwa3eyt44h6txtxquqh7lz5djge4afgfjn7k4rgrkuag0jsd5xvxg';
 
+const BOLT12_OFFER_WITH_BITCOIN_AMOUNT =
+  'lno1pqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj';
+
+const BOLT12_OFFER_WITH_CURRENCY_AMOUNT =
+  'lno1qcp4256ypqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj';
+
 const BOLT12_OFFER_WITH_PATH =
   'lno1pgx9getnwss8vetrw3hhyucs5ypjgef743p5fzqq9nqxh0ah7y87rzv3ud0eleps9kl2d5348hq2k8qzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqpqqqqqqqqqqqqqqqqqqqqqqqqqqqzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqqzq3zyg3zyg3zyg3vggzamrjghtt05kvkvpcp0a79gmy3nt6jsn98ad2xs8de6sl9qmgvcvs';
 
 describe('decode helpers', () => {
-  it('decodes BOLT11 invoices through light-bolt11-decoder', () => {
+  it('decodes BOLT11 invoices into keyed fields', () => {
     const decoded = decode(BOLT11);
     expect(decoded.paymentRequest).toBe(BOLT11);
-    expect(decoded.sections.some((section) => section.name === 'payment_hash')).toBe(true);
+    expect(decoded.type).toBe('bolt11_invoice');
+    expect(decoded.amount).toBe('250000000');
+    expect(decoded.amountMsats).toBe(250000000);
+    expect(decoded.payment_hash).toBe('0001020304050607080900010203040506070809000102030405060708090102');
+    expect(decoded.description).toBe('1 cup coffee');
+    expect(decoded.expiry).toBe(60);
+    expect(decoded.expiresAt).toBe(1496314718);
+    expect('sections' in decoded).toBe(false);
   });
 
   it('decodes BOLT12 offers separately', () => {
@@ -28,6 +41,18 @@ describe('decode helpers', () => {
   it('serializes decoded BOLT12 offers for node adapter methods', () => {
     const decoded = JSON.parse(decodeOfferToJson(BOLT12_OFFER)) as ReturnType<typeof decodeOffer>;
     expect(decoded.offer).toBe(BOLT12_OFFER);
+  });
+
+  it('only sets amountMsats for bitcoin-denominated BOLT12 offer amounts', () => {
+    const bitcoinOffer = decodeOffer(BOLT12_OFFER_WITH_BITCOIN_AMOUNT);
+    expect(bitcoinOffer.currency).toBeUndefined();
+    expect(bitcoinOffer.amount).toBe('10000');
+    expect(bitcoinOffer.amountMsats).toBe(10000);
+
+    const currencyOffer = decodeOffer(BOLT12_OFFER_WITH_CURRENCY_AMOUNT);
+    expect(currencyOffer.currency).toBe('USD');
+    expect(currencyOffer.amount).toBe('10000');
+    expect(currencyOffer.amountMsats).toBeUndefined();
   });
 
   it('normalizes BOLT12 blinded paths', () => {

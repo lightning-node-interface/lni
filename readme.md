@@ -117,8 +117,12 @@ const decodedBolt11 = decode('lnbc...');
 const decodedOffer = decodeOffer('lno1...');
 
 console.log(decodedBolt11.paymentRequest);
+console.log(decodedBolt11.payment_hash);
+console.log(decodedBolt11.amountMsats);
 console.log(decodedOffer.paths?.[0]?.blindedHops);
 ```
+
+BOLT11 decode returns a normalized keyed object instead of a `sections` array. Common fields include `payment_hash`, `payment_secret`, `description`, `amount`, `amountMsats`, `expiry`, `expiresAt`, `feature_bits`, and `route_hints`.
 
 TypeScript node adapters also expose:
 
@@ -134,6 +138,8 @@ let decoded_offer = node.decode_offer("lno1...".to_string()).await?;
 ```
 
 BOLT12 offer decode includes normalized blinded paths when present:
+
+If an offer includes `currency`, the decoded `amount` is in that ISO-4217 currency's minor unit, not millisatoshis. In that case `amountMsats` is omitted/null; callers should use the fetched BOLT12 invoice for the actual payable msat amount.
 
 ```json
 {

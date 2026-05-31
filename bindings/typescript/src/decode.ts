@@ -1,7 +1,37 @@
-import { decode } from 'light-bolt11-decoder';
+import { decode as decodeBolt11 } from 'light-bolt11-decoder';
+import type { DecodedInvoice as LightDecodedInvoice } from 'light-bolt11-decoder';
 
-export { decode };
-export type { DecodedInvoice } from 'light-bolt11-decoder';
+type LightBolt11Section = LightDecodedInvoice['sections'][number];
+
+export interface DecodedInvoice {
+  [key: string]: unknown;
+  paymentRequest: string;
+  type: 'bolt11_invoice';
+  network?: {
+    bech32: string;
+    pubKeyHash: number;
+    scriptHash: number;
+    validWitnessVersions: number[];
+  };
+  amount?: string;
+  amountMsats?: number;
+  amountSats?: number | null;
+  timestamp?: number;
+  timestampString?: string;
+  expiry?: number;
+  expiresAt?: number;
+  expiresAtString?: string;
+  payment_hash?: string;
+  payment_secret?: string;
+  description?: string;
+  description_hash?: string;
+  payee_node_key?: string;
+  payeeNodeKey?: string;
+  min_final_cltv_expiry?: number;
+  route_hints?: LightDecodedInvoice['route_hints'];
+  feature_bits?: unknown;
+  signature?: string;
+}
 
 const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 
@@ -42,6 +72,26 @@ export interface DecodedOffer {
   issuer?: string;
   quantityMax?: number | 'unbounded';
   issuerSigningPubkey?: string;
+}
+
+export function decode(invoice: string): DecodedInvoice {
+  const decoded = decodeBolt11(invoice) as LightDecodedInvoice;
+  const result: DecodedInvoice = {
+    paymentRequest: decoded.paymentRequest ?? invoice,
+    type: 'bolt11_invoice',
+    expiresAt: decoded.expiry,
+    route_hints: decoded.route_hints,
+  };
+
+  for (const section of decoded.sections) {
+    applyBolt11Section(result, section);
+  }
+
+  if (result.timestamp !== undefined && result.expiry !== undefined) {
+    result.expiresAt = result.timestamp + result.expiry;
+  }
+
+  return omitUndefined(result);
 }
 
 export function decodeBolt11ToJson(invoice: string): string {
@@ -106,7 +156,9 @@ export function decodeOffer(offer: string): DecodedOffer {
       case 8: {
         const amount = integerFromBytes(record.value);
         decoded.amount = amount.toString();
-        decoded.amountMsats = Number(amount);
+        if (!decoded.currency) {
+          decoded.amountMsats = Number(amount);
+        }
         decoded.sections.push({ name: 'amount', type: record.type, value: decoded.amount });
         break;
       }
@@ -150,6 +202,74 @@ export function decodeOffer(offer: string): DecodedOffer {
   }
 
   return decoded;
+}
+
+function applyBolt11Section(result: DecodedInvoice, section: LightBolt11Section): void {
+  const value = sectionValue(section);
+
+  switch (section.name) {
+    case 'paymentRequest':
+      if (typeof value === 'string') {
+        result.paymentRequest = value;
+      }
+      break;
+    case 'coin_network':
+      result.coin_network = value;
+      if (value && typeof value === 'object') {
+        result.network = value as DecodedInvoice['network'];
+      }
+      break;
+    case 'amount':
+      if (typeof value === 'string') {
+        result.amount = value;
+        result.amountMsats = parseSafeInteger(value);
+      }
+      break;
+    case 'timestamp':
+      if (typeof value === 'number') {
+        result.timestamp = value;
+      }
+      break;
+    case 'expiry':
+      if (typeof value === 'number') {
+        result.expiry = value;
+      }
+      break;
+    case 'route_hint':
+      result.route_hint = value;
+      break;
+    default:
+      result[String(section.name)] = value;
+      break;
+  }
+}
+
+function sectionValue(section: LightBolt11Section): unknown {
+  if ('value' in section) {
+    return section.value;
+  }
+  if ('letters' in section) {
+    return section.letters;
+  }
+  return undefined;
+}
+
+function parseSafeInteger(value: unknown): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function omitUndefined<T extends object>(input: T): T {
+  const output = { ...input };
+  for (const key of Object.keys(output) as Array<keyof T>) {
+    if (output[key] === undefined) {
+      delete output[key];
+    }
+  }
+  return output;
 }
 
 function normalizeBolt12Bech32(input: string): string {

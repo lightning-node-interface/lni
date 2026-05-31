@@ -23,8 +23,8 @@ import {
   tweakPublicKeyPackage,
 } from '../vendor/frosts-bridge.js';
 import { decrypt as eciesDecrypt, encrypt as eciesEncrypt } from 'eciesjs';
-import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 import { decodeOfferToJson, LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StorageProvider, type Transaction } from '@sunnyln/lni';
+import { decode as decodeBolt11 } from '@sunnyln/lni';
 import { bytesToHex, hexToBytes } from '@sunnyln/lni/internal/encoding';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '@sunnyln/lni/internal/transform';
@@ -1024,9 +1024,7 @@ function extractPaymentHashFromInvoice(invoice: string): string {
   }
 
   try {
-    const decoded = decodeBolt11(invoice) as { sections?: Array<{ name?: string; value?: unknown }> };
-    const section = decoded.sections?.find((entry) => entry.name === 'payment_hash');
-    return typeof section?.value === 'string' ? section.value : '';
+    return decodeBolt11(invoice).payment_hash ?? '';
   } catch {
     return '';
   }
@@ -1038,8 +1036,7 @@ function extractExpiryFromInvoice(invoice: string): number {
   }
 
   try {
-    const decoded = decodeBolt11(invoice) as { expiry?: unknown };
-    return numberFromUnknown(decoded.expiry);
+    return numberFromUnknown(decodeBolt11(invoice).expiresAt);
   } catch {
     return 0;
   }
@@ -1051,9 +1048,7 @@ function extractAmountMsatsFromInvoice(invoice: string): number | undefined {
   }
 
   try {
-    const decoded = decodeBolt11(invoice) as { sections?: Array<{ name?: string; value?: unknown }> };
-    const section = decoded.sections?.find((entry) => entry.name === 'amount');
-    const amountMsats = numberFromUnknown(section?.value);
+    const amountMsats = numberFromUnknown(decodeBolt11(invoice).amountMsats);
     if (amountMsats > 0) {
       return Math.floor(amountMsats);
     }

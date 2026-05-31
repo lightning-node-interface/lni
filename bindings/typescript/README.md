@@ -69,10 +69,11 @@ import { decode } from '@sunnyln/lni';
 
 const decoded = decode(invoice);
 console.log(decoded.paymentRequest);
-console.log(decoded.sections.map((section) => section.name));
+console.log(decoded.payment_hash);
+console.log(decoded.amountMsats);
 ```
 
-`decode` is exported from the package root and returns the same object shape as `light-bolt11-decoder`.
+`decode` is exported from the package root and returns a normalized keyed object. BOLT11 tags are exposed by name, such as `payment_hash`, `payment_secret`, `description`, `expiry`, `feature_bits`, and `route_hints`. The raw invoice is available as `paymentRequest`; `amount` is a millisatoshi string, `amountMsats` is a number when safely representable, and `expiresAt` is the absolute expiry timestamp.
 Node adapters also expose `await node.decode(invoice)`, which returns the decoded BOLT11 object serialized as JSON.
 
 ### BOLT12 Offer Decode
@@ -86,6 +87,8 @@ console.log(decodedOffer.paths?.[0]?.blindedHops);
 ```
 
 `decodeOffer` decodes BOLT12 offers without requiring node config. Blinded paths are normalized when present:
+
+If an offer amount is denominated in bitcoin, `amountMsats` is set. If the offer includes `currency`, `amount` is denominated in that ISO-4217 currency's minor unit and `amountMsats` is omitted; the payable msats come from the fetched BOLT12 invoice.
 
 ```ts
 type DecodedBlindedPath = {
