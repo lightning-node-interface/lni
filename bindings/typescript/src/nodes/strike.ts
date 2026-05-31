@@ -80,6 +80,11 @@ interface StrikeOnchainPaymentQuoteResponse {
   totalAmount: StrikeAmount;
 }
 
+interface DuplicatePaymentQuote {
+  paymentQuoteId: string;
+  raw: unknown;
+}
+
 interface StrikeReceivesResponse {
   items: Array<{
     receiveRequestId: string;
@@ -178,6 +183,83 @@ function assertValidOnchainAmount(amountSats: number): void {
   if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
     throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountSats.');
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function findStringProperty(value: unknown, key: string): string | undefined {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      const nested = findStringProperty(child, key);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const direct = value[key];
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
+  }
+
+  for (const child of Object.values(value)) {
+    const nested = findStringProperty(child, key);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function containsDuplicatePaymentQuoteCode(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some((child) => containsDuplicatePaymentQuoteCode(child));
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  for (const child of Object.values(value)) {
+    if (child === 'DUPLICATE_PAYMENT_QUOTE') {
+      return true;
+    }
+
+    if (containsDuplicatePaymentQuoteCode(child)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function duplicatePaymentQuoteFromError(error: unknown): DuplicatePaymentQuote | undefined {
+  if (!(error instanceof LniError) || error.code !== 'Http' || error.status !== 422 || !error.body) {
+    return undefined;
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(error.body);
+  } catch {
+    return undefined;
+  }
+
+  if (!containsDuplicatePaymentQuoteCode(raw)) {
+    return undefined;
+  }
+
+  const paymentQuoteId = findStringProperty(raw, 'paymentQuoteId');
+  return paymentQuoteId ? { paymentQuoteId, raw } : undefined;
 }
 
 export class StrikeNode implements LightningNode, OnchainPayments {
@@ -331,21 +413,31 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const feePayer = resolveOnchainFeePayer(params.feePayer);
     const onchainTierId = await this.resolveOnchainTierId(params.address, amountSats, fee);
 
-    const quote = await this.postJson<StrikeOnchainPaymentQuoteResponse>(
-      '/payment-quotes/onchain',
-      {
-        btcAddress: params.address,
-        sourceCurrency: 'BTC',
-        description: params.description,
-        amount: {
-          amount: satsToBtc(amountSats),
-          currency: 'BTC',
+    let quote: StrikeOnchainPaymentQuoteResponse;
+    try {
+      quote = await this.postJson<StrikeOnchainPaymentQuoteResponse>(
+        '/payment-quotes/onchain',
+        {
+          btcAddress: params.address,
+          sourceCurrency: 'BTC',
+          description: params.description,
+          amount: {
+            amount: satsToBtc(amountSats),
+            currency: 'BTC',
+          },
+          feePolicy: strikeFeePolicy(feePayer),
+          onchainTierId,
         },
-        feePolicy: strikeFeePolicy(feePayer),
-        onchainTierId,
-      },
-      params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined,
-    );
+        params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined,
+      );
+    } catch (error) {
+      const duplicate = duplicatePaymentQuoteFromError(error);
+      if (!duplicate) {
+        throw error;
+      }
+
+      return this.onchainTransactionFromDuplicate(params.address, amountSats, fee, feePayer, duplicate);
+    }
 
     return this.onchainTransactionFromQuote(params.address, amountSats, fee, feePayer, quote);
   }
@@ -414,6 +506,23 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         ? quote.estimatedDeliveryDurationInMin * 60
         : undefined,
       raw: quote,
+    };
+  }
+
+  private onchainTransactionFromDuplicate(
+    address: string,
+    amountSats: number,
+    fee: OnchainFeePreference,
+    feePayer: OnchainFeePayer,
+    duplicate: DuplicatePaymentQuote,
+  ): OnchainTransaction {
+    return {
+      id: duplicate.paymentQuoteId,
+      address,
+      amountSats,
+      feePayer,
+      fee,
+      raw: duplicate.raw,
     };
   }
 

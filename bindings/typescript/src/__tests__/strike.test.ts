@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { StrikeNode } from '../nodes/strike.js';
 import type { FetchLike } from '../types.js';
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
+    ...init,
     headers: {
       'content-type': 'application/json',
+      ...(init?.headers ?? {}),
     },
   });
 }
@@ -95,6 +97,60 @@ describe('StrikeNode on-chain payments', () => {
       fee: { type: 'speed', speed: 'normal' },
       estimatedDeliverySeconds: 3600,
     });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers the original on-chain quote id when Strike reports a duplicate idempotency key', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain/tiers') {
+        return jsonResponse([
+          {
+            id: 'tier_standard',
+            estimatedDeliveryDurationInMin: 60,
+            estimatedFee: { amount: '0.00001000', currency: 'BTC' },
+          },
+        ]);
+      }
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/onchain') {
+        return jsonResponse(
+          {
+            code: 'DUPLICATE_PAYMENT_QUOTE',
+            message: 'A payment quote for the specified idempotency key already exists.',
+            data: {
+              paymentQuoteId: 'quote-original',
+            },
+          },
+          { status: 422 },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      fee: { type: 'speed', speed: 'normal' },
+      feePayer: 'sender',
+      idempotencyKey: '00000000-0000-4000-8000-000000000001',
+    });
+
+    expect(transaction).toMatchObject({
+      id: 'quote-original',
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      feePayer: 'sender',
+      fee: { type: 'speed', speed: 'normal' },
+    });
+    expect(transaction.feeSats).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

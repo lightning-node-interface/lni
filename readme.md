@@ -186,7 +186,8 @@ node.lookup_invoice(payment_hash: String) -> Result<Transaction, ApiError>
 node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 ```
 
-#### On-chain Bitcoin payments
+On-chain Bitcoin payments
+-------------------------
 
 On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. `fee_payer` answers who pays the mining/provider fee:
 
