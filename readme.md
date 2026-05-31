@@ -251,6 +251,49 @@ const payment = await node.payOnchain(transaction);
 
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: "backend", value: "tier_..." }` in TypeScript, or `OnchainFeePreferenceType::Backend` with `backend: Some("tier_...")` in Rust, to pass a Strike tier id directly.
 
+Testing Strike on-chain payments
+--------------------------------
+
+The Strike on-chain integration tests include a safe quote-only path and an opt-in broadcast path. The broadcast tests send real bitcoin and only run when explicit confirmation variables are present.
+
+Add the shared Strike test values to `crates/lni/.env`:
+
+```env
+STRIKE_API_KEY=...
+STRIKE_ONCHAIN_TEST_ADDRESS=bc1q...
+STRIKE_ONCHAIN_AMOUNT_SATS=76000
+```
+
+Run the TypeScript quote-only integration test:
+
+```bash
+cd bindings/typescript
+npm run test:integration:strike
+```
+
+To intentionally run the TypeScript broadcast test, add the confirmation values:
+
+```env
+STRIKE_RUN_ONCHAIN_SEND=true
+STRIKE_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
+```
+
+Then run:
+
+```bash
+cd bindings/typescript
+npm run test:integration:strike
+```
+
+For Rust, run from `crates/lni` so `dotenv` loads `crates/lni/.env`:
+
+```bash
+cd crates/lni
+cargo test strike::lib::tests::test_pay_onchain_e2e -- --ignored --nocapture
+```
+
+Without `-- --ignored`, the Rust broadcast test is discovered but skipped. Without `STRIKE_RUN_ONCHAIN_SEND=true` and `STRIKE_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN`, it refuses to broadcast.
+
 #### Node Management
 ```rust
 node.get_info() -> Result<NodeInfo, ApiError> // returns NodeInfo and balances

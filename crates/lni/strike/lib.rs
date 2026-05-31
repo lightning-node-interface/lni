@@ -170,11 +170,16 @@ crate::impl_lightning_node!(StrikeNode);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InvoiceType;
+    use crate::{
+        InvoiceType, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+        OnchainFeeSpeed,
+    };
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
+
+    const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 
     lazy_static! {
         static ref BASE_URL: String = {
@@ -321,6 +326,69 @@ mod tests {
                 // Don't panic as this requires valid API key
             }
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "broadcasts an on-chain bitcoin payment"]
+    async fn test_pay_onchain_e2e() {
+        dotenv().ok();
+
+        if env::var("STRIKE_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("STRIKE_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some(ONCHAIN_SEND_CONFIRMATION)
+        {
+            panic!("Refusing to broadcast without explicit STRIKE on-chain send confirmation");
+        }
+
+        let address = env::var("STRIKE_ONCHAIN_TEST_ADDRESS")
+            .expect("STRIKE_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("STRIKE_ONCHAIN_AMOUNT_SATS")
+            .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be set")
+            .parse::<i64>()
+            .expect("STRIKE_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        assert!(amount_sats > 0, "STRIKE_ONCHAIN_AMOUNT_SATS must be positive");
+
+        let idempotency_key = uuid::Uuid::new_v4().to_string();
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address: address.clone(),
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::Speed,
+                    speed: Some(OnchainFeeSpeed::Free),
+                    target_conf: None,
+                    sats_per_vbyte: None,
+                    backend: None,
+                }),
+                fee_payer: Some(OnchainFeePayer::Sender),
+                description: Some("strike rust onchain e2e".to_string()),
+                idempotency_key: Some(idempotency_key),
+            })
+            .await
+            .expect("prepare_onchain_transaction should create a quote");
+
+        assert_eq!(transaction.address, address);
+        assert_eq!(transaction.amount_sats, amount_sats);
+        assert!(
+            transaction.id.as_ref().map_or(false, |id| !id.is_empty()),
+            "on-chain transaction should include a quote id"
+        );
+
+        // TODO: have user validate fees before broadcasting in case of unexpectedly high fees
+
+        let payment = NODE
+            .pay_onchain(transaction)
+            .await
+            .expect("pay_onchain should execute quote");
+
+        assert_eq!(payment.address, address);
+        assert_eq!(payment.amount_sats, amount_sats);
+        assert!(
+            matches!(payment.state.as_str(), "pending" | "completed"),
+            "unexpected on-chain payment state: {}",
+            payment.state
+        );
     }
 
     // #[test]
