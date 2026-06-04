@@ -429,6 +429,8 @@ export declare class PhoenixdNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Promise<Offer>
   getOffer(): Promise<Offer>
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>

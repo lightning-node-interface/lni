@@ -1,5 +1,6 @@
 use lni::{
-  phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
+  phoenixd::lib::PhoenixdConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  OnchainTransaction, PayInvoiceParams, PayOnchainOptions, PrepareOnchainTransactionParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -66,6 +67,31 @@ impl PhoenixdNode {
     let invoice = lni::phoenixd::api::pay_invoice(self.inner.clone(), params)
       .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> Result<OnchainTransaction> {
+    lni::phoenixd::api::prepare_onchain_transaction(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+    options: Option<PayOnchainOptions>,
+  ) -> Result<lni::types::PayOnchainResponse> {
+    lni::phoenixd::api::pay_onchain_with_options(
+      self.inner.clone(),
+      transaction,
+      options.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))
   }
 
   #[napi]

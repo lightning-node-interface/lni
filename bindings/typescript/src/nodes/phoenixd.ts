@@ -4,7 +4,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats, toUnixSeconds } from '../internal/transform.js';
 import { encodeBase64 } from '../internal/encoding.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type PhoenixdConfig, type Transaction, type NodeInfo } from '../types.js';
+import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type OnchainTransaction, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type PhoenixdConfig, type PrepareOnchainTransactionParams, type Transaction, type NodeInfo } from '../types.js';
 
 interface PhoenixdInfoResponse {
   nodeId: string;
@@ -55,7 +55,75 @@ interface PhoenixdOutgoingPaymentResponse {
   externalId?: string;
 }
 
-export class PhoenixdNode implements LightningNode {
+function assertValidOnchainAmount(amountSats: number): void {
+  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
+    throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountSats.');
+  }
+}
+
+function resolvePhoenixdFeePayer(feePayer?: OnchainFeePayer): OnchainFeePayer {
+  if (feePayer === 'recipient') {
+    throw new LniError('InvalidInput', 'Phoenixd payOnchain only supports sender-paid on-chain fees.');
+  }
+
+  return 'sender';
+}
+
+function resolvePhoenixdFeeRequest(fee?: OnchainFeePreference): { fee: OnchainFeePreference; feerateSatByte: number } {
+  const resolvedFee = fee ?? { type: 'default' };
+
+  switch (resolvedFee.type) {
+    case 'satsPerVbyte':
+      if (!Number.isFinite(resolvedFee.satsPerVbyte) || resolvedFee.satsPerVbyte <= 0) {
+        throw new LniError('InvalidInput', 'Phoenixd satsPerVbyte fee preference requires a positive fee rate.');
+      }
+      return { fee: resolvedFee, feerateSatByte: Math.ceil(resolvedFee.satsPerVbyte) };
+    case 'backend': {
+      const feerateSatByte = Number(resolvedFee.value);
+      if (!Number.isSafeInteger(feerateSatByte) || feerateSatByte <= 0) {
+        throw new LniError('InvalidInput', 'Phoenixd backend fee preference must be a positive integer feerateSatByte value.');
+      }
+      return { fee: resolvedFee, feerateSatByte };
+    }
+    case 'default':
+    case 'speed':
+    case 'targetConf':
+      throw new LniError('InvalidInput', 'Phoenixd payOnchain requires an explicit satsPerVbyte fee preference.');
+  }
+}
+
+function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+  if (options?.dangerouslyDisableFeeGuardrail) {
+    return;
+  }
+
+  const guardrail: Required<OnchainFeeGuardrail> = {
+    maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
+    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+  };
+  if (transaction.feeSats === undefined) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.');
+  }
+  if (!Number.isFinite(transaction.feeSats) || transaction.feeSats < 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+  }
+  if (!Number.isFinite(transaction.amountSats) || transaction.amountSats <= 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+  }
+
+  const maxFeeByPercent = Math.floor((transaction.amountSats * guardrail.maxFeePercent) / 100);
+  const maxAllowedFee = Math.min(guardrail.maxFeeSats, maxFeeByPercent);
+  if (transaction.feeSats > maxAllowedFee) {
+    throw new LniError('InvalidInput', `Cannot pay on-chain transaction because feeSats ${transaction.feeSats} exceeds guardrail ${maxAllowedFee} sats.`);
+  }
+}
+
+function txidFromText(value: string): string | undefined {
+  const trimmed = value.trim();
+  return /^[0-9a-fA-F]{64}$/.test(trimmed) ? trimmed : undefined;
+}
+
+export class PhoenixdNode implements LightningNode, OnchainPayments {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
 
@@ -174,6 +242,59 @@ export class PhoenixdNode implements LightningNode {
       paymentHash: payload.paymentHash,
       preimage: payload.paymentPreimage,
       feeMsats: satsToMsats(payload.routingFeeSat),
+    };
+  }
+
+  async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
+    assertValidOnchainAmount(params.amountSats);
+    const feePayer = resolvePhoenixdFeePayer(params.feePayer);
+    const { fee, feerateSatByte } = resolvePhoenixdFeeRequest(params.fee);
+
+    return {
+      address: params.address,
+      amountSats: params.amountSats,
+      recipientAmountSats: params.amountSats,
+      feePayer,
+      fee,
+      raw: {
+        sendRequest: {
+          address: params.address,
+          amountSat: params.amountSats,
+          feerateSatByte,
+        },
+        description: params.description,
+      },
+    };
+  }
+
+  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
+    assertValidOnchainAmount(transaction.amountSats);
+    resolvePhoenixdFeePayer(transaction.feePayer);
+    const { feerateSatByte } = resolvePhoenixdFeeRequest(transaction.fee);
+    assertOnchainFeeGuardrail(transaction, options);
+
+    const response = await this.requestText('/sendtoaddress', {
+      method: 'POST',
+      form: {
+        address: transaction.address,
+        amountSat: transaction.amountSats,
+        feerateSatByte,
+      },
+    });
+    const txid = txidFromText(response);
+    if (!txid) {
+      throw new LniError('Api', response.trim() || 'Phoenixd sendtoaddress did not return a txid.');
+    }
+
+    return {
+      txid,
+      state: 'pending',
+      address: transaction.address,
+      amountSats: transaction.amountSats,
+      feeSats: transaction.feeSats,
+      totalAmountSats: transaction.totalAmountSats,
+      recipientAmountSats: transaction.recipientAmountSats ?? transaction.amountSats,
+      raw: response,
     };
   }
 

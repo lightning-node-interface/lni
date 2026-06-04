@@ -64,7 +64,7 @@ const txs = await node.listTransactions({ from: 0, limit: 10 });
 
 ### On-chain Bitcoin Payments
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`, `BlinkNode`, `LndNode`, and `ClnNode`.
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`, `BlinkNode`, `LndNode`, `ClnNode`, and `PhoenixdNode`.
 
 ```ts
 import { StrikeNode } from '@sunnyln/lni';
@@ -93,6 +93,8 @@ Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` 
 LND maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target-confirmation and sats/vbyte fee preferences, but not `free`, backend fee preferences, or recipient-paid fees.
 
 CLN maps `fast`, `normal`, and `slow` to CLN's `urgent`, `normal`, and `slow` feerates. CLN also supports explicit sats/vbyte fee preferences and raw backend feerate strings such as `1000perkw` or `normal`, but not `free`, target-confirmation fee preferences, or recipient-paid fees. CLN prepares on-chain transactions with `txprepare`, which reserves wallet inputs until `txsend`, `txdiscard`, or lightningd restart.
+
+Phoenixd requires an explicit sats/vbyte fee preference because its `sendtoaddress` endpoint requires `feerateSatByte`. Phoenixd does not support `default`, speed, target-confirmation, or recipient-paid fees for on-chain sends. Phoenixd does not expose a separate quote endpoint or final mining fee quote, so `payOnchain` requires `dangerouslyDisableFeeGuardrail: true` after the caller has chosen and accepted the feerate.
 
 For LND payment flows, avoid using `admin.macaroon` in apps. Bake a narrower macaroon with the permissions LNI needs for Lightning sends and on-chain sends:
 

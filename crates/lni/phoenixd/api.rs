@@ -6,7 +6,9 @@ use super::PhoenixdConfig;
 use crate::ListTransactionsParams;
 use crate::{
     phoenixd::types::GetBalanceResponse, ApiError, CreateOfferParams, InvoiceType, NodeInfo, Offer, OnInvoiceEventCallback,
-    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    OnInvoiceEventParams, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+    OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 use lightning_invoice::Bolt11Invoice;
 use serde_urlencoded;
@@ -19,6 +21,10 @@ use tokio::time::sleep;
 // get_balance
 
 // https://phoenix.acinq.co/server/api
+
+struct PhoenixdOnchainFeeRequest {
+    feerate_sat_byte: i64,
+}
 
 fn client(config: &PhoenixdConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
@@ -53,6 +59,125 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
     client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+}
+
+fn assert_valid_onchain_amount(amount_sats: i64) -> Result<(), ApiError> {
+    if amount_sats <= 0 {
+        return Err(ApiError::InvalidInput(
+            "pay_onchain requires a positive amount_sats".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn resolve_phoenixd_fee_payer(
+    fee_payer: Option<OnchainFeePayer>,
+) -> Result<OnchainFeePayer, ApiError> {
+    match fee_payer.unwrap_or(OnchainFeePayer::Sender) {
+        OnchainFeePayer::Sender => Ok(OnchainFeePayer::Sender),
+        OnchainFeePayer::Recipient => Err(ApiError::InvalidInput(
+            "Phoenixd pay_onchain only supports sender-paid on-chain fees".to_string(),
+        )),
+    }
+}
+
+fn resolve_phoenixd_fee_request(
+    fee: &OnchainFeePreference,
+) -> Result<PhoenixdOnchainFeeRequest, ApiError> {
+    match fee.preference_type {
+        OnchainFeePreferenceType::SatsPerVbyte => {
+            let sats_per_vbyte = fee.sats_per_vbyte.ok_or_else(|| {
+                ApiError::InvalidInput(
+                    "Phoenixd sats_per_vbyte fee preference requires a fee rate".to_string(),
+                )
+            })?;
+            if sats_per_vbyte <= 0.0 {
+                return Err(ApiError::InvalidInput(
+                    "Phoenixd sats_per_vbyte fee preference requires a positive fee rate".to_string(),
+                ));
+            }
+
+            Ok(PhoenixdOnchainFeeRequest {
+                feerate_sat_byte: sats_per_vbyte.ceil() as i64,
+            })
+        }
+        OnchainFeePreferenceType::Backend => {
+            let feerate = fee
+                .backend
+                .clone()
+                .unwrap_or_default()
+                .parse::<i64>()
+                .map_err(|_| {
+                    ApiError::InvalidInput(
+                        "Phoenixd backend fee preference must be a positive integer feerateSatByte value".to_string(),
+                    )
+                })?;
+            if feerate <= 0 {
+                return Err(ApiError::InvalidInput(
+                    "Phoenixd backend fee preference must be a positive integer feerateSatByte value".to_string(),
+                ));
+            }
+
+            Ok(PhoenixdOnchainFeeRequest {
+                feerate_sat_byte: feerate,
+            })
+        }
+        OnchainFeePreferenceType::Default
+        | OnchainFeePreferenceType::Speed
+        | OnchainFeePreferenceType::TargetConf => Err(ApiError::InvalidInput(
+            "Phoenixd pay_onchain requires an explicit sats_per_vbyte fee preference".to_string(),
+        )),
+    }
+}
+
+fn assert_onchain_fee_guardrail(
+    transaction: &OnchainTransaction,
+    options: PayOnchainOptions,
+) -> Result<(), ApiError> {
+    if options.dangerously_disable_fee_guardrail {
+        return Ok(());
+    }
+
+    let guardrail = options.fee_guardrail.unwrap_or_default();
+    let max_fee_sats = guardrail
+        .max_fee_sats
+        .unwrap_or(crate::types::DEFAULT_ONCHAIN_MAX_FEE_SATS);
+    let max_fee_percent = guardrail
+        .max_fee_percent
+        .unwrap_or(crate::types::DEFAULT_ONCHAIN_MAX_FEE_PERCENT);
+    let fee_sats = transaction.fee_sats.ok_or_else(|| {
+        ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because fee_sats is unknown. Re-prepare the transaction or pass dangerously_disable_fee_guardrail: true.".to_string(),
+        )
+    })?;
+    if fee_sats < 0 {
+        return Err(ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because fee_sats is invalid".to_string(),
+        ));
+    }
+    if transaction.amount_sats <= 0 {
+        return Err(ApiError::InvalidInput(
+            "Cannot pay on-chain transaction because amount_sats is invalid".to_string(),
+        ));
+    }
+
+    let max_fee_by_percent =
+        ((transaction.amount_sats as f64) * max_fee_percent / 100.0).floor() as i64;
+    let max_allowed_fee = std::cmp::min(max_fee_sats, max_fee_by_percent);
+    if fee_sats > max_allowed_fee {
+        return Err(ApiError::InvalidInput(format!(
+            "Cannot pay on-chain transaction because fee_sats {} exceeds guardrail {} sats",
+            fee_sats, max_allowed_fee
+        )));
+    }
+
+    Ok(())
+}
+
+fn is_txid(value: &str) -> bool {
+    let trimmed = value.trim();
+    trimmed.len() == 64 && trimmed.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
@@ -252,6 +377,110 @@ pub async fn pay_invoice(
         payment_hash: pay_invoice_resp.payment_hash,
         preimage: pay_invoice_resp.preimage,
         fee_msats: pay_invoice_resp.routing_fee_sat * 1000,
+    })
+}
+
+pub async fn prepare_onchain_transaction(
+    _config: PhoenixdConfig,
+    params: PrepareOnchainTransactionParams,
+) -> Result<OnchainTransaction, ApiError> {
+    assert_valid_onchain_amount(params.amount_sats)?;
+
+    let fee = params.fee.clone().unwrap_or_default();
+    let fee_payer = resolve_phoenixd_fee_payer(params.fee_payer.clone())?;
+    let fee_request = resolve_phoenixd_fee_request(&fee)?;
+
+    Ok(OnchainTransaction {
+        id: None,
+        address: params.address.clone(),
+        amount_sats: params.amount_sats,
+        fee_sats: None,
+        total_amount_sats: None,
+        recipient_amount_sats: Some(params.amount_sats),
+        fee_payer,
+        fee,
+        expires_at: None,
+        estimated_delivery_seconds: None,
+        raw: Some(
+            serde_json::json!({
+                "sendRequest": {
+                    "address": params.address,
+                    "amountSat": params.amount_sats,
+                    "feerateSatByte": fee_request.feerate_sat_byte,
+                },
+                "description": params.description,
+            })
+            .to_string(),
+        ),
+    })
+}
+
+pub async fn pay_onchain(
+    config: PhoenixdConfig,
+    transaction: OnchainTransaction,
+) -> Result<PayOnchainResponse, ApiError> {
+    pay_onchain_with_options(config, transaction, PayOnchainOptions::default()).await
+}
+
+pub async fn pay_onchain_with_options(
+    config: PhoenixdConfig,
+    transaction: OnchainTransaction,
+    options: PayOnchainOptions,
+) -> Result<PayOnchainResponse, ApiError> {
+    assert_valid_onchain_amount(transaction.amount_sats)?;
+    let _fee_payer = resolve_phoenixd_fee_payer(Some(transaction.fee_payer.clone()))?;
+    let fee_request = resolve_phoenixd_fee_request(&transaction.fee)?;
+    assert_onchain_fee_guardrail(&transaction, options)?;
+
+    let client = client(&config);
+    let req_url = format!("{}/sendtoaddress", config.url);
+    let response = client
+        .post(&req_url)
+        .basic_auth("", Some(config.password.clone()))
+        .form(&[
+            ("address", transaction.address.clone()),
+            ("amountSat", transaction.amount_sats.to_string()),
+            ("feerateSatByte", fee_request.feerate_sat_byte.to_string()),
+        ])
+        .send()
+        .await
+        .map_err(|e| ApiError::Http {
+            reason: format!("Failed to broadcast Phoenixd on-chain transaction: {}", e),
+        })?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(ApiError::Http {
+            reason: format!(
+                "Failed to broadcast Phoenixd on-chain transaction: {} - {}",
+                status, error_text
+            ),
+        });
+    }
+
+    let response_text = response.text().await.unwrap_or_default();
+    let txid = response_text.trim().to_string();
+    if !is_txid(&txid) {
+        return Err(ApiError::Api {
+            reason: if txid.is_empty() {
+                "Phoenixd sendtoaddress did not return a txid".to_string()
+            } else {
+                txid
+            },
+        });
+    }
+
+    Ok(PayOnchainResponse {
+        payment_id: None,
+        txid: Some(txid),
+        state: "pending".to_string(),
+        address: transaction.address,
+        amount_sats: transaction.amount_sats,
+        fee_sats: transaction.fee_sats,
+        total_amount_sats: transaction.total_amount_sats,
+        recipient_amount_sats: transaction.recipient_amount_sats.or(Some(transaction.amount_sats)),
+        created_at: None,
+        raw: Some(response_text),
     })
 }
 

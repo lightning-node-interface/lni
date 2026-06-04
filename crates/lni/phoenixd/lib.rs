@@ -3,6 +3,7 @@ use napi_derive::napi;
 
 use crate::{
     phoenixd::api::*, ApiError, ListTransactionsParams, PayInvoiceParams, PayInvoiceResponse,
+    OnchainTransaction, PayOnchainOptions, PayOnchainResponse, PrepareOnchainTransactionParams,
     Transaction, CreateOfferParams
 };
 #[cfg(not(feature = "uniffi"))]
@@ -92,6 +93,28 @@ impl PhoenixdNode {
         pay_invoice(self.config.clone(), params).await
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::phoenixd::api::prepare_onchain_transaction(self.config.clone(), params).await
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::phoenixd::api::pay_onchain(self.config.clone(), transaction).await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::phoenixd::api::pay_onchain_with_options(self.config.clone(), transaction, options).await
+    }
+
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
         crate::phoenixd::api::create_offer(self.config.clone(), params).await
     }
@@ -153,7 +176,10 @@ crate::impl_lightning_node!(PhoenixdNode);
 
 #[cfg(test)]
 mod tests {
-    use crate::InvoiceType;
+    use crate::{
+        InvoiceType, OnchainFeeGuardrail, OnchainFeePreference, OnchainFeePreferenceType,
+        PayOnchainOptions, PrepareOnchainTransactionParams,
+    };
 
     use super::*;
     use dotenv::dotenv;
@@ -199,6 +225,72 @@ mod tests {
                 panic!("Failed to get offer: {:?}", e);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_pay_onchain_e2e() {
+        let address = env::var("PHOENIXD_ONCHAIN_TEST_ADDRESS")
+            .expect("PHOENIXD_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("PHOENIXD_ONCHAIN_AMOUNT_SATS")
+            .expect("PHOENIXD_ONCHAIN_AMOUNT_SATS must be set")
+            .parse::<i64>()
+            .expect("PHOENIXD_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        let feerate_sat_byte = env::var("PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE")
+            .expect("PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE must be set")
+            .parse::<f64>()
+            .expect("PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE must be a positive number");
+        assert!(amount_sats > 0, "PHOENIXD_ONCHAIN_AMOUNT_SATS must be positive");
+        assert!(
+            feerate_sat_byte > 0.0,
+            "PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE must be positive"
+        );
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address,
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::SatsPerVbyte,
+                    speed: None,
+                    target_conf: None,
+                    sats_per_vbyte: Some(feerate_sat_byte),
+                    backend: None,
+                }),
+                fee_payer: None,
+                description: Some("phoenixd rust onchain e2e".to_string()),
+                idempotency_key: None,
+            })
+            .await
+            .expect("prepare_onchain_transaction should create a Phoenixd on-chain transaction");
+
+        assert_eq!(transaction.amount_sats, amount_sats);
+        assert!(
+            transaction.fee_sats.is_none(),
+            "Phoenixd does not quote final on-chain fee_sats"
+        );
+
+        if env::var("PHOENIXD_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("PHOENIXD_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some("I_UNDERSTAND_THIS_BROADCASTS_BITCOIN")
+        {
+            println!("Prepared Phoenixd on-chain transaction; skipping broadcast without explicit confirmation");
+            return;
+        }
+
+        let payment = NODE
+            .pay_onchain_with_options(
+                transaction,
+                PayOnchainOptions {
+                    fee_guardrail: Some(OnchainFeeGuardrail::default()),
+                    dangerously_disable_fee_guardrail: true,
+                },
+            )
+            .await
+            .expect("pay_onchain should execute Phoenixd sendtoaddress");
+        assert!(
+            payment.txid.as_ref().map(|txid| !txid.is_empty()).unwrap_or(false),
+            "Phoenixd on-chain payment should include a txid"
+        );
     }
 
     #[tokio::test]
