@@ -465,6 +465,8 @@ export declare class LndNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   decode(invoiceStr: string): Promise<string>

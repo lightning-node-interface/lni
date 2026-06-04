@@ -64,7 +64,7 @@ const txs = await node.listTransactions({ from: 0, limit: 10 });
 
 ### On-chain Bitcoin Payments
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and `BlinkNode`.
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`, `BlinkNode`, and `LndNode`.
 
 ```ts
 import { StrikeNode } from '@sunnyln/lni';
@@ -89,6 +89,40 @@ const payment = await node.payOnchain(transaction);
 On-chain amounts are expressed in sats. Lightning invoice and offer APIs continue to use msats.
 
 Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
+
+LND maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target-confirmation and sats/vbyte fee preferences, but not `free`, backend fee preferences, or recipient-paid fees.
+
+For LND payment flows, avoid using `admin.macaroon` in apps. Bake a narrower macaroon with the permissions LNI needs for Lightning sends and on-chain sends:
+
+```bash
+lncli bakemacaroon \
+  --save_to ./lni-payments.macaroon \
+  info:read \
+  offchain:read \
+  offchain:write \
+  onchain:read \
+  onchain:write
+```
+
+For on-chain-only testing, use a macaroon with just the LND wallet permissions:
+
+```bash
+lncli bakemacaroon \
+  --save_to ./lni-onchain.macaroon \
+  info:read \
+  onchain:read \
+  onchain:write
+```
+
+Plain `lncli bakemacaroon` macaroons do not enforce a max-spend budget; they only grant or restrict permissions. Enforce per-payment or rolling-window budgets in the app before calling `payInvoice` or `payOnchain`.
+
+If you run `litd`, LND Accounts can create an account-restricted macaroon with an enforced off-chain balance:
+
+```bash
+litcli accounts create 50000 --save_to ./lni-account.macaroon
+```
+
+That account balance limits Lightning payments, including routing fees. It does not provide an on-chain send budget; account-restricted users cannot spend the node's on-chain wallet. LNI's on-chain guardrail limits unusually high fees, not total spend.
 
 `payOnchain` enforces the shared `DEFAULT_ONCHAIN_FEE_GUARDRAIL`: `25_000` sats and `25%` of the send amount. It fails closed when `feeSats` is unknown, such as a recovered duplicate quote that only includes a quote id.
 

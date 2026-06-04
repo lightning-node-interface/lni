@@ -4,7 +4,8 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
-    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    Offer, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
@@ -82,6 +83,28 @@ impl LndNode {
         crate::lnd::api::pay_invoice(self.config.clone(), params).await
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::lnd::api::prepare_onchain_transaction(self.config.clone(), params).await
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::lnd::api::pay_onchain(self.config.clone(), transaction).await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::lnd::api::pay_onchain_with_options(self.config.clone(), transaction, options).await
+    }
+
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
         Err(ApiError::Api { reason: "create_offer not implemented for LndNode".to_string() })
     }
@@ -153,7 +176,10 @@ crate::impl_lightning_node!(LndNode);
 
 #[cfg(test)]
 mod tests {
-    use crate::{InvoiceType, PayInvoiceParams};
+    use crate::{
+        InvoiceType, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+        OnchainFeeSpeed, PayInvoiceParams, PrepareOnchainTransactionParams,
+    };
 
     use super::*;
     use dotenv::dotenv;
@@ -162,6 +188,8 @@ mod tests {
     use sha2::{Digest, Sha256};
     use std::env;
     use std::sync::{Arc, Mutex};
+
+    const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 
     lazy_static! {
         static ref URL: String = {
@@ -307,6 +335,69 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_pay_onchain_e2e() {
+        dotenv().ok();
+
+        let address = env::var("LND_ONCHAIN_TEST_ADDRESS")
+            .expect("LND_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("LND_ONCHAIN_AMOUNT_SATS")
+            .unwrap_or_else(|_| "10000".to_string())
+            .parse::<i64>()
+            .expect("LND_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        assert!(
+            amount_sats > 0,
+            "LND_ONCHAIN_AMOUNT_SATS must be positive"
+        );
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address: address.clone(),
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::Speed,
+                    speed: Some(OnchainFeeSpeed::Normal),
+                    target_conf: None,
+                    sats_per_vbyte: None,
+                    backend: None,
+                }),
+                fee_payer: Some(OnchainFeePayer::Sender),
+                description: Some("lnd rust onchain e2e".to_string()),
+                idempotency_key: None,
+            })
+            .await
+            .expect("prepare_onchain_transaction should create an LND on-chain quote");
+
+        assert_eq!(transaction.address, address);
+        assert_eq!(transaction.amount_sats, amount_sats);
+        assert_eq!(transaction.fee_payer, OnchainFeePayer::Sender);
+        assert!(
+            transaction.fee_sats.map_or(false, |fee_sats| fee_sats >= 0),
+            "on-chain transaction should include a non-negative fee quote"
+        );
+
+        if env::var("LND_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("LND_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some(ONCHAIN_SEND_CONFIRMATION)
+        {
+            println!("Prepared LND on-chain quote; skipping broadcast without explicit confirmation");
+            return;
+        }
+
+        let payment = NODE
+            .pay_onchain(transaction)
+            .await
+            .expect("pay_onchain should execute LND on-chain send");
+
+        assert_eq!(payment.address, address);
+        assert_eq!(payment.amount_sats, amount_sats);
+        assert_eq!(payment.state, "pending");
+        assert!(
+            payment.txid.as_ref().map_or(false, |txid| !txid.is_empty()),
+            "LND on-chain payment should include a txid"
+        );
     }
 
     #[tokio::test]

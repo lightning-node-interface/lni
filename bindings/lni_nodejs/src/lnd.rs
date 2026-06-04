@@ -1,5 +1,6 @@
 use lni::{
   lnd::lib::LndConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
+  OnchainTransaction, PayOnchainOptions, PrepareOnchainTransactionParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -104,6 +105,33 @@ impl LndNode {
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> napi::Result<lni::types::OnchainTransaction> {
+    let transaction = lni::lnd::api::prepare_onchain_transaction(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(transaction)
+  }
+
+  #[napi]
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+    options: Option<PayOnchainOptions>,
+  ) -> napi::Result<lni::types::PayOnchainResponse> {
+    let payment = lni::lnd::api::pay_onchain_with_options(
+      self.inner.clone(),
+      transaction,
+      options.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(payment)
   }
 
   #[napi]
