@@ -4,7 +4,8 @@ use napi_derive::napi;
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams, Offer,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
+    OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
@@ -97,6 +98,28 @@ impl ClnNode {
         crate::cln::api::pay_invoice(self.config.clone(), params).await
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, ApiError> {
+        crate::cln::api::prepare_onchain_transaction(self.config.clone(), params).await
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::cln::api::pay_onchain(self.config.clone(), transaction).await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, ApiError> {
+        crate::cln::api::pay_onchain_with_options(self.config.clone(), transaction, options).await
+    }
+
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
         crate::cln::api::create_offer(self.config.clone(), params).await
     }
@@ -168,7 +191,10 @@ crate::impl_lightning_node!(ClnNode);
 
 #[cfg(test)]
 mod tests {
-    use crate::InvoiceType;
+    use crate::{
+        InvoiceType, OnchainFeePreference, OnchainFeePreferenceType, OnchainFeeSpeed,
+        PrepareOnchainTransactionParams,
+    };
 
     use super::*;
     use dotenv::dotenv;
@@ -226,6 +252,78 @@ mod tests {
                 panic!("Failed to get offer: {:?}", e);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_pay_onchain_e2e() {
+        let address = env::var("CLN_ONCHAIN_TEST_ADDRESS")
+            .expect("CLN_ONCHAIN_TEST_ADDRESS must be set");
+        let amount_sats = env::var("CLN_ONCHAIN_AMOUNT_SATS")
+            .expect("CLN_ONCHAIN_AMOUNT_SATS must be set")
+            .parse::<i64>()
+            .expect("CLN_ONCHAIN_AMOUNT_SATS must be a positive integer");
+        assert!(amount_sats > 0, "CLN_ONCHAIN_AMOUNT_SATS must be positive");
+
+        let transaction = NODE
+            .prepare_onchain_transaction(PrepareOnchainTransactionParams {
+                address,
+                amount_sats,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::Speed,
+                    speed: Some(OnchainFeeSpeed::Normal),
+                    target_conf: None,
+                    sats_per_vbyte: None,
+                    backend: None,
+                }),
+                fee_payer: None,
+                description: Some("cln rust onchain e2e".to_string()),
+                idempotency_key: None,
+            })
+            .await
+            .expect("prepare_onchain_transaction should create a CLN on-chain transaction");
+
+        assert!(
+            transaction.id.as_ref().map(|id| !id.is_empty()).unwrap_or(false),
+            "CLN prepared on-chain transaction should include a txid"
+        );
+        assert!(
+            transaction.fee_sats.unwrap_or(-1) >= 0,
+            "CLN prepared on-chain transaction should include a non-negative fee quote"
+        );
+
+        if env::var("CLN_RUN_ONCHAIN_SEND").ok().as_deref() != Some("true")
+            || env::var("CLN_ONCHAIN_SEND_CONFIRM").ok().as_deref()
+                != Some("I_UNDERSTAND_THIS_BROADCASTS_BITCOIN")
+        {
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .expect("test client should build");
+            let discard_url = format!("{}/v1/txdiscard", URL.as_str());
+            let response = client
+                .post(discard_url)
+                .header("Rune", RUNE.as_str())
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({ "txid": transaction.id.clone() }))
+                .send()
+                .await
+                .expect("txdiscard should send");
+            assert!(
+                response.status().is_success(),
+                "txdiscard should release prepared CLN inputs"
+            );
+            println!("Prepared CLN on-chain transaction; discarded without explicit broadcast confirmation");
+            return;
+        }
+
+        let payment = NODE
+            .pay_onchain(transaction)
+            .await
+            .expect("pay_onchain should execute CLN txsend");
+        assert!(
+            payment.txid.as_ref().map(|txid| !txid.is_empty()).unwrap_or(false),
+            "CLN on-chain payment should include a txid"
+        );
     }
 
     #[tokio::test]

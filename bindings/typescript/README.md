@@ -64,7 +64,7 @@ const txs = await node.listTransactions({ from: 0, limit: 10 });
 
 ### On-chain Bitcoin Payments
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`, `BlinkNode`, and `LndNode`.
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode`, `BlinkNode`, `LndNode`, and `ClnNode`.
 
 ```ts
 import { StrikeNode } from '@sunnyln/lni';
@@ -91,6 +91,8 @@ On-chain amounts are expressed in sats. Lightning invoice and offer APIs continu
 Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
 
 LND maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target-confirmation and sats/vbyte fee preferences, but not `free`, backend fee preferences, or recipient-paid fees.
+
+CLN maps `fast`, `normal`, and `slow` to CLN's `urgent`, `normal`, and `slow` feerates. CLN also supports explicit sats/vbyte fee preferences and raw backend feerate strings such as `1000perkw` or `normal`, but not `free`, target-confirmation fee preferences, or recipient-paid fees. CLN prepares on-chain transactions with `txprepare`, which reserves wallet inputs until `txsend`, `txdiscard`, or lightningd restart.
 
 For LND payment flows, avoid using `admin.macaroon` in apps. Bake a narrower macaroon with the permissions LNI needs for Lightning sends and on-chain sends:
 

@@ -175,7 +175,7 @@ lnurl::get_payment_info(destination, amount_msats) -> Result<PaymentInfo, ApiErr
 lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: bolt11|bolt12|lnurl|lightning_address
 lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
 
-// On-chain Bitcoin payments (currently implemented for Strike, Blink, and LND)
+// On-chain Bitcoin payments (currently implemented for Strike, Blink, LND, and CLN)
 node.prepare_onchain_transaction(PrepareOnchainTransactionParams) -> Result<OnchainTransaction, ApiError>
 node.pay_onchain(OnchainTransaction) -> Result<PayOnchainResponse, ApiError>
 node.pay_onchain_with_options(OnchainTransaction, PayOnchainOptions) -> Result<PayOnchainResponse, ApiError>
@@ -190,7 +190,7 @@ node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 On-chain Bitcoin payments
 -------------------------
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for Strike, Blink, and LND. `fee_payer` answers who pays the mining/provider fee:
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for Strike, Blink, LND, and CLN. `fee_payer` answers who pays the mining/provider fee:
 
 - `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
 - `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
@@ -294,6 +294,8 @@ For Blink, LNI maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, an
 
 For LND, LNI maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target confirmation and sats/vbyte fee preferences. LND does not support `free`, backend fee preferences, or recipient-paid fees for on-chain sends.
 
+For CLN, LNI maps `fast`, `normal`, and `slow` to CLN's `urgent`, `normal`, and `slow` feerates. CLN also supports explicit sats/vbyte fee preferences and raw backend feerate strings such as `1000perkw` or `normal`. CLN does not support `free`, target-confirmation fee preferences, or recipient-paid fees. CLN prepares on-chain transactions with `txprepare`, which reserves wallet inputs until `txsend`, `txdiscard`, or lightningd restart.
+
 LND payment macaroons
 ---------------------
 
@@ -357,6 +359,12 @@ LND_URL=https://127.0.0.1:8080
 LND_MACAROON=...
 LND_ONCHAIN_TEST_ADDRESS=bc1q...
 LND_ONCHAIN_AMOUNT_SATS=10000
+
+# CLN
+CLN_URL=https://127.0.0.1:3010
+CLN_RUNE=...
+CLN_ONCHAIN_TEST_ADDRESS=bc1q...
+CLN_ONCHAIN_AMOUNT_SATS=10000
 ```
 
 Run TypeScript integration tests:
@@ -366,14 +374,16 @@ cd bindings/typescript
 npm run test:integration:strike
 npm run test:integration:blink
 npm run test:integration:lnd
+npm run test:integration:cln
 ```
 
-Blink and LND TypeScript and Rust tests prepare a quote first, then skip the broadcast unless the confirmation variables are set. Run Rust tests from `crates/lni` so `dotenv` loads `crates/lni/.env`:
+Blink, LND, and CLN TypeScript and Rust tests prepare a quote first, then skip the broadcast unless the confirmation variables are set. CLN prepare-only tests call `txdiscard` to release reserved inputs. Run Rust tests from `crates/lni` so `dotenv` loads `crates/lni/.env`:
 
 ```bash
 cd crates/lni
 cargo test blink::lib::tests::test_pay_onchain_e2e -- --nocapture
 cargo test lnd::lib::tests::test_pay_onchain_e2e -- --nocapture
+cargo test cln::lib::tests::test_pay_onchain_e2e -- --nocapture
 ```
 
 Broadcast tests require a second pair of env vars for the provider being tested:
@@ -387,6 +397,9 @@ BLINK_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
 
 LND_RUN_ONCHAIN_SEND=true
 LND_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
+
+CLN_RUN_ONCHAIN_SEND=true
+CLN_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN
 ```
 
 Run broadcast tests only when you intentionally want to send real bitcoin:
@@ -396,14 +409,16 @@ cd bindings/typescript
 npm run test:integration:strike
 npm run test:integration:blink
 npm run test:integration:lnd
+npm run test:integration:cln
 
 cd crates/lni
 cargo test strike::lib::tests::test_pay_onchain_e2e -- --ignored --nocapture
 cargo test blink::lib::tests::test_pay_onchain_e2e -- --nocapture
 cargo test lnd::lib::tests::test_pay_onchain_e2e -- --nocapture
+cargo test cln::lib::tests::test_pay_onchain_e2e -- --nocapture
 ```
 
-Without `-- --ignored`, Strike's Rust broadcast test is discovered but skipped. Blink and LND Rust tests are not ignored; they prepare a quote and return before broadcasting unless confirmation is present. TypeScript broadcast tests are skipped unless the provider-specific confirmation variables are present. Without the provider-specific `*_RUN_ONCHAIN_SEND=true` and `*_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN`, broadcast tests refuse to broadcast.
+Without `-- --ignored`, Strike's Rust broadcast test is discovered but skipped. Blink, LND, and CLN Rust tests are not ignored; they prepare a quote and return before broadcasting unless confirmation is present. TypeScript broadcast tests are skipped unless the provider-specific confirmation variables are present. Without the provider-specific `*_RUN_ONCHAIN_SEND=true` and `*_ONCHAIN_SEND_CONFIRM=I_UNDERSTAND_THIS_BROADCASTS_BITCOIN`, broadcast tests refuse to broadcast.
 
 #### Node Management
 ```rust
