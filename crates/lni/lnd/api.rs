@@ -795,15 +795,39 @@ pub async fn prepare_onchain_transaction(
     let fee = params.fee.clone().unwrap_or_else(default_onchain_fee);
     let fee_payer = resolve_lnd_fee_payer(params.fee_payer.clone())?;
     let fee_request = resolve_lnd_fee_request(&fee)?;
+
+    if fee_request.sat_per_vbyte.is_some() {
+        return Ok(OnchainTransaction {
+            id: None,
+            address: params.address,
+            amount_sats: params.amount_sats,
+            fee_sats: None,
+            total_amount_sats: None,
+            recipient_amount_sats: Some(params.amount_sats),
+            fee_payer,
+            fee,
+            expires_at: None,
+            estimated_delivery_seconds: None,
+            raw: Some(
+                serde_json::json!({
+                    "send_request": {
+                        "sat_per_vbyte": fee_request
+                            .sat_per_vbyte
+                            .map(|sat_per_vbyte| sat_per_vbyte.to_string()),
+                    },
+                    "label": params.description,
+                })
+                .to_string(),
+            ),
+        });
+    }
+
     let client = async_client(&config);
     let fee_url = format!("{}/v1/transactions/fee", config.url);
     let addr_amount_key = format!("AddrToAmount[{}]", params.address);
     let mut query = vec![(addr_amount_key, params.amount_sats.to_string())];
     if let Some(target_conf) = fee_request.target_conf {
         query.push(("target_conf".to_string(), target_conf.to_string()));
-    }
-    if let Some(sat_per_vbyte) = fee_request.sat_per_vbyte {
-        query.push(("sat_per_vbyte".to_string(), sat_per_vbyte.to_string()));
     }
 
     let response = client
@@ -1019,5 +1043,49 @@ fn parse_r_preimage(r_preimage_str: &str) -> String {
             // This handles cases where r_preimage might already be in hex format or is invalid
             r_preimage_str.to_string()
         }
+    }
+}
+
+#[cfg(test)]
+mod onchain_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn prepare_manual_sat_per_vbyte_without_fee_estimate() {
+        let transaction = prepare_onchain_transaction(
+            LndConfig {
+                url: "https://lnd.test".to_string(),
+                macaroon: "00".to_string(),
+                socks5_proxy: None,
+                accept_invalid_certs: Some(true),
+                http_timeout: Some(1),
+            },
+            PrepareOnchainTransactionParams {
+                address: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh".to_string(),
+                amount_sats: 10_000,
+                fee: Some(OnchainFeePreference {
+                    preference_type: OnchainFeePreferenceType::SatsPerVbyte,
+                    speed: None,
+                    target_conf: None,
+                    sats_per_vbyte: Some(5.0),
+                    backend: None,
+                }),
+                fee_payer: Some(OnchainFeePayer::Sender),
+                description: Some("cold storage".to_string()),
+                idempotency_key: None,
+            },
+        )
+        .await
+        .expect("manual sats/vbyte prepare should not call LND fee estimate");
+
+        assert_eq!(transaction.amount_sats, 10_000);
+        assert_eq!(transaction.recipient_amount_sats, Some(10_000));
+        assert_eq!(transaction.fee_sats, None);
+        assert_eq!(transaction.total_amount_sats, None);
+
+        let raw: serde_json::Value =
+            serde_json::from_str(transaction.raw.as_deref().unwrap_or_default()).unwrap();
+        assert_eq!(raw["send_request"]["sat_per_vbyte"], "5");
+        assert_eq!(raw["label"], "cold storage");
     }
 }

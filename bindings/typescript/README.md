@@ -90,7 +90,7 @@ On-chain amounts are expressed in sats. Lightning invoice and offer APIs continu
 
 Blink maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
 
-LND maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target-confirmation and sats/vbyte fee preferences, but not `free`, backend fee preferences, or recipient-paid fees.
+LND maps `fast`, `normal`, and `slow` to confirmation targets of `1`, `6`, and `12` blocks. LND also supports explicit target-confirmation and sats/vbyte fee preferences. LND can quote target-confirmation sends with `EstimateFee`, but LND cannot quote an explicit sats/vbyte send before broadcast; in that case `prepareOnchainTransaction` returns no `feeSats`, and `payOnchain` requires `dangerouslyDisableFeeGuardrail: true` after the caller has chosen and accepted the fee rate. LND does not support `free`, backend fee preferences, or recipient-paid fees.
 
 CLN maps `fast`, `normal`, and `slow` to CLN's `urgent`, `normal`, and `slow` feerates. CLN also supports explicit sats/vbyte fee preferences and raw backend feerate strings such as `1000perkw` or `normal`, but not `free`, target-confirmation fee preferences, or recipient-paid fees. CLN prepares on-chain transactions with `txprepare`, which reserves wallet inputs until `txsend`, `txdiscard`, or lightningd restart.
 

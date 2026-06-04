@@ -450,6 +450,21 @@ export class LndNode implements LightningNode, OnchainPayments {
     const fee = params.fee ?? defaultOnchainFee();
     const feePayer = resolveLndFeePayer(params.feePayer);
     const feeRequest = resolveLndFeeRequest(fee);
+
+    if (feeRequest.sat_per_vbyte !== undefined) {
+      return {
+        address: params.address,
+        amountSats,
+        recipientAmountSats: amountSats,
+        feePayer,
+        fee,
+        raw: {
+          sendRequest: feeRequest,
+          label: params.description,
+        },
+      };
+    }
+
     const estimate = await this.getJsonWithQuery<LndEstimateFeeResponse>('/v1/transactions/fee', {
       [`AddrToAmount[${params.address}]`]: amountSats,
       ...feeRequest,

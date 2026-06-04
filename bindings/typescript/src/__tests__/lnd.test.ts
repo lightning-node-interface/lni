@@ -51,6 +51,36 @@ describe('LndNode on-chain payments', () => {
     });
   });
 
+  it('prepares a manual sat/vbyte send without calling LND fee estimate', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new LndNode(
+      { url: 'https://lnd.test', macaroon: '00' },
+      { fetch: fetchMock },
+    );
+
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
+      description: 'cold storage',
+    });
+
+    expect(transaction).toMatchObject({
+      address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+      amountSats: 10_000,
+      recipientAmountSats: 10_000,
+      feePayer: 'sender',
+      fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
+      raw: {
+        sendRequest: { sat_per_vbyte: '5' },
+        label: 'cold storage',
+      },
+    });
+    expect(transaction.feeSats).toBeUndefined();
+    expect(transaction.totalAmountSats).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('executes an on-chain transaction using LND sendcoins', async () => {
     const fetchMock = vi.fn<FetchLike>(async (input, init) => {
       const url = new URL(String(input));
@@ -134,6 +164,25 @@ describe('LndNode on-chain payments', () => {
         feeSats: 3_000,
         feePayer: 'sender',
         fee: { type: 'targetConf', blocks: 6 },
+      }),
+    ).rejects.toMatchObject({ code: 'InvalidInput' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks manual sat/vbyte execution unless the fee guardrail is disabled', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new LndNode(
+      { url: 'https://lnd.test', macaroon: '00' },
+      { fetch: fetchMock },
+    );
+
+    await expect(
+      node.payOnchain({
+        address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amountSats: 10_000,
+        recipientAmountSats: 10_000,
+        feePayer: 'sender',
+        fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
       }),
     ).rejects.toMatchObject({ code: 'InvalidInput' });
     expect(fetchMock).not.toHaveBeenCalled();
