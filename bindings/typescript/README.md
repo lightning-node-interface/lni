@@ -278,6 +278,11 @@ const invoice = await arkadeNode.createInvoice({
 - Uses `fetch`, no Node-native runtime dependency required.
 - Use `@sunnyln/lni-spark` when Spark support is needed.
 - Use `@sunnyln/lni-arkade` when Arkade Boltz support is needed.
+- Expo / React Native apps using NWC can install the package's pollyfill `expo-crypto` fallback before using LNI:
+  ```ts
+  import '@sunnyln/lni/expo-polyfills';
+  import { createNode } from '@sunnyln/lni';
+  ```
 - For local `file:` package development with Expo, build the package first (`bindings/typescript`: `npm run build`) and use the Expo example `metro.config.js` pattern for `./dist/*` resolution.
 - You can inject custom fetch via constructor options:
   - `new LndNode(config, { fetch: customFetch })`

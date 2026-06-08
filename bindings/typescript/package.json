@@ -1,10 +1,12 @@
 {
   "name": "@sunnyln/lni",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "private": false,
   "description": "Lightning Node Interface. Connect to CLN, LND, Phoenixd, NWC, Strike, Speed and Blink. Supports BOLT11, BOLT12, LNURL and Lightning Address.",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/expo-polyfills.js"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/lightning-node-interface/lni.git",
@@ -50,6 +52,11 @@
       "types": "./dist/internal/transform.d.ts",
       "import": "./dist/internal/transform.js",
       "default": "./dist/internal/transform.js"
+    },
+    "./expo-polyfills": {
+      "types": "./dist/expo-polyfills.d.ts",
+      "import": "./dist/expo-polyfills.js",
+      "default": "./dist/expo-polyfills.js"
     }
   },
   "files": [
@@ -81,6 +88,14 @@
     "@getalby/sdk": "^7.0.0",
     "@scure/base": "^2.0.0",
     "light-bolt11-decoder": "^3.2.0"
+  },
+  "peerDependencies": {
+    "expo-crypto": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-crypto": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.13.5",

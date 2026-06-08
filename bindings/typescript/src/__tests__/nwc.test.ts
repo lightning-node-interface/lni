@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nwcMocks = vi.hoisted(() => ({
+  payInvoice: vi.fn(),
   lookupInvoice: vi.fn(),
   listTransactions: vi.fn(),
   close: vi.fn(),
@@ -13,6 +14,7 @@ const bolt11Mocks = vi.hoisted(() => ({
 vi.mock('@getalby/sdk/nwc', () => ({
   NWCClient: Object.assign(
     vi.fn().mockImplementation(() => ({
+      payInvoice: nwcMocks.payInvoice,
       lookupInvoice: nwcMocks.lookupInvoice,
       listTransactions: nwcMocks.listTransactions,
       close: nwcMocks.close,
@@ -30,12 +32,16 @@ vi.mock('../decode.js', () => ({
 }));
 
 import { NwcNode } from '../nodes/nwc.js';
+import { registerSha256DigestFallback } from '../internal/sha256.js';
 
 const PAYMENT_HASH = '31b06bf9be4c938914030eb23d583a4fe6f6e2f3374293170f027be248ed6370';
 const OTHER_PAYMENT_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
+const ZERO_PREIMAGE = '0000000000000000000000000000000000000000000000000000000000000000';
+const ZERO_PREIMAGE_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
 const BOLT11_INVOICE = 'lnbc1testinvoice';
 const NWC_URI = 'nostr+walletconnect://wallet?relay=wss://relay.example&secret=test';
 const originalConsoleError = console.error;
+const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
 
 function nwcTransaction(overrides: Record<string, unknown> = {}) {
   return {
@@ -79,6 +85,7 @@ function mockLookupFailure(error: Error) {
 }
 
 beforeEach(() => {
+  nwcMocks.payInvoice.mockReset();
   nwcMocks.lookupInvoice.mockReset();
   nwcMocks.listTransactions.mockReset();
   nwcMocks.close.mockReset();
@@ -88,7 +95,64 @@ beforeEach(() => {
 
 afterEach(() => {
   console.error = originalConsoleError;
+  registerSha256DigestFallback(undefined);
+
+  if (originalCryptoDescriptor) {
+    Object.defineProperty(globalThis, 'crypto', originalCryptoDescriptor);
+  } else {
+    delete (globalThis as { crypto?: Crypto }).crypto;
+  }
 });
+
+describe('NwcNode.payInvoice', () => {
+  it('hashes returned preimages with a registered fallback when global crypto.subtle is absent', async () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {},
+    });
+    registerSha256DigestFallback(async () => hexToBytesForTest(ZERO_PREIMAGE_PAYMENT_HASH));
+    nwcMocks.payInvoice.mockResolvedValue({
+      preimage: ZERO_PREIMAGE,
+      fees_paid: 21,
+    });
+
+    const response = await makeNode().payInvoice({ invoice: BOLT11_INVOICE });
+
+    expect(response).toEqual({
+      paymentHash: ZERO_PREIMAGE_PAYMENT_HASH,
+      preimage: ZERO_PREIMAGE,
+      feeMsats: 21,
+    });
+    expect(nwcMocks.payInvoice).toHaveBeenCalledWith({
+      invoice: BOLT11_INVOICE,
+      amount: undefined,
+    });
+  });
+
+  it('throws a clear error when no SHA-256 implementation is available', async () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {},
+    });
+    nwcMocks.payInvoice.mockResolvedValue({
+      preimage: ZERO_PREIMAGE,
+      fees_paid: 21,
+    });
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toThrow(
+      'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.',
+    );
+  });
+});
+
+function hexToBytesForTest(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+
+  return bytes;
+}
 
 describe('NwcNode.lookupInvoice', () => {
   it('returns successful native lookup_invoice responses', async () => {
