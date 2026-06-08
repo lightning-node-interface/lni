@@ -1,9 +1,10 @@
 import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError } from '../errors.js';
-import { bytesToHex, hexToBytes } from '../internal/encoding.js';
+import { hexToBytes } from '../internal/encoding.js';
 import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
+import { sha256Hex } from '../internal/sha256.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
 import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
 
@@ -44,15 +45,6 @@ function paymentHashFromInvoice(invoice: string): string {
   } catch {
     return '';
   }
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  if (!globalThis.crypto?.subtle) {
-    throw new LniError('Api', 'Web Crypto API is required to hash NWC preimages.');
-  }
-
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  return bytesToHex(new Uint8Array(digest));
 }
 
 function nwcTransactionToLniTransaction(tx: Nip47Transaction | NwcListTransaction): Transaction {

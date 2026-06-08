@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-spark",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "private": false,
   "description": "Optional Spark adapter for @sunnyln/lni with browser and Expo compatible pure TypeScript signer patching.",
   "type": "module",
@@ -56,7 +56,7 @@
     "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/spark.real.test.ts"
   },
   "peerDependencies": {
-    "@sunnyln/lni": "^0.2.10"
+    "@sunnyln/lni": "^0.2.11"
   },
   "dependencies": {
     "@buildonspark/spark-sdk": "^0.6.3",
