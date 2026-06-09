@@ -1,10 +1,11 @@
-use crate::nwc::NwcConfig;
+use crate::nwc::{NwcConfig, NwcLightningAddress};
 use crate::types::{OnInvoiceEventCallback, OnInvoiceEventParams};
 use crate::{
     ApiError, CreateInvoiceParams, ListTransactionsParams, NodeInfo, Offer, PayInvoiceParams,
     PayInvoiceResponse, Transaction,
 };
 use lightning_invoice::Bolt11Invoice;
+use nwc::nostr::nips::nip47;
 use nwc::prelude::*;
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
@@ -27,12 +28,30 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
     Ok(nwc)
 }
 
+fn nwc_error_code_to_string(code: nip47::ErrorCode) -> String {
+    serde_json::to_string(&code)
+        .map(|value| value.trim_matches('"').to_string())
+        .unwrap_or_else(|_| format!("{:?}", code))
+}
+
+fn map_nwc_error(error: nwc::Error, fallback_prefix: &str) -> ApiError {
+    match error {
+        nwc::Error::NIP47(nip47::Error::ErrorCode(nwc_error)) => ApiError::Nwc {
+            code: nwc_error_code_to_string(nwc_error.code),
+            message: nwc_error.message,
+        },
+        other => ApiError::Api {
+            reason: format!("{}: {}", fallback_prefix, other),
+        },
+    }
+}
+
 pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
         let nwc = create_nwc_client(&config).await?;
         
         // Get balance first
         let balance = nwc.get_balance().await
-            .map_err(|e| ApiError::Api { reason: format!("Failed to get balance: {}", e) })?;
+            .map_err(|e| map_nwc_error(e, "Failed to get balance"))?;
         
         // Try to get more info using get_info method if available
         let info_result = nwc.get_info().await;
@@ -89,15 +108,45 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
 
 pub async fn get_permissions(config: NwcConfig) -> Result<crate::Permissions, ApiError> {
     let nwc = create_nwc_client(&config).await?;
-    let info = nwc.get_info().await.map_err(|e| ApiError::Api {
-        reason: format!("Failed to get NWC permissions: {}", e),
-    })?;
+    let info = nwc.get_info().await.map_err(|e| map_nwc_error(e, "Failed to get NWC permissions"))?;
 
     if info.methods.is_empty() {
         Ok(crate::permissions::nwc_method_permissions())
     } else {
         Ok(crate::permissions::normalize_nwc_permissions(info.methods))
     }
+}
+
+pub fn lightning_address_from_nwc_uri(config: &NwcConfig) -> Result<String, ApiError> {
+    let normalized_uri = config
+        .nwc_uri
+        .replace("nostrwalletconnect://", "http://")
+        .replace("nostr+walletconnect://", "http://")
+        .replace("nostrwalletconnect:", "http://")
+        .replace("nostr+walletconnect:", "http://");
+    let uri = reqwest::Url::parse(&normalized_uri)
+        .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
+    let lightning_address = uri
+        .query_pairs()
+        .find(|(key, _)| key == "lud16")
+        .map(|(_, value)| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::InvalidInput("NWC URI does not include a lud16 Lightning Address".to_string()))?;
+
+    match crate::lnurl::PaymentDestination::parse(&lightning_address)? {
+        crate::lnurl::PaymentDestination::LightningAddress { .. } => Ok(lightning_address),
+        _ => Err(ApiError::InvalidInput("NWC lud16 value must be a Lightning Address".to_string())),
+    }
+}
+
+pub async fn get_lightning_address(config: NwcConfig) -> Result<NwcLightningAddress, ApiError> {
+    let lightning_address = lightning_address_from_nwc_uri(&config)?;
+    let lnurl_verify_supported = crate::lnurl::lightning_address_lnurl_verify_supported(&lightning_address).await;
+
+    Ok(NwcLightningAddress {
+        lightning_address,
+        lnurl_verify_supported,
+    })
 }
 
 pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
@@ -111,7 +160,7 @@ pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> R
     };
     
     let response = nwc.make_invoice(request).await
-        .map_err(|e| ApiError::Api { reason: format!("Failed to create invoice: {}", e) })?;
+        .map_err(|e| map_nwc_error(e, "Failed to create invoice"))?;
     
     Ok(Transaction {
         type_: "incoming".to_string(),
@@ -136,7 +185,7 @@ pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<
     let request = PayInvoiceRequest::new(params.invoice);
     
     let response = nwc.pay_invoice(request).await
-        .map_err(|e| ApiError::Api { reason: format!("Failed to pay invoice: {}", e) })?;
+        .map_err(|e| map_nwc_error(e, "Failed to pay invoice"))?;
     
     // Compute payment hash from preimage (payment_hash = SHA256(preimage))
     let payment_hash = if !response.preimage.is_empty() {
@@ -203,9 +252,7 @@ pub async fn lookup_invoice(
                 return Ok(transaction);
             }
 
-            return Err(ApiError::Api {
-                reason: format!("Failed to lookup invoice: {}", error),
-            });
+            return Err(map_nwc_error(error, "Failed to lookup invoice"));
         }
     };
 
@@ -321,9 +368,7 @@ async fn list_transactions_page_raw(
     let response = nwc
         .list_transactions(request)
         .await
-        .map_err(|e| ApiError::Api {
-            reason: format!("Failed to list transactions: {}", e),
-        })?;
+        .map_err(|e| map_nwc_error(e, "Failed to list transactions"))?;
 
     Ok(response
         .into_iter()
@@ -544,6 +589,22 @@ mod tests {
 
         assert_eq!(status, "pending");
         assert!(transaction.is_none());
+    }
+
+    #[test]
+    fn maps_nip47_error_codes_to_structured_api_errors() {
+        let error = nwc::Error::NIP47(nip47::Error::ErrorCode(nip47::NIP47Error {
+            code: nip47::ErrorCode::QuotaExceeded,
+            message: "quota spent".to_string(),
+        }));
+
+        match map_nwc_error(error, "Failed to pay invoice") {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "QUOTA_EXCEEDED");
+                assert_eq!(message, "quota spent");
+            }
+            other => panic!("expected structured NWC error, got {:?}", other),
+        }
     }
 
     #[test]

@@ -22,6 +22,14 @@ pub struct NwcConfig {
     pub http_timeout: Option<i64>,
 }
 
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NwcLightningAddress {
+    pub lightning_address: String,
+    pub lnurl_verify_supported: bool,
+}
+
 impl std::fmt::Debug for NwcConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NwcConfig")
@@ -65,6 +73,10 @@ impl NwcNode {
 impl NwcNode {
     pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
         crate::nwc::api::get_permissions(self.config.clone()).await
+    }
+
+    pub async fn get_lightning_address(&self) -> Result<NwcLightningAddress, ApiError> {
+        crate::nwc::api::get_lightning_address(self.config.clone()).await
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
@@ -162,6 +174,39 @@ mod tests {
             dotenv().ok();
             env::var("NWC_TEST_PAYMENT_REQUEST").expect("NWC_TEST_PAYMENT_REQUEST must be set")
         };
+    }
+
+    fn nwc_uri_with_lud16(lud16: &str) -> String {
+        format!(
+            "nostr+walletconnect://wallet?secret=test&relay=wss%3A%2F%2Frelay.example&lud16={}",
+            lud16
+        )
+    }
+
+    #[test]
+    fn test_lightning_address_from_nwc_uri() {
+        let config = NwcConfig {
+            nwc_uri: nwc_uri_with_lud16("test%40example.com"),
+            ..Default::default()
+        };
+
+        let lightning_address = crate::nwc::api::lightning_address_from_nwc_uri(&config)
+            .expect("lud16 should parse from NWC URI");
+
+        assert_eq!(lightning_address, "test@example.com");
+    }
+
+    #[test]
+    fn test_lightning_address_from_nwc_uri_requires_lud16() {
+        let config = NwcConfig {
+            nwc_uri: "nostr+walletconnect://wallet?secret=test&relay=wss%3A%2F%2Frelay.example".to_string(),
+            ..Default::default()
+        };
+
+        let error = crate::nwc::api::lightning_address_from_nwc_uri(&config)
+            .expect_err("missing lud16 should fail");
+
+        assert!(format!("{:?}", error).contains("lud16"));
     }
 
     #[tokio::test]

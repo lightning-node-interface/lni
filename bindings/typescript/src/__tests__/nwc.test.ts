@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nwcMocks = vi.hoisted(() => ({
+  Nip47Error: class Nip47Error extends Error {
+    code: string;
+
+    constructor(message: string, code: string) {
+      super(message);
+      this.code = code;
+    }
+  },
   payInvoice: vi.fn(),
   lookupInvoice: vi.fn(),
   listTransactions: vi.fn(),
@@ -12,6 +20,7 @@ const bolt11Mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@getalby/sdk/nwc', () => ({
+  Nip47Error: nwcMocks.Nip47Error,
   NWCClient: Object.assign(
     vi.fn().mockImplementation(() => ({
       payInvoice: nwcMocks.payInvoice,
@@ -32,6 +41,7 @@ vi.mock('../decode.js', () => ({
 }));
 
 import { NwcNode } from '../nodes/nwc.js';
+import { NwcError } from '../errors.js';
 import { registerSha256DigestFallback } from '../internal/sha256.js';
 
 const PAYMENT_HASH = '31b06bf9be4c938914030eb23d583a4fe6f6e2f3374293170f027be248ed6370';
@@ -40,6 +50,7 @@ const ZERO_PREIMAGE = '000000000000000000000000000000000000000000000000000000000
 const ZERO_PREIMAGE_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
 const BOLT11_INVOICE = 'lnbc1testinvoice';
 const NWC_URI = 'nostr+walletconnect://wallet?relay=wss://relay.example&secret=test';
+const NWC_URI_WITH_LUD16 = `${NWC_URI}&lud16=test%40example.com`;
 const originalConsoleError = console.error;
 const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
 
@@ -63,6 +74,14 @@ function nwcTransaction(overrides: Record<string, unknown> = {}) {
 
 function makeNode() {
   return new NwcNode({ nwcUri: NWC_URI });
+}
+
+function makeJsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      'content-type': 'application/json',
+    },
+  });
 }
 
 function mockBolt11Decode() {
@@ -105,6 +124,21 @@ afterEach(() => {
 });
 
 describe('NwcNode.payInvoice', () => {
+  it('preserves typed NIP-47 wallet error codes from the SDK', async () => {
+    nwcMocks.payInvoice.mockRejectedValue(new nwcMocks.Nip47Error('quota spent', 'QUOTA_EXCEEDED'));
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toMatchObject({
+      name: 'NwcError',
+      code: 'NwcError',
+      nwcCode: 'QUOTA_EXCEEDED',
+      nwcMessage: 'quota spent',
+      operation: 'pay_invoice',
+      message: 'quota spent',
+    });
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toBeInstanceOf(NwcError);
+  });
+
   it('hashes returned preimages with a registered fallback when global crypto.subtle is absent', async () => {
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
@@ -141,6 +175,69 @@ describe('NwcNode.payInvoice', () => {
 
     await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toThrow(
       'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.',
+    );
+  });
+});
+
+describe('NwcNode.getLightningAddress', () => {
+  it('returns the lud16 Lightning Address and true when LNURL verify succeeds', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          callback: 'https://example.com/lnurl/callback',
+          maxSendable: 500_000_000,
+          minSendable: 1,
+          metadata: '[["text/plain","test"]]',
+          tag: 'payRequest',
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          pr: 'lnbc1testinvoice',
+          verify: 'https://example.com/lnurl/verify',
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse({ status: 'OK' }));
+
+    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+
+    expect(response).toEqual({
+      lightningAddress: 'test@example.com',
+      lnurlVerifySupported: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/.well-known/lnurlp/test');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://example.com/lnurl/callback?amount=100000');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://example.com/lnurl/verify');
+  });
+
+  it('returns false when the Lightning Address LNURL callback has no verify endpoint', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          callback: 'https://example.com/lnurl/callback',
+          maxSendable: 500_000_000,
+          minSendable: 1,
+          metadata: '[["text/plain","test"]]',
+          tag: 'payRequest',
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse({ pr: 'lnbc1testinvoice' }));
+
+    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+
+    expect(response).toEqual({
+      lightningAddress: 'test@example.com',
+      lnurlVerifySupported: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws clearly when the NWC URI has no lud16 value', async () => {
+    await expect(makeNode().getLightningAddress()).rejects.toThrow(
+      'NWC URI does not include a lud16 Lightning Address.',
     );
   });
 });

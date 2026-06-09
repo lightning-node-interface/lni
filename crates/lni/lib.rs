@@ -29,6 +29,8 @@ pub enum ApiError {
     InvalidInput(String),
     #[error("LnurlError: {0}")]
     LnurlError(String),
+    #[error("NwcError: {code}: {message}")]
+    Nwc { code: String, message: String },
 }
 impl From<serde_json::Error> for ApiError {
     fn from(e: serde_json::Error) -> Self {
@@ -211,7 +213,7 @@ pub mod nwc {
     pub mod api;
     pub mod lib;
     pub mod types;
-    pub use lib::{NwcConfig, NwcNode};
+    pub use lib::{NwcConfig, NwcLightningAddress, NwcNode};
 }
 
 pub mod strike {

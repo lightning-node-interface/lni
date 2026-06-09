@@ -32,6 +32,12 @@ pub struct LnurlInvoiceResponse {
     pub routes: Option<Vec<serde_json::Value>>,
 }
 
+#[derive(Debug, Deserialize)]
+struct LnurlVerifyPayResponse {
+    pub pr: String,
+    pub verify: String,
+}
+
 /// Error response from LNURL service
 #[derive(Debug, Deserialize)]
 pub struct LnurlErrorResponse {
@@ -178,6 +184,113 @@ pub async fn request_invoice(callback_url: &str, amount_msats: i64) -> Result<St
     validate_invoice_amount(&invoice_resp.pr, amount_msats)?;
 
     Ok(invoice_resp.pr)
+}
+
+fn handle_lnurl_error_value(value: &serde_json::Value) -> Result<(), ApiError> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+
+    if object
+        .get("status")
+        .and_then(|status| status.as_str())
+        .map(|status| status.eq_ignore_ascii_case("ERROR"))
+        .unwrap_or(false)
+    {
+        if let Some(reason) = object.get("reason").and_then(|reason| reason.as_str()) {
+            return Err(ApiError::LnurlError(reason.to_string()));
+        }
+    }
+
+    if object
+        .get("error")
+        .and_then(|error| error.as_bool())
+        .unwrap_or(false)
+    {
+        if let Some(message) = object.get("message").and_then(|message| message.as_str()) {
+            return Err(ApiError::LnurlError(message.to_string()));
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_lnurl_ok_value(value: &serde_json::Value, endpoint_label: &str) -> Result<(), ApiError> {
+    handle_lnurl_error_value(value)?;
+
+    let status_ok = value
+        .as_object()
+        .and_then(|object| object.get("status"))
+        .and_then(|status| status.as_str())
+        .map(|status| status == "OK")
+        .unwrap_or(false);
+    if status_ok {
+        Ok(())
+    } else {
+        Err(ApiError::InvalidInput(format!("{} response status is not OK", endpoint_label)))
+    }
+}
+
+fn callback_url_with_amount(callback_url: &str, amount_msats: i64) -> Result<String, ApiError> {
+    let mut url = reqwest::Url::parse(callback_url)
+        .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL callback URL: {}", e)))?;
+    url.query_pairs_mut().append_pair("amount", &amount_msats.to_string());
+    Ok(url.to_string())
+}
+
+async fn fetch_lnurl_json_value(url: &str) -> Result<serde_json::Value, ApiError> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+    let response = client
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?;
+
+    let text = response
+        .text()
+        .await
+        .map_err(|e| ApiError::NetworkError(format!("Failed to read LNURL response: {}", e)))?;
+
+    let value = serde_json::from_str::<serde_json::Value>(&text)
+        .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL JSON response: {} - {}", e, &text[..text.len().min(200)])))?;
+    handle_lnurl_error_value(&value)?;
+    Ok(value)
+}
+
+/// Verify whether a Lightning Address LNURL-pay endpoint supports LNURL-verify.
+pub async fn verify_lightning_address_pay_request(lightning_address: &str) -> Result<(), ApiError> {
+    let PaymentDestination::LightningAddress { user, domain } = PaymentDestination::parse(lightning_address)? else {
+        return Err(ApiError::InvalidInput("Expected Lightning Address".to_string()));
+    };
+    let well_known = fetch_lnurl_pay(&lightning_address_to_url(&user, &domain)).await?;
+    let amount_msats = std::cmp::min(
+        std::cmp::max(100_000, well_known.min_sendable),
+        well_known.max_sendable,
+    );
+
+    if amount_msats < well_known.min_sendable || amount_msats > well_known.max_sendable {
+        return Err(ApiError::InvalidInput("Invalid LNURL sendable amount range".to_string()));
+    }
+
+    let callback_response = fetch_lnurl_json_value(&callback_url_with_amount(&well_known.callback, amount_msats)?).await?;
+    let verify_response: LnurlVerifyPayResponse = serde_json::from_value(callback_response)
+        .map_err(|_| ApiError::InvalidInput("LNURL-verify endpoint is not supported".to_string()))?;
+
+    if verify_response.pr.is_empty() || verify_response.verify.is_empty() {
+        return Err(ApiError::InvalidInput("LNURL-verify endpoint is not supported".to_string()));
+    }
+
+    let verify_result = fetch_lnurl_json_value(&verify_response.verify).await?;
+    handle_lnurl_ok_value(&verify_result, "LNURL verify")
+}
+
+pub async fn lightning_address_lnurl_verify_supported(lightning_address: &str) -> bool {
+    verify_lightning_address_pay_request(lightning_address).await.is_ok()
 }
 
 fn validate_invoice_amount(invoice: &str, expected_amount_msats: i64) -> Result<(), ApiError> {

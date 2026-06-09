@@ -1,12 +1,13 @@
-import { NWCClient, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
+import { NWCClient, Nip47Error, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorOperation } from '../errors.js';
 import { hexToBytes } from '../internal/encoding.js';
 import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { sha256Hex } from '../internal/sha256.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
-import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
+import { verifyLightningAddressPayRequest } from '../lnurl.js';
+import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningAddressInfo, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
 
 type NwcListTransaction = Partial<Omit<Nip47Transaction, 'type' | 'payment_hash'>> & {
   type?: Nip47Transaction['type'];
@@ -17,6 +18,30 @@ type NwcListTransactionsResponse = Omit<Nip47ListTransactionsResponse, 'transact
   transactions: NwcListTransaction[];
   total_count?: number;
 };
+
+function toNwcError(error: unknown, operation: NwcErrorOperation): NwcError | undefined {
+  if (error instanceof NwcError) {
+    return error;
+  }
+
+  if (error instanceof Nip47Error) {
+    return new NwcError(error.code, error.message, {
+      operation,
+      cause: error,
+    });
+  }
+
+  return undefined;
+}
+
+function throwNwcOrApiError(error: unknown, operation: NwcErrorOperation, fallbackPrefix: string): never {
+  const nwcError = toNwcError(error, operation);
+  if (nwcError) {
+    throw nwcError;
+  }
+
+  throw new LniError('Api', `${fallbackPrefix}: ${(error as Error)?.message ?? 'unknown error'}`, { cause: error });
+}
 
 function extractPubkeyFromNwcUri(uri: string): string {
   try {
@@ -32,6 +57,28 @@ function extractPubkeyFromNwcUri(uri: string): string {
   }
 
   return '';
+}
+
+function extractLightningAddressFromNwcUri(uri: string): string {
+  try {
+    const parsed = NWCClient.parseWalletConnectUrl(uri);
+    if (parsed.lud16?.trim()) {
+      return parsed.lud16.trim();
+    }
+  } catch {
+    // fall back to URL parsing below
+  }
+
+  try {
+    const normalized = uri
+      .replace('nostrwalletconnect://', 'http://')
+      .replace('nostr+walletconnect://', 'http://')
+      .replace('nostrwalletconnect:', 'http://')
+      .replace('nostr+walletconnect:', 'http://');
+    return new URL(normalized).searchParams.get('lud16')?.trim() ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function paymentHashFromInvoice(invoice: string): string {
@@ -98,7 +145,10 @@ function replayConsoleErrors(errorLogs: unknown[][]): void {
 export class NwcNode implements LightningNode {
   private readonly client: NWCClient;
 
-  constructor(private readonly config: NwcConfig, _options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: NwcConfig,
+    private readonly options: NodeRequestOptions = {},
+  ) {
     this.client = new NWCClient({
       nostrWalletConnectUrl: config.nwcUri,
     });
@@ -110,15 +160,34 @@ export class NwcNode implements LightningNode {
 
   async getPermissions(): Promise<Permissions> {
     const info = await this.client.getInfo().catch((error) => {
-      throw new LniError('Api', `Failed to get NWC permissions: ${(error as Error)?.message ?? 'unknown error'}`);
+      throwNwcOrApiError(error, 'get_info', 'Failed to get NWC permissions');
     });
     const methods = (info as Nip47GetInfoResponse & { methods?: string[] }).methods;
     return normalizeNwcPermissions(methods?.length ? methods : NWC_METHOD_PERMISSIONS);
   }
 
+  async getLightningAddress(): Promise<LightningAddressInfo> {
+    const lightningAddress = extractLightningAddressFromNwcUri(this.config.nwcUri);
+    if (!lightningAddress) {
+      throw new LniError('InvalidInput', 'NWC URI does not include a lud16 Lightning Address.');
+    }
+
+    const lnurlVerifySupported = await verifyLightningAddressPayRequest(lightningAddress, {
+      fetch: this.options.fetch,
+    }).then(
+      () => true,
+      () => false,
+    );
+
+    return {
+      lightningAddress,
+      lnurlVerifySupported,
+    };
+  }
+
   async getInfo(): Promise<NodeInfo> {
     const balance = await this.client.getBalance().catch((error) => {
-      throw new LniError('Api', `Failed to get balance: ${(error as Error)?.message ?? 'unknown error'}`);
+      throwNwcOrApiError(error, 'get_balance', 'Failed to get balance');
     });
 
     const pubkeyFallback = extractPubkeyFromNwcUri(this.config.nwcUri);
@@ -161,7 +230,7 @@ export class NwcNode implements LightningNode {
         expiry: params.expiry,
       })
       .catch((error) => {
-        throw new LniError('Api', `Failed to create invoice: ${(error as Error)?.message ?? 'unknown error'}`);
+        throwNwcOrApiError(error, 'make_invoice', 'Failed to create invoice');
       });
 
     return nwcTransactionToLniTransaction(tx);
@@ -174,7 +243,7 @@ export class NwcNode implements LightningNode {
         amount: params.amountMsats,
       })
       .catch((error) => {
-        throw new LniError('Api', `Failed to pay invoice: ${(error as Error)?.message ?? 'unknown error'}`);
+        throwNwcOrApiError(error, 'pay_invoice', 'Failed to pay invoice');
       });
 
     let paymentHash = '';
@@ -239,7 +308,7 @@ export class NwcNode implements LightningNode {
       }
 
       replayConsoleErrors(errorLogs);
-      throw new LniError('Api', `Failed to lookup invoice: ${(error as Error)?.message ?? 'unknown error'}`);
+      throwNwcOrApiError(error, 'lookup_invoice', 'Failed to lookup invoice');
     }
   }
 
@@ -290,7 +359,7 @@ export class NwcNode implements LightningNode {
         limit: params.limit > 0 ? params.limit : undefined,
       })
       .catch((error) => {
-        throw new LniError('Api', `Failed to list transactions: ${(error as Error)?.message ?? 'unknown error'}`);
+        throwNwcOrApiError(error, 'list_transactions', 'Failed to list transactions');
       });
 
     return this.filterTransactions(response as NwcListTransactionsResponse, params);
