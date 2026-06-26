@@ -8,6 +8,7 @@ use lightning_invoice::Bolt11Invoice;
 use nwc::nostr::nips::nip47;
 use nwc::prelude::*;
 use sha2::{Digest, Sha256};
+use std::future::Future;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -19,13 +20,47 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
     let relay_opts = RelayOptions::default()
         .verify_subscriptions(true)
         .ban_relay_on_mismatch(true);
-    let timeout = Duration::from_secs(config.http_timeout.unwrap_or(60).max(1) as u64);
+    let timeout = nwc_request_timeout(config);
     let opts = NostrWalletConnectOptions::default()
         .relay(relay_opts)
         .timeout(timeout);
     let nwc = NWC::with_opts(uri, opts);
 
     Ok(nwc)
+}
+
+fn nwc_request_timeout(config: &NwcConfig) -> Duration {
+    Duration::from_secs(config.http_timeout.unwrap_or(60).max(1) as u64)
+}
+
+fn nwc_timeout_error(timeout: Duration) -> ApiError {
+    ApiError::NetworkError(format!(
+        "NWC request timed out after {} seconds",
+        timeout.as_secs()
+    ))
+}
+
+fn upstream_nwc_timeout_error() -> ApiError {
+    ApiError::NetworkError("NWC request timed out".to_string())
+}
+
+async fn execute_nwc_request<T, F>(
+    timeout: Duration,
+    request: F,
+    fallback_prefix: &str,
+) -> Result<T, ApiError>
+where
+    F: Future<Output = Result<T, nwc::Error>>,
+{
+    match tokio::time::timeout(timeout, request).await {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(error)) => Err(map_nwc_error(error, fallback_prefix)),
+        Err(_) => Err(nwc_timeout_error(timeout)),
+    }
+}
+
+fn is_network_error(error: &ApiError) -> bool {
+    matches!(error, ApiError::NetworkError(_))
 }
 
 fn nwc_error_code_to_string(code: nip47::ErrorCode) -> String {
@@ -36,6 +71,7 @@ fn nwc_error_code_to_string(code: nip47::ErrorCode) -> String {
 
 fn map_nwc_error(error: nwc::Error, fallback_prefix: &str) -> ApiError {
     match error {
+        nwc::Error::Timeout => upstream_nwc_timeout_error(),
         nwc::Error::NIP47(nip47::Error::ErrorCode(nwc_error)) => ApiError::Nwc {
             code: nwc_error_code_to_string(nwc_error.code),
             message: nwc_error.message,
@@ -48,13 +84,13 @@ fn map_nwc_error(error: nwc::Error, fallback_prefix: &str) -> ApiError {
 
 pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
         let nwc = create_nwc_client(&config).await?;
+        let timeout = nwc_request_timeout(&config);
         
         // Get balance first
-        let balance = nwc.get_balance().await
-            .map_err(|e| map_nwc_error(e, "Failed to get balance"))?;
+        let balance = execute_nwc_request(timeout, nwc.get_balance(), "Failed to get balance").await?;
         
         // Try to get more info using get_info method if available
-        let info_result = nwc.get_info().await;
+        let info_result = execute_nwc_request(timeout, nwc.get_info(), "Failed to get info").await;
         
         match info_result {
             Ok(nwc_info) => {
@@ -108,7 +144,8 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
 
 pub async fn get_permissions(config: NwcConfig) -> Result<crate::Permissions, ApiError> {
     let nwc = create_nwc_client(&config).await?;
-    let info = nwc.get_info().await.map_err(|e| map_nwc_error(e, "Failed to get NWC permissions"))?;
+    let timeout = nwc_request_timeout(&config);
+    let info = execute_nwc_request(timeout, nwc.get_info(), "Failed to get NWC permissions").await?;
 
     if info.methods.is_empty() {
         Ok(crate::permissions::nwc_method_permissions())
@@ -151,6 +188,7 @@ pub async fn get_lightning_address(config: NwcConfig) -> Result<NwcLightningAddr
 
 pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
     let nwc = create_nwc_client(&config).await?;
+    let timeout = nwc_request_timeout(&config);
     
     let request = MakeInvoiceRequest {
         amount: params.amount_msats.unwrap_or(0) as u64,
@@ -159,8 +197,7 @@ pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> R
         expiry: params.expiry.map(|e| e as u64),
     };
     
-    let response = nwc.make_invoice(request).await
-        .map_err(|e| map_nwc_error(e, "Failed to create invoice"))?;
+    let response = execute_nwc_request(timeout, nwc.make_invoice(request), "Failed to create invoice").await?;
     
     Ok(Transaction {
         type_: "incoming".to_string(),
@@ -181,11 +218,11 @@ pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> R
 
 pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
     let nwc = create_nwc_client(&config).await?;
+    let timeout = nwc_request_timeout(&config);
     
     let request = PayInvoiceRequest::new(params.invoice);
     
-    let response = nwc.pay_invoice(request).await
-        .map_err(|e| map_nwc_error(e, "Failed to pay invoice"))?;
+    let response = execute_nwc_request(timeout, nwc.pay_invoice(request), "Failed to pay invoice").await?;
     
     // Compute payment hash from preimage (payment_hash = SHA256(preimage))
     let payment_hash = if !response.preimage.is_empty() {
@@ -238,10 +275,15 @@ pub async fn lookup_invoice(
         invoice: if lookup_payment_hash.is_some() { None } else { invoice.clone() },
     };
     let nwc = create_nwc_client(&config).await?;
+    let timeout = nwc_request_timeout(&config);
 
-    let response = match nwc.lookup_invoice(request).await {
+    let response = match execute_nwc_request(timeout, nwc.lookup_invoice(request), "Failed to lookup invoice").await {
         Ok(response) => response,
         Err(error) => {
+            if is_network_error(&error) {
+                return Err(error);
+            }
+
             if let Some(transaction) = lookup_invoice_from_transactions(
                 config.clone(),
                 lookup_payment_hash.as_deref(),
@@ -252,7 +294,7 @@ pub async fn lookup_invoice(
                 return Ok(transaction);
             }
 
-            return Err(map_nwc_error(error, "Failed to lookup invoice"));
+            return Err(error);
         }
     };
 
@@ -365,10 +407,8 @@ async fn list_transactions_page_raw(
 ) -> Result<Vec<Transaction>, ApiError> {
     let request = list_transactions_request(params, offset);
     let nwc = create_nwc_client(config).await?;
-    let response = nwc
-        .list_transactions(request)
-        .await
-        .map_err(|e| map_nwc_error(e, "Failed to list transactions"))?;
+    let timeout = nwc_request_timeout(config);
+    let response = execute_nwc_request(timeout, nwc.list_transactions(request), "Failed to list transactions").await?;
 
     Ok(response
         .into_iter()
@@ -604,6 +644,48 @@ mod tests {
                 assert_eq!(message, "quota spent");
             }
             other => panic!("expected structured NWC error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn maps_upstream_nwc_timeout_to_network_error() {
+        match map_nwc_error(nwc::Error::Timeout, "Failed to pay invoice") {
+            ApiError::NetworkError(message) => {
+                assert!(message.contains("timed out"));
+            }
+            other => panic!("expected network timeout error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn normalizes_nwc_request_timeout_to_at_least_one_second() {
+        let config = NwcConfig {
+            nwc_uri: String::new(),
+            socks5_proxy: None,
+            accept_invalid_certs: None,
+            http_timeout: Some(0),
+        };
+
+        assert_eq!(nwc_request_timeout(&config), Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn execute_nwc_request_maps_elapsed_timeout_to_network_error() {
+        let result = execute_nwc_request(
+            Duration::from_millis(1),
+            async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok::<(), nwc::Error>(())
+            },
+            "Failed to pay invoice",
+        )
+        .await;
+
+        match result {
+            Err(ApiError::NetworkError(message)) => {
+                assert!(message.contains("timed out"));
+            }
+            other => panic!("expected elapsed timeout error, got {:?}", other),
         }
     }
 

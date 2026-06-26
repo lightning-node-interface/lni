@@ -163,6 +163,7 @@ mod tests {
             NwcNode::new(NwcConfig {
                 nwc_uri: NWC_URI.clone(),
                 //socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor socks5 proxy using arti
+                http_timeout: Some(10),
                 ..Default::default()
             })
         };
