@@ -53,7 +53,11 @@ function throwNwcOrApiError(error: unknown, operation: NwcErrorOperation, fallba
   }
 
   if (error instanceof LniError) {
-    throw new LniError(error.code, `${fallbackPrefix}: ${error.message}`, { cause: error });
+    throw new LniError(error.code, `${fallbackPrefix}: ${error.message}`, {
+      status: error.status,
+      body: error.body,
+      cause: error,
+    });
   }
 
   throw new LniError('Api', `${fallbackPrefix}: ${(error as Error)?.message ?? 'unknown error'}`, { cause: error });

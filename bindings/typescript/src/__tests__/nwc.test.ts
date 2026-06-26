@@ -60,7 +60,7 @@ vi.mock('../decode.js', () => ({
 }));
 
 import { NwcNode } from '../nodes/nwc.js';
-import { NwcError } from '../errors.js';
+import { LniError, NwcError } from '../errors.js';
 import { registerSha256DigestFallback } from '../internal/sha256.js';
 
 const PAYMENT_HASH = '31b06bf9be4c938914030eb23d583a4fe6f6e2f3374293170f027be248ed6370';
@@ -212,6 +212,23 @@ describe('NwcNode.payInvoice', () => {
     });
 
     await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toBeInstanceOf(NwcError);
+  });
+
+  it('preserves LniError status and body when rewrapping request failures', async () => {
+    nwcMocks.payInvoice.mockRejectedValue(
+      new LniError('Http', 'gateway timeout', {
+        status: 504,
+        body: '{"error":"timeout"}',
+      }),
+    );
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toMatchObject({
+      name: 'LniError',
+      code: 'Http',
+      status: 504,
+      body: '{"error":"timeout"}',
+      message: 'Failed to pay invoice: gateway timeout',
+    });
   });
 
   it('hashes returned preimages with a registered fallback when global crypto.subtle is absent', async () => {
