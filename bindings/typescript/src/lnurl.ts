@@ -395,7 +395,12 @@ export async function verifyLightningAddressPayRequest(
   handleLnurlErrorResponse(callbackResponse);
 
   const maybeVerify = callbackResponse as Partial<LnurlVerifyInvoiceResponse>;
-  if (typeof maybeVerify.pr !== 'string' || typeof maybeVerify.verify !== 'string') {
+  if (
+    typeof maybeVerify.pr !== 'string' ||
+    maybeVerify.pr.trim() === '' ||
+    typeof maybeVerify.verify !== 'string' ||
+    maybeVerify.verify.trim() === ''
+  ) {
     throw new LnurlVerifyUnsupportedError();
   }
 

@@ -1,6 +1,6 @@
 import { bech32 } from '@scure/base';
 import { describe, expect, it, vi } from 'vitest';
-import { getPaymentInfo, resolveToBolt11 } from '../lnurl.js';
+import { getPaymentInfo, LnurlVerifyUnsupportedError, resolveToBolt11, verifyLightningAddressPayRequest } from '../lnurl.js';
 import type { FetchLike } from '../types.js';
 
 const BOLT11_250_000_000_MSATS =
@@ -104,5 +104,22 @@ describe('LNURL SSRF protections', () => {
     ).rejects.toThrow('does not match requested amount 1000 msats');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats empty LNURL verify fields as unsupported verify', async () => {
+    const fetchMock = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(jsonResponse(lnurlPayResponse('https://pay.example/callback')))
+      .mockResolvedValueOnce(jsonResponse({ pr: '', verify: '' }));
+
+    await expect(
+      verifyLightningAddressPayRequest('alice@example.com', {
+        fetch: fetchMock,
+      }),
+    ).rejects.toBeInstanceOf(LnurlVerifyUnsupportedError);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/.well-known/lnurlp/alice');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://pay.example/callback?amount=100000');
   });
 });

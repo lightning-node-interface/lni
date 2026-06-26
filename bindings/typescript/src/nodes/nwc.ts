@@ -7,7 +7,7 @@ import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/per
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { sha256Hex } from '../internal/sha256.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
-import { verifyLightningAddressPayRequest } from '../lnurl.js';
+import { LnurlVerifyUnsupportedError, verifyLightningAddressPayRequest } from '../lnurl.js';
 import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningAddressInfo, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
 
 const DEFAULT_NWC_TIMEOUT_MS = 60_000;
@@ -211,12 +211,17 @@ export class NwcNode implements LightningNode {
       throw new LniError('InvalidInput', 'NWC URI does not include a lud16 Lightning Address.');
     }
 
-    const lnurlVerifySupported = await verifyLightningAddressPayRequest(lightningAddress, {
-      fetch: this.options.fetch,
-    }).then(
-      () => true,
-      () => false,
-    );
+    let lnurlVerifySupported = false;
+    try {
+      await verifyLightningAddressPayRequest(lightningAddress, {
+        fetch: this.options.fetch,
+      });
+      lnurlVerifySupported = true;
+    } catch (error) {
+      if (!(error instanceof LnurlVerifyUnsupportedError)) {
+        throw error;
+      }
+    }
 
     return {
       lightningAddress,

@@ -70,6 +70,7 @@ const ZERO_PREIMAGE_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee2
 const BOLT11_INVOICE = 'lnbc1testinvoice';
 const NWC_URI = 'nostr+walletconnect://wallet?relay=wss://relay.example&secret=test';
 const NWC_URI_WITH_LUD16 = `${NWC_URI}&lud16=test%40example.com`;
+const NWC_URI_WITH_MALFORMED_LUD16 = `${NWC_URI}&lud16=notaddress`;
 const originalConsoleError = console.error;
 const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
 
@@ -313,6 +314,13 @@ describe('NwcNode.getLightningAddress', () => {
     await expect(makeNode().getLightningAddress()).rejects.toThrow(
       'NWC URI does not include a lud16 Lightning Address.',
     );
+  });
+
+  it('rejects malformed lud16 values before treating LNURL verify as unsupported', async () => {
+    await expect(new NwcNode({ nwcUri: NWC_URI_WITH_MALFORMED_LUD16 }).getLightningAddress()).rejects.toMatchObject({
+      code: 'InvalidInput',
+      message: 'Invalid Lightning Address format.',
+    });
   });
 });
 
