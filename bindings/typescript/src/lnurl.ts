@@ -15,7 +15,7 @@ export interface LnurlResolverOptions {
   allowUnsafeUrls?: boolean;
 }
 
-interface LnurlPayResponse {
+export interface LnurlPayResponse {
   callback: string;
   maxSendable: number;
   minSendable: number;
@@ -29,9 +29,30 @@ interface LnurlInvoiceResponse {
   pr: string;
 }
 
+interface LnurlVerifyInvoiceResponse {
+  pr: string;
+  verify: string;
+}
+
 interface LnurlErrorResponse {
   status: string;
   reason: string;
+}
+
+interface LnurlMessageErrorResponse {
+  error?: boolean;
+  message?: string;
+}
+
+interface LnurlOkResponse {
+  status?: string;
+}
+
+export class LnurlVerifyUnsupportedError extends Error {
+  constructor() {
+    super('LNURL-verify endpoint is not supported.');
+    this.name = 'LnurlVerifyUnsupportedError';
+  }
 }
 
 export function detectPaymentType(destination: string): PaymentDestinationType {
@@ -206,9 +227,7 @@ async function fetchLnurlPay(
   });
 
   const maybeError = payload as LnurlErrorResponse;
-  if (maybeError?.status === 'ERROR') {
-    throw new LniError('LnurlError', maybeError.reason);
-  }
+  handleLnurlErrorResponse(maybeError);
 
   return payload as LnurlPayResponse;
 }
@@ -231,9 +250,7 @@ async function requestInvoice(
   });
 
   const maybeError = response as LnurlErrorResponse;
-  if (maybeError.status === 'ERROR') {
-    throw new LniError('LnurlError', maybeError.reason);
-  }
+  handleLnurlErrorResponse(maybeError);
 
   const invoiceResponse = response as LnurlInvoiceResponse;
   if (!invoiceResponse.pr) {
@@ -243,6 +260,38 @@ async function requestInvoice(
   validateInvoiceAmount(invoiceResponse.pr, amountMsats);
 
   return invoiceResponse.pr;
+}
+
+function getLnurlErrorMessage(response: unknown): string | undefined {
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+
+  const payload = response as Partial<LnurlErrorResponse & LnurlMessageErrorResponse>;
+  if (typeof payload.status === 'string' && payload.status.toUpperCase() === 'ERROR' && payload.reason) {
+    return payload.reason;
+  }
+
+  if (payload.error === true && payload.message) {
+    return payload.message;
+  }
+
+  return undefined;
+}
+
+function handleLnurlErrorResponse(response: unknown): void {
+  const message = getLnurlErrorMessage(response);
+  if (message) {
+    throw new LniError('LnurlError', message);
+  }
+}
+
+function handleLnurlOkResponse(response: unknown, endpointLabel: string): void {
+  handleLnurlErrorResponse(response);
+  const payload = response as LnurlOkResponse;
+  if (payload?.status !== 'OK') {
+    throw new LniError('InvalidInput', `${endpointLabel} response status is not OK`);
+  }
 }
 
 function invoiceAmountMsats(invoice: string): number | null {
@@ -310,6 +359,65 @@ async function resolveViaLnurlPay(
   const lnurlPay = await fetchLnurlPay(url, fetchFn, options);
   assertAmountRange(amountMsats, lnurlPay.minSendable, lnurlPay.maxSendable);
   return requestInvoice(lnurlPay.callback, amountMsats, fetchFn, options);
+}
+
+export async function verifyLightningAddressPayRequest(
+  lightningAddress: string,
+  options: LnurlResolverOptions = {},
+): Promise<{ wellKnown: LnurlPayResponse; verifyEndpoint: string }> {
+  const fetchFn = resolveFetch(options?.fetch);
+  const { user, domain } = parseLightningAddress(lightningAddress.trim());
+  const wellKnown = await fetchLnurlPay(lightningAddressToUrl(user, domain), fetchFn, options);
+  const amountMsats = Math.min(Math.max(100_000, wellKnown.minSendable), wellKnown.maxSendable);
+
+  if (
+    !Number.isFinite(amountMsats) ||
+    amountMsats < wellKnown.minSendable ||
+    amountMsats > wellKnown.maxSendable
+  ) {
+    throw new LniError('InvalidInput', 'Invalid LNURL sendable amount range.');
+  }
+
+  const callback = parseLnurlUrl(wellKnown.callback, options.allowUnsafeUrls);
+  callback.searchParams.set('amount', String(amountMsats));
+
+  const callbackResponse = await requestJson<LnurlVerifyInvoiceResponse | LnurlErrorResponse>(
+    fetchFn,
+    callback.toString(),
+    {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+      timeoutMs: 30_000,
+    },
+  );
+  handleLnurlErrorResponse(callbackResponse);
+
+  const maybeVerify = callbackResponse as Partial<LnurlVerifyInvoiceResponse>;
+  if (
+    typeof maybeVerify.pr !== 'string' ||
+    maybeVerify.pr.trim() === '' ||
+    typeof maybeVerify.verify !== 'string' ||
+    maybeVerify.verify.trim() === ''
+  ) {
+    throw new LnurlVerifyUnsupportedError();
+  }
+
+  const verify = parseLnurlUrl(maybeVerify.verify, options.allowUnsafeUrls);
+  const verifyResponse = await requestJson<LnurlOkResponse | LnurlErrorResponse>(fetchFn, verify.toString(), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+    },
+    timeoutMs: 30_000,
+  });
+  handleLnurlOkResponse(verifyResponse, 'LNURL verify');
+
+  return {
+    wellKnown,
+    verifyEndpoint: maybeVerify.verify,
+  };
 }
 
 export async function resolveToBolt11(

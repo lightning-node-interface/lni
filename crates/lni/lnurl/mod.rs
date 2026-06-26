@@ -7,6 +7,7 @@
 use crate::ApiError;
 use lightning_invoice::Bolt11Invoice;
 use serde::Deserialize;
+use std::net::IpAddr;
 use std::str::FromStr;
 
 /// LNURL-pay response from the service
@@ -14,8 +15,8 @@ use std::str::FromStr;
 #[serde(rename_all = "camelCase")]
 pub struct LnurlPayResponse {
     pub callback: String,
-    pub max_sendable: i64,  // msats
-    pub min_sendable: i64,  // msats
+    pub max_sendable: i64, // msats
+    pub min_sendable: i64, // msats
     pub metadata: String,
     pub tag: String,
     #[serde(default)]
@@ -27,9 +28,15 @@ pub struct LnurlPayResponse {
 /// Response when requesting invoice from callback
 #[derive(Debug, Deserialize)]
 pub struct LnurlInvoiceResponse {
-    pub pr: String,  // BOLT11 invoice
+    pub pr: String, // BOLT11 invoice
     #[serde(default)]
     pub routes: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LnurlVerifyPayResponse {
+    pub pr: String,
+    pub verify: String,
 }
 
 /// Error response from LNURL service
@@ -53,7 +60,7 @@ impl PaymentDestination {
     pub fn parse(input: &str) -> Result<Self, ApiError> {
         let input = input.trim();
         let lower = input.to_lowercase();
-        
+
         // Lightning Address: user@domain (but not LNURL which may contain @)
         if input.contains('@') && !lower.starts_with("lnurl") {
             let parts: Vec<&str> = input.split('@').collect();
@@ -63,24 +70,26 @@ impl PaymentDestination {
                     domain: parts[1].to_string(),
                 });
             }
-            return Err(ApiError::InvalidInput("Invalid Lightning Address format".to_string()));
+            return Err(ApiError::InvalidInput(
+                "Invalid Lightning Address format".to_string(),
+            ));
         }
-        
+
         // BOLT11: lnbc, lntb, lntbs (mainnet, testnet, signet)
         if lower.starts_with("lnbc") || lower.starts_with("lntb") || lower.starts_with("lntbs") {
             return Ok(PaymentDestination::Bolt11(input.to_string()));
         }
-        
+
         // BOLT12 offer: lno1
         if lower.starts_with("lno1") {
             return Ok(PaymentDestination::Bolt12(input.to_string()));
         }
-        
+
         // LNURL: lnurl1
         if lower.starts_with("lnurl1") {
             return Ok(PaymentDestination::LnurlPay(input.to_string()));
         }
-        
+
         Err(ApiError::InvalidInput(format!(
             "Unknown payment destination format. Expected: BOLT11 (lnbc...), BOLT12 (lno1...), LNURL (lnurl1...), or Lightning Address (user@domain)"
         )))
@@ -95,48 +104,125 @@ pub fn lightning_address_to_url(user: &str, domain: &str) -> String {
 /// Decode a bech32-encoded LNURL to its URL
 pub fn decode_lnurl(lnurl: &str) -> Result<String, ApiError> {
     let lnurl_lower = lnurl.to_lowercase();
-    
+
     // Try to decode as bech32
     let (hrp, data) = bech32::decode(&lnurl_lower)
         .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL encoding: {}", e)))?;
-    
+
     if hrp.to_string() != "lnurl" {
-        return Err(ApiError::InvalidInput("LNURL must have 'lnurl' prefix".to_string()));
+        return Err(ApiError::InvalidInput(
+            "LNURL must have 'lnurl' prefix".to_string(),
+        ));
     }
-    
+
     // bech32 0.11 returns Vec<u8> directly (already 8-bit)
     String::from_utf8(data)
         .map_err(|e| ApiError::InvalidInput(format!("LNURL contains invalid UTF-8: {}", e)))
 }
 
+fn validate_public_https_url(raw: &str) -> Result<reqwest::Url, ApiError> {
+    let url = reqwest::Url::parse(raw)
+        .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL URL: {}", e)))?;
+
+    if url.scheme() != "https" {
+        return Err(ApiError::InvalidInput(
+            "LNURL endpoints must use HTTPS".to_string(),
+        ));
+    }
+
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(ApiError::InvalidInput(
+            "LNURL endpoints must not include credentials".to_string(),
+        ));
+    }
+
+    let Some(hostname) = url.host_str() else {
+        return Err(ApiError::InvalidInput(
+            "Invalid LNURL URL: missing hostname".to_string(),
+        ));
+    };
+    if is_private_or_local_hostname(hostname) {
+        return Err(ApiError::InvalidInput(
+            "LNURL endpoints must use a public hostname".to_string(),
+        ));
+    }
+
+    Ok(url)
+}
+
+fn is_private_or_local_hostname(hostname: &str) -> bool {
+    let host = hostname
+        .trim_matches(|char| char == '[' || char == ']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+
+    if host.is_empty()
+        || host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host.ends_with(".internal")
+    {
+        return true;
+    }
+
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => {
+            let octets = ip.octets();
+            let first = octets[0];
+            let second = octets[1];
+            first == 0
+                || first == 10
+                || first == 127
+                || (first == 100 && (64..=127).contains(&second))
+                || (first == 169 && second == 254)
+                || (first == 172 && (16..=31).contains(&second))
+                || (first == 192 && second == 168)
+                || (first == 198 && (18..=19).contains(&second))
+        }
+        Ok(IpAddr::V6(ip)) => {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.segments()[0] & 0xfe00 == 0xfc00
+                || ip.segments()[0] & 0xffc0 == 0xfe80
+        }
+        Err(_) => false,
+    }
+}
+
 /// Fetch LNURL-pay metadata from a URL
 pub async fn fetch_lnurl_pay(url: &str) -> Result<LnurlPayResponse, ApiError> {
+    let url = validate_public_https_url(url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| ApiError::NetworkError(e.to_string()))?;
-    
+
     let response = client
         .get(url)
         .header("Accept", "application/json")
         .send()
         .await
         .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?;
-    
+
     let text = response
         .text()
         .await
         .map_err(|e| ApiError::NetworkError(format!("Failed to read LNURL response: {}", e)))?;
-    
+
     // Check for error response
     if let Ok(error) = serde_json::from_str::<LnurlErrorResponse>(&text) {
         if error.status == "ERROR" {
             return Err(ApiError::LnurlError(error.reason));
         }
     }
-    
-    serde_json::from_str(&text)
-        .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL-pay response: {} - {}", e, &text[..text.len().min(200)])))
+
+    serde_json::from_str(&text).map_err(|e| {
+        ApiError::InvalidInput(format!(
+            "Invalid LNURL-pay response: {} - {}",
+            e,
+            &text[..text.len().min(200)]
+        ))
+    })
 }
 
 /// Request an invoice from LNURL-pay callback
@@ -145,39 +231,172 @@ pub async fn request_invoice(callback_url: &str, amount_msats: i64) -> Result<St
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| ApiError::NetworkError(e.to_string()))?;
-    
-    // Add amount to callback URL
-    let url = if callback_url.contains('?') {
-        format!("{}&amount={}", callback_url, amount_msats)
-    } else {
-        format!("{}?amount={}", callback_url, amount_msats)
-    };
-    
+
+    let url = callback_url_with_amount(callback_url, amount_msats)?;
+
     let response = client
-        .get(&url)
+        .get(url)
         .header("Accept", "application/json")
         .send()
         .await
         .map_err(|e| ApiError::NetworkError(format!("Failed to request invoice: {}", e)))?;
-    
+
     let text = response
         .text()
         .await
         .map_err(|e| ApiError::NetworkError(format!("Failed to read invoice response: {}", e)))?;
-    
+
     // Check for error response
     if let Ok(error) = serde_json::from_str::<LnurlErrorResponse>(&text) {
         if error.status == "ERROR" {
             return Err(ApiError::LnurlError(error.reason));
         }
     }
-    
-    let invoice_resp: LnurlInvoiceResponse = serde_json::from_str(&text)
-        .map_err(|e| ApiError::InvalidInput(format!("Invalid invoice response: {} - {}", e, &text[..text.len().min(200)])))?;
-    
+
+    let invoice_resp: LnurlInvoiceResponse = serde_json::from_str(&text).map_err(|e| {
+        ApiError::InvalidInput(format!(
+            "Invalid invoice response: {} - {}",
+            e,
+            &text[..text.len().min(200)]
+        ))
+    })?;
+
     validate_invoice_amount(&invoice_resp.pr, amount_msats)?;
 
     Ok(invoice_resp.pr)
+}
+
+fn handle_lnurl_error_value(value: &serde_json::Value) -> Result<(), ApiError> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+
+    if object
+        .get("status")
+        .and_then(|status| status.as_str())
+        .map(|status| status.eq_ignore_ascii_case("ERROR"))
+        .unwrap_or(false)
+    {
+        if let Some(reason) = object.get("reason").and_then(|reason| reason.as_str()) {
+            return Err(ApiError::LnurlError(reason.to_string()));
+        }
+    }
+
+    if object
+        .get("error")
+        .and_then(|error| error.as_bool())
+        .unwrap_or(false)
+    {
+        if let Some(message) = object.get("message").and_then(|message| message.as_str()) {
+            return Err(ApiError::LnurlError(message.to_string()));
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_lnurl_ok_value(value: &serde_json::Value, endpoint_label: &str) -> Result<(), ApiError> {
+    handle_lnurl_error_value(value)?;
+
+    let status_ok = value
+        .as_object()
+        .and_then(|object| object.get("status"))
+        .and_then(|status| status.as_str())
+        .map(|status| status == "OK")
+        .unwrap_or(false);
+    if status_ok {
+        Ok(())
+    } else {
+        Err(ApiError::InvalidInput(format!(
+            "{} response status is not OK",
+            endpoint_label
+        )))
+    }
+}
+
+fn callback_url_with_amount(
+    callback_url: &str,
+    amount_msats: i64,
+) -> Result<reqwest::Url, ApiError> {
+    let mut url = validate_public_https_url(callback_url)?;
+    url.query_pairs_mut()
+        .append_pair("amount", &amount_msats.to_string());
+    Ok(url)
+}
+
+async fn fetch_lnurl_json_value(url: &str) -> Result<serde_json::Value, ApiError> {
+    let url = validate_public_https_url(url)?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+    let response = client
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?;
+
+    let text = response
+        .text()
+        .await
+        .map_err(|e| ApiError::NetworkError(format!("Failed to read LNURL response: {}", e)))?;
+
+    let value = serde_json::from_str::<serde_json::Value>(&text).map_err(|e| {
+        ApiError::InvalidInput(format!(
+            "Invalid LNURL JSON response: {} - {}",
+            e,
+            &text[..text.len().min(200)]
+        ))
+    })?;
+    handle_lnurl_error_value(&value)?;
+    Ok(value)
+}
+
+/// Verify whether a Lightning Address LNURL-pay endpoint supports LNURL-verify.
+pub async fn verify_lightning_address_pay_request(lightning_address: &str) -> Result<(), ApiError> {
+    let PaymentDestination::LightningAddress { user, domain } =
+        PaymentDestination::parse(lightning_address)?
+    else {
+        return Err(ApiError::InvalidInput(
+            "Expected Lightning Address".to_string(),
+        ));
+    };
+    let well_known = fetch_lnurl_pay(&lightning_address_to_url(&user, &domain)).await?;
+    let amount_msats = std::cmp::min(
+        std::cmp::max(100_000, well_known.min_sendable),
+        well_known.max_sendable,
+    );
+
+    if amount_msats < well_known.min_sendable || amount_msats > well_known.max_sendable {
+        return Err(ApiError::InvalidInput(
+            "Invalid LNURL sendable amount range".to_string(),
+        ));
+    }
+
+    let callback_url = callback_url_with_amount(&well_known.callback, amount_msats)?;
+    let callback_response = fetch_lnurl_json_value(callback_url.as_str()).await?;
+    let verify_response: LnurlVerifyPayResponse = serde_json::from_value(callback_response)
+        .map_err(|_| {
+            ApiError::InvalidInput("LNURL-verify endpoint is not supported".to_string())
+        })?;
+
+    if verify_response.pr.is_empty() || verify_response.verify.is_empty() {
+        return Err(ApiError::InvalidInput(
+            "LNURL-verify endpoint is not supported".to_string(),
+        ));
+    }
+
+    let verify_url = validate_public_https_url(&verify_response.verify)?;
+    let verify_result = fetch_lnurl_json_value(verify_url.as_str()).await?;
+    handle_lnurl_ok_value(&verify_result, "LNURL verify")
+}
+
+pub async fn lightning_address_lnurl_verify_supported(lightning_address: &str) -> bool {
+    verify_lightning_address_pay_request(lightning_address)
+        .await
+        .is_ok()
 }
 
 fn validate_invoice_amount(invoice: &str, expected_amount_msats: i64) -> Result<(), ApiError> {
@@ -189,9 +408,9 @@ fn validate_invoice_amount(invoice: &str, expected_amount_msats: i64) -> Result<
 
     let invoice = Bolt11Invoice::from_str(invoice)
         .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL invoice: {}", e)))?;
-    let actual_amount = invoice.amount_milli_satoshis().ok_or_else(|| {
-        ApiError::InvalidInput("LNURL invoice is missing an amount".to_string())
-    })?;
+    let actual_amount = invoice
+        .amount_milli_satoshis()
+        .ok_or_else(|| ApiError::InvalidInput("LNURL invoice is missing an amount".to_string()))?;
     let expected_amount = expected_amount_msats as u64;
 
     if actual_amount != expected_amount {
@@ -205,7 +424,7 @@ fn validate_invoice_amount(invoice: &str, expected_amount_msats: i64) -> Result<
 }
 
 /// Resolve any payment destination to a BOLT11 invoice
-/// 
+///
 /// This handles:
 /// - BOLT11: Returns as-is
 /// - Lightning Address: Fetches LNURL endpoint, requests invoice
@@ -216,24 +435,22 @@ pub async fn resolve_to_bolt11(
     amount_msats: Option<i64>,
 ) -> Result<String, ApiError> {
     let parsed = PaymentDestination::parse(destination)?;
-    
+
     match parsed {
         PaymentDestination::Bolt11(invoice) => Ok(invoice),
-        
-        PaymentDestination::Bolt12(_) => {
-            Err(ApiError::InvalidInput(
-                "BOLT12 offers require amount and should use pay_offer method".to_string()
-            ))
-        }
-        
+
+        PaymentDestination::Bolt12(_) => Err(ApiError::InvalidInput(
+            "BOLT12 offers require amount and should use pay_offer method".to_string(),
+        )),
+
         PaymentDestination::LightningAddress { user, domain } => {
             let amount = amount_msats.ok_or_else(|| {
                 ApiError::InvalidInput("Lightning Address requires amount_msats".to_string())
             })?;
-            
+
             let url = lightning_address_to_url(&user, &domain);
             let lnurl_data = fetch_lnurl_pay(&url).await?;
-            
+
             // Validate amount
             if amount < lnurl_data.min_sendable {
                 return Err(ApiError::InvalidInput(format!(
@@ -247,18 +464,17 @@ pub async fn resolve_to_bolt11(
                     amount, lnurl_data.max_sendable
                 )));
             }
-            
+
             request_invoice(&lnurl_data.callback, amount).await
         }
-        
+
         PaymentDestination::LnurlPay(lnurl) => {
-            let amount = amount_msats.ok_or_else(|| {
-                ApiError::InvalidInput("LNURL requires amount_msats".to_string())
-            })?;
-            
+            let amount = amount_msats
+                .ok_or_else(|| ApiError::InvalidInput("LNURL requires amount_msats".to_string()))?;
+
             let url = decode_lnurl(&lnurl)?;
             let lnurl_data = fetch_lnurl_pay(&url).await?;
-            
+
             // Validate amount
             if amount < lnurl_data.min_sendable {
                 return Err(ApiError::InvalidInput(format!(
@@ -272,7 +488,7 @@ pub async fn resolve_to_bolt11(
                     amount, lnurl_data.max_sendable
                 )));
             }
-            
+
             request_invoice(&lnurl_data.callback, amount).await
         }
     }
@@ -290,7 +506,7 @@ pub async fn get_payment_info(
     amount_msats: Option<i64>,
 ) -> Result<PaymentInfo, ApiError> {
     let parsed = PaymentDestination::parse(destination)?;
-    
+
     match parsed {
         PaymentDestination::Bolt11(invoice) => {
             // TODO: Could decode invoice to get amount
@@ -303,24 +519,22 @@ pub async fn get_payment_info(
                 description: None,
             })
         }
-        
-        PaymentDestination::Bolt12(offer) => {
-            Ok(PaymentInfo {
-                destination_type: "bolt12".to_string(),
-                destination: destination.to_string(),
-                amount_msats,
-                min_sendable_msats: None,
-                max_sendable_msats: None,
-                description: None,
-            })
-        }
-        
+
+        PaymentDestination::Bolt12(offer) => Ok(PaymentInfo {
+            destination_type: "bolt12".to_string(),
+            destination: destination.to_string(),
+            amount_msats,
+            min_sendable_msats: None,
+            max_sendable_msats: None,
+            description: None,
+        }),
+
         PaymentDestination::LightningAddress { user, domain } => {
             let url = lightning_address_to_url(&user, &domain);
             let lnurl_data = fetch_lnurl_pay(&url).await?;
-            
+
             let description = lnurl_data.metadata.clone();
-            
+
             Ok(PaymentInfo {
                 destination_type: "lightning_address".to_string(),
                 destination: destination.to_string(),
@@ -330,11 +544,11 @@ pub async fn get_payment_info(
                 description: Some(description),
             })
         }
-        
+
         PaymentDestination::LnurlPay(lnurl) => {
             let url = decode_lnurl(&lnurl)?;
             let lnurl_data = fetch_lnurl_pay(&url).await?;
-            
+
             Ok(PaymentInfo {
                 destination_type: "lnurl".to_string(),
                 destination: destination.to_string(),
@@ -361,49 +575,101 @@ pub struct PaymentInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_bolt11() {
         let result = PaymentDestination::parse("lnbc10u1ptest");
         assert!(matches!(result, Ok(PaymentDestination::Bolt11(_))));
     }
-    
+
     #[test]
     fn test_parse_bolt12() {
         let result = PaymentDestination::parse("lno1qtest");
         assert!(matches!(result, Ok(PaymentDestination::Bolt12(_))));
     }
-    
+
     #[test]
     fn test_parse_lightning_address() {
         let result = PaymentDestination::parse("test@example.com");
-        assert!(matches!(result, Ok(PaymentDestination::LightningAddress { .. })));
-        
+        assert!(matches!(
+            result,
+            Ok(PaymentDestination::LightningAddress { .. })
+        ));
+
         if let Ok(PaymentDestination::LightningAddress { user, domain }) = result {
             assert_eq!(user, "test");
             assert_eq!(domain, "example.com");
         }
     }
-    
+
     #[test]
     fn test_parse_lnurl() {
         // Lowercase
         let result = PaymentDestination::parse("lnurl1test");
         assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
-        
+
         // Uppercase - should NOT be parsed as Lightning Address
         let result = PaymentDestination::parse("LNURL1TEST");
         assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
-        
+
         // Mixed case with @ - should still be LNURL, not Lightning Address
         let result = PaymentDestination::parse("LNURL1test@fake");
         assert!(matches!(result, Ok(PaymentDestination::LnurlPay(_))));
     }
-    
+
     #[test]
     fn test_lightning_address_to_url() {
         let url = lightning_address_to_url("nick", "strike.me");
         assert_eq!(url, "https://strike.me/.well-known/lnurlp/nick");
+    }
+
+    #[test]
+    fn test_validate_public_https_url_accepts_public_https_url() {
+        let url = validate_public_https_url("https://pay.example/lnurl?tag=pay")
+            .expect("public HTTPS URL should be accepted");
+
+        assert_eq!(url.as_str(), "https://pay.example/lnurl?tag=pay");
+    }
+
+    #[test]
+    fn test_validate_public_https_url_rejects_unsafe_urls() {
+        let cases = [
+            "http://pay.example/lnurl",
+            "https://user:pass@pay.example/lnurl",
+            "https://localhost/lnurl",
+            "https://wallet.local/lnurl",
+            "https://10.0.0.1/lnurl",
+            "https://127.0.0.1/lnurl",
+            "https://169.254.169.254/latest/meta-data",
+            "https://[::1]/lnurl",
+            "https://[fd00::1]/lnurl",
+        ];
+
+        for url in cases {
+            assert!(
+                validate_public_https_url(url).is_err(),
+                "{url} should be rejected before fetching"
+            );
+        }
+    }
+
+    #[test]
+    fn test_callback_url_with_amount_rejects_private_callback_url() {
+        let error = callback_url_with_amount("https://192.168.1.10/callback", 100_000)
+            .expect_err("private callback URL should be rejected");
+
+        assert!(format!("{:?}", error).contains("public hostname"));
+    }
+
+    #[test]
+    fn test_callback_url_with_amount_preserves_existing_query() {
+        let url = callback_url_with_amount("https://pay.example/callback?nonce=abc", 100_000)
+            .expect("public callback URL should be accepted");
+
+        assert_eq!(
+            url.as_str(),
+            "https://pay.example/callback?nonce=abc&amount=100000"
+        );
     }
 
     #[test]
@@ -417,7 +683,8 @@ mod tests {
     fn test_validate_lnurl_invoice_amount_rejects_mismatch() {
         let invoice = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
 
-        let error = validate_invoice_amount(invoice, 1_000).expect_err("amount mismatch should fail");
+        let error =
+            validate_invoice_amount(invoice, 1_000).expect_err("amount mismatch should fail");
         assert!(format!("{:?}", error).contains("does not match requested amount"));
     }
 }

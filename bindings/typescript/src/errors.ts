@@ -4,7 +4,31 @@ export type LniErrorCode =
   | 'Json'
   | 'NetworkError'
   | 'InvalidInput'
-  | 'LnurlError';
+  | 'LnurlError'
+  | 'NwcError';
+
+export type NwcStandardErrorCode =
+  | 'RATE_LIMITED'
+  | 'NOT_IMPLEMENTED'
+  | 'INSUFFICIENT_BALANCE'
+  | 'PAYMENT_FAILED'
+  | 'NOT_FOUND'
+  | 'QUOTA_EXCEEDED'
+  | 'RESTRICTED'
+  | 'UNAUTHORIZED'
+  | 'INTERNAL'
+  | 'UNSUPPORTED_ENCRYPTION'
+  | 'OTHER';
+
+export type NwcErrorCode = NwcStandardErrorCode | (string & {});
+
+export type NwcErrorOperation =
+  | 'get_info'
+  | 'get_balance'
+  | 'make_invoice'
+  | 'pay_invoice'
+  | 'lookup_invoice'
+  | 'list_transactions';
 
 export class LniError extends Error {
   public readonly code: LniErrorCode;
@@ -17,6 +41,24 @@ export class LniError extends Error {
     this.code = code;
     this.status = options?.status;
     this.body = options?.body;
+  }
+}
+
+export class NwcError extends LniError {
+  public readonly nwcCode: NwcErrorCode;
+  public readonly nwcMessage: string;
+  public readonly operation?: NwcErrorOperation;
+
+  constructor(
+    nwcCode: NwcErrorCode,
+    message: string,
+    options?: { operation?: NwcErrorOperation; cause?: unknown },
+  ) {
+    super('NwcError', message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = 'NwcError';
+    this.nwcCode = nwcCode;
+    this.nwcMessage = message;
+    this.operation = options?.operation;
   }
 }
 

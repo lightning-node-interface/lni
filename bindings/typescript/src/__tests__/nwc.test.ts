@@ -1,10 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nwcMocks = vi.hoisted(() => ({
+  Nip47Error: class Nip47Error extends Error {
+    code: string;
+
+    constructor(message: string, code: string) {
+      super(message);
+      this.code = code;
+    }
+  },
+  getInfo: vi.fn(),
+  getBalance: vi.fn(),
+  makeInvoice: vi.fn(),
   payInvoice: vi.fn(),
   lookupInvoice: vi.fn(),
   listTransactions: vi.fn(),
+  executeNip47Request: vi.fn(),
   close: vi.fn(),
+  usePrivateExecute: false,
 }));
 
 const bolt11Mocks = vi.hoisted(() => ({
@@ -12,13 +25,28 @@ const bolt11Mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@getalby/sdk/nwc', () => ({
+  Nip47Error: nwcMocks.Nip47Error,
   NWCClient: Object.assign(
-    vi.fn().mockImplementation(() => ({
-      payInvoice: nwcMocks.payInvoice,
-      lookupInvoice: nwcMocks.lookupInvoice,
-      listTransactions: nwcMocks.listTransactions,
-      close: nwcMocks.close,
-    })),
+    vi.fn().mockImplementation(() => {
+      const client = {
+        getInfo: nwcMocks.getInfo,
+        getBalance: nwcMocks.getBalance,
+        makeInvoice: nwcMocks.makeInvoice,
+        payInvoice: nwcMocks.payInvoice,
+        lookupInvoice: nwcMocks.lookupInvoice,
+        listTransactions: nwcMocks.listTransactions,
+        close: nwcMocks.close,
+      };
+
+      if (nwcMocks.usePrivateExecute) {
+        return {
+          ...client,
+          executeNip47Request: nwcMocks.executeNip47Request,
+        };
+      }
+
+      return client;
+    }),
     {
       parseWalletConnectUrl: vi.fn(() => ({ walletPubkey: 'wallet-pubkey' })),
     },
@@ -32,6 +60,7 @@ vi.mock('../decode.js', () => ({
 }));
 
 import { NwcNode } from '../nodes/nwc.js';
+import { LniError, NwcError } from '../errors.js';
 import { registerSha256DigestFallback } from '../internal/sha256.js';
 
 const PAYMENT_HASH = '31b06bf9be4c938914030eb23d583a4fe6f6e2f3374293170f027be248ed6370';
@@ -40,6 +69,8 @@ const ZERO_PREIMAGE = '000000000000000000000000000000000000000000000000000000000
 const ZERO_PREIMAGE_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
 const BOLT11_INVOICE = 'lnbc1testinvoice';
 const NWC_URI = 'nostr+walletconnect://wallet?relay=wss://relay.example&secret=test';
+const NWC_URI_WITH_LUD16 = `${NWC_URI}&lud16=test%40example.com`;
+const NWC_URI_WITH_MALFORMED_LUD16 = `${NWC_URI}&lud16=notaddress`;
 const originalConsoleError = console.error;
 const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
 
@@ -65,6 +96,18 @@ function makeNode() {
   return new NwcNode({ nwcUri: NWC_URI });
 }
 
+function makeNodeWithTimeout(httpTimeout: number) {
+  return new NwcNode({ nwcUri: NWC_URI, httpTimeout });
+}
+
+function makeJsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      'content-type': 'application/json',
+    },
+  });
+}
+
 function mockBolt11Decode() {
   bolt11Mocks.decode.mockImplementation((invoice: string) => {
     if (invoice !== BOLT11_INVOICE) {
@@ -85,15 +128,21 @@ function mockLookupFailure(error: Error) {
 }
 
 beforeEach(() => {
+  nwcMocks.getInfo.mockReset();
+  nwcMocks.getBalance.mockReset();
+  nwcMocks.makeInvoice.mockReset();
   nwcMocks.payInvoice.mockReset();
   nwcMocks.lookupInvoice.mockReset();
   nwcMocks.listTransactions.mockReset();
+  nwcMocks.executeNip47Request.mockReset();
   nwcMocks.close.mockReset();
+  nwcMocks.usePrivateExecute = false;
   bolt11Mocks.decode.mockReset();
   mockBolt11Decode();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   console.error = originalConsoleError;
   registerSha256DigestFallback(undefined);
 
@@ -105,6 +154,83 @@ afterEach(() => {
 });
 
 describe('NwcNode.payInvoice', () => {
+  it('passes httpTimeout to the SDK NIP-47 timeout values when the SDK request API is available', async () => {
+    nwcMocks.usePrivateExecute = true;
+    nwcMocks.executeNip47Request.mockResolvedValue({
+      preimage: '',
+      fees_paid: 21,
+    });
+
+    const response = await makeNodeWithTimeout(15).payInvoice({ invoice: BOLT11_INVOICE });
+
+    expect(response).toEqual({
+      paymentHash: '',
+      preimage: '',
+      feeMsats: 21,
+    });
+    expect(nwcMocks.executeNip47Request).toHaveBeenCalledWith(
+      'pay_invoice',
+      {
+        invoice: BOLT11_INVOICE,
+        amount: undefined,
+      },
+      expect.any(Function),
+      {
+        replyTimeout: 15_000,
+        publishTimeout: 5_000,
+      },
+    );
+    expect(nwcMocks.payInvoice).not.toHaveBeenCalled();
+  });
+
+  it('times out and closes the NWC client when the websocket request never settles', async () => {
+    vi.useFakeTimers();
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+
+    const response = makeNodeWithTimeout(0.001).payInvoice({ invoice: BOLT11_INVOICE });
+    const assertion = expect(response).rejects.toMatchObject({
+      code: 'NetworkError',
+      message:
+        'Failed to pay invoice: NWC pay invoice timed out after 0.001s. Check that the relay websocket is reachable and the wallet connection still exists.',
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves typed NIP-47 wallet error codes from the SDK', async () => {
+    nwcMocks.payInvoice.mockRejectedValue(new nwcMocks.Nip47Error('quota spent', 'QUOTA_EXCEEDED'));
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toMatchObject({
+      name: 'NwcError',
+      code: 'NwcError',
+      nwcCode: 'QUOTA_EXCEEDED',
+      nwcMessage: 'quota spent',
+      operation: 'pay_invoice',
+      message: 'quota spent',
+    });
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toBeInstanceOf(NwcError);
+  });
+
+  it('preserves LniError status and body when rewrapping request failures', async () => {
+    nwcMocks.payInvoice.mockRejectedValue(
+      new LniError('Http', 'gateway timeout', {
+        status: 504,
+        body: '{"error":"timeout"}',
+      }),
+    );
+
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toMatchObject({
+      name: 'LniError',
+      code: 'Http',
+      status: 504,
+      body: '{"error":"timeout"}',
+      message: 'Failed to pay invoice: gateway timeout',
+    });
+  });
+
   it('hashes returned preimages with a registered fallback when global crypto.subtle is absent', async () => {
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
@@ -145,6 +271,76 @@ describe('NwcNode.payInvoice', () => {
   });
 });
 
+describe('NwcNode.getLightningAddress', () => {
+  it('returns the lud16 Lightning Address and true when LNURL verify succeeds', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          callback: 'https://example.com/lnurl/callback',
+          maxSendable: 500_000_000,
+          minSendable: 1,
+          metadata: '[["text/plain","test"]]',
+          tag: 'payRequest',
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          pr: 'lnbc1testinvoice',
+          verify: 'https://example.com/lnurl/verify',
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse({ status: 'OK' }));
+
+    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+
+    expect(response).toEqual({
+      lightningAddress: 'test@example.com',
+      lnurlVerifySupported: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/.well-known/lnurlp/test');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://example.com/lnurl/callback?amount=100000');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://example.com/lnurl/verify');
+  });
+
+  it('returns false when the Lightning Address LNURL callback has no verify endpoint', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          callback: 'https://example.com/lnurl/callback',
+          maxSendable: 500_000_000,
+          minSendable: 1,
+          metadata: '[["text/plain","test"]]',
+          tag: 'payRequest',
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse({ pr: 'lnbc1testinvoice' }));
+
+    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+
+    expect(response).toEqual({
+      lightningAddress: 'test@example.com',
+      lnurlVerifySupported: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws clearly when the NWC URI has no lud16 value', async () => {
+    await expect(makeNode().getLightningAddress()).rejects.toThrow(
+      'NWC URI does not include a lud16 Lightning Address.',
+    );
+  });
+
+  it('rejects malformed lud16 values before treating LNURL verify as unsupported', async () => {
+    await expect(new NwcNode({ nwcUri: NWC_URI_WITH_MALFORMED_LUD16 }).getLightningAddress()).rejects.toMatchObject({
+      code: 'InvalidInput',
+      message: 'Invalid Lightning Address format.',
+    });
+  });
+});
+
 function hexToBytesForTest(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i += 1) {
@@ -155,6 +351,23 @@ function hexToBytesForTest(hex: string): Uint8Array {
 }
 
 describe('NwcNode.lookupInvoice', () => {
+  it('does not try the list_transactions fallback when lookup_invoice times out', async () => {
+    vi.useFakeTimers();
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
+
+    const response = makeNodeWithTimeout(0.001).lookupInvoice({ paymentHash: PAYMENT_HASH });
+    const assertion = expect(response).rejects.toMatchObject({
+      code: 'NetworkError',
+      message:
+        'Failed to lookup invoice: NWC lookup invoice timed out after 0.001s. Check that the relay websocket is reachable and the wallet connection still exists.',
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(nwcMocks.listTransactions).not.toHaveBeenCalled();
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it('returns successful native lookup_invoice responses', async () => {
     nwcMocks.lookupInvoice.mockResolvedValue(nwcTransaction({ amount: 2100 }));
 

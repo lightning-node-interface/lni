@@ -221,6 +221,11 @@ export interface NwcConfig {
   httpTimeout?: number;
 }
 
+export interface LightningAddressInfo {
+  lightningAddress: string;
+  lnurlVerifySupported: boolean;
+}
+
 export interface StrikeConfig {
   baseUrl?: string;
   apiKey: string;

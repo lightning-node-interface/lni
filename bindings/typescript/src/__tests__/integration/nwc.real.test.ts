@@ -5,13 +5,10 @@ import { hasEnv, itIf, testInvoiceLabel, timeout } from './helpers.js';
 describe('Real integration from crates/lni/.env > NwcNode', async () => {
   const enabled = hasEnv('NWC_URI');
 
-  const makeNode = () => new NwcNode({ nwcUri: process.env.NWC_URI! });
+  const makeNode = () => new NwcNode({ nwcUri: process.env.NWC_URI!, httpTimeout: 15 });
  
   itIf(enabled)('getInfo + createInvoice + listTransactions + lookupInvoice', async () => {
     const node = makeNode();
-
-
-    
 
     try {
       const info = await node.getInfo();
