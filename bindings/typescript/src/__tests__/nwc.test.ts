@@ -9,10 +9,15 @@ const nwcMocks = vi.hoisted(() => ({
       this.code = code;
     }
   },
+  getInfo: vi.fn(),
+  getBalance: vi.fn(),
+  makeInvoice: vi.fn(),
   payInvoice: vi.fn(),
   lookupInvoice: vi.fn(),
   listTransactions: vi.fn(),
+  executeNip47Request: vi.fn(),
   close: vi.fn(),
+  usePrivateExecute: false,
 }));
 
 const bolt11Mocks = vi.hoisted(() => ({
@@ -22,12 +27,26 @@ const bolt11Mocks = vi.hoisted(() => ({
 vi.mock('@getalby/sdk/nwc', () => ({
   Nip47Error: nwcMocks.Nip47Error,
   NWCClient: Object.assign(
-    vi.fn().mockImplementation(() => ({
-      payInvoice: nwcMocks.payInvoice,
-      lookupInvoice: nwcMocks.lookupInvoice,
-      listTransactions: nwcMocks.listTransactions,
-      close: nwcMocks.close,
-    })),
+    vi.fn().mockImplementation(() => {
+      const client = {
+        getInfo: nwcMocks.getInfo,
+        getBalance: nwcMocks.getBalance,
+        makeInvoice: nwcMocks.makeInvoice,
+        payInvoice: nwcMocks.payInvoice,
+        lookupInvoice: nwcMocks.lookupInvoice,
+        listTransactions: nwcMocks.listTransactions,
+        close: nwcMocks.close,
+      };
+
+      if (nwcMocks.usePrivateExecute) {
+        return {
+          ...client,
+          executeNip47Request: nwcMocks.executeNip47Request,
+        };
+      }
+
+      return client;
+    }),
     {
       parseWalletConnectUrl: vi.fn(() => ({ walletPubkey: 'wallet-pubkey' })),
     },
@@ -76,6 +95,10 @@ function makeNode() {
   return new NwcNode({ nwcUri: NWC_URI });
 }
 
+function makeNodeWithTimeout(httpTimeout: number) {
+  return new NwcNode({ nwcUri: NWC_URI, httpTimeout });
+}
+
 function makeJsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -104,15 +127,21 @@ function mockLookupFailure(error: Error) {
 }
 
 beforeEach(() => {
+  nwcMocks.getInfo.mockReset();
+  nwcMocks.getBalance.mockReset();
+  nwcMocks.makeInvoice.mockReset();
   nwcMocks.payInvoice.mockReset();
   nwcMocks.lookupInvoice.mockReset();
   nwcMocks.listTransactions.mockReset();
+  nwcMocks.executeNip47Request.mockReset();
   nwcMocks.close.mockReset();
+  nwcMocks.usePrivateExecute = false;
   bolt11Mocks.decode.mockReset();
   mockBolt11Decode();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   console.error = originalConsoleError;
   registerSha256DigestFallback(undefined);
 
@@ -124,6 +153,51 @@ afterEach(() => {
 });
 
 describe('NwcNode.payInvoice', () => {
+  it('passes httpTimeout to the SDK NIP-47 timeout values when the SDK request API is available', async () => {
+    nwcMocks.usePrivateExecute = true;
+    nwcMocks.executeNip47Request.mockResolvedValue({
+      preimage: '',
+      fees_paid: 21,
+    });
+
+    const response = await makeNodeWithTimeout(15).payInvoice({ invoice: BOLT11_INVOICE });
+
+    expect(response).toEqual({
+      paymentHash: '',
+      preimage: '',
+      feeMsats: 21,
+    });
+    expect(nwcMocks.executeNip47Request).toHaveBeenCalledWith(
+      'pay_invoice',
+      {
+        invoice: BOLT11_INVOICE,
+        amount: undefined,
+      },
+      expect.any(Function),
+      {
+        replyTimeout: 15_000,
+        publishTimeout: 5_000,
+      },
+    );
+    expect(nwcMocks.payInvoice).not.toHaveBeenCalled();
+  });
+
+  it('times out and closes the NWC client when the websocket request never settles', async () => {
+    vi.useFakeTimers();
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+
+    const response = makeNodeWithTimeout(0.001).payInvoice({ invoice: BOLT11_INVOICE });
+    const assertion = expect(response).rejects.toMatchObject({
+      code: 'NetworkError',
+      message:
+        'Failed to pay invoice: NWC pay invoice timed out after 0.001s. Check that the relay websocket is reachable and the wallet connection still exists.',
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves typed NIP-47 wallet error codes from the SDK', async () => {
     nwcMocks.payInvoice.mockRejectedValue(new nwcMocks.Nip47Error('quota spent', 'QUOTA_EXCEEDED'));
 
@@ -252,6 +326,23 @@ function hexToBytesForTest(hex: string): Uint8Array {
 }
 
 describe('NwcNode.lookupInvoice', () => {
+  it('does not try the list_transactions fallback when lookup_invoice times out', async () => {
+    vi.useFakeTimers();
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
+
+    const response = makeNodeWithTimeout(0.001).lookupInvoice({ paymentHash: PAYMENT_HASH });
+    const assertion = expect(response).rejects.toMatchObject({
+      code: 'NetworkError',
+      message:
+        'Failed to lookup invoice: NWC lookup invoice timed out after 0.001s. Check that the relay websocket is reachable and the wallet connection still exists.',
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(nwcMocks.listTransactions).not.toHaveBeenCalled();
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it('returns successful native lookup_invoice responses', async () => {
     nwcMocks.lookupInvoice.mockResolvedValue(nwcTransaction({ amount: 2100 }));
 
