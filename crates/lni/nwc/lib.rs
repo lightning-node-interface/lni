@@ -211,6 +211,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_permissions() {
+        dotenv().ok();
+        let nwc_uri = match env::var("NWC_URI") {
+            Ok(nwc_uri) => nwc_uri,
+            Err(_) => {
+                eprintln!("Skipping NWC permissions test because NWC_URI is not set");
+                return;
+            }
+        };
+        let node = NwcNode::new(NwcConfig {
+            nwc_uri,
+            ..Default::default()
+        });
+
+        match node.get_permissions().await {
+            Ok(permissions) => {
+                dbg!(&permissions);
+                assert!(
+                    !permissions.is_empty(),
+                    "NWC permissions should include at least one supported method"
+                );
+            }
+            Err(e) => {
+                panic!("Failed to get NWC permissions: {:?}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_get_info() {
         match NODE.get_info().await {
             Ok(info) => {

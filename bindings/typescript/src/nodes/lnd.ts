@@ -5,7 +5,7 @@ import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '.
 import { isEmptyPermissions, normalizeLndPermissions, parseLndMacaroonPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, parseOptionalNumber, rHashToHex } from '../internal/transform.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type Transaction } from '../types.js';
+import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type LndConfig, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type OnchainTransaction, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type PrepareOnchainTransactionParams, type Transaction } from '../types.js';
 
 interface LndGetInfoResponse {
   alias: string;
@@ -79,7 +79,147 @@ interface LndCheckMacaroonPermissionsResponse {
   valid?: boolean;
 }
 
-export class LndNode implements LightningNode {
+interface LndEstimateFeeResponse {
+  fee_sat?: string;
+  feerate_sat_per_byte?: string;
+  sat_per_vbyte?: string;
+}
+
+interface LndSendCoinsResponse {
+  txid?: string;
+}
+
+interface LndOnchainFeeRequest {
+  target_conf?: number;
+  sat_per_vbyte?: string;
+}
+
+function defaultOnchainFee(): OnchainFeePreference {
+  return { type: 'targetConf', blocks: 6 };
+}
+
+function resolveLndFeePayer(feePayer?: OnchainFeePayer): OnchainFeePayer {
+  if (feePayer === 'recipient') {
+    throw new LniError('InvalidInput', 'LND payOnchain only supports sender-paid on-chain fees.');
+  }
+
+  return 'sender';
+}
+
+function resolveLndFeeRequest(fee: OnchainFeePreference): LndOnchainFeeRequest {
+  switch (fee.type) {
+    case 'default':
+      return { target_conf: 6 };
+    case 'speed':
+      switch (fee.speed) {
+        case 'fast':
+          return { target_conf: 1 };
+        case 'normal':
+          return { target_conf: 6 };
+        case 'slow':
+          return { target_conf: 12 };
+        case 'free':
+          throw new LniError('InvalidInput', 'LND payOnchain does not support free on-chain fee speed.');
+      }
+    case 'targetConf':
+      if (!Number.isSafeInteger(fee.blocks) || fee.blocks <= 0) {
+        throw new LniError('InvalidInput', 'LND targetConf fee preference requires a positive integer block target.');
+      }
+      return { target_conf: fee.blocks };
+    case 'satsPerVbyte':
+      if (!Number.isFinite(fee.satsPerVbyte) || fee.satsPerVbyte <= 0) {
+        throw new LniError('InvalidInput', 'LND satsPerVbyte fee preference requires a positive number.');
+      }
+      return { sat_per_vbyte: String(Math.ceil(fee.satsPerVbyte)) };
+    case 'backend':
+      throw new LniError('InvalidInput', 'LND payOnchain does not support backend fee preferences.');
+  }
+}
+
+function normalizeOnchainState(txid?: string): PayOnchainResponse['state'] {
+  return txid ? 'pending' : 'failed';
+}
+
+function parseOptionalFeeSats(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const parsed = parseOptionalNumber(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function assertValidOnchainAmount(amountSats: number): void {
+  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
+    throw new LniError('InvalidInput', 'payOnchain requires a positive integer amountSats.');
+  }
+}
+
+function assertValidGuardrailLimit(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new LniError('InvalidInput', `${name} must be a non-negative finite number.`);
+  }
+
+  if (name.endsWith('maxFeeSats') && !Number.isSafeInteger(value)) {
+    throw new LniError('InvalidInput', `${name} must be a safe integer.`);
+  }
+}
+
+function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<OnchainFeeGuardrail> | undefined {
+  if (options?.dangerouslyDisableFeeGuardrail) {
+    return undefined;
+  }
+
+  const guardrail = {
+    maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
+    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+  };
+
+  assertValidGuardrailLimit(guardrail.maxFeeSats, 'feeGuardrail.maxFeeSats');
+  assertValidGuardrailLimit(guardrail.maxFeePercent, 'feeGuardrail.maxFeePercent');
+
+  return guardrail;
+}
+
+function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+  const guardrail = resolveOnchainFeeGuardrail(options);
+  if (!guardrail) {
+    return;
+  }
+
+  const { feeSats } = transaction;
+  if (feeSats === undefined) {
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.',
+    );
+  }
+
+  if (!Number.isSafeInteger(feeSats) || feeSats < 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+  }
+
+  if (!Number.isSafeInteger(transaction.amountSats) || transaction.amountSats <= 0) {
+    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+  }
+
+  if (feeSats > guardrail.maxFeeSats) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`,
+    );
+  }
+
+  const feePercent = (feeSats / transaction.amountSats) * 100;
+  if (feePercent > guardrail.maxFeePercent) {
+    throw new LniError(
+      'InvalidInput',
+      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`,
+    );
+  }
+}
+
+export class LndNode implements LightningNode, OnchainPayments {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
 
@@ -97,6 +237,14 @@ export class LndNode implements LightningNode {
 
   private async getJson<T>(path: string): Promise<T> {
     return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
+      method: 'GET',
+      headers: this.headers(),
+      timeoutMs: this.timeoutMs,
+    });
+  }
+
+  private async getJsonWithQuery<T>(path: string, query: Record<string, string | number | boolean | undefined>): Promise<T> {
+    return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path, query), {
       method: 'GET',
       headers: this.headers(),
       timeoutMs: this.timeoutMs,
@@ -292,6 +440,77 @@ export class LndNode implements LightningNode {
       paymentHash: wrapped.result.payment_hash,
       preimage: wrapped.result.payment_preimage,
       feeMsats: parseOptionalNumber(wrapped.result.fee_msat),
+    };
+  }
+
+  async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
+    const amountSats = params.amountSats;
+    assertValidOnchainAmount(amountSats);
+
+    const fee = params.fee ?? defaultOnchainFee();
+    const feePayer = resolveLndFeePayer(params.feePayer);
+    const feeRequest = resolveLndFeeRequest(fee);
+
+    if (feeRequest.sat_per_vbyte !== undefined) {
+      return {
+        address: params.address,
+        amountSats,
+        recipientAmountSats: amountSats,
+        feePayer,
+        fee,
+        raw: {
+          sendRequest: feeRequest,
+          label: params.description,
+        },
+      };
+    }
+
+    const estimate = await this.getJsonWithQuery<LndEstimateFeeResponse>('/v1/transactions/fee', {
+      [`AddrToAmount[${params.address}]`]: amountSats,
+      ...feeRequest,
+    });
+    const feeSats = parseOptionalFeeSats(estimate.fee_sat);
+
+    return {
+      address: params.address,
+      amountSats,
+      feeSats,
+      totalAmountSats: feeSats === undefined ? undefined : amountSats + feeSats,
+      recipientAmountSats: amountSats,
+      feePayer,
+      fee,
+      raw: {
+        estimate,
+        sendRequest: feeRequest,
+        label: params.description,
+      },
+    };
+  }
+
+  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
+    assertValidOnchainAmount(transaction.amountSats);
+    resolveLndFeePayer(transaction.feePayer);
+    const feeRequest = resolveLndFeeRequest(transaction.fee);
+    assertOnchainFeeGuardrail(transaction, options);
+
+    const response = await this.postJson<LndSendCoinsResponse>('/v1/transactions', {
+      addr: transaction.address,
+      amount: transaction.amountSats,
+      ...feeRequest,
+      label: typeof transaction.raw === 'object' && transaction.raw !== null && !Array.isArray(transaction.raw)
+        ? (transaction.raw as { label?: unknown }).label
+        : undefined,
+    });
+
+    return {
+      txid: response.txid,
+      state: normalizeOnchainState(response.txid),
+      address: transaction.address,
+      amountSats: transaction.amountSats,
+      feeSats: transaction.feeSats,
+      totalAmountSats: transaction.totalAmountSats,
+      recipientAmountSats: transaction.recipientAmountSats ?? transaction.amountSats,
+      raw: response,
     };
   }
 

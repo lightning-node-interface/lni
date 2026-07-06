@@ -429,6 +429,8 @@ export declare class PhoenixdNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Promise<Offer>
   getOffer(): Promise<Offer>
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
@@ -444,6 +446,8 @@ export declare class ClnNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   createOffer(params: CreateOfferParams): Promise<Offer>
   getOffer(search?: string | undefined | null): Promise<Offer>
   listOffers(search?: string | undefined | null): Promise<Array<Offer>>
@@ -465,6 +469,8 @@ export declare class LndNode {
   getInfo(): Promise<NodeInfo>
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | undefined | null): Promise<PayOnchainResponse>
   lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
   listTransactions(params: ListTransactionsParams): Promise<Array<Transaction>>
   decode(invoiceStr: string): Promise<string>

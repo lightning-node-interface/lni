@@ -1,4 +1,7 @@
-use lni::{cln::lib::ClnConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{
+  cln::lib::ClnConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  OnchainTransaction, PayInvoiceParams, PayOnchainOptions, PrepareOnchainTransactionParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -64,6 +67,31 @@ impl ClnNode {
     let invoice = lni::cln::api::pay_invoice(self.inner.clone(), params)
       .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
+  }
+
+  #[napi]
+  pub async fn prepare_onchain_transaction(
+    &self,
+    params: PrepareOnchainTransactionParams,
+  ) -> Result<OnchainTransaction> {
+    lni::cln::api::prepare_onchain_transaction(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub async fn pay_onchain(
+    &self,
+    transaction: OnchainTransaction,
+    options: Option<PayOnchainOptions>,
+  ) -> Result<lni::types::PayOnchainResponse> {
+    lni::cln::api::pay_onchain_with_options(
+      self.inner.clone(),
+      transaction,
+      options.unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))
   }
 
   #[napi]

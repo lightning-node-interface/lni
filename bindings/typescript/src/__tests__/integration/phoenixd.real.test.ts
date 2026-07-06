@@ -4,6 +4,13 @@ import { hasEnv, itIf, runOrSkipKnownError, testInvoiceLabel, timeout } from './
 
 describe('Real integration from crates/lni/.env > PhoenixdNode', () => {
   const enabled = hasEnv('PHOENIXD_URL', 'PHOENIXD_PASSWORD');
+  const onchainEnabled =
+    enabled &&
+    hasEnv('PHOENIXD_ONCHAIN_TEST_ADDRESS', 'PHOENIXD_ONCHAIN_AMOUNT_SATS', 'PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE');
+  const onchainSendConfirmation = 'I_UNDERSTAND_THIS_BROADCASTS_BITCOIN';
+  const shouldBroadcastOnchain =
+    process.env.PHOENIXD_RUN_ONCHAIN_SEND === 'true' &&
+    process.env.PHOENIXD_ONCHAIN_SEND_CONFIRM === onchainSendConfirmation;
 
   const makeNode = () =>
     new PhoenixdNode({
@@ -36,6 +43,37 @@ describe('Real integration from crates/lni/.env > PhoenixdNode', () => {
 
       const txs = await node.listTransactions({ from: 0, limit: 25, paymentHash: invoice.paymentHash });
       expect(Array.isArray(txs)).toBe(true);
+    }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
+  }, timeout);
+
+  itIf(onchainEnabled)('prepareOnchainTransaction + optionally payOnchain', async () => {
+    await runOrSkipKnownError(async () => {
+      const node = makeNode();
+      const amountSats = Number(process.env.PHOENIXD_ONCHAIN_AMOUNT_SATS);
+      const feerateSatByte = Number(process.env.PHOENIXD_ONCHAIN_FEERATE_SAT_BYTE);
+      expect(Number.isSafeInteger(amountSats)).toBe(true);
+      expect(amountSats).toBeGreaterThan(0);
+      expect(Number.isSafeInteger(feerateSatByte)).toBe(true);
+      expect(feerateSatByte).toBeGreaterThan(0);
+
+      const transaction = await node.prepareOnchainTransaction({
+        address: process.env.PHOENIXD_ONCHAIN_TEST_ADDRESS!,
+        amountSats,
+        fee: { type: 'satsPerVbyte', satsPerVbyte: feerateSatByte },
+        description: testInvoiceLabel('phoenixd onchain'),
+      });
+
+      expect(transaction.amountSats).toBe(amountSats);
+      expect(transaction.feeSats).toBeUndefined();
+
+      if (!shouldBroadcastOnchain) {
+        return;
+      }
+
+      const payment = await node.payOnchain(transaction, {
+        dangerouslyDisableFeeGuardrail: true,
+      });
+      expect(payment.txid?.length).toBeGreaterThan(0);
     }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
   }, timeout);
 });
