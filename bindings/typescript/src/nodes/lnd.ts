@@ -1,6 +1,7 @@
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { encodeBase64Bytes, hexToBytes } from '../internal/encoding.js';
+import { mapProviderMessage, providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { isEmptyPermissions, normalizeLndPermissions, parseLndMacaroonPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -58,6 +59,7 @@ interface LndPayResult {
 interface LndPayResponseWrapper {
   result?: LndPayResult;
   error?: {
+    code?: number | string;
     message?: string;
   };
 }
@@ -79,6 +81,59 @@ interface LndCheckMacaroonPermissionsResponse {
   valid?: boolean;
 }
 
+function mapLndProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  const code = String(info.code ?? '').toLowerCase();
+  const message = info.message?.toLowerCase() ?? '';
+
+  if (code.includes('unauthenticated') || message.includes('unauthenticated')) {
+    return 'UNAUTHORIZED';
+  }
+  if (code.includes('permission_denied') || message.includes('permission denied')) {
+    return 'RESTRICTED';
+  }
+
+  return mapProviderMessage(info.message);
+}
+
+function mapLndFailureReason(reason: string | undefined): NwcErrorCode {
+  switch (reason) {
+    case 'FAILURE_REASON_INSUFFICIENT_BALANCE':
+      return 'INSUFFICIENT_BALANCE';
+    case 'FAILURE_REASON_NO_ROUTE':
+    case 'FAILURE_REASON_TIMEOUT':
+    case 'FAILURE_REASON_INCORRECT_PAYMENT_DETAILS':
+    case 'FAILURE_REASON_ERROR':
+      return 'PAYMENT_FAILED';
+    case 'FAILURE_REASON_CANCELED':
+    case 'FAILURE_REASON_NONE':
+    default:
+      return 'OTHER';
+  }
+}
+
+function throwLndError(error: unknown, operation: NwcErrorOperation): never {
+  throwNormalizedProviderError(error, {
+    provider: 'lnd',
+    operation,
+    extractProviderError: providerInfoFromJsonErrorBody,
+    mapProviderError: mapLndProviderError,
+  });
+}
+
+function lndNwcError(
+  code: NwcErrorCode,
+  message: string,
+  operation: NwcErrorOperation,
+  providerCode?: string | number,
+): NwcError {
+  return new NwcError(code, message, {
+    operation,
+    provider: 'lnd',
+    providerCode,
+    providerMessage: message,
+  });
+}
+
 export class LndNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -95,28 +150,42 @@ export class LndNode implements LightningNode {
     };
   }
 
-  private async getJson<T>(path: string): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
-      method: 'GET',
-      headers: this.headers(),
-      timeoutMs: this.timeoutMs,
-    });
+  private async getJson<T>(path: string, operation?: NwcErrorOperation): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
+        method: 'GET',
+        headers: this.headers(),
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwLndError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async postJson<T>(path: string, json: unknown): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
-      method: 'POST',
-      headers: this.headers({ 'content-type': 'application/json' }),
-      json,
-      timeoutMs: this.timeoutMs,
-    });
+  private async postJson<T>(path: string, json: unknown, operation?: NwcErrorOperation): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
+        method: 'POST',
+        headers: this.headers({ 'content-type': 'application/json' }),
+        json,
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwLndError(error, operation);
+      }
+      throw error;
+    }
   }
 
   async getPermissions(): Promise<Permissions> {
     const macaroonBytes = hexToBytes(this.config.macaroon);
 
     try {
-      const payload = await this.getJson<LndListPermissionsResponse>('/v1/macaroon/permissions');
+      const payload = await this.getJson<LndListPermissionsResponse>('/v1/macaroon/permissions', 'get_info');
       const methodPermissions = Object.entries(payload.method_permissions ?? {});
       const macaroon = encodeBase64Bytes(macaroonBytes);
       const granted: string[] = [];
@@ -126,7 +195,7 @@ export class LndNode implements LightningNode {
           const response = await this.postJson<LndCheckMacaroonPermissionsResponse>('/v1/macaroon/checkpermissions', {
             macaroon,
             permissions: permissionList.permissions ?? [],
-          });
+          }, 'get_info');
 
           if (response.valid) {
             granted.push(method);
@@ -145,6 +214,10 @@ export class LndNode implements LightningNode {
   }
 
   private isPermissionDenied(error: unknown): boolean {
+    if (error instanceof NwcError) {
+      return error.nwcCode === 'RESTRICTED';
+    }
+
     if (!(error instanceof LniError)) {
       return false;
     }
@@ -176,11 +249,11 @@ export class LndNode implements LightningNode {
   }
 
   async getInfo(): Promise<NodeInfo> {
-    const info = await this.getJson<LndGetInfoResponse>('/v1/getinfo');
+    const info = await this.getJson<LndGetInfoResponse>('/v1/getinfo', 'get_info');
 
     let balances: LndBalancesResponse = {};
     try {
-      balances = await this.getJson<LndBalancesResponse>('/v1/balance/channels');
+      balances = await this.getJson<LndBalancesResponse>('/v1/balance/channels', 'get_info');
     } catch (error) {
       if (!this.isPermissionDenied(error)) {
         throw error;
@@ -205,7 +278,7 @@ export class LndNode implements LightningNode {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw new LniError('Api', 'Bolt12 is not implemented for LndNode.');
+      throw lndNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for LndNode.', 'make_invoice');
     }
 
     const payload = await this.postJson<LndCreateInvoiceResponse>('/v1/invoices', {
@@ -215,7 +288,7 @@ export class LndNode implements LightningNode {
       private: params.isPrivate ?? false,
       ...(params.rPreimage ? { r_preimage: params.rPreimage } : {}),
       ...(params.isBlinded ? { is_blinded: true } : {}),
-    });
+    }, 'make_invoice');
 
     return emptyTransaction({
       type: 'incoming',
@@ -244,12 +317,17 @@ export class LndNode implements LightningNode {
       };
     }
 
-    const responseText = await requestText(this.fetchFn, buildUrl(this.config.url, '/v2/router/send'), {
-      method: 'POST',
-      headers: this.headers({ 'content-type': 'application/json' }),
-      json: body,
-      timeoutMs: this.timeoutMs,
-    });
+    let responseText: string;
+    try {
+      responseText = await requestText(this.fetchFn, buildUrl(this.config.url, '/v2/router/send'), {
+        method: 'POST',
+        headers: this.headers({ 'content-type': 'application/json' }),
+        json: body,
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      throwLndError(error, 'pay_invoice');
+    }
 
     const finalLine = responseText
       .split('\n')
@@ -258,34 +336,36 @@ export class LndNode implements LightningNode {
       .at(-1);
 
     if (!finalLine) {
-      throw new LniError('Json', 'Missing payment response from LND router endpoint.');
+      throw lndNwcError('INTERNAL', 'Missing payment response from LND router endpoint.', 'pay_invoice');
     }
 
     let wrapped: LndPayResponseWrapper;
     try {
       wrapped = JSON.parse(finalLine) as LndPayResponseWrapper;
     } catch (error) {
-      throw new LniError('Json', `Failed to parse LND pay response: ${(error as Error).message}`);
+      throw lndNwcError('INTERNAL', `Failed to parse LND pay response: ${(error as Error).message}`, 'pay_invoice');
     }
 
     if (wrapped.error) {
-      throw new LniError('Api', `Payment failed: ${wrapped.error.message ?? 'unknown reason'}`);
+      const message = wrapped.error.message ?? 'unknown reason';
+      throw lndNwcError(mapProviderMessage(message) ?? 'PAYMENT_FAILED', `Payment failed: ${message}`, 'pay_invoice', wrapped.error.code);
     }
 
     if (!wrapped.result) {
-      throw new LniError('Json', 'Missing result payload in LND pay response.');
+      throw lndNwcError('INTERNAL', 'Missing result payload in LND pay response.', 'pay_invoice');
     }
 
     if (wrapped.result.status === 'FAILED') {
-      throw new LniError('Api', `Payment failed: ${wrapped.result.failure_reason ?? 'unknown reason'}`);
+      const reason = wrapped.result.failure_reason ?? 'unknown reason';
+      throw lndNwcError(mapLndFailureReason(wrapped.result.failure_reason), `Payment failed: ${reason}`, 'pay_invoice', reason);
     }
 
     if (wrapped.result.status === 'IN_FLIGHT') {
-      throw new LniError('Api', 'Payment is still in-flight. Increase timeoutSeconds and retry.');
+      throw lndNwcError('OTHER', 'Payment is still in-flight. Increase timeoutSeconds and retry.', 'pay_invoice', wrapped.result.status);
     }
 
     if (wrapped.result.status !== 'SUCCEEDED') {
-      throw new LniError('Api', `Unknown payment status: ${wrapped.result.status}`);
+      throw lndNwcError('OTHER', `Unknown payment status: ${wrapped.result.status}`, 'pay_invoice', wrapped.result.status);
     }
 
     return {
@@ -296,19 +376,19 @@ export class LndNode implements LightningNode {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for LndNode.');
+    throw lndNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for LndNode.', 'make_invoice');
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for LndNode.');
+    throw lndNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for LndNode.', 'lookup_invoice');
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw new LniError('Api', 'Bolt12 is not implemented for LndNode.');
+    throw lndNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for LndNode.', 'list_transactions');
   }
 
   async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw new LniError('Api', 'Bolt12 is not implemented for LndNode.');
+    throw lndNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for LndNode.', 'pay_invoice');
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
@@ -316,12 +396,12 @@ export class LndNode implements LightningNode {
       throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash for LndNode.');
     }
 
-    const payload = await this.getJson<LndInvoiceResponse>(`/v1/invoice/${params.paymentHash}`);
+    const payload = await this.getJson<LndInvoiceResponse>(`/v1/invoice/${params.paymentHash}`, 'lookup_invoice');
     return this.mapInvoice(payload);
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
-    const payload = await this.getJson<LndInvoiceListResponse>('/v1/invoices');
+    const payload = await this.getJson<LndInvoiceListResponse>('/v1/invoices', 'list_transactions');
     const sorted = payload.invoices
       .map((invoice) => this.mapInvoice(invoice))
       .sort((a, b) => b.createdAt - a.createdAt);

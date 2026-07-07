@@ -1,5 +1,6 @@
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
+import { providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { parseClnRunePermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -79,6 +80,56 @@ function newInvoiceLabel(): string {
   return `lni.${Date.now()}.${Math.floor(Math.random() * 1_000_000)}`;
 }
 
+function mapClnProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  const numericCode =
+    typeof info.code === 'number'
+      ? info.code
+      : typeof info.code === 'string'
+        ? Number.parseInt(info.code, 10)
+        : undefined;
+
+  switch (numericCode) {
+    case 203:
+    case 205:
+    case 206:
+    case 207:
+    case 210:
+      return 'PAYMENT_FAILED';
+    case 201:
+    case -1:
+    case 900:
+    case 901:
+    case 902:
+    case -32602:
+      return 'OTHER';
+    default:
+      return undefined;
+  }
+}
+
+function throwClnError(error: unknown, operation: NwcErrorOperation): never {
+  throwNormalizedProviderError(error, {
+    provider: 'cln',
+    operation,
+    extractProviderError: providerInfoFromJsonErrorBody,
+    mapProviderError: mapClnProviderError,
+  });
+}
+
+function clnNotFound(message: string, operation: NwcErrorOperation): NwcError {
+  return new NwcError('NOT_FOUND', message, {
+    operation,
+    provider: 'cln',
+  });
+}
+
+function clnInternal(message: string, operation: NwcErrorOperation): NwcError {
+  return new NwcError('INTERNAL', message, {
+    operation,
+    provider: 'cln',
+  });
+}
+
 export class ClnNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -96,34 +147,53 @@ export class ClnNode implements LightningNode {
     };
   }
 
-  private async postJson<T>(path: string, json: unknown = {}): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
-      method: 'POST',
-      headers: this.headers(),
-      json,
-      timeoutMs: this.timeoutMs,
-    });
+  private async postJson<T>(path: string, json: unknown = {}, operation?: NwcErrorOperation): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
+        method: 'POST',
+        headers: this.headers(),
+        json,
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwClnError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async postText(path: string, json: unknown = {}): Promise<string> {
-    return requestText(this.fetchFn, buildUrl(this.config.url, path), {
-      method: 'POST',
-      headers: this.headers(),
-      json,
-      timeoutMs: this.timeoutMs,
-    });
+  private async postText(path: string, json: unknown = {}, operation?: NwcErrorOperation): Promise<string> {
+    try {
+      return await requestText(this.fetchFn, buildUrl(this.config.url, path), {
+        method: 'POST',
+        headers: this.headers(),
+        json,
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwClnError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async fetchInvoiceFromOffer(offer: string, amountMsats: number, payerNote?: string): Promise<string> {
+  private async fetchInvoiceFromOffer(
+    offer: string,
+    amountMsats: number,
+    payerNote: string | undefined,
+    operation: NwcErrorOperation,
+  ): Promise<string> {
     const payload = await this.postJson<ClnFetchInvoiceResponse>('/v1/fetchinvoice', {
       offer,
       amount_msat: amountMsats,
       payer_note: payerNote,
       timeout: 60,
-    });
+    }, operation);
 
     if (!payload.invoice) {
-      throw new LniError('Api', 'Missing BOLT12 invoice');
+      throw clnInternal('Missing BOLT12 invoice', operation);
     }
 
     return payload.invoice;
@@ -167,8 +237,8 @@ export class ClnNode implements LightningNode {
 
   async getInfo(): Promise<NodeInfo> {
     const [info, funds] = await Promise.all([
-      this.postJson<ClnInfoResponse>('/v1/getinfo', {}),
-      this.postJson<ClnListFundsResponse>('/v1/listfunds', {}),
+      this.postJson<ClnInfoResponse>('/v1/getinfo', {}, 'get_info'),
+      this.postJson<ClnListFundsResponse>('/v1/listfunds', {}, 'get_info'),
     ]);
 
     let sendBalanceMsat = 0;
@@ -238,6 +308,7 @@ export class ClnNode implements LightningNode {
         params.offer,
         params.amountMsats ?? 0,
         params.description,
+        'make_invoice',
       );
 
       return emptyTransaction({
@@ -257,7 +328,7 @@ export class ClnNode implements LightningNode {
       amount_msat: params.amountMsats !== undefined ? String(params.amountMsats) : 'any',
       expiry: params.expiry,
       label: newInvoiceLabel(),
-    });
+    }, 'make_invoice');
 
     return emptyTransaction({
       type: 'incoming',
@@ -294,7 +365,7 @@ export class ClnNode implements LightningNode {
       body.retry_for = String(params.timeoutSeconds);
     }
 
-    const payload = await this.postJson<ClnPayResponse>('/v1/pay', body);
+    const payload = await this.postJson<ClnPayResponse>('/v1/pay', body, 'pay_invoice');
 
     return {
       paymentHash: payload.payment_hash,
@@ -307,7 +378,7 @@ export class ClnNode implements LightningNode {
     const payload = await this.postJson<ClnOfferResponse>('/v1/offer', {
       amount: params.amountMsats !== undefined ? `${params.amountMsats}msat` : 'any',
       description: params.description,
-    });
+    }, 'make_invoice');
 
     return {
       offerId: payload.offer_id ?? '',
@@ -323,7 +394,7 @@ export class ClnNode implements LightningNode {
   async getOffer(search?: string): Promise<Offer> {
     const offers = await this.listOffers(search);
     if (!offers.length) {
-      throw new LniError('Api', search ? `Offer not found for search: ${search}` : 'Offer not found');
+      throw clnNotFound(search ? `Offer not found for search: ${search}` : 'Offer not found', 'lookup_invoice');
     }
 
     return offers[0]!;
@@ -332,18 +403,18 @@ export class ClnNode implements LightningNode {
   async listOffers(search?: string): Promise<Offer[]> {
     const payload = await this.postJson<ClnListOffersResponse>('/v1/listoffers', {
       ...(search ? { offer_id: search } : {}),
-    });
+    }, 'list_transactions');
 
     return payload.offers;
   }
 
   async payOffer(offer: string, amountMsats: number, payerNote?: string): Promise<PayInvoiceResponse> {
-    const bolt11 = await this.fetchInvoiceFromOffer(offer, amountMsats, payerNote);
+    const bolt11 = await this.fetchInvoiceFromOffer(offer, amountMsats, payerNote, 'pay_invoice');
     const payload = await this.postJson<ClnPayResponse>('/v1/pay', {
       bolt11,
       maxfeepercent: 1,
       retry_for: 60,
-    });
+    }, 'pay_invoice');
 
     return {
       paymentHash: payload.payment_hash,
@@ -360,11 +431,11 @@ export class ClnNode implements LightningNode {
       query.payment_hash = params.search;
     }
 
-    const payload = await this.postJson<ClnInvoicesResponse>('/v1/listinvoices', query);
+    const payload = await this.postJson<ClnInvoicesResponse>('/v1/listinvoices', query, 'lookup_invoice');
 
     const invoice = payload.invoices[0];
     if (!invoice) {
-      throw new LniError('Api', 'No matching invoice found');
+      throw clnNotFound('No matching invoice found', 'lookup_invoice');
     }
 
     return this.invoiceToTransaction(invoice);
@@ -376,7 +447,7 @@ export class ClnNode implements LightningNode {
       index: 'created',
       limit: params.limit || undefined,
       payment_hash: params.paymentHash,
-    });
+    }, 'list_transactions');
 
     const transactions = payload.invoices.map((invoice) => this.invoiceToTransaction(invoice));
 

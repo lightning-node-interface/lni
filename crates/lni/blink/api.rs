@@ -5,20 +5,66 @@ use lightning_invoice::Bolt11Invoice;
 
 use super::types::*;
 use super::BlinkConfig;
+use crate::error_normalization::{
+    map_provider_message, nwc_error, provider_error_from_response, transport_error,
+    ProviderErrorInfo,
+};
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
-    OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType, OnchainFeeSpeed,
-    OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
+    ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
+    OnInvoiceEventParams, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
+    OnchainFeeSpeed, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
     PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
 use reqwest::header;
 
 // Docs: https://dev.blink.sv/
 
+fn map_blink_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    let code = info.code.as_deref().unwrap_or_default().to_uppercase();
+    if code.contains("AUTHENTICATION") || code.contains("UNAUTHORIZED") {
+        return Some("UNAUTHORIZED");
+    }
+    if code.contains("FORBIDDEN") || code.contains("PERMISSION") || code.contains("SCOPE") {
+        return Some("RESTRICTED");
+    }
+    if code.contains("INSUFFICIENT") || code.contains("BALANCE") {
+        return Some("INSUFFICIENT_BALANCE");
+    }
+    if code.contains("LIMIT") || code.contains("QUOTA") {
+        return Some("QUOTA_EXCEEDED");
+    }
+    if code.contains("INVALID_INVOICE") || code.contains("NO_ROUTE") || code.contains("PAYMENT") {
+        return Some("PAYMENT_FAILED");
+    }
+
+    map_provider_message(info.message.as_deref())
+}
+
+fn blink_graphql_error(errors: &[GraphQLError], fallback_code: &str) -> ApiError {
+    let first = errors.first();
+    let info = ProviderErrorInfo {
+        code: first.and_then(|error| error.code.clone()),
+        status: None,
+        message: Some(
+            errors
+                .iter()
+                .map(|error| error.message.clone())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+    };
+    let code = map_blink_provider_error(&info).unwrap_or(fallback_code);
+    nwc_error(
+        code,
+        info.message
+            .unwrap_or_else(|| "Blink GraphQL error".to_string()),
+    )
+}
+
 fn client(config: &BlinkConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
-    
+
     match header::HeaderValue::from_str(&config.api_key) {
         Ok(api_key_header) => headers.insert("X-API-KEY", api_key_header),
         Err(_) => {
@@ -29,7 +75,7 @@ fn client(config: &BlinkConfig) -> reqwest::Client {
                 .unwrap_or_else(|_| reqwest::Client::new());
         }
     };
-    
+
     headers.insert(
         "Content-Type",
         header::HeaderValue::from_static("application/json"),
@@ -42,7 +88,7 @@ fn client(config: &BlinkConfig) -> reqwest::Client {
             let client_builder = reqwest::Client::builder()
                 .default_headers(headers.clone())
                 .danger_accept_invalid_certs(true);
-            
+
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
                     let mut builder = client_builder.proxy(proxy);
@@ -60,7 +106,7 @@ fn client(config: &BlinkConfig) -> reqwest::Client {
             }
         }
     }
-    
+
     // Default client creation
     let mut client_builder = reqwest::Client::builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
@@ -71,13 +117,16 @@ fn client(config: &BlinkConfig) -> reqwest::Client {
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    client_builder
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 async fn execute_graphql_query<T>(
     config: &BlinkConfig,
     query: &str,
     variables: Option<serde_json::Value>,
+    operation: &str,
 ) -> Result<T, ApiError>
 where
     T: for<'de> serde::Deserialize<'de>,
@@ -89,44 +138,45 @@ where
     };
 
     let response = client
-        .post(config.base_url.as_deref().unwrap_or("https://api.blink.sv/graphql"))
+        .post(
+            config
+                .base_url
+                .as_deref()
+                .unwrap_or("https://api.blink.sv/graphql"),
+        )
         .json(&request)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("blink", operation, e))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("HTTP {} - {}", status, error_text),
-        });
+        return Err(provider_error_from_response(
+            "blink",
+            operation,
+            status,
+            error_text,
+            map_blink_provider_error,
+        ));
     }
 
     let response_text = response.text().await.unwrap();
-    let graphql_response: GraphQLResponse<T> = serde_json::from_str(&response_text)
-        .map_err(|e| ApiError::Json {
-            reason: format!("Failed to parse GraphQL response: {} - Response: {}", e, response_text),
+    let graphql_response: GraphQLResponse<T> =
+        serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
+            reason: format!(
+                "Failed to parse GraphQL response: {} - Response: {}",
+                e, response_text
+            ),
         })?;
 
     if let Some(errors) = graphql_response.errors {
-        return Err(ApiError::Api {
-            reason: format!(
-                "GraphQL errors: {}",
-                errors
-                    .iter()
-                    .map(|e| e.message.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        });
+        return Err(blink_graphql_error(&errors, "OTHER"));
     }
 
-    graphql_response.data.ok_or_else(|| ApiError::Json {
-        reason: "No data in GraphQL response".to_string(),
-    })
+    graphql_response
+        .data
+        .ok_or_else(|| nwc_error("INTERNAL", "No data in GraphQL response"))
 }
 
 async fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
@@ -144,17 +194,15 @@ async fn get_btc_wallet_id(config: &BlinkConfig) -> Result<String, ApiError> {
         }
     "#;
 
-    let response: MeQuery = execute_graphql_query(config, query, None).await?;
-    
+    let response: MeQuery = execute_graphql_query(config, query, None, "get_info").await?;
+
     let btc_wallet = response
         .me
         .default_account
         .wallets
         .into_iter()
         .find(|w| w.wallet_currency == "BTC")
-        .ok_or_else(|| ApiError::Api {
-            reason: "No BTC wallet found in account".to_string(),
-        })?;
+        .ok_or_else(|| nwc_error("OTHER", "No BTC wallet found in account"))?;
 
     Ok(btc_wallet.id)
 }
@@ -182,7 +230,8 @@ fn default_onchain_fee() -> OnchainFeePreference {
 fn resolve_blink_fee_speed(fee: &OnchainFeePreference) -> Result<&'static str, ApiError> {
     match fee.preference_type {
         OnchainFeePreferenceType::Default => Ok("FAST"),
-        OnchainFeePreferenceType::Speed => match fee.speed.clone().unwrap_or(OnchainFeeSpeed::Fast) {
+        OnchainFeePreferenceType::Speed => match fee.speed.clone().unwrap_or(OnchainFeeSpeed::Fast)
+        {
             OnchainFeeSpeed::Fast => Ok("FAST"),
             OnchainFeeSpeed::Normal => Ok("MEDIUM"),
             OnchainFeeSpeed::Slow => Ok("SLOW"),
@@ -199,7 +248,9 @@ fn resolve_blink_fee_speed(fee: &OnchainFeePreference) -> Result<&'static str, A
     }
 }
 
-fn resolve_blink_fee_payer(fee_payer: Option<OnchainFeePayer>) -> Result<OnchainFeePayer, ApiError> {
+fn resolve_blink_fee_payer(
+    fee_payer: Option<OnchainFeePayer>,
+) -> Result<OnchainFeePayer, ApiError> {
     match fee_payer.unwrap_or(OnchainFeePayer::Sender) {
         OnchainFeePayer::Sender => Ok(OnchainFeePayer::Sender),
         OnchainFeePayer::Recipient => Err(ApiError::InvalidInput(
@@ -323,8 +374,8 @@ pub async fn get_info(config: &BlinkConfig) -> Result<NodeInfo, ApiError> {
         }
     "#;
 
-    let response: MeQuery = execute_graphql_query(config, query, None).await?;
-    
+    let response: MeQuery = execute_graphql_query(config, query, None, "get_info").await?;
+
     let btc_wallet = response
         .me
         .default_account
@@ -359,9 +410,9 @@ pub async fn create_invoice(
     match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
             let wallet_id = get_btc_wallet_id(config).await?;
-            
+
             let amount_sats = invoice_params.amount_msats.unwrap_or(0) / 1000;
-            
+
             let query = r#"
                 mutation LnInvoiceCreate($input: LnInvoiceCreateInput!) {
                     lnInvoiceCreate(input: $input) {
@@ -386,30 +437,24 @@ pub async fn create_invoice(
                 }
             });
 
-            let response: LnInvoiceCreateResponse = execute_graphql_query(config, query, Some(variables)).await?;
+            let response: LnInvoiceCreateResponse =
+                execute_graphql_query(config, query, Some(variables), "make_invoice").await?;
 
             if let Some(errors) = &response.ln_invoice_create.errors {
                 if !errors.is_empty() {
-                    return Err(ApiError::Api {
-                        reason: format!(
-                            "Invoice creation errors: {}",
-                            errors
-                                .iter()
-                                .map(|e| e.message.clone())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ),
-                    });
+                    return Err(blink_graphql_error(errors, "OTHER"));
                 }
             }
 
-            let invoice = response.ln_invoice_create.invoice.ok_or_else(|| ApiError::Json {
-                reason: "No invoice data in response".to_string(),
-            })?;
+            let invoice = response
+                .ln_invoice_create
+                .invoice
+                .ok_or_else(|| nwc_error("INTERNAL", "No invoice data in response"))?;
 
             // Parse the BOLT11 invoice to get expiry
             let expires_at = match Bolt11Invoice::from_str(&invoice.payment_request) {
-                Ok(bolt11) => bolt11.expires_at()
+                Ok(bolt11) => bolt11
+                    .expires_at()
                     .map(|duration| duration.as_secs() as i64)
                     .unwrap_or(0),
                 Err(_) => 0,
@@ -431,9 +476,10 @@ pub async fn create_invoice(
                 external_id: Some("".to_string()),
             })
         }
-        InvoiceType::Bolt12 => Err(ApiError::Json {
-            reason: "Bolt12 not implemented for Blink".to_string(),
-        }),
+        InvoiceType::Bolt12 => Err(nwc_error(
+            "NOT_IMPLEMENTED",
+            "Bolt12 not implemented for Blink",
+        )),
     }
 }
 
@@ -462,20 +508,17 @@ pub async fn pay_invoice(
         }
     });
 
-    let fee_response: LnInvoiceFeeProbeResponse = execute_graphql_query(config, fee_probe_query, Some(fee_probe_variables)).await?;
+    let fee_response: LnInvoiceFeeProbeResponse = execute_graphql_query(
+        config,
+        fee_probe_query,
+        Some(fee_probe_variables),
+        "pay_invoice",
+    )
+    .await?;
 
     let fee_msats = if let Some(errors) = &fee_response.ln_invoice_fee_probe.errors {
         if !errors.is_empty() {
-            return Err(ApiError::Api {
-                reason: format!(
-                    "Fee probe errors: {}",
-                    errors
-                        .iter()
-                        .map(|e| e.message.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            });
+            return Err(blink_graphql_error(errors, "PAYMENT_FAILED"));
         } else {
             fee_response.ln_invoice_fee_probe.amount.unwrap_or(0) * 1000
         }
@@ -504,30 +547,30 @@ pub async fn pay_invoice(
         }
     });
 
-    let payment_response: LnInvoicePaymentSendResponse = execute_graphql_query(config, payment_query, Some(payment_variables)).await?;
+    let payment_response: LnInvoicePaymentSendResponse = execute_graphql_query(
+        config,
+        payment_query,
+        Some(payment_variables),
+        "pay_invoice",
+    )
+    .await?;
 
     if let Some(errors) = &payment_response.ln_invoice_payment_send.errors {
         if !errors.is_empty() {
-            return Err(ApiError::Api {
-                reason: format!(
-                    "Payment errors: {}",
-                    errors
-                        .iter()
-                        .map(|e| e.message.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            });
+            return Err(blink_graphql_error(errors, "PAYMENT_FAILED"));
         }
     }
 
     if payment_response.ln_invoice_payment_send.status != "SUCCESS" {
-        return Err(ApiError::Api {
-            reason: format!(
-                "Payment failed with status: {}",
-                payment_response.ln_invoice_payment_send.status
-            ),
-        });
+        let status = payment_response.ln_invoice_payment_send.status;
+        return Err(nwc_error(
+            if status == "FAILED" {
+                "PAYMENT_FAILED"
+            } else {
+                "OTHER"
+            },
+            format!("Payment failed with status: {}", status),
+        ));
     }
 
     // Extract payment hash from the BOLT11 invoice
@@ -570,7 +613,7 @@ pub async fn prepare_onchain_transaction(
     });
 
     let response: OnChainTxFeeResponse =
-        execute_graphql_query(config, query, Some(variables)).await?;
+        execute_graphql_query(config, query, Some(variables), "pay_invoice").await?;
     let fee_sats = response.on_chain_tx_fee.amount;
 
     Ok(OnchainTransaction {
@@ -647,32 +690,25 @@ pub async fn pay_onchain_with_options(
     });
 
     let response: OnChainPaymentSendResponse =
-        execute_graphql_query(config, query, Some(variables)).await?;
+        execute_graphql_query(config, query, Some(variables), "pay_invoice").await?;
     let payment = response.on_chain_payment_send;
 
     if let Some(errors) = &payment.errors {
         if !errors.is_empty() {
-            return Err(ApiError::Api {
-                reason: format!(
-                    "On-chain payment errors: {}",
-                    errors
-                        .iter()
-                        .map(|e| e.message.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            });
+            return Err(blink_graphql_error(errors, "PAYMENT_FAILED"));
         }
     }
 
     let payment_transaction = payment.transaction;
     let payment_id = payment_transaction.as_ref().and_then(|tx| tx.id.clone());
-    let txid = payment_transaction.as_ref().and_then(|tx| match tx.settlement_via.as_ref() {
-        Some(SettlementVia::SettlementViaOnChain { transaction_hash }) => {
-            transaction_hash.clone()
-        }
-        _ => None,
-    });
+    let txid = payment_transaction
+        .as_ref()
+        .and_then(|tx| match tx.settlement_via.as_ref() {
+            Some(SettlementVia::SettlementViaOnChain { transaction_hash }) => {
+                transaction_hash.clone()
+            }
+            _ => None,
+        });
     let fee_sats = payment_transaction
         .as_ref()
         .and_then(|tx| {
@@ -696,7 +732,9 @@ pub async fn pay_onchain_with_options(
         total_amount_sats: fee_sats
             .map(|fee_sats| transaction.amount_sats + fee_sats)
             .or(transaction.total_amount_sats),
-        recipient_amount_sats: transaction.recipient_amount_sats.or(Some(transaction.amount_sats)),
+        recipient_amount_sats: transaction
+            .recipient_amount_sats
+            .or(Some(transaction.amount_sats)),
         created_at: None,
         raw: None,
     })
@@ -711,18 +749,20 @@ pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
 }
 
 pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<Offer, ApiError> {
-    Err(ApiError::Json {
-        reason: "Bolt12 not implemented for Blink".to_string(),
-    })
+    Err(nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
 }
 
 pub async fn list_offers(
     _config: &BlinkConfig,
     _search: Option<String>,
 ) -> Result<Vec<Offer>, ApiError> {
-    Err(ApiError::Json {
-        reason: "Bolt12 not implemented for Blink".to_string(),
-    })
+    Err(nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
 }
 
 pub async fn create_offer(
@@ -731,9 +771,10 @@ pub async fn create_offer(
     _description: Option<String>,
     _expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    Err(ApiError::Json {
-        reason: "Bolt12 not implemented for Blink".to_string(),
-    })
+    Err(nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
 }
 
 pub async fn fetch_invoice_from_offer(
@@ -742,9 +783,10 @@ pub async fn fetch_invoice_from_offer(
     _amount_msats: i64,
     _payer_note: Option<String>,
 ) -> Result<crate::cln::types::FetchInvoiceResponse, ApiError> {
-    Err(ApiError::Json {
-        reason: "Bolt12 not implemented for Blink".to_string(),
-    })
+    Err(nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
 }
 
 pub async fn pay_offer(
@@ -753,9 +795,10 @@ pub async fn pay_offer(
     _amount_msats: i64,
     _payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    Err(ApiError::Json {
-        reason: "Bolt12 not implemented for Blink".to_string(),
-    })
+    Err(nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
 }
 
 pub async fn lookup_invoice(
@@ -766,20 +809,22 @@ pub async fn lookup_invoice(
     search: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let target_payment_hash = payment_hash.unwrap_or_default();
-    
+
     // Get transactions and look for the specific payment hash, using parameters or defaults
-    let transactions = list_transactions(
-        config, 
-        from.unwrap_or(0), 
-        limit.unwrap_or(100), 
-        search
-    ).await?;
-    
+    let transactions =
+        list_transactions(config, from.unwrap_or(0), limit.unwrap_or(100), search).await?;
+
     let transaction = transactions
         .into_iter()
         .find(|t| t.payment_hash == target_payment_hash)
-        .ok_or_else(|| ApiError::Json {
-            reason: format!("Transaction not found for payment hash: {}", target_payment_hash),
+        .ok_or_else(|| {
+            nwc_error(
+                "NOT_FOUND",
+                format!(
+                    "Transaction not found for payment hash: {}",
+                    target_payment_hash
+                ),
+            )
         })?;
 
     Ok(transaction)
@@ -850,13 +895,14 @@ pub async fn list_transactions(
         "before": serde_json::Value::Null
     });
 
-    let response: TransactionsQuery = execute_graphql_query(config, query, Some(variables)).await?;
-    
+    let response: TransactionsQuery =
+        execute_graphql_query(config, query, Some(variables), "list_transactions").await?;
+
     let mut all_transactions = Vec::new();
-    
+
     for edge in response.me.default_account.transactions.edges {
         let node = edge.node;
-        
+
         // Extract Lightning-specific information
         let payment_hash = match node.initiation_via {
             Some(InitiationVia::InitiationViaLn { payment_hash }) => payment_hash,
@@ -887,7 +933,7 @@ pub async fn list_transactions(
             // No settlement currency available
             (0, 0)
         };
-        
+
         // Use the timestamp directly since it's already a Unix timestamp
         let created_at = node.created_at;
 
@@ -898,7 +944,12 @@ pub async fn list_transactions(
         };
 
         all_transactions.push(Transaction {
-            type_: if node.direction == "SEND" { "outgoing" } else { "incoming" }.to_string(),
+            type_: if node.direction == "SEND" {
+                "outgoing"
+            } else {
+                "incoming"
+            }
+            .to_string(),
             invoice: "".to_string(), // Not available from this query
             preimage,
             payment_hash,
@@ -918,16 +969,16 @@ pub async fn list_transactions(
     if let Some(search_term) = search {
         let search_lower = search_term.to_lowercase();
         all_transactions.retain(|tx| {
-            tx.description.to_lowercase().contains(&search_lower) ||
-            tx.payment_hash.to_lowercase().contains(&search_lower) ||
-            tx.preimage.to_lowercase().contains(&search_lower)
+            tx.description.to_lowercase().contains(&search_lower)
+                || tx.payment_hash.to_lowercase().contains(&search_lower)
+                || tx.preimage.to_lowercase().contains(&search_lower)
         });
     }
 
     // Apply client-side pagination: skip 'from' records and take 'limit' records
     let skip_count = from as usize;
     let take_count = limit as usize;
-    
+
     if skip_count < all_transactions.len() {
         let end_index = std::cmp::min(skip_count + take_count, all_transactions.len());
         all_transactions = all_transactions[skip_count..end_index].to_vec();
@@ -938,9 +989,12 @@ pub async fn list_transactions(
     Ok(all_transactions)
 }
 
-// Core logic shared by both implementations  
-pub async fn poll_invoice_events<F>(config: &BlinkConfig, params: OnInvoiceEventParams, mut callback: F)
-where
+// Core logic shared by both implementations
+pub async fn poll_invoice_events<F>(
+    config: &BlinkConfig,
+    params: OnInvoiceEventParams,
+    mut callback: F,
+) where
     F: FnMut(String, Option<Transaction>),
 {
     let start_time = std::time::Instant::now();
@@ -957,7 +1011,9 @@ where
             None,
             None,
             params.search.clone(),
-        ).await {
+        )
+        .await
+        {
             Ok(transaction) => {
                 if transaction.settled_at > 0 {
                     ("success".to_string(), Some(transaction))
@@ -987,5 +1043,6 @@ pub async fn on_invoice_events(
         "success" => callback.success(tx),
         "pending" => callback.pending(tx),
         "failure" | _ => callback.failure(tx),
-    }).await;
+    })
+    .await;
 }

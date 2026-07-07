@@ -1,5 +1,6 @@
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
+import { mapProviderMessage, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getBlinkTokenPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -8,6 +9,8 @@ import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type BlinkConfig, type Crea
 
 interface GraphQLError {
   message: string;
+  code?: string;
+  path?: string[];
 }
 
 interface GraphQLResponse<T> {
@@ -250,6 +253,64 @@ function blinkTransactionMemo(transaction: OnchainTransaction): string | undefin
   return typeof memo === 'string' && memo.length > 0 ? memo : undefined;
 }
 
+function blinkProviderInfoFromErrors(errors: GraphQLError[]): ProviderErrorInfo {
+  const first = errors[0];
+  return {
+    code: first?.code,
+    message: errors.map((error) => error.message).join(', '),
+  };
+}
+
+function mapBlinkProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  const code = String(info.code ?? '').toUpperCase();
+
+  if (code.includes('AUTHENTICATION') || code.includes('UNAUTHORIZED')) {
+    return 'UNAUTHORIZED';
+  }
+  if (code.includes('FORBIDDEN') || code.includes('PERMISSION') || code.includes('SCOPE')) {
+    return 'RESTRICTED';
+  }
+  if (code.includes('INSUFFICIENT') || code.includes('BALANCE')) {
+    return 'INSUFFICIENT_BALANCE';
+  }
+  if (code.includes('LIMIT') || code.includes('QUOTA')) {
+    return 'QUOTA_EXCEEDED';
+  }
+  if (code.includes('INVALID_INVOICE') || code.includes('NO_ROUTE') || code.includes('PAYMENT')) {
+    return 'PAYMENT_FAILED';
+  }
+
+  return mapProviderMessage(info.message);
+}
+
+function blinkNwcError(
+  code: NwcErrorCode,
+  message: string,
+  operation: NwcErrorOperation,
+  info?: ProviderErrorInfo,
+): NwcError {
+  return new NwcError(code, message, {
+    operation,
+    provider: 'blink',
+    providerCode: info?.code,
+    providerStatus: info?.status,
+    providerMessage: info?.message ?? message,
+  });
+}
+
+function blinkErrorsToNwcError(errors: GraphQLError[], operation: NwcErrorOperation, fallbackCode: NwcErrorCode = 'OTHER'): NwcError {
+  const info = blinkProviderInfoFromErrors(errors);
+  return blinkNwcError(mapBlinkProviderError(info) ?? fallbackCode, info.message ?? 'Blink GraphQL error', operation, info);
+}
+
+function throwBlinkProviderError(error: unknown, operation: NwcErrorOperation): never {
+  throwNormalizedProviderError(error, {
+    provider: 'blink',
+    operation,
+    mapProviderError: mapBlinkProviderError,
+  });
+}
+
 export class BlinkNode implements LightningNode, OnchainPayments {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -326,34 +387,43 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     };
   }
 
-  private async gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-    const payload = await requestJson<GraphQLResponse<T>>(this.fetchFn, this.baseUrl, {
-      method: 'POST',
-      headers: this.headers(),
-      json: {
-        query,
-        variables,
-      },
-      timeoutMs: this.timeoutMs,
-    });
+  private async gql<T>(
+    query: string,
+    variables: Record<string, unknown> | undefined,
+    operation: NwcErrorOperation,
+  ): Promise<T> {
+    let payload: GraphQLResponse<T>;
+    try {
+      payload = await requestJson<GraphQLResponse<T>>(this.fetchFn, this.baseUrl, {
+        method: 'POST',
+        headers: this.headers(),
+        json: {
+          query,
+          variables,
+        },
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      throwBlinkProviderError(error, operation);
+    }
 
     if (payload.errors?.length) {
-      throw new LniError('Api', payload.errors.map((error) => error.message).join(', '));
+      throw blinkErrorsToNwcError(payload.errors, operation);
     }
 
     if (!payload.data) {
-      throw new LniError('Json', 'No data in Blink GraphQL response.');
+      throw blinkNwcError('INTERNAL', 'No data in Blink GraphQL response.', operation);
     }
 
     return payload.data;
   }
 
   private async getBtcWallet(): Promise<BlinkWallet> {
-    const response = await this.gql<BlinkMeQuery>(BlinkNode.ME_QUERY);
+    const response = await this.gql<BlinkMeQuery>(BlinkNode.ME_QUERY, undefined, 'get_info');
     const wallet = response.me.defaultAccount.wallets.find((item) => item.walletCurrency === 'BTC');
 
     if (!wallet) {
-      throw new LniError('Api', 'No BTC wallet found in Blink account.');
+      throw blinkNwcError('OTHER', 'No BTC wallet found in Blink account.', 'get_info');
     }
 
     this.cachedWalletId = wallet.id;
@@ -396,7 +466,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw new LniError('Api', 'Bolt12 is not implemented for BlinkNode.');
+      throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'make_invoice');
     }
 
     const walletId = await this.getBtcWalletId();
@@ -410,7 +480,9 @@ export class BlinkNode implements LightningNode, OnchainPayments {
             satoshis
           }
           errors {
+            code
             message
+            path
           }
         }
       }
@@ -422,15 +494,15 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         walletId,
         memo: params.description,
       },
-    });
+    }, 'make_invoice');
 
     if (response.lnInvoiceCreate.errors?.length) {
-      throw new LniError('Api', response.lnInvoiceCreate.errors.map((error) => error.message).join(', '));
+      throw blinkErrorsToNwcError(response.lnInvoiceCreate.errors, 'make_invoice');
     }
 
     const invoice = response.lnInvoiceCreate.invoice;
     if (!invoice) {
-      throw new LniError('Json', 'No invoice returned from Blink invoice creation.');
+      throw blinkNwcError('INTERNAL', 'No invoice returned from Blink invoice creation.', 'make_invoice');
     }
 
     return emptyTransaction({
@@ -454,7 +526,9 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       mutation lnInvoiceFeeProbe($input: LnInvoiceFeeProbeInput!) {
         lnInvoiceFeeProbe(input: $input) {
           errors {
+            code
             message
+            path
           }
           amount
         }
@@ -466,10 +540,11 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           walletId,
         },
       },
+      'pay_invoice',
     );
 
     if (feeProbe.lnInvoiceFeeProbe.errors?.length) {
-      throw new LniError('Api', feeProbe.lnInvoiceFeeProbe.errors.map((error) => error.message).join(', '));
+      throw blinkErrorsToNwcError(feeProbe.lnInvoiceFeeProbe.errors, 'pay_invoice', 'PAYMENT_FAILED');
     }
 
     const payment = await this.gql<BlinkPaymentSendResponse>(
@@ -478,7 +553,9 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         lnInvoicePaymentSend(input: $input) {
           status
           errors {
+            code
             message
+            path
           }
         }
       }
@@ -489,14 +566,21 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           walletId,
         },
       },
+      'pay_invoice',
     );
 
     if (payment.lnInvoicePaymentSend.errors?.length) {
-      throw new LniError('Api', payment.lnInvoicePaymentSend.errors.map((error) => error.message).join(', '));
+      throw blinkErrorsToNwcError(payment.lnInvoicePaymentSend.errors, 'pay_invoice', 'PAYMENT_FAILED');
     }
 
     if (payment.lnInvoicePaymentSend.status !== 'SUCCESS') {
-      throw new LniError('Api', `Blink payment failed with status ${payment.lnInvoicePaymentSend.status}`);
+      const status = payment.lnInvoicePaymentSend.status;
+      throw blinkNwcError(
+        status === 'FAILED' ? 'PAYMENT_FAILED' : 'OTHER',
+        `Blink payment failed with status ${status}`,
+        'pay_invoice',
+        { code: status, message: status },
+      );
     }
 
     return {
@@ -529,6 +613,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         amount: amountSats,
         speed,
       },
+      'pay_invoice',
     );
 
     const feeSats = response.onChainTxFee.amount;
@@ -576,7 +661,9 @@ export class BlinkNode implements LightningNode, OnchainPayments {
             }
           }
           errors {
+            code
             message
+            path
           }
         }
       }
@@ -590,10 +677,11 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           speed,
         },
       },
+      'pay_invoice',
     );
 
     if (payment.onChainPaymentSend.errors?.length) {
-      throw new LniError('Api', payment.onChainPaymentSend.errors.map((error) => error.message).join(', '));
+      throw blinkErrorsToNwcError(payment.onChainPaymentSend.errors, 'pay_invoice', 'PAYMENT_FAILED');
     }
 
     const paymentTransaction = payment.onChainPaymentSend.transaction;
@@ -618,19 +706,19 @@ export class BlinkNode implements LightningNode, OnchainPayments {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for BlinkNode.');
+    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'make_invoice');
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for BlinkNode.');
+    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'lookup_invoice');
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw new LniError('Api', 'Bolt12 is not implemented for BlinkNode.');
+    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'list_transactions');
   }
 
   async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw new LniError('Api', 'Bolt12 is not implemented for BlinkNode.');
+    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'pay_invoice');
   }
 
   private mapTransaction(node: BlinkTransactionNode): Transaction {
@@ -668,7 +756,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     const response: BlinkTransactionsQuery = await this.gql<BlinkTransactionsQuery>(BlinkNode.TRANSACTIONS_QUERY, {
       first: Math.max(args.first, 1),
       after: args.after ?? null,
-    });
+    }, args.paymentHash ? 'lookup_invoice' : 'list_transactions');
 
     const page: BlinkTransactionsQuery['me']['defaultAccount']['transactions'] =
       response.me.defaultAccount.transactions;
@@ -723,7 +811,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       after = page.nextCursor;
     }
 
-    throw new LniError('Api', `Transaction not found for payment hash: ${params.paymentHash}`);
+    throw blinkNwcError('NOT_FOUND', `Transaction not found for payment hash: ${params.paymentHash}`, 'lookup_invoice');
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {

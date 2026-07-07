@@ -1,15 +1,18 @@
 use std::time::Duration;
 
 use super::types::{
-    BalancesResponse, Bolt11Resp, FetchInvoiceResponse, GetInfoResponse, LndPayInvoiceResponseWrapper,
-    ListInvoiceResponse, ListInvoiceResponseWrapper,
+    BalancesResponse, Bolt11Resp, FetchInvoiceResponse, GetInfoResponse, ListInvoiceResponse,
+    ListInvoiceResponseWrapper, LndPayInvoiceResponseWrapper,
 };
 use super::LndConfig;
+use crate::error_normalization::{
+    map_provider_message, nwc_error, provider_error_from_response, transport_error,
+    ProviderErrorInfo,
+};
 use crate::types::NodeInfo;
 use crate::{
-    ApiError, CreateInvoiceParams, Offer, OnInvoiceEventCallback,
-    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
-    DEFAULT_INVOICE_EXPIRY,
+    ApiError, CreateInvoiceParams, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
+    PayInvoiceParams, PayInvoiceResponse, Transaction, DEFAULT_INVOICE_EXPIRY,
 };
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -17,6 +20,31 @@ use serde_json::json;
 
 // Docs
 // https://lightning.engineering/api-docs/api/lnd/rest-endpoints/
+
+fn map_lnd_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    let code = info.code.as_deref().unwrap_or_default().to_lowercase();
+    let message = info.message.as_deref().unwrap_or_default().to_lowercase();
+
+    if code.contains("unauthenticated") || message.contains("unauthenticated") {
+        return Some("UNAUTHORIZED");
+    }
+    if code.contains("permission_denied") || message.contains("permission denied") {
+        return Some("RESTRICTED");
+    }
+
+    map_provider_message(info.message.as_deref())
+}
+
+fn map_lnd_failure_reason(reason: &str) -> &'static str {
+    match reason {
+        "FAILURE_REASON_INSUFFICIENT_BALANCE" => "INSUFFICIENT_BALANCE",
+        "FAILURE_REASON_NO_ROUTE"
+        | "FAILURE_REASON_TIMEOUT"
+        | "FAILURE_REASON_INCORRECT_PAYMENT_DETAILS"
+        | "FAILURE_REASON_ERROR" => "PAYMENT_FAILED",
+        _ => "OTHER",
+    }
+}
 
 fn async_client(config: &LndConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
@@ -32,7 +60,7 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
             let client_builder = reqwest::Client::builder()
                 .default_headers(headers.clone())
                 .danger_accept_invalid_certs(true);
-            
+
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
                     match client_builder.proxy(proxy).build() {
@@ -44,7 +72,7 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
             }
         }
     }
-    
+
     // Default client creation
     let mut client_builder = reqwest::Client::builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
@@ -53,14 +81,13 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    client_builder
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 // Core shared logic for processing LND node info and balance responses
-fn process_node_info_responses(
-    info: GetInfoResponse,
-    balance: BalancesResponse,
-) -> NodeInfo {
+fn process_node_info_responses(info: GetInfoResponse, balance: BalancesResponse) -> NodeInfo {
     NodeInfo {
         alias: info.alias,
         color: info.color,
@@ -113,35 +140,57 @@ fn process_node_info_responses(
 pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
     // Create HTTP client using the helper function
     let client = async_client(&config);
-    
+
     // Get node info
     let req_url = format!("{}/v1/getinfo", config.url);
     let mut info_request = client.get(&req_url);
     info_request = info_request.header("Grpc-Metadata-macaroon", &config.macaroon);
-    
+
     let info_response = info_request.send().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to get node info: {}", e)
+        reason: format!("Failed to get node info: {}", e),
     })?;
-    
+    if !info_response.status().is_success() {
+        let status = info_response.status();
+        let error_text = info_response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "get_info",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
+
     let info_text = info_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read node info response: {}", e)
+        reason: format!("Failed to read node info response: {}", e),
     })?;
-    
+
     let info: GetInfoResponse = serde_json::from_str(&info_text)?;
-    
+
     // Get balance info
     let balance_url = format!("{}/v1/balance/channels", config.url);
     let mut balance_request = client.get(&balance_url);
     balance_request = balance_request.header("Grpc-Metadata-macaroon", &config.macaroon);
-    
+
     let balance_response = balance_request.send().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to get balance info: {}", e)
+        reason: format!("Failed to get balance info: {}", e),
     })?;
-    
+    if !balance_response.status().is_success() {
+        let status = balance_response.status();
+        let error_text = balance_response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "get_info",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
+
     let balance_text = balance_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read balance response: {}", e)
+        reason: format!("Failed to read balance response: {}", e),
     })?;
-    
+
     let balance: BalancesResponse = serde_json::from_str(&balance_text)?;
 
     // Use shared logic to create NodeInfo
@@ -177,9 +226,8 @@ struct LndCheckMacaroonPermissionsResponse {
 }
 
 pub async fn get_permissions(config: LndConfig) -> Result<crate::Permissions, ApiError> {
-    let macaroon_bytes = hex::decode(config.macaroon.trim()).map_err(|e| ApiError::InvalidInput(
-        format!("Invalid LND macaroon hex: {}", e),
-    ))?;
+    let macaroon_bytes = hex::decode(config.macaroon.trim())
+        .map_err(|e| ApiError::InvalidInput(format!("Invalid LND macaroon hex: {}", e)))?;
 
     match get_lnd_remote_permissions(&config, &macaroon_bytes).await {
         Ok(permissions) => Ok(permissions),
@@ -200,16 +248,20 @@ async fn get_lnd_remote_permissions(
 ) -> Result<crate::Permissions, ApiError> {
     let client = async_client(config);
     let permissions_url = format!("{}/v1/macaroon/permissions", config.url);
-    let permissions_response = client
-        .get(&permissions_url)
-        .send()
+    let permissions_response =
+        client
+            .get(&permissions_url)
+            .send()
+            .await
+            .map_err(|e| ApiError::Http {
+                reason: format!("Failed to list LND macaroon permissions: {}", e),
+            })?;
+    let permissions_text = permissions_response
+        .text()
         .await
         .map_err(|e| ApiError::Http {
-            reason: format!("Failed to list LND macaroon permissions: {}", e),
+            reason: format!("Failed to read LND permissions response: {}", e),
         })?;
-    let permissions_text = permissions_response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read LND permissions response: {}", e),
-    })?;
     let permissions_payload: LndListPermissionsResponse = serde_json::from_str(&permissions_text)?;
     let macaroon = base64::encode(macaroon_bytes);
     let check_url = format!("{}/v1/macaroon/checkpermissions", config.url);
@@ -241,15 +293,14 @@ async fn get_lnd_remote_permissions(
 
 // get the one with the offer_id or label or get the first offer in the list or
 pub async fn get_offer(config: &LndConfig, search: Option<String>) -> Result<Offer, ApiError> {
-    return Err(ApiError::Json {
-        reason: "Bolt12 not implemented".to_string(),
-    });
+    return Err(nwc_error("NOT_IMPLEMENTED", "Bolt12 not implemented"));
 }
 
-pub async fn list_offers(config: &LndConfig, search: Option<String>) -> Result<Vec<Offer>, ApiError> {
-    return Err(ApiError::Json {
-        reason: "Bolt12 not implemented".to_string(),
-    });
+pub async fn list_offers(
+    config: &LndConfig,
+    search: Option<String>,
+) -> Result<Vec<Offer>, ApiError> {
+    return Err(nwc_error("NOT_IMPLEMENTED", "Bolt12 not implemented"));
 }
 
 pub fn create_offer(
@@ -258,9 +309,7 @@ pub fn create_offer(
     description: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    return Err(ApiError::Json {
-        reason: "Bolt12 not implemented".to_string(),
-    });
+    return Err(nwc_error("NOT_IMPLEMENTED", "Bolt12 not implemented"));
 }
 
 pub fn fetch_invoice_from_offer(
@@ -269,9 +318,7 @@ pub fn fetch_invoice_from_offer(
     amount_msats: i64, // TODO make optional if the lno already has amount in it
     payer_note: Option<String>,
 ) -> Result<FetchInvoiceResponse, ApiError> {
-    return Err(ApiError::Json {
-        reason: "Bolt12 not implemented".to_string(),
-    });
+    return Err(nwc_error("NOT_IMPLEMENTED", "Bolt12 not implemented"));
 }
 
 pub async fn pay_offer(
@@ -280,9 +327,7 @@ pub async fn pay_offer(
     amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    return Err(ApiError::Json {
-        reason: "Bolt12 not implemented".to_string(),
-    });
+    return Err(nwc_error("NOT_IMPLEMENTED", "Bolt12 not implemented"));
 }
 
 // Async version of lookup_invoice following the same pattern as get_info_async
@@ -297,32 +342,40 @@ pub async fn lookup_invoice(
     let payment_hash_str = payment_hash.unwrap_or_default();
     let list_invoices_url = format!("{}/v1/invoice/{}", config.url, payment_hash_str);
     println!("list_invoices_url {}", &list_invoices_url);
-    
+
     // Create HTTP client using the helper function
     let client = async_client(&config);
-    
+
     // Fetch incoming transactions
     let mut request = client.get(&list_invoices_url);
     request = request.header("Grpc-Metadata-macaroon", &config.macaroon);
-    
+
     let response = request.send().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to lookup invoice: {}", e)
+        reason: format!("Failed to lookup invoice: {}", e),
     })?;
-    
+
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
-        return Err(ApiError::Json {
-            reason: "Invoice not found".to_string(),
-        });
+        return Err(nwc_error("NOT_FOUND", "Invoice not found"));
     }
-    
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "lookup_invoice",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
+
     println!("Status: {}", status);
     let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read invoice response: {}", e)
+        reason: format!("Failed to read invoice response: {}", e),
     })?;
-    
+
     let inv: ListInvoiceResponse = serde_json::from_str(&response_text)?;
-    
+
     Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: inv.payment_request.unwrap_or_default(),
@@ -361,7 +414,9 @@ pub async fn lookup_invoice(
 }
 
 // Core shared logic for invoice polling - processes lookup result and determines status
-fn process_invoice_lookup_result(transaction_result: Result<Transaction, ApiError>) -> (String, Option<Transaction>) {
+fn process_invoice_lookup_result(
+    transaction_result: Result<Transaction, ApiError>,
+) -> (String, Option<Transaction>) {
     match transaction_result {
         Ok(transaction) => {
             if transaction.settled_at > 0 {
@@ -419,10 +474,10 @@ pub async fn poll_invoice_events<F>(
             params.search.clone(),
         )
         .await;
-        
+
         let (status, transaction) = process_invoice_lookup_result(lookup_result);
         let should_continue = handle_poll_status(&status, transaction, &mut callback);
-        
+
         if !should_continue {
             break;
         }
@@ -453,7 +508,7 @@ pub async fn create_invoice(
     params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
     let client = async_client(&config);
-    
+
     let mut body = json!({
         "value_msat": params.amount_msats.unwrap_or(0),
         "memo": params.description.clone().unwrap_or_default(),
@@ -479,6 +534,18 @@ pub async fn create_invoice(
         .map_err(|e| ApiError::Http {
             reason: format!("Failed to create invoice: {}", e),
         })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "make_invoice",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
 
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read create invoice response: {}", e),
@@ -509,7 +576,7 @@ pub async fn pay_invoice(
     params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
     let client = async_client(&config);
-    
+
     let mut body = json!({
         "payment_request": params.invoice,
         "allow_self_payment": params.allow_self_payment.unwrap_or(false),
@@ -532,9 +599,19 @@ pub async fn pay_invoice(
         .json(&body)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to pay invoice: {}", e),
-        })?;
+        .map_err(|e| transport_error("lnd", "pay_invoice", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "pay_invoice",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
 
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read pay invoice response: {}", e),
@@ -542,51 +619,55 @@ pub async fn pay_invoice(
 
     // Try to parse as potential error response first
     if response_text.contains("error") && !response_text.contains("\"result\"") {
-        return Err(ApiError::Json {
-            reason: format!("Payment failed: {}", response_text),
-        });
+        return Err(nwc_error(
+            "PAYMENT_FAILED",
+            format!("Payment failed: {}", response_text),
+        ));
     }
 
     // LND sends streaming responses, we need to parse the last line which contains the final result
-    let final_response = response_text
-        .lines()
-        .last()
-        .unwrap_or(&response_text);
+    let final_response = response_text.lines().last().unwrap_or(&response_text);
 
     // Parse as wrapped LND response
     let wrapped_response: LndPayInvoiceResponseWrapper = serde_json::from_str(final_response)
         .map_err(|e| ApiError::Json {
-            reason: format!("Failed to parse LND wrapped response: {}. Raw response: {}", e, final_response),
+            reason: format!(
+                "Failed to parse LND wrapped response: {}. Raw response: {}",
+                e, final_response
+            ),
         })?;
-    
+
     // Check if payment failed
     if wrapped_response.result.status == "FAILED" {
-        return Err(ApiError::Json {
-            reason: format!("Payment failed: {}", wrapped_response.result.failure_reason),
-        });
+        return Err(nwc_error(
+            map_lnd_failure_reason(&wrapped_response.result.failure_reason),
+            format!("Payment failed: {}", wrapped_response.result.failure_reason),
+        ));
     }
-    
+
     // Check if payment is still in flight (shouldn't happen with proper timeout, but just in case)
     if wrapped_response.result.status == "IN_FLIGHT" {
-        return Err(ApiError::Json {
-            reason: "Payment is still in flight - timeout may need to be increased".to_string(),
-        });
+        return Err(nwc_error(
+            "OTHER",
+            "Payment is still in flight - timeout may need to be increased",
+        ));
     }
-    
+
     // Payment should be SUCCEEDED at this point
     if wrapped_response.result.status != "SUCCEEDED" {
-        return Err(ApiError::Json {
-            reason: format!("Unknown payment status: {}", wrapped_response.result.status),
-        });
+        return Err(nwc_error(
+            "OTHER",
+            format!("Unknown payment status: {}", wrapped_response.result.status),
+        ));
     }
-    
+
     // Convert to our standard PayInvoiceResponse format
     let pay_response = PayInvoiceResponse {
         payment_hash: wrapped_response.result.payment_hash,
         preimage: wrapped_response.result.payment_preimage,
         fee_msats: wrapped_response.result.fee_msat.parse::<i64>().unwrap_or(0),
     };
-    
+
     Ok(pay_response)
 }
 
@@ -609,7 +690,7 @@ pub async fn list_transactions(
     _search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
     let client = async_client(&config);
-    
+
     let list_txns_url = format!("{}/v1/invoices", config.url);
     let response = client
         .get(&list_txns_url)
@@ -619,6 +700,18 @@ pub async fn list_transactions(
         .map_err(|e| ApiError::Http {
             reason: format!("Failed to list transactions: {}", e),
         })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "lnd",
+            "list_transactions",
+            status,
+            error_text,
+            map_lnd_provider_error,
+        ));
+    }
 
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read list transactions response: {}", e),
