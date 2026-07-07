@@ -791,6 +791,7 @@ export class NwcNode implements LightningNode {
       let sub: NwcSubscription | undefined;
       let replyTimeoutId: ReturnType<typeof setTimeout> | undefined;
       let publishTimeoutId: ReturnType<typeof setTimeout> | undefined;
+      let replyTimeoutMessage = `reply timeout: request setup for ${method}`;
 
       const cleanup = () => {
         if (replyTimeoutId) {
@@ -834,6 +835,12 @@ export class NwcNode implements LightningNode {
       this.activeRequests.add(activeRequest);
       options.signal?.addEventListener('abort', onAbort, { once: true });
 
+      const replyTimeout = this.nip47TimeoutValues?.replyTimeout ?? DEFAULT_NWC_TIMEOUT_MS;
+      replyTimeoutId = setTimeout(() => {
+        this.client.close();
+        settleReject(new Nip47ReplyTimeoutError(replyTimeoutMessage, 'INTERNAL'));
+      }, replyTimeout);
+
       (async () => {
         try {
           await client._checkConnected();
@@ -869,6 +876,7 @@ export class NwcNode implements LightningNode {
           if (settled) {
             return;
           }
+          replyTimeoutMessage = `reply timeout: event ${event.id}`;
 
           sub = client.pool.subscribe(
             client.relayUrls,
@@ -921,13 +929,9 @@ export class NwcNode implements LightningNode {
             },
           );
 
-          const replyTimeout = this.nip47TimeoutValues?.replyTimeout ?? DEFAULT_NWC_TIMEOUT_MS;
-          replyTimeoutId = setTimeout(() => {
-            settleReject(new Nip47ReplyTimeoutError(`reply timeout: event ${event.id}`, 'INTERNAL'));
-          }, replyTimeout);
-
           const publishTimeout = this.nip47TimeoutValues?.publishTimeout ?? 5_000;
           publishTimeoutId = setTimeout(() => {
+            this.client.close();
             settleReject(new Nip47PublishTimeoutError(`publish timeout: ${event.id}`, 'INTERNAL'));
           }, publishTimeout);
 

@@ -257,6 +257,30 @@ describe('NwcNode.payInvoice', () => {
     expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(closeCount);
   });
 
+  it('applies the NWC timeout to relay setup before subscribing for a response', async () => {
+    vi.useFakeTimers();
+    nwcMocks.useCancelableRequest = true;
+    nwcMocks.checkConnected.mockReturnValue(new Promise(() => undefined));
+
+    const response = makeNodeWithTimeout(0.001).payInvoice({ invoice: BOLT11_INVOICE });
+    const assertion = expect(response).rejects.toMatchObject({
+      name: 'NwcError',
+      code: 'NwcError',
+      nwcCode: 'INTERNAL',
+      operation: 'pay_invoice',
+      message: 'reply timeout: request setup for pay_invoice',
+    });
+    await vi.advanceTimersByTimeAsync(1);
+
+    await assertion;
+    expect(nwcMocks.poolSubscribe).not.toHaveBeenCalled();
+    expect(nwcMocks.subscriptionClose).not.toHaveBeenCalled();
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels an active NIP-47 request with AbortSignal and does not timeout later', async () => {
     vi.useFakeTimers();
     nwcMocks.useCancelableRequest = true;
