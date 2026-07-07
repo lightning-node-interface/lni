@@ -3,7 +3,7 @@ import { NwcNode } from '../../nodes/nwc.js';
 import { hasEnv, itIf, testInvoiceLabel, timeout } from './helpers.js';
 
 describe('Real integration from crates/lni/.env > NwcNode', async () => {
-  const enabled = hasEnv('NWC_URI');
+  const enabled = hasEnv('NWC_URI') && typeof globalThis.WebSocket === 'function';
 
   const makeNode = () => new NwcNode({ nwcUri: process.env.NWC_URI!, httpTimeout: 15 });
  
@@ -35,6 +35,44 @@ describe('Real integration from crates/lni/.env > NwcNode', async () => {
 
       const invoiceLookup = await node.lookupInvoice({ search: invoice.invoice });
       expect(typeof invoiceLookup.type).toBe('string');
+    } finally {
+      node.close();
+    }
+  }, timeout);
+
+  itIf(enabled)('payInvoice can be canceled against a real NWC connection', async () => {
+    const verificationNode = makeNode();
+    try {
+      const info = await verificationNode.getInfo();
+      expect(typeof info.alias).toBe('string');
+    } finally {
+      verificationNode.close();
+    }
+
+    const node = new NwcNode({ nwcUri: process.env.NWC_URI!, httpTimeout: 0.25 });
+    const controller = new AbortController();
+
+    try {
+      const startedAt = Date.now();
+      const payment = node.payInvoice(
+        {
+          invoice: 'lnbc1lniaborttest',
+        },
+        {
+          signal: controller.signal,
+        },
+      );
+
+      queueMicrotask(() => {
+        controller.abort();
+      });
+
+      await expect(payment).rejects.toMatchObject({
+        code: 'Canceled',
+      });
+      expect(Date.now() - startedAt).toBeLessThan(1_000);
+
+      await new Promise((resolve) => setTimeout(resolve, 350));
     } finally {
       node.close();
     }

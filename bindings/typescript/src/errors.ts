@@ -4,6 +4,7 @@ export type LniErrorCode =
   | 'Json'
   | 'NetworkError'
   | 'InvalidInput'
+  | 'Canceled'
   | 'LnurlError'
   | 'NwcError';
 

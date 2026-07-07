@@ -161,6 +161,10 @@ export interface PayInvoiceParams {
   isAmp?: boolean;
 }
 
+export interface RequestCancellationOptions {
+  signal?: AbortSignal;
+}
+
 export interface LookupInvoiceParams {
   paymentHash?: string;
   search?: string;
@@ -268,7 +272,7 @@ export interface LightningNode {
   getPermissions(): Promise<Permissions>;
   getInfo(): Promise<NodeInfo>;
   createInvoice(params: CreateInvoiceParams): Promise<Transaction>;
-  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>;
+  payInvoice(params: PayInvoiceParams, options?: RequestCancellationOptions): Promise<PayInvoiceResponse>;
   createOffer(params: CreateOfferParams): Promise<Offer>;
   getOffer(search?: string): Promise<Offer>;
   listOffers(search?: string): Promise<Offer[]>;
