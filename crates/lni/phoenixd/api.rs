@@ -306,11 +306,10 @@ pub async fn pay_invoice(
             map_phoenixd_provider_error,
         ));
     }
-    let pay_invoice_resp: PhoenixPayInvoiceResp = serde_json::from_str(&response_text)
-        .map_err(|e| ApiError::Json {
-            reason: format!("Failed to parse pay_invoice response: {}", e),
-        })
-        .map_err(|_| phoenixd_error_from_body(None, response_text.clone()))?;
+    let pay_invoice_resp: PhoenixPayInvoiceResp = match serde_json::from_str(&response_text) {
+        Ok(resp) => resp,
+        Err(_) => return Err(phoenixd_error_from_body(None, response_text.clone())),
+    };
 
     Ok(PayInvoiceResponse {
         payment_hash: pay_invoice_resp.payment_hash,

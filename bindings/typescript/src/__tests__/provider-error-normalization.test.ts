@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LniError } from '../errors.js';
+import { normalizeProviderError } from '../internal/error-normalization.js';
 import { ClnNode } from '../nodes/cln.js';
 import { BlinkNode } from '../nodes/blink.js';
 import { LndNode } from '../nodes/lnd.js';
@@ -17,6 +19,33 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 }
 
 describe('provider error normalization', () => {
+  it('bounds provider JSON traversal without throwing on pathological payloads', () => {
+    let payload: Record<string, unknown> = {};
+    const root = payload;
+    for (let index = 0; index < 1000; index += 1) {
+      const next: Record<string, unknown> = {};
+      payload.child = next;
+      payload = next;
+    }
+    payload.message = 'deep provider message';
+
+    const error = normalizeProviderError(
+      new LniError('Http', 'Provider failed', {
+        status: 500,
+        body: JSON.stringify(root),
+      }),
+      { provider: 'test', operation: 'pay_invoice' },
+    );
+
+    expect(error).toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'INTERNAL',
+      operation: 'pay_invoice',
+      provider: 'test',
+      providerStatus: 500,
+    });
+  });
+
   it('maps CLN pay route failures to payment failed', async () => {
     const fetchMock = vi.fn<FetchLike>(async () =>
       jsonResponse(
@@ -63,6 +92,33 @@ describe('provider error normalization', () => {
     });
   });
 
+  it('uses the actionable Blink GraphQL code when multiple errors are returned', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () =>
+      jsonResponse({
+        errors: [
+          {
+            code: 'BAD_USER_INPUT',
+            message: 'Validation failed',
+          },
+          {
+            code: 'UNAUTHORIZED',
+            message: 'Not authorized',
+          },
+        ],
+      }),
+    );
+    const node = new BlinkNode({ apiKey: 'bad-token', baseUrl: 'https://blink.test/graphql' }, { fetch: fetchMock });
+
+    await expect(node.getInfo()).rejects.toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'UNAUTHORIZED',
+      operation: 'get_info',
+      provider: 'blink',
+      providerCode: 'UNAUTHORIZED',
+      providerMessage: 'Validation failed, Not authorized',
+    });
+  });
+
   it('maps LND router insufficient-balance failures to insufficient balance', async () => {
     const fetchMock = vi.fn<FetchLike>(async () =>
       jsonResponse({
@@ -83,6 +139,29 @@ describe('provider error normalization', () => {
       operation: 'pay_invoice',
       provider: 'lnd',
       providerCode: 'FAILURE_REASON_INSUFFICIENT_BALANCE',
+    });
+  });
+
+  it('maps LND failed payments without a useful reason to payment failed', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () =>
+      jsonResponse({
+        result: {
+          payment_hash: '',
+          payment_preimage: '',
+          fee_msat: '0',
+          status: 'FAILED',
+          failure_reason: 'FAILURE_REASON_NONE',
+        },
+      }),
+    );
+    const node = new LndNode({ url: 'https://lnd.test', macaroon: '00' }, { fetch: fetchMock });
+
+    await expect(node.payInvoice({ invoice: 'lnbc1testinvoice' })).rejects.toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'PAYMENT_FAILED',
+      operation: 'pay_invoice',
+      provider: 'lnd',
+      providerCode: 'FAILURE_REASON_NONE',
     });
   });
 

@@ -254,30 +254,41 @@ function blinkTransactionMemo(transaction: OnchainTransaction): string | undefin
 }
 
 function blinkProviderInfoFromErrors(errors: GraphQLError[]): ProviderErrorInfo {
-  const first = errors[0];
+  const firstActionable = errors.find((error) => mapBlinkCode(error.code) !== undefined);
+  const firstCoded = errors.find((error) => error.code !== undefined);
+  const selected = firstActionable ?? firstCoded ?? errors[0];
   return {
-    code: first?.code,
+    code: selected?.code,
     message: errors.map((error) => error.message).join(', '),
   };
 }
 
-function mapBlinkProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
-  const code = String(info.code ?? '').toUpperCase();
+function mapBlinkCode(code: unknown): NwcErrorCode | undefined {
+  const normalized = String(code ?? '').toUpperCase();
 
-  if (code.includes('AUTHENTICATION') || code.includes('UNAUTHORIZED')) {
+  if (normalized.includes('AUTHENTICATION') || normalized.includes('UNAUTHORIZED')) {
     return 'UNAUTHORIZED';
   }
-  if (code.includes('FORBIDDEN') || code.includes('PERMISSION') || code.includes('SCOPE')) {
+  if (normalized.includes('FORBIDDEN') || normalized.includes('PERMISSION') || normalized.includes('SCOPE')) {
     return 'RESTRICTED';
   }
-  if (code.includes('INSUFFICIENT') || code.includes('BALANCE')) {
+  if (normalized.includes('INSUFFICIENT') || normalized.includes('BALANCE')) {
     return 'INSUFFICIENT_BALANCE';
   }
-  if (code.includes('LIMIT') || code.includes('QUOTA')) {
+  if (normalized.includes('LIMIT') || normalized.includes('QUOTA')) {
     return 'QUOTA_EXCEEDED';
   }
-  if (code.includes('INVALID_INVOICE') || code.includes('NO_ROUTE') || code.includes('PAYMENT')) {
+  if (normalized.includes('INVALID_INVOICE') || normalized.includes('NO_ROUTE') || normalized.includes('PAYMENT')) {
     return 'PAYMENT_FAILED';
+  }
+
+  return undefined;
+}
+
+function mapBlinkProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  const code = mapBlinkCode(info.code);
+  if (code) {
+    return code;
   }
 
   return mapProviderMessage(info.message);
@@ -423,7 +434,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     const wallet = response.me.defaultAccount.wallets.find((item) => item.walletCurrency === 'BTC');
 
     if (!wallet) {
-      throw blinkNwcError('OTHER', 'No BTC wallet found in Blink account.', 'get_info');
+      throw blinkNwcError('NOT_FOUND', 'No BTC wallet found in Blink account.', 'get_info');
     }
 
     this.cachedWalletId = wallet.id;

@@ -1,6 +1,11 @@
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
-import { throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
+import {
+  findStringProperty,
+  providerInfoFromJsonErrorBody,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -191,85 +196,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function findStringProperty(value: unknown, key: string): string | undefined {
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const nested = findStringProperty(child, key);
-      if (nested) {
-        return nested;
-      }
-    }
-
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const direct = value[key];
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
-  }
-
-  for (const child of Object.values(value)) {
-    const nested = findStringProperty(child, key);
-    if (nested) {
-      return nested;
-    }
-  }
-
-  return undefined;
-}
-
-function findNumberProperty(value: unknown, key: string): number | undefined {
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const nested = findNumberProperty(child, key);
-      if (nested !== undefined) {
-        return nested;
-      }
-    }
-
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const direct = value[key];
-  if (typeof direct === 'number' && Number.isFinite(direct)) {
-    return direct;
-  }
-
-  for (const child of Object.values(value)) {
-    const nested = findNumberProperty(child, key);
-    if (nested !== undefined) {
-      return nested;
-    }
-  }
-
-  return undefined;
-}
-
 function strikeProviderErrorInfo(error: unknown): ProviderErrorInfo | undefined {
-  if (!(error instanceof LniError) || !error.body) {
-    return undefined;
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(error.body);
-  } catch {
-    return { status: error.status };
-  }
-
-  return {
-    code: findStringProperty(raw, 'code'),
-    status: findNumberProperty(raw, 'status') ?? error.status,
-    message: findStringProperty(raw, 'message'),
-  };
+  return providerInfoFromJsonErrorBody(error);
 }
 
 function mapStrikeProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
@@ -306,6 +234,21 @@ function mapStrikeProviderError(info: ProviderErrorInfo): NwcErrorCode | undefin
     default:
       return undefined;
   }
+}
+
+function strikeNwcError(
+  code: NwcErrorCode,
+  message: string,
+  operation: NwcErrorOperation,
+  info?: ProviderErrorInfo,
+): NwcError {
+  return new NwcError(code, message, {
+    operation,
+    provider: 'strike',
+    providerCode: info?.code,
+    providerStatus: info?.status,
+    providerMessage: info?.message ?? message,
+  });
 }
 
 function throwStrikeError(error: unknown, operation: NwcErrorOperation): never {
@@ -530,7 +473,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+      throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
     }
 
     const response = await this.postJson<StrikeCreateReceiveResponse>(
@@ -760,19 +703,19 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'lookup_invoice');
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'list_transactions');
   }
 
   async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'pay_invoice');
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {

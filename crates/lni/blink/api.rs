@@ -161,7 +161,9 @@ where
         ));
     }
 
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read GraphQL response: {}", e),
+    })?;
     let graphql_response: GraphQLResponse<T> =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
             reason: format!(

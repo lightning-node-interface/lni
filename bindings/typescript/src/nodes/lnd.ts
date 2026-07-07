@@ -357,7 +357,11 @@ export class LndNode implements LightningNode {
 
     if (wrapped.result.status === 'FAILED') {
       const reason = wrapped.result.failure_reason ?? 'unknown reason';
-      throw lndNwcError(mapLndFailureReason(wrapped.result.failure_reason), `Payment failed: ${reason}`, 'pay_invoice', reason);
+      const mappedCode = wrapped.result.failure_reason
+        ? mapLndFailureReason(wrapped.result.failure_reason)
+        : undefined;
+      const code = mappedCode && mappedCode !== 'OTHER' ? mappedCode : 'PAYMENT_FAILED';
+      throw lndNwcError(code, `Payment failed: ${reason}`, 'pay_invoice', reason);
     }
 
     if (wrapped.result.status === 'IN_FLIGHT') {

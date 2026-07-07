@@ -27,6 +27,15 @@ fn u16_field(value: &Value, key: &str) -> Option<u16> {
         .or_else(|| field.as_str().and_then(|value| value.parse::<u16>().ok()))
 }
 
+fn integer_string_field(value: &Value, key: &str) -> Option<String> {
+    let field = value.get(key)?;
+    field
+        .as_i64()
+        .map(|value| value.to_string())
+        .or_else(|| field.as_u64().map(|value| value.to_string()))
+        .or_else(|| field.as_str().map(ToString::to_string))
+}
+
 pub fn provider_info_from_body(status: Option<u16>, body: &str) -> ProviderErrorInfo {
     let Ok(value) = serde_json::from_str::<Value>(body) else {
         return ProviderErrorInfo {
@@ -47,10 +56,7 @@ pub fn provider_info_from_body(status: Option<u16>, body: &str) -> ProviderError
         .unwrap_or(&value);
 
     ProviderErrorInfo {
-        code: string_field(source, "code")
-            .or_else(|| string_field(&value, "code"))
-            .or_else(|| u16_field(source, "code").map(|code| code.to_string()))
-            .or_else(|| u16_field(&value, "code").map(|code| code.to_string())),
+        code: integer_string_field(source, "code").or_else(|| integer_string_field(&value, "code")),
         status: u16_field(source, "status")
             .or_else(|| u16_field(&value, "status"))
             .or(status),
@@ -198,6 +204,18 @@ mod tests {
             }
             other => panic!("expected NWC error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn preserves_signed_provider_codes() {
+        let info = provider_info_from_body(
+            Some(500),
+            r#"{"error":{"code":-32602,"message":"Invalid params"}}"#,
+        );
+
+        assert_eq!(info.code.as_deref(), Some("-32602"));
+        assert_eq!(info.message.as_deref(), Some("Invalid params"));
+        assert_eq!(info.status, Some(500));
     }
 
     #[test]

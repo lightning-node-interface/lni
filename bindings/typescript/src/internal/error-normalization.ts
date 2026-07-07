@@ -35,73 +35,61 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function findStringProperty(value: unknown, key: string): string | undefined {
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const nested = findStringProperty(child, key);
-      if (nested !== undefined) {
-        return nested;
-      }
+const MAX_PROVIDER_ERROR_SEARCH_STEPS = 500;
+
+function findProperty<T>(
+  value: unknown,
+  key: string,
+  coerce: (value: unknown) => T | undefined,
+): T | undefined {
+  const queue: unknown[] = [value];
+  let steps = 0;
+
+  while (queue.length > 0 && steps < MAX_PROVIDER_ERROR_SEARCH_STEPS) {
+    steps += 1;
+    const current = queue.shift();
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
     }
 
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const direct = value[key];
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
-  }
-
-  for (const child of Object.values(value)) {
-    const nested = findStringProperty(child, key);
-    if (nested !== undefined) {
-      return nested;
+    if (!isRecord(current)) {
+      continue;
     }
+
+    const direct = coerce(current[key]);
+    if (direct !== undefined) {
+      return direct;
+    }
+
+    queue.push(...Object.values(current));
   }
 
   return undefined;
 }
 
+export function findStringProperty(value: unknown, key: string): string | undefined {
+  return findProperty(value, key, (direct) => {
+    return typeof direct === 'string' && direct.length > 0 ? direct : undefined;
+  });
+}
+
 export function findNumberProperty(value: unknown, key: string): number | undefined {
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const nested = findNumberProperty(child, key);
-      if (nested !== undefined) {
-        return nested;
+  return findProperty(value, key, (direct) => {
+    if (typeof direct === 'number' && Number.isFinite(direct)) {
+      return direct;
+    }
+
+    if (typeof direct === 'string' && direct.trim().length > 0) {
+      const parsed = Number.parseInt(direct, 10);
+      if (Number.isFinite(parsed)) {
+        return parsed;
       }
     }
 
     return undefined;
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const direct = value[key];
-  if (typeof direct === 'number' && Number.isFinite(direct)) {
-    return direct;
-  }
-
-  if (typeof direct === 'string' && direct.trim().length > 0) {
-    const parsed = Number.parseInt(direct, 10);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  for (const child of Object.values(value)) {
-    const nested = findNumberProperty(child, key);
-    if (nested !== undefined) {
-      return nested;
-    }
-  }
-
-  return undefined;
+  });
 }
 
 export function parseProviderJsonBody(error: unknown): unknown | undefined {
@@ -190,10 +178,16 @@ export function normalizeProviderError(
   options: ProviderErrorNormalizationOptions,
 ): NwcError {
   if (error instanceof NwcError) {
+    const operation = options.operation ?? error.operation;
+    const provider = error.provider ?? options.provider;
+    if (operation === error.operation && provider === error.provider) {
+      return error;
+    }
+
     return new NwcError(error.nwcCode, error.nwcMessage, {
-      operation: options.operation ?? error.operation,
+      operation,
       cause: error,
-      provider: error.provider ?? options.provider,
+      provider,
       providerCode: error.providerCode,
       providerStatus: error.providerStatus,
       providerMessage: error.providerMessage,

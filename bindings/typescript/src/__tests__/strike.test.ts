@@ -23,7 +23,7 @@ describe('StrikeNode error normalization', () => {
           {
             traceId: 'trace-1',
             data: {
-              status: 422,
+              status: '422',
               code: 'BALANCE_TOO_LOW',
               message: 'Insufficient funds',
             },
@@ -53,6 +53,20 @@ describe('StrikeNode error normalization', () => {
       providerMessage: 'Insufficient funds',
     });
     await expect(payment).rejects.toBeInstanceOf(NwcError);
+  });
+
+  it('maps unsupported Bolt12 flows to not implemented NWC errors', async () => {
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: vi.fn<FetchLike>() },
+    );
+
+    await expect(node.createOffer({})).rejects.toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'NOT_IMPLEMENTED',
+      operation: 'make_invoice',
+      provider: 'strike',
+    });
   });
 
   it('maps Strike invalid invoice errors to payment failures', async () => {

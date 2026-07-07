@@ -2,7 +2,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use lightning_invoice::Bolt11Invoice;
-use serde_json::Value;
 
 use super::types::{
     Amount, CreateReceiveRequestRequest, OnchainPaymentExecutionResponse,
@@ -12,6 +11,9 @@ use super::types::{
     StrikeReceiveRequestResponse, StrikeReceivesWithCountResponse,
 };
 use super::StrikeConfig;
+use crate::error_normalization::{
+    provider_error_from_response, transport_error, ProviderErrorInfo,
+};
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
@@ -84,53 +86,8 @@ fn get_base_url(config: &StrikeConfig) -> &str {
         .unwrap_or("https://api.strike.me/v1")
 }
 
-#[derive(Debug)]
-struct StrikeProviderErrorInfo {
-    code: Option<String>,
-    message: Option<String>,
-    status: u16,
-}
-
-fn json_string_field(value: &Value, key: &str) -> Option<String> {
-    value.get(key)?.as_str().map(ToString::to_string)
-}
-
-fn json_u16_field(value: &Value, key: &str) -> Option<u16> {
-    let field = value.get(key)?;
-    field
-        .as_u64()
-        .and_then(|value| u16::try_from(value).ok())
-        .or_else(|| field.as_str().and_then(|value| value.parse::<u16>().ok()))
-}
-
-fn strike_provider_error_info(status: reqwest::StatusCode, body: &str) -> StrikeProviderErrorInfo {
-    let mut info = StrikeProviderErrorInfo {
-        code: None,
-        message: None,
-        status: status.as_u16(),
-    };
-
-    let Ok(value) = serde_json::from_str::<Value>(body) else {
-        return info;
-    };
-
-    let source = value
-        .get("data")
-        .filter(|data| data.is_object())
-        .unwrap_or(&value);
-
-    info.code = json_string_field(source, "code").or_else(|| json_string_field(&value, "code"));
-    info.message =
-        json_string_field(source, "message").or_else(|| json_string_field(&value, "message"));
-    info.status = json_u16_field(source, "status")
-        .or_else(|| json_u16_field(&value, "status"))
-        .unwrap_or(info.status);
-
-    info
-}
-
-fn map_strike_provider_code(code: &str) -> Option<&'static str> {
-    match code.to_ascii_uppercase().as_str() {
+fn map_strike_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    match info.code.as_deref()?.to_ascii_uppercase().as_str() {
         "BALANCE_TOO_LOW" => Some("INSUFFICIENT_BALANCE"),
         "RATE_LIMIT_EXCEEDED" | "TOO_MANY_ATTEMPTS" => Some("RATE_LIMITED"),
         "FORBIDDEN" => Some("RESTRICTED"),
@@ -155,44 +112,17 @@ fn map_strike_provider_code(code: &str) -> Option<&'static str> {
     }
 }
 
-fn map_provider_http_status(status: u16) -> Option<&'static str> {
-    match status {
-        401 => Some("UNAUTHORIZED"),
-        403 => Some("RESTRICTED"),
-        404 => Some("NOT_FOUND"),
-        429 => Some("RATE_LIMITED"),
-        500..=599 => Some("INTERNAL"),
-        _ => None,
-    }
-}
-
 fn strike_nwc_error_from_response(
     status: reqwest::StatusCode,
     body: String,
     operation: &str,
-    context: &str,
+    _context: &str,
 ) -> ApiError {
-    let info = strike_provider_error_info(status, &body);
-    let code = info
-        .code
-        .as_deref()
-        .and_then(map_strike_provider_code)
-        .or_else(|| map_provider_http_status(info.status))
-        .unwrap_or("OTHER")
-        .to_string();
-    let message = info
-        .message
-        .filter(|message| !message.is_empty())
-        .unwrap_or_else(|| format!("{} for {}: HTTP {} - {}", context, operation, status, body));
-
-    ApiError::Nwc { code, message }
+    provider_error_from_response("strike", operation, status, body, map_strike_provider_error)
 }
 
 fn strike_nwc_error_from_transport(error: reqwest::Error, operation: &str) -> ApiError {
-    ApiError::Nwc {
-        code: "INTERNAL".to_string(),
-        message: format!("Strike {} request failed: {}", operation, error),
-    }
+    transport_error("strike", operation, error)
 }
 
 fn sats_to_btc_amount(amount_sats: i64) -> Result<Amount, ApiError> {
@@ -1224,7 +1154,7 @@ pub async fn list_transactions(
                 external_id: Some(payment.id),
             });
         }
-    } else {
+    } else if payments_response.status() != reqwest::StatusCode::NOT_FOUND {
         let status = payments_response.status();
         let error_text = payments_response.text().await.unwrap_or_default();
         return Err(strike_nwc_error_from_response(
@@ -1386,7 +1316,7 @@ mod tests {
         match error {
             ApiError::Nwc { code, message } => {
                 assert_eq!(code, "UNAUTHORIZED");
-                assert!(message.contains("Failed to get balances"));
+                assert_eq!(message, "unauthorized");
             }
             other => panic!("expected structured NWC error, got {:?}", other),
         }
