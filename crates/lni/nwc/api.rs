@@ -278,9 +278,36 @@ pub async fn pay_invoice(
         return direct_payment.await;
     };
 
+    prefer_payment_result_over_direct_error(
+        direct_payment,
+        poll_paid_invoice_result(config, payment_hash, invoice, timeout),
+    )
+    .await
+}
+
+async fn prefer_payment_result_over_direct_error<D, P>(
+    direct_payment: D,
+    poll_payment: P,
+) -> Result<PayInvoiceResponse, ApiError>
+where
+    D: Future<Output = Result<PayInvoiceResponse, ApiError>>,
+    P: Future<Output = Result<PayInvoiceResponse, ApiError>>,
+{
+    tokio::pin!(direct_payment);
+    tokio::pin!(poll_payment);
+
     tokio::select! {
-        result = direct_payment => result,
-        result = poll_paid_invoice_result(config, payment_hash, invoice, timeout) => result,
+        direct_result = &mut direct_payment => match direct_result {
+            Ok(response) => Ok(response),
+            Err(direct_error) => match poll_payment.await {
+                Ok(response) => Ok(response),
+                Err(_) => Err(direct_error),
+            },
+        },
+        poll_result = &mut poll_payment => match poll_result {
+            Ok(response) => Ok(response),
+            Err(_) => direct_payment.await,
+        },
     }
 }
 
@@ -866,6 +893,63 @@ mod tests {
             "0000000000000000000000000000000000000000000000000000000000000000"
         );
         assert_eq!(response.fee_msats, 21);
+    }
+
+    #[tokio::test]
+    async fn payment_poll_result_wins_after_direct_payment_error() {
+        let response = prefer_payment_result_over_direct_error(
+            async {
+                Err(ApiError::Nwc {
+                    code: "INTERNAL".to_string(),
+                    message: "direct failure".to_string(),
+                })
+            },
+            async {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                Ok(PayInvoiceResponse {
+                    payment_hash:
+                        "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925"
+                            .to_string(),
+                    preimage: "0000000000000000000000000000000000000000000000000000000000000000"
+                        .to_string(),
+                    fee_msats: 21,
+                })
+            },
+        )
+        .await
+        .expect("poll result should win");
+
+        assert_eq!(
+            response.payment_hash,
+            "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925"
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_payment_error_is_returned_when_poll_also_fails() {
+        let error = prefer_payment_result_over_direct_error(
+            async {
+                Err(ApiError::Nwc {
+                    code: "PAYMENT_FAILED".to_string(),
+                    message: "direct failure".to_string(),
+                })
+            },
+            async {
+                Err(ApiError::NetworkError(
+                    "lookup fallback timed out".to_string(),
+                ))
+            },
+        )
+        .await
+        .expect_err("direct error should be returned when poll also fails");
+
+        match error {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "PAYMENT_FAILED");
+                assert_eq!(message, "direct failure");
+            }
+            other => panic!("expected direct NWC error, got {:?}", other),
+        }
     }
 
     #[test]

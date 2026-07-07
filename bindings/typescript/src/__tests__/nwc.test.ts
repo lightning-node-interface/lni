@@ -218,72 +218,73 @@ afterEach(() => {
 describe('NwcNode.payInvoice', () => {
   it('resolves a normal NIP-47 response and clears the reply timeout', async () => {
     vi.useFakeTimers();
-    nwcMocks.useCancelableRequest = true;
+    nwcMocks.payInvoice.mockResolvedValue({
+      preimage: '',
+      fees_paid: 21,
+    });
 
-    const response = makeNode().payInvoice({ invoice: BOLT11_INVOICE });
-    await vi.advanceTimersByTimeAsync(0);
-    await nwcMocks.replyHandler?.({ id: 'reply-event-id', content: 'encrypted-response' });
+    const response = await makeNode().payInvoice({ invoice: BOLT11_INVOICE });
 
-    await expect(response).resolves.toEqual({
+    expect(response).toEqual({
       paymentHash: '',
       preimage: '',
       feeMsats: 21,
     });
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.payInvoice).toHaveBeenCalledWith({
+      invoice: BOLT11_INVOICE,
+      amount: undefined,
+    });
+    expect(nwcMocks.close).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
   it('rejects on the NIP-47 reply timeout when no response or cancel happens', async () => {
     vi.useFakeTimers();
-    nwcMocks.useCancelableRequest = true;
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
 
     const response = makeNode().payInvoice({ invoice: BOLT11_INVOICE });
     const assertion = expect(response).rejects.toMatchObject({
-      name: 'NwcError',
-      code: 'NwcError',
-      nwcCode: 'INTERNAL',
-      operation: 'pay_invoice',
-      message: 'reply timeout: event request-event-id',
+      code: 'NetworkError',
+      message:
+        'Failed to pay invoice: NWC pay invoice timed out after 60s. Check that the relay websocket is reachable and the wallet connection still exists.',
     });
-    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(60_000);
 
     await assertion;
-    const closeCount = nwcMocks.subscriptionClose.mock.calls.length;
-    expect(closeCount).toBeGreaterThanOrEqual(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(closeCount);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
-  it('applies the NWC timeout to relay setup before subscribing for a response', async () => {
+  it('applies the NWC timeout around the public SDK request without closing the shared client', async () => {
     vi.useFakeTimers();
-    nwcMocks.useCancelableRequest = true;
-    nwcMocks.checkConnected.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
 
     const response = makeNodeWithTimeout(0.001).payInvoice({ invoice: BOLT11_INVOICE });
     const assertion = expect(response).rejects.toMatchObject({
-      name: 'NwcError',
-      code: 'NwcError',
-      nwcCode: 'INTERNAL',
-      operation: 'pay_invoice',
-      message: 'reply timeout: request setup for pay_invoice',
+      code: 'NetworkError',
+      message:
+        'Failed to pay invoice: NWC pay invoice timed out after 0.001s. Check that the relay websocket is reachable and the wallet connection still exists.',
     });
     await vi.advanceTimersByTimeAsync(1);
 
     await assertion;
     expect(nwcMocks.poolSubscribe).not.toHaveBeenCalled();
     expect(nwcMocks.subscriptionClose).not.toHaveBeenCalled();
-    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
   it('cancels an active NIP-47 request with AbortSignal and does not timeout later', async () => {
     vi.useFakeTimers();
-    nwcMocks.useCancelableRequest = true;
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
     const controller = new AbortController();
 
     const response = makeNode().payInvoice({ invoice: BOLT11_INVOICE }, { signal: controller.signal });
@@ -293,18 +294,18 @@ describe('NwcNode.payInvoice', () => {
     await expect(response).rejects.toMatchObject({
       name: 'LniError',
       code: 'Canceled',
-      message: 'Failed to pay invoice: NWC pay invoice canceled because the request was aborted.',
     });
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.subscriptionClose).not.toHaveBeenCalled();
     expect(nwcMocks.close).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
   it('cancels active NIP-47 requests on close and close is idempotent', async () => {
     vi.useFakeTimers();
-    nwcMocks.useCancelableRequest = true;
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
     const node = makeNode();
 
     const response = node.payInvoice({ invoice: BOLT11_INVOICE });
@@ -317,11 +318,10 @@ describe('NwcNode.payInvoice', () => {
       code: 'Canceled',
       message: 'Failed to pay invoice: NWC request canceled because the node was closed.',
     });
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.subscriptionClose).not.toHaveBeenCalled();
     expect(nwcMocks.close).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(nwcMocks.subscriptionClose).toHaveBeenCalledTimes(1);
     expect(nwcMocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -377,12 +377,37 @@ describe('NwcNode.payInvoice', () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     await assertion;
-    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
-  it('passes httpTimeout to the SDK NIP-47 timeout values when the SDK request API is available', async () => {
+  it('bounds lookup fallback polling even when httpTimeout is disabled', async () => {
+    vi.useFakeTimers();
+    nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockResolvedValue(
+      nwcTransaction({
+        type: 'outgoing',
+        preimage: '',
+        settled_at: 150,
+      }),
+    );
+
+    const response = makeNodeWithTimeout(0).payInvoice({ invoice: BOLT11_INVOICE });
+    const assertion = expect(response).rejects.toMatchObject({
+      code: 'NetworkError',
+      message:
+        'Failed to pay invoice: NWC pay invoice lookup fallback timed out after 60s. Check that the wallet exposes a settled outgoing transaction with preimage via lookup_invoice or list_transactions.',
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    await assertion;
+    expect(nwcMocks.lookupInvoice).toHaveBeenCalled();
+    expect(nwcMocks.close).not.toHaveBeenCalled();
+  });
+
+  it('uses public SDK request methods even when private SDK request internals exist', async () => {
     nwcMocks.usePrivateExecute = true;
-    nwcMocks.executeNip47Request.mockResolvedValue({
+    nwcMocks.payInvoice.mockResolvedValue({
       preimage: '',
       fees_paid: 21,
     });
@@ -394,24 +419,17 @@ describe('NwcNode.payInvoice', () => {
       preimage: '',
       feeMsats: 21,
     });
-    expect(nwcMocks.executeNip47Request).toHaveBeenCalledWith(
-      'pay_invoice',
-      {
-        invoice: BOLT11_INVOICE,
-        amount: undefined,
-      },
-      expect.any(Function),
-      {
-        replyTimeout: 15_000,
-        publishTimeout: 5_000,
-      },
-    );
-    expect(nwcMocks.payInvoice).not.toHaveBeenCalled();
+    expect(nwcMocks.executeNip47Request).not.toHaveBeenCalled();
+    expect(nwcMocks.payInvoice).toHaveBeenCalledWith({
+      invoice: BOLT11_INVOICE,
+      amount: undefined,
+    });
   });
 
-  it('times out and closes the NWC client when the websocket request never settles', async () => {
+  it('times out without closing the shared NWC client when the websocket request never settles', async () => {
     vi.useFakeTimers();
     nwcMocks.payInvoice.mockReturnValue(new Promise(() => undefined));
+    nwcMocks.lookupInvoice.mockReturnValue(new Promise(() => undefined));
 
     const response = makeNodeWithTimeout(0.001).payInvoice({ invoice: BOLT11_INVOICE });
     const assertion = expect(response).rejects.toMatchObject({
@@ -422,7 +440,7 @@ describe('NwcNode.payInvoice', () => {
 
     await vi.advanceTimersByTimeAsync(1);
     await assertion;
-    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
   it('preserves typed NIP-47 wallet error codes from the SDK', async () => {
@@ -591,7 +609,7 @@ describe('NwcNode.lookupInvoice', () => {
     await vi.advanceTimersByTimeAsync(1);
     await assertion;
     expect(nwcMocks.listTransactions).not.toHaveBeenCalled();
-    expect(nwcMocks.close).toHaveBeenCalledTimes(1);
+    expect(nwcMocks.close).not.toHaveBeenCalled();
   });
 
   it('returns successful native lookup_invoice responses', async () => {

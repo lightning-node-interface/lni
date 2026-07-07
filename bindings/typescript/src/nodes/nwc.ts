@@ -1,4 +1,4 @@
-import { NWCClient, Nip47Error, Nip47PublishError, Nip47PublishTimeoutError, Nip47ReplyTimeoutError, Nip47ResponseDecodingError, Nip47ResponseValidationError, Nip47WalletError, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Method, type Nip47PayResponse, type Nip47TimeoutValues, type Nip47Transaction } from '@getalby/sdk/nwc';
+import { NWCClient, Nip47Error, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Method, type Nip47PayResponse, type Nip47Transaction } from '@getalby/sdk/nwc';
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError, NwcError, type NwcErrorOperation } from '../errors.js';
 import { hexToBytes } from '../internal/encoding.js';
@@ -22,51 +22,6 @@ type NwcListTransaction = Partial<Omit<Nip47Transaction, 'type' | 'payment_hash'
 type NwcListTransactionsResponse = Omit<Nip47ListTransactionsResponse, 'transactions' | 'total_count'> & {
   transactions: NwcListTransaction[];
   total_count?: number;
-};
-
-type NwcClientWithTimeouts = {
-  executeNip47Request<T>(
-    nip47Method: Nip47Method,
-    params: unknown,
-    resultValidator: (result: T) => boolean,
-    timeoutValues?: Nip47TimeoutValues,
-  ): Promise<T>;
-};
-
-type NostrEventTemplate = {
-  kind: number;
-  created_at: number;
-  tags: string[][];
-  content: string;
-};
-
-type NostrEvent = NostrEventTemplate & {
-  id: string;
-};
-
-type NwcSubscription = {
-  close(): void;
-};
-
-type NwcPool = {
-  subscribe(
-    relayUrls: string[],
-    filters: { kinds: number[]; authors: string[]; '#e': string[] },
-    params: { onevent: (event: NostrEvent) => void | Promise<void> },
-  ): NwcSubscription;
-  publish(relayUrls: string[], event: NostrEvent): Promise<unknown>[];
-};
-
-type NwcCancelableClient = {
-  pool: NwcPool;
-  relayUrls: string[];
-  walletPubkey: string;
-  encryptionType: string;
-  encrypt(pubkey: string, content: string): Promise<string>;
-  decrypt(pubkey: string, content: string): Promise<string>;
-  signEvent(event: NostrEventTemplate): Promise<NostrEvent>;
-  _checkConnected(): Promise<void>;
-  _selectEncryptionType(): Promise<void>;
 };
 
 type ActiveNwcRequest = {
@@ -215,7 +170,6 @@ function resolveNwcTimeoutMs(timeoutSeconds: number | undefined): number | undef
 export class NwcNode implements LightningNode {
   private readonly client: NWCClient;
   private readonly timeoutMs: number | undefined;
-  private readonly nip47TimeoutValues: Nip47TimeoutValues | undefined;
   private readonly activeRequests = new Set<ActiveNwcRequest>();
   private closed = false;
 
@@ -224,12 +178,6 @@ export class NwcNode implements LightningNode {
     private readonly options: NodeRequestOptions = {},
   ) {
     this.timeoutMs = resolveNwcTimeoutMs(config.httpTimeout);
-    this.nip47TimeoutValues = this.timeoutMs
-      ? {
-          replyTimeout: this.timeoutMs,
-          publishTimeout: Math.min(this.timeoutMs, 5_000),
-        }
-      : undefined;
     this.client = new NWCClient({
       nostrWalletConnectUrl: config.nwcUri,
     });
@@ -419,7 +367,12 @@ export class NwcNode implements LightningNode {
       }
     }
 
-    const lookupFallback = this.pollPaidInvoiceResult(paymentHash, request.invoice, pollController.signal);
+    const lookupFallback = this.pollPaidInvoiceResult(
+      paymentHash,
+      request.invoice,
+      pollController.signal,
+      this.timeoutMs ?? DEFAULT_NWC_TIMEOUT_MS,
+    );
     void lookupFallback.catch(() => undefined);
 
     try {
@@ -434,18 +387,31 @@ export class NwcNode implements LightningNode {
     paymentHash: string,
     invoice: string,
     signal: AbortSignal,
+    timeoutMs: number,
   ): Promise<Nip47PayResponse> {
-    await this.delay(NWC_PAYMENT_LOOKUP_INITIAL_DELAY_MS, signal, 'pay invoice lookup fallback');
+    const deadlineAt = Date.now() + timeoutMs;
+    await this.delay(
+      Math.min(NWC_PAYMENT_LOOKUP_INITIAL_DELAY_MS, this.remainingLookupTimeoutMs(deadlineAt, timeoutMs)),
+      signal,
+      'pay invoice lookup fallback',
+    );
 
     while (!signal.aborted) {
       try {
-        const tx = await this.lookupInvoiceWithOptions(
+        const lookup = this.lookupInvoiceWithOptions(
           {
             paymentHash,
             search: invoice,
           },
           { signal },
           { suppressBufferedLookupErrors: true },
+        );
+        void lookup.catch(() => undefined);
+        const tx = await this.withLookupDeadline(
+          lookup,
+          this.remainingLookupTimeoutMs(deadlineAt, timeoutMs),
+          timeoutMs,
+          signal,
         );
 
         if (tx.type === 'outgoing' && tx.paymentHash === paymentHash && tx.settledAt > 0 && tx.preimage) {
@@ -455,15 +421,77 @@ export class NwcNode implements LightningNode {
           };
         }
       } catch (error) {
+        if (this.isLookupTimeoutError(error)) {
+          throw error;
+        }
+
         if (signal.aborted || (error instanceof LniError && error.code === 'Canceled')) {
           throw error;
         }
       }
 
-      await this.delay(NWC_PAYMENT_LOOKUP_POLL_INTERVAL_MS, signal, 'pay invoice lookup fallback');
+      await this.delay(
+        Math.min(NWC_PAYMENT_LOOKUP_POLL_INTERVAL_MS, this.remainingLookupTimeoutMs(deadlineAt, timeoutMs)),
+        signal,
+        'pay invoice lookup fallback',
+      );
     }
 
     throw this.createCancellationError('pay invoice lookup fallback', 'canceled because the request was aborted.');
+  }
+
+  private remainingLookupTimeoutMs(deadlineAt: number, timeoutMs: number): number {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs <= 0) {
+      throw this.createPaymentLookupTimeoutError(timeoutMs);
+    }
+
+    return remainingMs;
+  }
+
+  private async withLookupDeadline<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    totalTimeoutMs: number,
+    signal: AbortSignal,
+  ): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(this.createPaymentLookupTimeoutError(totalTimeoutMs));
+      }, timeoutMs);
+      onAbort = () => {
+        reject(this.createCancellationError('pay invoice lookup fallback', 'canceled because the request was aborted.'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (onAbort) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    }
+  }
+
+  private createPaymentLookupTimeoutError(timeoutMs: number): LniError {
+    return new LniError(
+      'NetworkError',
+      `NWC pay invoice lookup fallback timed out after ${timeoutMs / 1000}s. Check that the wallet exposes a settled outgoing transaction with preimage via lookup_invoice or list_transactions.`,
+    );
+  }
+
+  private isLookupTimeoutError(error: unknown): boolean {
+    return (
+      error instanceof LniError &&
+      error.code === 'NetworkError' &&
+      error.message.startsWith('NWC pay invoice lookup fallback timed out')
+    );
   }
 
   private async delay(ms: number, signal: AbortSignal, operation: string): Promise<void> {
@@ -693,7 +721,7 @@ export class NwcNode implements LightningNode {
       throw this.createCancellationError(operation, 'canceled because the request was aborted.');
     }
 
-    const promise = fn();
+    const promise = Promise.resolve().then(fn);
     const timeoutMs = this.timeoutMs;
     if (!timeoutMs && !options.signal) {
       return promise;
@@ -722,7 +750,6 @@ export class NwcNode implements LightningNode {
       rejectWait = reject;
       if (timeoutMs) {
         timeoutId = setTimeout(() => {
-          this.client.close();
           activeRequest.cancel(
             new LniError(
               'NetworkError',
@@ -748,241 +775,14 @@ export class NwcNode implements LightningNode {
     }
   }
 
-  private getCancelableClient(): NwcCancelableClient | undefined {
-    const client = this.client as unknown as Partial<NwcCancelableClient>;
-    if (
-      client.pool &&
-      Array.isArray(client.relayUrls) &&
-      typeof client.walletPubkey === 'string' &&
-      typeof client.encrypt === 'function' &&
-      typeof client.decrypt === 'function' &&
-      typeof client.signEvent === 'function' &&
-      typeof client._checkConnected === 'function' &&
-      typeof client._selectEncryptionType === 'function'
-    ) {
-      return client as NwcCancelableClient;
-    }
-
-    return undefined;
-  }
-
-  private async executeCancelableNip47Request<T>(
-    operation: string,
-    method: Nip47Method,
-    params: unknown,
-    validator: (result: T) => boolean,
-    options: RequestCancellationOptions,
-  ): Promise<T> {
-    const client = this.getCancelableClient();
-    if (!client) {
-      throw new LniError('Api', 'Installed NWC SDK does not expose a cancellable NIP-47 request surface.');
-    }
-
-    if (this.closed) {
-      throw this.createCancellationError(operation, 'canceled because the node is closed.');
-    }
-
-    if (options.signal?.aborted) {
-      throw this.createCancellationError(operation, 'canceled because the request was aborted.');
-    }
-
-    return new Promise<T>((resolve, reject) => {
-      let settled = false;
-      let sub: NwcSubscription | undefined;
-      let replyTimeoutId: ReturnType<typeof setTimeout> | undefined;
-      let publishTimeoutId: ReturnType<typeof setTimeout> | undefined;
-      let replyTimeoutMessage = `reply timeout: request setup for ${method}`;
-
-      const cleanup = () => {
-        if (replyTimeoutId) {
-          clearTimeout(replyTimeoutId);
-          replyTimeoutId = undefined;
-        }
-        if (publishTimeoutId) {
-          clearTimeout(publishTimeoutId);
-          publishTimeoutId = undefined;
-        }
-        sub?.close();
-        sub = undefined;
-        options.signal?.removeEventListener('abort', onAbort);
-        this.activeRequests.delete(activeRequest);
-      };
-
-      const settleReject = (error: unknown) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        cleanup();
-        reject(error);
-      };
-
-      const settleResolve = (result: T) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        cleanup();
-        resolve(result);
-      };
-
-      const activeRequest: ActiveNwcRequest = {
-        cancel: settleReject,
-      };
-      const onAbort = () => settleReject(this.createCancellationError(operation, 'canceled because the request was aborted.'));
-      this.activeRequests.add(activeRequest);
-      options.signal?.addEventListener('abort', onAbort, { once: true });
-
-      const replyTimeout = this.nip47TimeoutValues?.replyTimeout ?? DEFAULT_NWC_TIMEOUT_MS;
-      replyTimeoutId = setTimeout(() => {
-        this.client.close();
-        settleReject(new Nip47ReplyTimeoutError(replyTimeoutMessage, 'INTERNAL'));
-      }, replyTimeout);
-
-      (async () => {
-        try {
-          await client._checkConnected();
-          if (settled) {
-            return;
-          }
-
-          await client._selectEncryptionType();
-          if (settled) {
-            return;
-          }
-
-          const command = {
-            method,
-            params,
-          };
-          const encryptedCommand = await client.encrypt(client.walletPubkey, JSON.stringify(command));
-          if (settled) {
-            return;
-          }
-
-          const eventTemplate = {
-            kind: 23194,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-              ['p', client.walletPubkey],
-              ['v', client.encryptionType === 'nip44_v2' ? '1.0' : '0.0'],
-              ['encryption', client.encryptionType],
-            ],
-            content: encryptedCommand,
-          };
-          const event = await client.signEvent(eventTemplate);
-          if (settled) {
-            return;
-          }
-          replyTimeoutMessage = `reply timeout: event ${event.id}`;
-
-          sub = client.pool.subscribe(
-            client.relayUrls,
-            {
-              kinds: [23195],
-              authors: [client.walletPubkey],
-              '#e': [event.id],
-            },
-            {
-              onevent: async (responseEvent) => {
-                if (settled) {
-                  return;
-                }
-
-                let decryptedContent: string;
-                try {
-                  decryptedContent = await client.decrypt(client.walletPubkey, responseEvent.content);
-                } catch (error) {
-                  settleReject(error);
-                  return;
-                }
-
-                let response: { result?: T; error?: { message?: string; code?: string } };
-                try {
-                  response = JSON.parse(decryptedContent);
-                } catch {
-                  settleReject(new Nip47ResponseDecodingError('failed to deserialize response', 'INTERNAL'));
-                  return;
-                }
-
-                if (response.result) {
-                  if (validator(response.result)) {
-                    settleResolve(response.result);
-                    return;
-                  }
-
-                  settleReject(
-                    new Nip47ResponseValidationError(
-                      `response from NWC failed validation: ${JSON.stringify(response.result)}`,
-                      'INTERNAL',
-                    ),
-                  );
-                  return;
-                }
-
-                settleReject(
-                  new Nip47WalletError(response.error?.message || 'unknown Error', response.error?.code || 'INTERNAL'),
-                );
-              },
-            },
-          );
-
-          const publishTimeout = this.nip47TimeoutValues?.publishTimeout ?? 5_000;
-          publishTimeoutId = setTimeout(() => {
-            this.client.close();
-            settleReject(new Nip47PublishTimeoutError(`publish timeout: ${event.id}`, 'INTERNAL'));
-          }, publishTimeout);
-
-          try {
-            await Promise.any(client.pool.publish(client.relayUrls, event));
-            if (publishTimeoutId) {
-              clearTimeout(publishTimeoutId);
-              publishTimeoutId = undefined;
-            }
-          } catch (error) {
-            settleReject(new Nip47PublishError(`failed to publish: ${error}`, 'INTERNAL'));
-          }
-        } catch (error) {
-          settleReject(error);
-        }
-      })();
-    });
-  }
-
-  private async executeSdkNip47Request<T>(
-    operation: string,
-    method: Nip47Method,
-    params: unknown,
-    validator: (result: T) => boolean,
-    fallback: () => Promise<T>,
-    options: RequestCancellationOptions,
-  ): Promise<T> {
-    const clientWithTimeouts = this.client as unknown as Partial<NwcClientWithTimeouts>;
-    const execute = clientWithTimeouts.executeNip47Request?.bind(this.client);
-
-    return this.withTimeout(operation, () => {
-      if (execute) {
-        return execute(method, params, validator, this.nip47TimeoutValues);
-      }
-
-      return fallback();
-    }, options);
-  }
-
   private async executeNip47Request<T>(
     operation: string,
-    method: Nip47Method,
-    params: unknown,
-    validator: (result: T) => boolean,
+    _method: Nip47Method,
+    _params: unknown,
+    _validator: (result: T) => boolean,
     fallback: () => Promise<T>,
     options: RequestCancellationOptions = {},
   ): Promise<T> {
-    if (this.getCancelableClient()) {
-      return this.executeCancelableNip47Request(operation, method, params, validator, options);
-    }
-
-    return this.executeSdkNip47Request(operation, method, params, validator, fallback, options);
+    return this.withTimeout(operation, fallback, options);
   }
 }
