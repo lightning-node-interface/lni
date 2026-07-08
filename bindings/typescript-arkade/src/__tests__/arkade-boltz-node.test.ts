@@ -14,7 +14,10 @@ describe('ArkadeBoltzNode', () => {
     const createSwapsSpy = vi.fn(async () => ({
       getSwapHistory: async () => [],
     }));
-    const swapProviderSpy = vi.fn(function SwapProvider(this: Record<string, unknown>, config: unknown) {
+    const swapProviderSpy = vi.fn(function SwapProvider(
+      this: Record<string, unknown>,
+      config: unknown
+    ) {
       this.config = config;
     });
 
@@ -46,7 +49,8 @@ describe('ArkadeBoltzNode', () => {
 
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
-      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      mnemonic:
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
       arkServerUrl: 'https://mutinynet.arkade.sh',
       network: 'mutinynet',
     });
@@ -75,13 +79,16 @@ describe('ArkadeBoltzNode', () => {
   it('maps createInvoice into an incoming transaction', async () => {
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
-      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      mnemonic:
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
       arkServerUrl: 'https://arkade.example',
     });
 
-    (node as unknown as {
-      getContext: () => Promise<unknown>;
-    }).getContext = async () => ({
+    (
+      node as unknown as {
+        getContext: () => Promise<unknown>;
+      }
+    ).getContext = async () => ({
       wallet: { getBalance: async () => ({ available: 0 }) },
       swaps: {
         createLightningInvoice: async () => ({
@@ -120,13 +127,16 @@ describe('ArkadeBoltzNode', () => {
   it('rejects amountless invoices for payInvoice', async () => {
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
-      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      mnemonic:
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
       arkServerUrl: 'https://arkade.example',
     });
 
-    (node as unknown as {
-      getContext: () => Promise<unknown>;
-    }).getContext = async () => ({
+    (
+      node as unknown as {
+        getContext: () => Promise<unknown>;
+      }
+    ).getContext = async () => ({
       wallet: { getBalance: async () => ({ available: 0 }) },
       swaps: {
         sendLightningPayment: vi.fn(),
@@ -141,20 +151,23 @@ describe('ArkadeBoltzNode', () => {
     });
 
     await expect(node.payInvoice({ invoice: 'amountless' })).rejects.toThrow(
-      'ArkadeBoltzNode does not support amountless invoices.',
+      'ArkadeBoltzNode does not support amountless invoices.'
     );
   });
 
   it('maps swap history for lookupInvoice and listTransactions', async () => {
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
-      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      mnemonic:
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
       arkServerUrl: 'https://arkade.example',
     });
 
-    (node as unknown as {
-      getContext: () => Promise<unknown>;
-    }).getContext = async () => ({
+    (
+      node as unknown as {
+        getContext: () => Promise<unknown>;
+      }
+    ).getContext = async () => ({
       wallet: { getBalance: async () => ({ available: 0 }) },
       swaps: {
         getSwapHistory: async () => [
@@ -247,7 +260,8 @@ describe('ArkadeBoltzNode', () => {
 
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
-      mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      mnemonic:
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
       arkServerUrl: 'https://arkade.example',
     });
 

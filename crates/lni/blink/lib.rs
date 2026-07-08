@@ -2,13 +2,13 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
     Offer, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
     PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
 };
-#[cfg(not(feature = "uniffi"))]
-use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -17,7 +17,7 @@ pub struct BlinkConfig {
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("https://api.blink.sv/graphql")))]
     pub base_url: Option<String>,
     pub api_key: String,
-   #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
     pub accept_invalid_certs: Option<bool>,
@@ -80,11 +80,17 @@ impl BlinkNode {
         crate::blink::api::get_info(&self.config).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::blink::api::create_invoice(&self.config, params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::blink::api::pay_invoice(&self.config, params).await
     }
 
@@ -111,7 +117,9 @@ impl BlinkNode {
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for BlinkNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for BlinkNode".to_string(),
+        })
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
@@ -131,21 +139,26 @@ impl BlinkNode {
         crate::blink::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
+    pub async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, ApiError> {
         crate::blink::api::lookup_invoice(
             &self.config,
             params.payment_hash,
             None,
             None,
             params.search,
-        ).await
+        )
+        .await
     }
 
     pub async fn list_transactions(
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search).await
+        crate::blink::api::list_transactions(&self.config, params.from, params.limit, params.search)
+            .await
     }
 
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
@@ -211,7 +224,7 @@ mod tests {
         };
     }
 
-   #[tokio::test]
+    #[tokio::test]
     async fn test_get_info() {
         match NODE.get_info().await {
             Ok(info) => {
@@ -229,13 +242,16 @@ mod tests {
         let description = "Test Blink invoice".to_string();
         let expiry = 3600;
 
-        match NODE.create_invoice(CreateInvoiceParams {
-            invoice_type: Some(InvoiceType::Bolt11),
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            expiry: Some(expiry),
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                invoice_type: Some(InvoiceType::Bolt11),
+                amount_msats: Some(amount_msats),
+                description: Some(description.clone()),
+                expiry: Some(expiry),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("Blink create_invoice: {:?}", txn);
                 assert!(
@@ -280,10 +296,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            ..Default::default()
-        }).await {
+        match NODE
+            .lookup_invoice(LookupInvoiceParams {
+                payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("Blink lookup invoice: {:?}", txn);
                 assert!(
@@ -335,8 +354,8 @@ mod tests {
     async fn test_pay_onchain_e2e() {
         dotenv().ok();
 
-        let address = env::var("BLINK_ONCHAIN_TEST_ADDRESS")
-            .expect("BLINK_ONCHAIN_TEST_ADDRESS must be set");
+        let address =
+            env::var("BLINK_ONCHAIN_TEST_ADDRESS").expect("BLINK_ONCHAIN_TEST_ADDRESS must be set");
         let amount_sats = env::var("BLINK_ONCHAIN_AMOUNT_SATS")
             .unwrap_or_else(|_| "10000".to_string())
             .parse::<i64>()
@@ -377,7 +396,9 @@ mod tests {
             || env::var("BLINK_ONCHAIN_SEND_CONFIRM").ok().as_deref()
                 != Some(ONCHAIN_SEND_CONFIRMATION)
         {
-            println!("Prepared Blink on-chain quote; skipping broadcast without explicit confirmation");
+            println!(
+                "Prepared Blink on-chain quote; skipping broadcast without explicit confirmation"
+            );
             return;
         }
 
@@ -432,8 +453,9 @@ mod tests {
             ..Default::default()
         };
 
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
-        
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
+
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
         println!("Blink events captured: {:?}", *events_guard);

@@ -1,11 +1,32 @@
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
-import { providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
+import {
+  providerInfoFromJsonErrorBody,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { parseClnRunePermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, parseOptionalNumber } from '../internal/transform.js';
-import { InvoiceType, type ClnConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type Transaction } from '../types.js';
+import {
+  InvoiceType,
+  type ClnConfig,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeInfo,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type Permissions,
+  type Transaction,
+} from '../types.js';
 
 interface ClnInfoResponse {
   id: string;
@@ -134,7 +155,10 @@ export class ClnNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
 
-  constructor(private readonly config: ClnConfig, options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: ClnConfig,
+    options: NodeRequestOptions = {}
+  ) {
     this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
   }
@@ -147,7 +171,11 @@ export class ClnNode implements LightningNode {
     };
   }
 
-  private async postJson<T>(path: string, json: unknown = {}, operation?: NwcErrorOperation): Promise<T> {
+  private async postJson<T>(
+    path: string,
+    json: unknown = {},
+    operation?: NwcErrorOperation
+  ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
         method: 'POST',
@@ -163,7 +191,11 @@ export class ClnNode implements LightningNode {
     }
   }
 
-  private async postText(path: string, json: unknown = {}, operation?: NwcErrorOperation): Promise<string> {
+  private async postText(
+    path: string,
+    json: unknown = {},
+    operation?: NwcErrorOperation
+  ): Promise<string> {
     try {
       return await requestText(this.fetchFn, buildUrl(this.config.url, path), {
         method: 'POST',
@@ -183,14 +215,18 @@ export class ClnNode implements LightningNode {
     offer: string,
     amountMsats: number,
     payerNote: string | undefined,
-    operation: NwcErrorOperation,
+    operation: NwcErrorOperation
   ): Promise<string> {
-    const payload = await this.postJson<ClnFetchInvoiceResponse>('/v1/fetchinvoice', {
-      offer,
-      amount_msat: amountMsats,
-      payer_note: payerNote,
-      timeout: 60,
-    }, operation);
+    const payload = await this.postJson<ClnFetchInvoiceResponse>(
+      '/v1/fetchinvoice',
+      {
+        offer,
+        amount_msat: amountMsats,
+        payer_note: payerNote,
+        timeout: 60,
+      },
+      operation
+    );
 
     if (!payload.invoice) {
       throw clnInternal('Missing BOLT12 invoice', operation);
@@ -301,14 +337,17 @@ export class ClnNode implements LightningNode {
 
     if (invoiceType === InvoiceType.Bolt12) {
       if (!params.offer) {
-        throw new LniError('InvalidInput', 'Offer is required for BOLT12 invoice creation with CLN.');
+        throw new LniError(
+          'InvalidInput',
+          'Offer is required for BOLT12 invoice creation with CLN.'
+        );
       }
 
       const invoice = await this.fetchInvoiceFromOffer(
         params.offer,
         params.amountMsats ?? 0,
         params.description,
-        'make_invoice',
+        'make_invoice'
       );
 
       return emptyTransaction({
@@ -323,12 +362,16 @@ export class ClnNode implements LightningNode {
       });
     }
 
-    const payload = await this.postJson<ClnBolt11Response>('/v1/invoice', {
-      description: params.description ?? '',
-      amount_msat: params.amountMsats !== undefined ? String(params.amountMsats) : 'any',
-      expiry: params.expiry,
-      label: newInvoiceLabel(),
-    }, 'make_invoice');
+    const payload = await this.postJson<ClnBolt11Response>(
+      '/v1/invoice',
+      {
+        description: params.description ?? '',
+        amount_msat: params.amountMsats !== undefined ? String(params.amountMsats) : 'any',
+        expiry: params.expiry,
+        label: newInvoiceLabel(),
+      },
+      'make_invoice'
+    );
 
     return emptyTransaction({
       type: 'incoming',
@@ -370,15 +413,20 @@ export class ClnNode implements LightningNode {
     return {
       paymentHash: payload.payment_hash,
       preimage: payload.payment_preimage,
-      feeMsats: parseOptionalNumber(payload.amount_sent_msat) - parseOptionalNumber(payload.amount_msat),
+      feeMsats:
+        parseOptionalNumber(payload.amount_sent_msat) - parseOptionalNumber(payload.amount_msat),
     };
   }
 
   async createOffer(params: CreateOfferParams): Promise<Offer> {
-    const payload = await this.postJson<ClnOfferResponse>('/v1/offer', {
-      amount: params.amountMsats !== undefined ? `${params.amountMsats}msat` : 'any',
-      description: params.description,
-    }, 'make_invoice');
+    const payload = await this.postJson<ClnOfferResponse>(
+      '/v1/offer',
+      {
+        amount: params.amountMsats !== undefined ? `${params.amountMsats}msat` : 'any',
+        description: params.description,
+      },
+      'make_invoice'
+    );
 
     return {
       offerId: payload.offer_id ?? '',
@@ -394,32 +442,48 @@ export class ClnNode implements LightningNode {
   async getOffer(search?: string): Promise<Offer> {
     const offers = await this.listOffers(search);
     if (!offers.length) {
-      throw clnNotFound(search ? `Offer not found for search: ${search}` : 'Offer not found', 'lookup_invoice');
+      throw clnNotFound(
+        search ? `Offer not found for search: ${search}` : 'Offer not found',
+        'lookup_invoice'
+      );
     }
 
     return offers[0]!;
   }
 
   async listOffers(search?: string): Promise<Offer[]> {
-    const payload = await this.postJson<ClnListOffersResponse>('/v1/listoffers', {
-      ...(search ? { offer_id: search } : {}),
-    }, 'list_transactions');
+    const payload = await this.postJson<ClnListOffersResponse>(
+      '/v1/listoffers',
+      {
+        ...(search ? { offer_id: search } : {}),
+      },
+      'list_transactions'
+    );
 
     return payload.offers;
   }
 
-  async payOffer(offer: string, amountMsats: number, payerNote?: string): Promise<PayInvoiceResponse> {
+  async payOffer(
+    offer: string,
+    amountMsats: number,
+    payerNote?: string
+  ): Promise<PayInvoiceResponse> {
     const bolt11 = await this.fetchInvoiceFromOffer(offer, amountMsats, payerNote, 'pay_invoice');
-    const payload = await this.postJson<ClnPayResponse>('/v1/pay', {
-      bolt11,
-      maxfeepercent: 1,
-      retry_for: 60,
-    }, 'pay_invoice');
+    const payload = await this.postJson<ClnPayResponse>(
+      '/v1/pay',
+      {
+        bolt11,
+        maxfeepercent: 1,
+        retry_for: 60,
+      },
+      'pay_invoice'
+    );
 
     return {
       paymentHash: payload.payment_hash,
       preimage: payload.payment_preimage,
-      feeMsats: parseOptionalNumber(payload.amount_sent_msat) - parseOptionalNumber(payload.amount_msat),
+      feeMsats:
+        parseOptionalNumber(payload.amount_sent_msat) - parseOptionalNumber(payload.amount_msat),
     };
   }
 
@@ -431,7 +495,11 @@ export class ClnNode implements LightningNode {
       query.payment_hash = params.search;
     }
 
-    const payload = await this.postJson<ClnInvoicesResponse>('/v1/listinvoices', query, 'lookup_invoice');
+    const payload = await this.postJson<ClnInvoicesResponse>(
+      '/v1/listinvoices',
+      query,
+      'lookup_invoice'
+    );
 
     const invoice = payload.invoices[0];
     if (!invoice) {
@@ -442,12 +510,16 @@ export class ClnNode implements LightningNode {
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
-    const payload = await this.postJson<ClnInvoicesResponse>('/v1/listinvoices', {
-      start: params.from,
-      index: 'created',
-      limit: params.limit || undefined,
-      payment_hash: params.paymentHash,
-    }, 'list_transactions');
+    const payload = await this.postJson<ClnInvoicesResponse>(
+      '/v1/listinvoices',
+      {
+        start: params.from,
+        index: 'created',
+        limit: params.limit || undefined,
+        payment_hash: params.paymentHash,
+      },
+      'list_transactions'
+    );
 
     const transactions = payload.invoices.map((invoice) => this.invoiceToTransaction(invoice));
 
@@ -473,7 +545,10 @@ export class ClnNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,
@@ -481,7 +556,7 @@ export class ClnNode implements LightningNode {
         this.lookupInvoice({
           paymentHash: params.paymentHash,
           search: params.search,
-      }),
+        }),
     });
   }
 }

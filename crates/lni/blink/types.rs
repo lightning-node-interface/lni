@@ -193,8 +193,8 @@ pub struct Transaction {
     pub id: String,
     #[serde(rename = "createdAt")]
     pub created_at: i64, // Unix timestamp
-    pub direction: String,  // "SEND" or "RECEIVE"
-    pub status: String,     // "SUCCESS", "FAILURE", "PENDING"
+    pub direction: String, // "SEND" or "RECEIVE"
+    pub status: String,    // "SUCCESS", "FAILURE", "PENDING"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

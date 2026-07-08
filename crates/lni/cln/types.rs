@@ -30,7 +30,6 @@ pub struct PayResponse {
     pub status: String,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct PaidOutpoint {
     pub txid: String,
@@ -56,14 +55,12 @@ pub struct Invoice {
     pub local_offer_id: Option<String>,
     pub invreq_payer_note: Option<String>,
     pub paid_outpoint: Option<PaidOutpoint>,
-
 }
 
 #[derive(Debug, Deserialize)]
 pub struct InvoicesResponse {
     pub invoices: Vec<Invoice>,
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct Bolt11Resp {

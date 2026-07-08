@@ -16,10 +16,11 @@ const frostsBridgeOutputPath = path.resolve(distVendorDir, 'frosts-bridge.js');
 const legacySparkOutputPath = path.resolve(distVendorDir, 'spark-sdk-bare.browser.js');
 const sparkSourcePath = path.resolve(
   projectRoot,
-  'node_modules/@buildonspark/spark-sdk/dist/bare/index.js',
+  'node_modules/@buildonspark/spark-sdk/dist/bare/index.js'
 );
 
-const browserTransportPattern = 'return new ConnectionManagerBrowser(config, "identity", BareHttpTransport());';
+const browserTransportPattern =
+  'return new ConnectionManagerBrowser(config, "identity", BareHttpTransport());';
 const browserTransportReplacement =
   'return new ConnectionManagerBrowser(config, "identity", (0, import_nice_grpc_web.FetchTransport)());';
 

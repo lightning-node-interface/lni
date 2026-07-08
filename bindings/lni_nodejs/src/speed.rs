@@ -1,4 +1,7 @@
-use lni::{speed::lib::SpeedConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{
+  speed::lib::SpeedConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  PayInvoiceParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -24,7 +27,11 @@ impl SpeedNode {
     SpeedConfig {
       base_url: self.inner.base_url.clone(),
       api_key: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -70,7 +77,9 @@ impl SpeedNode {
 
   #[napi]
   pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
-    Err(napi::Error::from_reason("Bolt12 not implemented for Speed".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented for Speed".to_string(),
+    ))
   }
 
   #[napi]

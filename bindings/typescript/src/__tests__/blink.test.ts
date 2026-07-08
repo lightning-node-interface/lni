@@ -61,7 +61,7 @@ describe('BlinkNode on-chain payments', () => {
 
     const node = new BlinkNode(
       { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const transaction = await node.prepareOnchainTransaction({
@@ -126,7 +126,7 @@ describe('BlinkNode on-chain payments', () => {
 
     const node = new BlinkNode(
       { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const payment = await node.payOnchain({
@@ -156,7 +156,7 @@ describe('BlinkNode on-chain payments', () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new BlinkNode(
       { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(
@@ -164,7 +164,7 @@ describe('BlinkNode on-chain payments', () => {
         address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
         amountSats: 10_000,
         fee: { type: 'speed', speed: 'free' },
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });
@@ -174,7 +174,7 @@ describe('BlinkNode on-chain payments', () => {
         address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
         amountSats: 10_000,
         feePayer: 'recipient',
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });
@@ -186,7 +186,7 @@ describe('BlinkNode on-chain payments', () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new BlinkNode(
       { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(
@@ -196,7 +196,7 @@ describe('BlinkNode on-chain payments', () => {
         feeSats: 3_000,
         feePayer: 'sender',
         fee: { type: 'speed', speed: 'fast' },
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });

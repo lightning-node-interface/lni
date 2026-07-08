@@ -1,7 +1,5 @@
 const nativeFetch =
-  typeof globalThis.fetch === 'function'
-    ? globalThis.fetch.bind(globalThis)
-    : null;
+  typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null;
 
 const bareFetch = (input, init) => {
   if (!nativeFetch) {

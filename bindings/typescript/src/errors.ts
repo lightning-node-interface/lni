@@ -35,7 +35,11 @@ export class LniError extends Error {
   public readonly status?: number;
   public readonly body?: string;
 
-  constructor(code: LniErrorCode, message: string, options?: { status?: number; body?: string; cause?: unknown }) {
+  constructor(
+    code: LniErrorCode,
+    message: string,
+    options?: { status?: number; body?: string; cause?: unknown }
+  ) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'LniError';
     this.code = code;
@@ -63,14 +67,14 @@ export class NwcError extends LniError {
       providerCode?: string | number;
       providerStatus?: number;
       providerMessage?: string;
-    },
+    }
   ) {
     super(
       'NwcError',
       message,
       options?.cause !== undefined
         ? { cause: options.cause, status: options.providerStatus }
-        : { status: options?.providerStatus },
+        : { status: options?.providerStatus }
     );
     this.name = 'NwcError';
     this.nwcCode = nwcCode;

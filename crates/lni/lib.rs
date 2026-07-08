@@ -1,7 +1,5 @@
-
-
-use std::time::Duration;
 use once_cell::sync::Lazy;
+use std::time::Duration;
 
 // Global Tokio runtime for async operations
 // This is needed because UniFFI's async trait support requires a runtime that's always available
@@ -42,10 +40,10 @@ impl From<serde_json::Error> for ApiError {
 
 /// Generate a new BIP39 mnemonic phrase for wallet creation.
 /// Uses cryptographically secure randomness from the OS.
-/// 
+///
 /// # Arguments
 /// * `word_count` - Number of words: 12 (default) or 24. If None or invalid, defaults to 12.
-/// 
+///
 /// # Returns
 /// A space-separated mnemonic phrase
 #[cfg(feature = "uniffi")]
@@ -63,8 +61,8 @@ pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     let mut entropy = vec![0u8; entropy_size];
     OsRng.fill_bytes(&mut entropy);
 
-    let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy)
-        .map_err(|e| ApiError::Api {
+    let mnemonic =
+        Mnemonic::from_entropy_in(Language::English, &entropy).map_err(|e| ApiError::Api {
             reason: format!("Failed to generate mnemonic: {}", e),
         })?;
 
@@ -74,7 +72,7 @@ pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
 /// Macro to implement LightningNode trait by delegating to inherent methods.
 /// This avoids code duplication between UniFFI exports and trait implementations.
 /// The macro works for both UniFFI and non-UniFFI builds.
-/// 
+///
 /// For UniFFI builds, the async work is spawned onto the global TOKIO_RUNTIME
 /// since Swift/Kotlin drive the outer future but Tokio needs to drive the actual async work.
 #[macro_export]
@@ -84,51 +82,73 @@ macro_rules! impl_lightning_node {
         impl crate::LightningNode for $node_type {
             async fn get_permissions(&self) -> Result<crate::Permissions, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::get_permissions(&this).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::get_permissions(&this).await })
+                    .await
+                    .unwrap()
             }
 
             async fn get_info(&self) -> Result<crate::NodeInfo, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::get_info(&this).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::get_info(&this).await })
+                    .await
+                    .unwrap()
             }
 
-            async fn create_invoice(&self, params: crate::CreateInvoiceParams) -> Result<crate::Transaction, crate::ApiError> {
+            async fn create_invoice(
+                &self,
+                params: crate::CreateInvoiceParams,
+            ) -> Result<crate::Transaction, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::create_invoice(&this, params).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::create_invoice(&this, params).await })
+                    .await
+                    .unwrap()
             }
 
-            async fn pay_invoice(&self, params: crate::PayInvoiceParams) -> Result<crate::PayInvoiceResponse, crate::ApiError> {
+            async fn pay_invoice(
+                &self,
+                params: crate::PayInvoiceParams,
+            ) -> Result<crate::PayInvoiceResponse, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::pay_invoice(&this, params).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::pay_invoice(&this, params).await })
+                    .await
+                    .unwrap()
             }
 
-            async fn create_offer(&self, params: crate::CreateOfferParams) -> Result<crate::Offer, crate::ApiError> {
+            async fn create_offer(
+                &self,
+                params: crate::CreateOfferParams,
+            ) -> Result<crate::Offer, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::create_offer(&this, params).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::create_offer(&this, params).await })
+                    .await
+                    .unwrap()
             }
 
-            async fn get_offer(&self, search: Option<String>) -> Result<crate::Offer, crate::ApiError> {
+            async fn get_offer(
+                &self,
+                search: Option<String>,
+            ) -> Result<crate::Offer, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::get_offer(&this, search).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::get_offer(&this, search).await })
+                    .await
+                    .unwrap()
             }
 
-            async fn list_offers(&self, search: Option<String>) -> Result<Vec<crate::Offer>, crate::ApiError> {
+            async fn list_offers(
+                &self,
+                search: Option<String>,
+            ) -> Result<Vec<crate::Offer>, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::list_offers(&this, search).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::list_offers(&this, search).await })
+                    .await
+                    .unwrap()
             }
 
             async fn pay_offer(
@@ -138,16 +158,23 @@ macro_rules! impl_lightning_node {
                 payer_note: Option<String>,
             ) -> Result<crate::PayInvoiceResponse, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::pay_offer(&this, offer, amount_msats, payer_note).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move {
+                        <$node_type>::pay_offer(&this, offer, amount_msats, payer_note).await
+                    })
+                    .await
+                    .unwrap()
             }
 
-            async fn lookup_invoice(&self, params: crate::LookupInvoiceParams) -> Result<crate::Transaction, crate::ApiError> {
+            async fn lookup_invoice(
+                &self,
+                params: crate::LookupInvoiceParams,
+            ) -> Result<crate::Transaction, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::lookup_invoice(&this, params).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::lookup_invoice(&this, params).await })
+                    .await
+                    .unwrap()
             }
 
             async fn list_transactions(
@@ -155,23 +182,26 @@ macro_rules! impl_lightning_node {
                 params: crate::ListTransactionsParams,
             ) -> Result<Vec<crate::Transaction>, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::list_transactions(&this, params).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::list_transactions(&this, params).await })
+                    .await
+                    .unwrap()
             }
 
             async fn decode(&self, str: String) -> Result<String, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::decode(&this, str).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::decode(&this, str).await })
+                    .await
+                    .unwrap()
             }
 
             async fn decode_offer(&self, offer: String) -> Result<String, crate::ApiError> {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
-                    <$node_type>::decode_offer(&this, offer).await
-                }).await.unwrap()
+                crate::TOKIO_RUNTIME
+                    .spawn(async move { <$node_type>::decode_offer(&this, offer).await })
+                    .await
+                    .unwrap()
             }
 
             async fn on_invoice_events(
@@ -180,9 +210,10 @@ macro_rules! impl_lightning_node {
                 callback: std::sync::Arc<dyn crate::types::OnInvoiceEventCallback>,
             ) {
                 let this = self.clone();
-                crate::TOKIO_RUNTIME.spawn(async move {
+                let handle = crate::TOKIO_RUNTIME.spawn(async move {
                     <$node_type>::on_invoice_events(&this, params, callback).await
-                }).await.unwrap()
+                });
+                handle.await.unwrap()
             }
         }
     };
@@ -261,49 +292,55 @@ pub use database::{Db, DbError, Payment};
 
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
-pub async fn say_after_with_tokio(ms: u16, who: String, url: String, socks5_proxy: Option<String>, header_key: Option<String>, header_value: Option<String>) -> String {
+pub async fn say_after_with_tokio(
+    ms: u16,
+    who: String,
+    url: String,
+    socks5_proxy: Option<String>,
+    header_key: Option<String>,
+    header_value: Option<String>,
+) -> String {
     // Create HTTP client with optional SOCKS5 proxy
     let client = if let Some(proxy_url) = socks5_proxy {
         // Ignore certificate errors when using SOCKS5 proxy
         let client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
-        
+
         match reqwest::Proxy::all(&proxy_url) {
             Ok(proxy) => {
                 match client_builder.proxy(proxy).build() {
                     Ok(client) => client,
-                    Err(_) => reqwest::Client::new() // Fallback to default client on error
+                    Err(_) => reqwest::Client::new(), // Fallback to default client on error
                 }
             }
-            Err(_) => reqwest::Client::new() // Fallback to default client on error
+            Err(_) => reqwest::Client::new(), // Fallback to default client on error
         }
     } else {
-        reqwest::Client::builder().build().unwrap_or_else(|_| reqwest::Client::new())
+        reqwest::Client::builder()
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
     };
-    
+
     // Create request with optional header
     let mut request = client.get(&url);
-    
+
     if let (Some(key), Some(value)) = (header_key, header_value) {
         request = request.header(&key, &value);
     }
-    
+
     // Make HTTP request
     let ip_result = request.send().await;
-    
+
     let page_content = match ip_result {
-        Ok(response) => {
-            match response.text().await {
-                Ok(html) => html,
-                Err(_) => "Failed to read response text".to_string()
-            }
-        }
-        Err(_) => "Failed to make HTTP request".to_string()
+        Ok(response) => match response.text().await {
+            Ok(html) => html,
+            Err(_) => "Failed to read response text".to_string(),
+        },
+        Err(_) => "Failed to make HTTP request".to_string(),
     };
-    
+
     // Simulate latency
     tokio::time::sleep(Duration::from_millis(ms.into())).await;
-    
-    
+
     format!("Hello, {who}! Your IP address is: {page_content} (with Tokio after {ms}ms delay)")
 }
 
@@ -358,7 +395,9 @@ pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
 /// Create a Spark node as a polymorphic LightningNode
 #[cfg(feature = "uniffi")]
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn create_spark_node(config: spark::SparkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
+pub async fn create_spark_node(
+    config: spark::SparkConfig,
+) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;
     Ok(Arc::new(node))
 }
@@ -427,16 +466,14 @@ mod debug_redaction_tests {
         );
 
         let nwc = crate::nwc::NwcConfig {
-            nwc_uri: "nostr+walletconnect://wallet-pubkey?relay=wss://relay.example&secret=nwc-secret".to_string(),
+            nwc_uri:
+                "nostr+walletconnect://wallet-pubkey?relay=wss://relay.example&secret=nwc-secret"
+                    .to_string(),
             socks5_proxy: Some(proxy.to_string()),
             accept_invalid_certs: Some(false),
             http_timeout: Some(30),
         };
-        assert_redacted(
-            "NwcConfig",
-            &format!("{:?}", nwc),
-            &["nwc-secret", proxy],
-        );
+        assert_redacted("NwcConfig", &format!("{:?}", nwc), &["nwc-secret", proxy]);
         assert_redacted(
             "NwcNode",
             &format!("{:?}", crate::nwc::NwcNode::new(nwc)),

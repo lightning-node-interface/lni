@@ -55,8 +55,8 @@ pub struct MakeInvoiceResponse {
     pub description_hash: Option<String>,
     pub preimage: Option<String>,
     pub payment_hash: String,
-    pub amount: i64, // in msats
-    pub fees_paid: i64, // in msats
+    pub amount: i64,     // in msats
+    pub fees_paid: i64,  // in msats
     pub created_at: i64, // unix timestamp
     pub expires_at: i64, // unix timestamp
     pub metadata: Option<serde_json::Value>,
@@ -113,9 +113,9 @@ pub struct LookupInvoiceResponse {
     pub preimage: Option<String>,
     #[serde(default)]
     pub payment_hash: Option<String>,
-    pub amount: i64, // in msats
-    pub fees_paid: i64, // in msats
-    pub created_at: i64, // unix timestamp
+    pub amount: i64,             // in msats
+    pub fees_paid: i64,          // in msats
+    pub created_at: i64,         // unix timestamp
     pub expires_at: Option<i64>, // unix timestamp
     pub settled_at: Option<i64>, // unix timestamp
     pub metadata: Option<serde_json::Value>,
@@ -123,7 +123,7 @@ pub struct LookupInvoiceResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListTransactionsRequest {
-    pub from: Option<i64>, // unix timestamp
+    pub from: Option<i64>,  // unix timestamp
     pub until: Option<i64>, // unix timestamp
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -147,9 +147,9 @@ pub struct NwcTransaction {
     pub preimage: Option<String>,
     #[serde(default)]
     pub payment_hash: Option<String>,
-    pub amount: i64, // in msats
-    pub fees_paid: i64, // in msats
-    pub created_at: i64, // unix timestamp
+    pub amount: i64,             // in msats
+    pub fees_paid: i64,          // in msats
+    pub created_at: i64,         // unix timestamp
     pub expires_at: Option<i64>, // unix timestamp
     pub settled_at: Option<i64>, // unix timestamp
     pub metadata: Option<serde_json::Value>,

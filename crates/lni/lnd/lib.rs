@@ -2,12 +2,12 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
     Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
-#[cfg(not(feature = "uniffi"))]
-use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -74,16 +74,24 @@ impl LndNode {
         crate::lnd::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::lnd::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::lnd::api::pay_invoice(self.config.clone(), params).await
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for LndNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for LndNode".to_string(),
+        })
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
@@ -487,7 +495,8 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
 
         // Check if events were received
         let received_events = events.lock().unwrap();

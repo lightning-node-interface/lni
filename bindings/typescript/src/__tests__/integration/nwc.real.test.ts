@@ -6,37 +6,43 @@ describe('Real integration from crates/lni/.env > NwcNode', async () => {
   const enabled = hasEnv('NWC_URI');
 
   const makeNode = () => new NwcNode({ nwcUri: process.env.NWC_URI!, httpTimeout: 15 });
- 
-  itIf(enabled)('getInfo + createInvoice + listTransactions + lookupInvoice', async () => {
-    const node = makeNode();
 
-    try {
-      const info = await node.getInfo();
-      expect(typeof info.alias).toBe('string');
+  itIf(enabled)(
+    'getInfo + createInvoice + listTransactions + lookupInvoice',
+    async () => {
+      const node = makeNode();
 
-      const invoice1 = await node.lookupInvoice({ paymentHash: process.env.NWC_TEST_PAYMENT_HASH! });
-      console.log('NWC Invoice Lookup by Hash:', invoice1);
-      expect(invoice1.paymentHash.length).toBeGreaterThan(0);
+      try {
+        const info = await node.getInfo();
+        expect(typeof info.alias).toBe('string');
 
-      const invoice = await node.createInvoice({
-        amountMsats: 3_000,
-        description: testInvoiceLabel('nwc'),
-      });
-      console.log('NWC Invoice:', invoice);
-      expect(invoice.invoice.length).toBeGreaterThan(0);
+        const invoice1 = await node.lookupInvoice({
+          paymentHash: process.env.NWC_TEST_PAYMENT_HASH!,
+        });
+        console.log('NWC Invoice Lookup by Hash:', invoice1);
+        expect(invoice1.paymentHash.length).toBeGreaterThan(0);
 
-      const txs = await node.listTransactions({ from: 0, limit: 25 });
-      expect(Array.isArray(txs)).toBe(true);
+        const invoice = await node.createInvoice({
+          amountMsats: 3_000,
+          description: testInvoiceLabel('nwc'),
+        });
+        console.log('NWC Invoice:', invoice);
+        expect(invoice.invoice.length).toBeGreaterThan(0);
 
-      if (invoice.paymentHash.length > 0) {
-        const hashLookup = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
-        expect(hashLookup.paymentHash.length).toBeGreaterThan(0);
+        const txs = await node.listTransactions({ from: 0, limit: 25 });
+        expect(Array.isArray(txs)).toBe(true);
+
+        if (invoice.paymentHash.length > 0) {
+          const hashLookup = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
+          expect(hashLookup.paymentHash.length).toBeGreaterThan(0);
+        }
+
+        const invoiceLookup = await node.lookupInvoice({ search: invoice.invoice });
+        expect(typeof invoiceLookup.type).toBe('string');
+      } finally {
+        node.close();
       }
-
-      const invoiceLookup = await node.lookupInvoice({ search: invoice.invoice });
-      expect(typeof invoiceLookup.type).toBe('string');
-    } finally {
-      node.close();
-    }
-  }, timeout);
+    },
+    timeout
+  );
 });

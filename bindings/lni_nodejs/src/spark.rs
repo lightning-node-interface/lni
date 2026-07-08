@@ -9,290 +9,310 @@ use tokio::sync::RwLock;
 /// Note: SparkNode requires async initialization, so we use a builder pattern
 #[napi]
 pub struct SparkNode {
-    inner: Arc<RwLock<Option<CoreSparkNode>>>,
-    config: SparkConfig,
+  inner: Arc<RwLock<Option<CoreSparkNode>>>,
+  config: SparkConfig,
 }
 
 #[napi]
 impl SparkNode {
-    #[napi(constructor)]
-    pub fn new(config: SparkConfig) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(None)),
-            config,
-        }
+  #[napi(constructor)]
+  pub fn new(config: SparkConfig) -> Self {
+    Self {
+      inner: Arc::new(RwLock::new(None)),
+      config,
     }
+  }
 
-    /// Connect to the Spark network (must be called before using other methods)
-    #[napi]
-    pub async fn connect(&self) -> napi::Result<()> {
-        let node = CoreSparkNode::new(self.config.clone())
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-        
-        let mut inner = self.inner.write().await;
-        *inner = Some(node);
-        Ok(())
+  /// Connect to the Spark network (must be called before using other methods)
+  #[napi]
+  pub async fn connect(&self) -> napi::Result<()> {
+    let node = CoreSparkNode::new(self.config.clone())
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+    let mut inner = self.inner.write().await;
+    *inner = Some(node);
+    Ok(())
+  }
+
+  /// Disconnect from the Spark network
+  #[napi]
+  pub async fn disconnect(&self) -> napi::Result<()> {
+    let inner = self.inner.read().await;
+    if let Some(node) = inner.as_ref() {
+      node
+        .disconnect()
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     }
+    Ok(())
+  }
 
-    /// Disconnect from the Spark network
-    #[napi]
-    pub async fn disconnect(&self) -> napi::Result<()> {
-        let inner = self.inner.read().await;
-        if let Some(node) = inner.as_ref() {
-            node.disconnect()
-                .await
-                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-        }
-        Ok(())
+  /// Check if the node is connected
+  #[napi]
+  pub async fn is_connected(&self) -> bool {
+    let inner = self.inner.read().await;
+    inner.is_some()
+  }
+
+  #[napi]
+  pub fn get_config(&self) -> SparkConfig {
+    SparkConfig {
+      mnemonic: "<redacted>".to_string(),
+      passphrase: self
+        .config
+        .passphrase
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
+      api_key: self
+        .config
+        .api_key
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
+      storage_dir: "<redacted>".to_string(),
+      network: self.config.network.clone(),
     }
+  }
 
-    /// Check if the node is connected
-    #[napi]
-    pub async fn is_connected(&self) -> bool {
-        let inner = self.inner.read().await;
-        inner.is_some()
-    }
+  /// Get the Spark address for receiving payments
+  #[napi]
+  pub async fn get_spark_address(&self) -> napi::Result<String> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub fn get_config(&self) -> SparkConfig {
-        SparkConfig {
-            mnemonic: "<redacted>".to_string(),
-            passphrase: self.config.passphrase.as_ref().map(|_| "<redacted>".to_string()),
-            api_key: self.config.api_key.as_ref().map(|_| "<redacted>".to_string()),
-            storage_dir: "<redacted>".to_string(),
-            network: self.config.network.clone(),
-        }
-    }
+    node
+      .get_spark_address()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    /// Get the Spark address for receiving payments
-    #[napi]
-    pub async fn get_spark_address(&self) -> napi::Result<String> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.get_spark_address()
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  /// Get a Bitcoin address for on-chain deposits
+  #[napi]
+  pub async fn get_deposit_address(&self) -> napi::Result<String> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    /// Get a Bitcoin address for on-chain deposits
-    #[napi]
-    pub async fn get_deposit_address(&self) -> napi::Result<String> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.get_deposit_address()
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .get_deposit_address()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.get_info()
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
+    node
+      .get_info()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-        node.get_permissions()
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn get_permissions(&self) -> napi::Result<lni::Permissions> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn create_invoice(
-        &self,
-        params: CreateInvoiceParams,
-    ) -> napi::Result<lni::Transaction> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.create_invoice(params)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .get_permissions()
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub async fn pay_invoice(
-        &self,
-        params: PayInvoiceParams,
-    ) -> napi::Result<lni::types::PayInvoiceResponse> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.pay_invoice(params)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn create_invoice(
+    &self,
+    params: CreateInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn create_offer(&self, params: CreateOfferParams) -> Result<lni::Offer> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.create_offer(params)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .create_invoice(params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub async fn get_offer(&self, search: Option<String>) -> napi::Result<lni::Offer> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.get_offer(search)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> napi::Result<lni::types::PayInvoiceResponse> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.list_offers(search)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .pay_invoice(params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub async fn lookup_invoice(
-        &self,
-        params: LookupInvoiceParams,
-    ) -> napi::Result<lni::Transaction> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.lookup_invoice(params)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn create_offer(&self, params: CreateOfferParams) -> Result<lni::Offer> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn pay_offer(
-        &self,
-        offer: String,
-        amount_msats: i64,
-        payer_note: Option<String>,
-    ) -> napi::Result<lni::PayInvoiceResponse> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        node.pay_offer(offer, amount_msats, payer_note)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .create_offer(params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub async fn list_transactions(
-        &self,
-        params: crate::ListTransactionsParams,
-    ) -> napi::Result<Vec<lni::Transaction>> {
-        let inner = self.inner.read().await;
-        let node = inner
-            .as_ref()
-            .ok_or_else(|| napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string()))?;
-        
-        let lni_params = lni::ListTransactionsParams {
-            from: params.from,
-            limit: params.limit,
-            search: params.search,
-            payment_hash: params.payment_hash,
-            created_after: params.created_after,
-            created_before: params.created_before,
-        };
-        
-        node.list_transactions(lni_params)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn get_offer(&self, search: Option<String>) -> napi::Result<lni::Offer> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub async fn decode(&self, str: String) -> napi::Result<String> {
-        lni::spark::api::decode(str)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+    node
+      .get_offer(search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-    #[napi]
-    pub fn decode_offer(&self, offer: String) -> napi::Result<String> {
-        lni::spark::api::decode_offer(offer)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
-    }
+  #[napi]
+  pub async fn list_offers(&self, search: Option<String>) -> napi::Result<Vec<lni::Offer>> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-    #[napi]
-    pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
-        &self,
-        params: lni::types::OnInvoiceEventParams,
-        callback: T,
-    ) -> Result<()> {
-        let inner = self.inner.clone();
+    node
+      .list_offers(search)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-        // Block on the async function in the current thread, similar to Blink's sync approach
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let guard = inner.read().await;
-            if let Some(node) = guard.as_ref() {
-                let start_time = std::time::Instant::now();
+  #[napi]
+  pub async fn lookup_invoice(
+    &self,
+    params: LookupInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-                while start_time.elapsed().as_secs() < params.max_polling_sec as u64 {
-                    let lookup_params = lni::LookupInvoiceParams {
-                        payment_hash: params.payment_hash.clone(),
-                        search: params.search.clone(),
-                    };
+    node
+      .lookup_invoice(params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
 
-                    match node.lookup_invoice(lookup_params).await {
-                        Ok(transaction) if transaction.settled_at > 0 => {
-                            let _ = callback("success".to_string(), Some(transaction));
-                            return;
-                        }
-                        Ok(transaction) => {
-                            let _ = callback("pending".to_string(), Some(transaction));
-                        }
-                        Err(_) => {
-                            let _ = callback("pending".to_string(), None);
-                        }
-                    }
+  #[napi]
+  pub async fn pay_offer(
+    &self,
+    offer: String,
+    amount_msats: i64,
+    payer_note: Option<String>,
+  ) -> napi::Result<lni::PayInvoiceResponse> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
 
-                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                        params.polling_delay_sec as u64,
-                    ))
-                    .await;
-                }
+    node
+      .pay_offer(offer, amount_msats, payer_note)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub async fn list_transactions(
+    &self,
+    params: crate::ListTransactionsParams,
+  ) -> napi::Result<Vec<lni::Transaction>> {
+    let inner = self.inner.read().await;
+    let node = inner.as_ref().ok_or_else(|| {
+      napi::Error::from_reason("SparkNode not connected. Call connect() first.".to_string())
+    })?;
+
+    let lni_params = lni::ListTransactionsParams {
+      from: params.from,
+      limit: params.limit,
+      search: params.search,
+      payment_hash: params.payment_hash,
+      created_after: params.created_after,
+      created_before: params.created_before,
+    };
+
+    node
+      .list_transactions(lni_params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub async fn decode(&self, str: String) -> napi::Result<String> {
+    lni::spark::api::decode(str)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub fn decode_offer(&self, offer: String) -> napi::Result<String> {
+    lni::spark::api::decode_offer(offer).map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  #[napi]
+  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
+    &self,
+    params: lni::types::OnInvoiceEventParams,
+    callback: T,
+  ) -> Result<()> {
+    let inner = self.inner.clone();
+
+    // Block on the async function in the current thread, similar to Blink's sync approach
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+      let guard = inner.read().await;
+      if let Some(node) = guard.as_ref() {
+        let start_time = std::time::Instant::now();
+
+        while start_time.elapsed().as_secs() < params.max_polling_sec as u64 {
+          let lookup_params = lni::LookupInvoiceParams {
+            payment_hash: params.payment_hash.clone(),
+            search: params.search.clone(),
+          };
+
+          match node.lookup_invoice(lookup_params).await {
+            Ok(transaction) if transaction.settled_at > 0 => {
+              let _ = callback("success".to_string(), Some(transaction));
+              return;
             }
+            Ok(transaction) => {
+              let _ = callback("pending".to_string(), Some(transaction));
+            }
+            Err(_) => {
+              let _ = callback("pending".to_string(), None);
+            }
+          }
 
-            let _ = callback("failure".to_string(), None);
-        });
+          tokio::time::sleep(tokio::time::Duration::from_secs(
+            params.polling_delay_sec as u64,
+          ))
+          .await;
+        }
+      }
 
-        Ok(())
-    }
+      let _ = callback("failure".to_string(), None);
+    });
+
+    Ok(())
+  }
 }

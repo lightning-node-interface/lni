@@ -75,19 +75,33 @@ fn extract_payment_info(payment: &breez_sdk_spark::Payment) -> Option<PaymentInf
 /// Returns None for payment types we can't map (non-Lightning/Spark without extract_payment_info).
 fn payment_to_transaction(payment: &breez_sdk_spark::Payment) -> Option<Transaction> {
     let (invoice, payment_hash, preimage, description) = match extract_payment_info(payment) {
-        Some(info) => (info.invoice, info.payment_hash, info.preimage, info.description),
+        Some(info) => (
+            info.invoice,
+            info.payment_hash,
+            info.preimage,
+            info.description,
+        ),
         None => {
             // Handle on-chain types
             match &payment.details {
-                Some(PaymentDetails::Deposit { tx_id }) => {
-                    (tx_id.clone(), "".to_string(), "".to_string(), "Deposit".to_string())
-                }
-                Some(PaymentDetails::Withdraw { tx_id }) => {
-                    (tx_id.clone(), "".to_string(), "".to_string(), "Withdraw".to_string())
-                }
-                Some(PaymentDetails::Token { tx_hash, .. }) => {
-                    (tx_hash.clone(), "".to_string(), "".to_string(), "Token Transfer".to_string())
-                }
+                Some(PaymentDetails::Deposit { tx_id }) => (
+                    tx_id.clone(),
+                    "".to_string(),
+                    "".to_string(),
+                    "Deposit".to_string(),
+                ),
+                Some(PaymentDetails::Withdraw { tx_id }) => (
+                    tx_id.clone(),
+                    "".to_string(),
+                    "".to_string(),
+                    "Withdraw".to_string(),
+                ),
+                Some(PaymentDetails::Token { tx_hash, .. }) => (
+                    tx_hash.clone(),
+                    "".to_string(),
+                    "".to_string(),
+                    "Token Transfer".to_string(),
+                ),
                 _ => return None,
             }
         }
@@ -548,18 +562,11 @@ pub async fn on_invoice_events(
     match result {
         Ok(Some(Some(txn))) => callback.success(Some(txn)),
         Ok(Some(None)) => callback.failure(None), // matched but couldn't convert
-        Ok(None) => callback.failure(None),        // channel closed
+        Ok(None) => callback.failure(None),       // channel closed
         Err(_) => {
             // Timeout — do one final lookup in case we missed the event
-            if let Ok(txn) = lookup_invoice(
-                sdk.clone(),
-                Some(target_hash),
-                None,
-                None,
-                None,
-                cache,
-            )
-            .await
+            if let Ok(txn) =
+                lookup_invoice(sdk.clone(), Some(target_hash), None, None, None, cache).await
             {
                 if txn.settled_at > 0 {
                     callback.success(Some(txn));

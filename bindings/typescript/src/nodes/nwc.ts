@@ -1,4 +1,14 @@
-import { NWCClient, Nip47Error, type Nip47GetBalanceResponse, type Nip47GetInfoResponse, type Nip47ListTransactionsResponse, type Nip47Method, type Nip47PayResponse, type Nip47TimeoutValues, type Nip47Transaction } from '@getalby/sdk/nwc';
+import {
+  NWCClient,
+  Nip47Error,
+  type Nip47GetBalanceResponse,
+  type Nip47GetInfoResponse,
+  type Nip47ListTransactionsResponse,
+  type Nip47Method,
+  type Nip47PayResponse,
+  type Nip47TimeoutValues,
+  type Nip47Transaction,
+} from '@getalby/sdk/nwc';
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import { LniError, NwcError, type NwcErrorOperation } from '../errors.js';
 import { hexToBytes } from '../internal/encoding.js';
@@ -6,9 +16,31 @@ import { toTimeoutMs } from '../internal/http.js';
 import { NWC_METHOD_PERMISSIONS, normalizeNwcPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { sha256Hex } from '../internal/sha256.js';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, parseOptionalNumber } from '../internal/transform.js';
+import {
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  parseOptionalNumber,
+} from '../internal/transform.js';
 import { LnurlVerifyUnsupportedError, verifyLightningAddressPayRequest } from '../lnurl.js';
-import type { CreateInvoiceParams, CreateOfferParams, InvoiceEventCallback, LightningAddressInfo, LightningNode, ListTransactionsParams, LookupInvoiceParams, NodeInfo, NodeRequestOptions, NwcConfig, Offer, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction } from '../types.js';
+import type {
+  CreateInvoiceParams,
+  CreateOfferParams,
+  InvoiceEventCallback,
+  LightningAddressInfo,
+  LightningNode,
+  ListTransactionsParams,
+  LookupInvoiceParams,
+  NodeInfo,
+  NodeRequestOptions,
+  NwcConfig,
+  Offer,
+  OnInvoiceEventParams,
+  PayInvoiceParams,
+  PayInvoiceResponse,
+  Permissions,
+  Transaction,
+} from '../types.js';
 
 const DEFAULT_NWC_TIMEOUT_MS = 60_000;
 
@@ -17,7 +49,10 @@ type NwcListTransaction = Partial<Omit<Nip47Transaction, 'type' | 'payment_hash'
   payment_hash?: string;
 };
 
-type NwcListTransactionsResponse = Omit<Nip47ListTransactionsResponse, 'transactions' | 'total_count'> & {
+type NwcListTransactionsResponse = Omit<
+  Nip47ListTransactionsResponse,
+  'transactions' | 'total_count'
+> & {
   transactions: NwcListTransaction[];
   total_count?: number;
 };
@@ -27,7 +62,7 @@ type NwcClientWithTimeouts = {
     nip47Method: Nip47Method,
     params: unknown,
     resultValidator: (result: T) => boolean,
-    timeoutValues?: Nip47TimeoutValues,
+    timeoutValues?: Nip47TimeoutValues
   ): Promise<T>;
 };
 
@@ -46,7 +81,11 @@ function toNwcError(error: unknown, operation: NwcErrorOperation): NwcError | un
   return undefined;
 }
 
-function throwNwcOrApiError(error: unknown, operation: NwcErrorOperation, fallbackPrefix: string): never {
+function throwNwcOrApiError(
+  error: unknown,
+  operation: NwcErrorOperation,
+  fallbackPrefix: string
+): never {
   const nwcError = toNwcError(error, operation);
   if (nwcError) {
     throw nwcError;
@@ -60,7 +99,9 @@ function throwNwcOrApiError(error: unknown, operation: NwcErrorOperation, fallba
     });
   }
 
-  throw new LniError('Api', `${fallbackPrefix}: ${(error as Error)?.message ?? 'unknown error'}`, { cause: error });
+  throw new LniError('Api', `${fallbackPrefix}: ${(error as Error)?.message ?? 'unknown error'}`, {
+    cause: error,
+  });
 }
 
 function extractPubkeyFromNwcUri(uri: string): string {
@@ -136,7 +177,7 @@ function nwcTransactionToLniTransaction(tx: Nip47Transaction | NwcListTransactio
 
 async function bufferGetAlbyLookupInvoiceErrors<T>(
   fn: () => Promise<T>,
-  errorLogs: unknown[][],
+  errorLogs: unknown[][]
 ): Promise<T> {
   const originalError = console.error;
 
@@ -177,7 +218,7 @@ export class NwcNode implements LightningNode {
 
   constructor(
     private readonly config: NwcConfig,
-    private readonly options: NodeRequestOptions = {},
+    private readonly options: NodeRequestOptions = {}
   ) {
     this.timeoutMs = resolveNwcTimeoutMs(config.httpTimeout);
     this.nip47TimeoutValues = this.timeoutMs
@@ -201,7 +242,7 @@ export class NwcNode implements LightningNode {
       'get_info',
       {},
       (result: Nip47GetInfoResponse) => Boolean(result.methods),
-      () => this.client.getInfo(),
+      () => this.client.getInfo()
     ).catch((error) => {
       throwNwcOrApiError(error, 'get_info', 'Failed to get NWC permissions');
     });
@@ -239,7 +280,7 @@ export class NwcNode implements LightningNode {
       'get_balance',
       {},
       (result: Nip47GetBalanceResponse) => result.balance !== undefined,
-      () => this.client.getBalance(),
+      () => this.client.getBalance()
     ).catch((error) => {
       throwNwcOrApiError(error, 'get_balance', 'Failed to get balance');
     });
@@ -252,7 +293,7 @@ export class NwcNode implements LightningNode {
         'get_info',
         {},
         (result: Nip47GetInfoResponse) => Boolean(result.methods),
-        () => this.client.getInfo(),
+        () => this.client.getInfo()
       );
       return this.mapInfoWithBalance(info, balance, pubkeyFallback);
     } catch {
@@ -268,7 +309,7 @@ export class NwcNode implements LightningNode {
   private mapInfoWithBalance(
     info: Nip47GetInfoResponse,
     balance: Nip47GetBalanceResponse,
-    pubkeyFallback: string,
+    pubkeyFallback: string
   ): NodeInfo {
     return emptyNodeInfo({
       alias: info.alias ?? 'NWC Node',
@@ -293,7 +334,7 @@ export class NwcNode implements LightningNode {
       'make_invoice',
       request,
       (result: Nip47Transaction) => Boolean(result.invoice),
-      () => this.client.makeInvoice(request),
+      () => this.client.makeInvoice(request)
     ).catch((error) => {
       throwNwcOrApiError(error, 'make_invoice', 'Failed to create invoice');
     });
@@ -311,7 +352,7 @@ export class NwcNode implements LightningNode {
       'pay_invoice',
       request,
       (result: Nip47PayResponse) => Boolean(result),
-      () => this.client.payInvoice(request),
+      () => this.client.payInvoice(request)
     ).catch((error) => {
       throwNwcOrApiError(error, 'pay_invoice', 'Failed to pay invoice');
     });
@@ -347,7 +388,11 @@ export class NwcNode implements LightningNode {
     throw new LniError('Api', 'NWC does not support offers (BOLT12) yet.');
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
     throw new LniError('Api', 'NWC does not support offers (BOLT12) yet.');
   }
 
@@ -356,7 +401,10 @@ export class NwcNode implements LightningNode {
     const invoice = params.search;
 
     if (!paymentHash && !invoice) {
-      throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search (invoice) for NwcNode.');
+      throw new LniError(
+        'InvalidInput',
+        'lookupInvoice requires paymentHash or search (invoice) for NwcNode.'
+      );
     }
 
     const errorLogs: unknown[][] = [];
@@ -375,9 +423,9 @@ export class NwcNode implements LightningNode {
               this.client.lookupInvoice({
                 payment_hash: paymentHash || undefined,
                 invoice: paymentHash ? undefined : invoice,
-              }),
+              })
           ),
-        errorLogs,
+        errorLogs
       );
 
       return nwcTransactionToLniTransaction(tx);
@@ -399,7 +447,7 @@ export class NwcNode implements LightningNode {
 
   private async lookupInvoiceFromTransactions(
     paymentHash: string,
-    invoice: string | undefined,
+    invoice: string | undefined
   ): Promise<Transaction | undefined> {
     const pageSize = 100;
     let offset = 0;
@@ -421,7 +469,7 @@ export class NwcNode implements LightningNode {
               from: 0,
               limit: pageSize,
               offset,
-            }),
+            })
         );
         const page = response as NwcListTransactionsResponse;
         const transactions = page.transactions.map((tx) => nwcTransactionToLniTransaction(tx));
@@ -459,7 +507,7 @@ export class NwcNode implements LightningNode {
       'list_transactions',
       request,
       (result: NwcListTransactionsResponse) => Boolean(result.transactions),
-      () => this.client.listTransactions(request),
+      () => this.client.listTransactions(request)
     ).catch((error) => {
       throwNwcOrApiError(error, 'list_transactions', 'Failed to list transactions');
     });
@@ -469,7 +517,7 @@ export class NwcNode implements LightningNode {
 
   private filterTransactions(
     response: NwcListTransactionsResponse,
-    params: ListTransactionsParams,
+    params: ListTransactionsParams
   ): Transaction[] {
     const mapped = response.transactions.map((tx) => nwcTransactionToLniTransaction(tx));
 
@@ -490,7 +538,10 @@ export class NwcNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,
@@ -516,8 +567,8 @@ export class NwcNode implements LightningNode {
         reject(
           new LniError(
             'NetworkError',
-            `NWC ${operation} timed out after ${timeoutMs / 1000}s. Check that the relay websocket is reachable and the wallet connection still exists.`,
-          ),
+            `NWC ${operation} timed out after ${timeoutMs / 1000}s. Check that the relay websocket is reachable and the wallet connection still exists.`
+          )
         );
       }, timeoutMs);
     });
@@ -536,7 +587,7 @@ export class NwcNode implements LightningNode {
     method: Nip47Method,
     params: unknown,
     validator: (result: T) => boolean,
-    fallback: () => Promise<T>,
+    fallback: () => Promise<T>
   ): Promise<T> {
     const clientWithTimeouts = this.client as unknown as Partial<NwcClientWithTimeouts>;
     const execute = clientWithTimeouts.executeNip47Request?.bind(this.client);

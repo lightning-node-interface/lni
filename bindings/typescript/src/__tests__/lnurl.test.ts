@@ -1,6 +1,11 @@
 import { bech32 } from '@scure/base';
 import { describe, expect, it, vi } from 'vitest';
-import { getPaymentInfo, LnurlVerifyUnsupportedError, resolveToBolt11, verifyLightningAddressPayRequest } from '../lnurl.js';
+import {
+  getPaymentInfo,
+  LnurlVerifyUnsupportedError,
+  resolveToBolt11,
+  verifyLightningAddressPayRequest,
+} from '../lnurl.js';
 import type { FetchLike } from '../types.js';
 
 const BOLT11_250_000_000_MSATS =
@@ -37,7 +42,7 @@ describe('LNURL SSRF protections', () => {
     await expect(
       resolveToBolt11(lnurl, 1000, {
         fetch: fetchMock,
-      }),
+      })
     ).rejects.toThrow('LNURL endpoints must use HTTPS.');
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -45,14 +50,14 @@ describe('LNURL SSRF protections', () => {
 
   it('rejects private callback URLs returned by public LNURL endpoints', async () => {
     const fetchMock = vi.fn<FetchLike>(async () =>
-      jsonResponse(lnurlPayResponse('https://127.0.0.1/callback')),
+      jsonResponse(lnurlPayResponse('https://127.0.0.1/callback'))
     );
     const lnurl = encodeLnurl('https://pay.example/lnurl');
 
     await expect(
       resolveToBolt11(lnurl, 1000, {
         fetch: fetchMock,
-      }),
+      })
     ).rejects.toThrow('LNURL endpoints must use a public hostname.');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -65,7 +70,7 @@ describe('LNURL SSRF protections', () => {
     await expect(
       getPaymentInfo('alice@localhost', undefined, {
         fetch: fetchMock,
-      }),
+      })
     ).rejects.toThrow('LNURL endpoints must use a public hostname.');
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -82,7 +87,7 @@ describe('LNURL SSRF protections', () => {
       resolveToBolt11(lnurl, 250_000_000, {
         allowUnsafeUrls: true,
         fetch: fetchMock,
-      }),
+      })
     ).resolves.toBe(BOLT11_250_000_000_MSATS);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -100,7 +105,7 @@ describe('LNURL SSRF protections', () => {
     await expect(
       resolveToBolt11(lnurl, 1000, {
         fetch: fetchMock,
-      }),
+      })
     ).rejects.toThrow('does not match requested amount 1000 msats');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -115,7 +120,7 @@ describe('LNURL SSRF protections', () => {
     await expect(
       verifyLightningAddressPayRequest('alice@example.com', {
         fetch: fetchMock,
-      }),
+      })
     ).rejects.toBeInstanceOf(LnurlVerifyUnsupportedError);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

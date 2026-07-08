@@ -5,7 +5,8 @@ import { getPaymentInfo, resolveToBolt11 } from '../../lnurl.js';
 import { itIf, timeout } from './helpers.js';
 
 const realLnurlAddress = process.env.LNI_REAL_LNURL_ADDRESS?.trim() || 'bluerobin15@primal.net';
-const runRealLnurlTest = process.env.LNI_REAL_LNURL === '1' || Boolean(process.env.LNI_REAL_LNURL_ADDRESS?.trim());
+const runRealLnurlTest =
+  process.env.LNI_REAL_LNURL === '1' || Boolean(process.env.LNI_REAL_LNURL_ADDRESS?.trim());
 const BOLT11_250_000_000_MSATS =
   'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
 
@@ -63,70 +64,84 @@ function lnurlPayResponse(callback: string) {
 }
 
 describe('real LNURL SSRF protections', () => {
-  it('blocks local decoded LNURLs before making a network request', async () => {
-    let hits = 0;
-    const server = http.createServer((_request, response) => {
-      hits += 1;
-      jsonResponse(response, lnurlPayResponse('http://127.0.0.1/callback'));
-    });
-    const port = await listen(server);
+  it(
+    'blocks local decoded LNURLs before making a network request',
+    async () => {
+      let hits = 0;
+      const server = http.createServer((_request, response) => {
+        hits += 1;
+        jsonResponse(response, lnurlPayResponse('http://127.0.0.1/callback'));
+      });
+      const port = await listen(server);
 
-    try {
-      const lnurl = encodeLnurl(`http://127.0.0.1:${port}/lnurl`);
+      try {
+        const lnurl = encodeLnurl(`http://127.0.0.1:${port}/lnurl`);
 
-      await expect(resolveToBolt11(lnurl, 1000)).rejects.toThrow('LNURL endpoints must use HTTPS.');
-      expect(hits).toBe(0);
-    } finally {
-      await close(server);
-    }
-  }, timeout);
-
-  it('can still resolve a local LNURL when unsafe URLs are explicitly enabled', async () => {
-    const requests: string[] = [];
-    let port = 0;
-    const server = http.createServer((request, response) => {
-      requests.push(request.url ?? '');
-
-      if (request.url === '/lnurl') {
-        jsonResponse(response, lnurlPayResponse(`http://127.0.0.1:${port}/callback`));
-        return;
+        await expect(resolveToBolt11(lnurl, 1000)).rejects.toThrow(
+          'LNURL endpoints must use HTTPS.'
+        );
+        expect(hits).toBe(0);
+      } finally {
+        await close(server);
       }
+    },
+    timeout
+  );
 
-      if (request.url === '/callback?amount=250000000') {
-        jsonResponse(response, { pr: BOLT11_250_000_000_MSATS });
-        return;
+  it(
+    'can still resolve a local LNURL when unsafe URLs are explicitly enabled',
+    async () => {
+      const requests: string[] = [];
+      let port = 0;
+      const server = http.createServer((request, response) => {
+        requests.push(request.url ?? '');
+
+        if (request.url === '/lnurl') {
+          jsonResponse(response, lnurlPayResponse(`http://127.0.0.1:${port}/callback`));
+          return;
+        }
+
+        if (request.url === '/callback?amount=250000000') {
+          jsonResponse(response, { pr: BOLT11_250_000_000_MSATS });
+          return;
+        }
+
+        response.writeHead(404);
+        response.end();
+      });
+      port = await listen(server);
+
+      try {
+        const lnurl = encodeLnurl(`http://127.0.0.1:${port}/lnurl`);
+
+        await expect(
+          resolveToBolt11(lnurl, 250_000_000, {
+            allowUnsafeUrls: true,
+          })
+        ).resolves.toBe(BOLT11_250_000_000_MSATS);
+        expect(requests).toEqual(['/lnurl', '/callback?amount=250000000']);
+      } finally {
+        await close(server);
       }
-
-      response.writeHead(404);
-      response.end();
-    });
-    port = await listen(server);
-
-    try {
-      const lnurl = encodeLnurl(`http://127.0.0.1:${port}/lnurl`);
-
-      await expect(
-        resolveToBolt11(lnurl, 250_000_000, {
-          allowUnsafeUrls: true,
-        }),
-      ).resolves.toBe(BOLT11_250_000_000_MSATS);
-      expect(requests).toEqual(['/lnurl', '/callback?amount=250000000']);
-    } finally {
-      await close(server);
-    }
-  }, timeout);
+    },
+    timeout
+  );
 });
 
 describe('real LNURL resolution', () => {
-  itIf(runRealLnurlTest)(`resolves ${realLnurlAddress}`, async () => {
-    const info = await getPaymentInfo(realLnurlAddress);
-    expect(info.destinationType).toBe('lightning_address');
-    expect(info.minSendableMsats).toBeGreaterThan(0);
-    expect(info.maxSendableMsats).toBeGreaterThanOrEqual(info.minSendableMsats ?? 0);
+  itIf(runRealLnurlTest)(
+    `resolves ${realLnurlAddress}`,
+    async () => {
+      const info = await getPaymentInfo(realLnurlAddress);
+      expect(info.destinationType).toBe('lightning_address');
+      expect(info.minSendableMsats).toBeGreaterThan(0);
+      expect(info.maxSendableMsats).toBeGreaterThanOrEqual(info.minSendableMsats ?? 0);
 
-    const amountMsats = info.minSendableMsats ?? 1000;
-    const invoice = await resolveToBolt11(realLnurlAddress, amountMsats);
+      const amountMsats = info.minSendableMsats ?? 1000;
+      const invoice = await resolveToBolt11(realLnurlAddress, amountMsats);
 
-    expect(invoice.toLowerCase()).toMatch(/^ln(bc|tb|bcrt)/);
-  }, timeout);
+      expect(invoice.toLowerCase()).toMatch(/^ln(bc|tb|bcrt)/);
+    },
+    timeout
+  );
 });

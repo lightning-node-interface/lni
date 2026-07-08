@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StorageProvider } from '@sunnyln/lni';
 
-const TEST_MNEMONIC = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+const TEST_MNEMONIC =
+  'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
 function mockBolt11Decoder(options: { amountMsats?: string } = {}): void {
   vi.doMock('@sunnyln/lni', async (importOriginal) => {
@@ -40,7 +41,7 @@ describe('SparkNode payInvoice', () => {
     await expect(
       node.payInvoice({
         invoice: 'amountless',
-      }),
+      })
     ).rejects.toThrow('Spark amountless invoice requires amountMsats.');
   });
 
@@ -51,7 +52,9 @@ describe('SparkNode payInvoice', () => {
       sdkEntry: 'bare',
     });
 
-    await expect(node.getPermissions()).rejects.toThrow('Spark wallet credentials cannot be introspected.');
+    await expect(node.getPermissions()).rejects.toThrow(
+      'Spark wallet credentials cannot be introspected.'
+    );
   });
 
   it('does not send amountSatsToSend for fixed-amount invoice', async () => {
@@ -66,10 +69,13 @@ describe('SparkNode payInvoice', () => {
       mnemonic: TEST_MNEMONIC,
       sdkEntry: 'bare',
     });
-    (node as unknown as { getWallet: () => Promise<{ payLightningInvoice: typeof payLightningInvoice }> }).getWallet =
-      async () => ({
-        payLightningInvoice,
-      });
+    (
+      node as unknown as {
+        getWallet: () => Promise<{ payLightningInvoice: typeof payLightningInvoice }>;
+      }
+    ).getWallet = async () => ({
+      payLightningInvoice,
+    });
 
     await node.payInvoice({
       invoice: 'with-amount',
@@ -79,7 +85,7 @@ describe('SparkNode payInvoice', () => {
     expect(payLightningInvoice).toHaveBeenCalledWith(
       expect.objectContaining({
         amountSatsToSend: undefined,
-      }),
+      })
     );
   });
 
@@ -95,10 +101,13 @@ describe('SparkNode payInvoice', () => {
       mnemonic: TEST_MNEMONIC,
       sdkEntry: 'bare',
     });
-    (node as unknown as { getWallet: () => Promise<{ payLightningInvoice: typeof payLightningInvoice }> }).getWallet =
-      async () => ({
-        payLightningInvoice,
-      });
+    (
+      node as unknown as {
+        getWallet: () => Promise<{ payLightningInvoice: typeof payLightningInvoice }>;
+      }
+    ).getWallet = async () => ({
+      payLightningInvoice,
+    });
 
     await node.payInvoice({
       invoice: 'amountless',
@@ -109,20 +118,22 @@ describe('SparkNode payInvoice', () => {
     expect(payLightningInvoice).toHaveBeenCalledWith(
       expect.objectContaining({
         amountSatsToSend: 118,
-      }),
+      })
     );
   });
 });
 
-function makeTransfer(overrides: {
-  id?: string;
-  paymentHash?: string;
-  memo?: string;
-  invoice?: string;
-  status?: string;
-  direction?: string;
-  createdTime?: string;
-} = {}) {
+function makeTransfer(
+  overrides: {
+    id?: string;
+    paymentHash?: string;
+    memo?: string;
+    invoice?: string;
+    status?: string;
+    direction?: string;
+    createdTime?: string;
+  } = {}
+) {
   return {
     id: overrides.id ?? 'transfer-1',
     status: overrides.status ?? 'COMPLETED',
@@ -139,12 +150,14 @@ function makeTransfer(overrides: {
   };
 }
 
-function createMockWallet(options: {
-  transfers?: unknown[];
-  getTransfer?: ReturnType<typeof vi.fn>;
-  on?: ReturnType<typeof vi.fn>;
-  off?: ReturnType<typeof vi.fn>;
-} = {}) {
+function createMockWallet(
+  options: {
+    transfers?: unknown[];
+    getTransfer?: ReturnType<typeof vi.fn>;
+    on?: ReturnType<typeof vi.fn>;
+    off?: ReturnType<typeof vi.fn>;
+  } = {}
+) {
   const transfers = options.transfers ?? [];
   return {
     getBalance: vi.fn(async () => ({ balance: 1000 })),
@@ -290,7 +303,11 @@ describe('SparkNode onInvoiceEvents', () => {
     mockBolt11Decoder();
     const { SparkNode } = await import('../nodes/spark.js');
     const transfer = makeTransfer({ id: 'tf-event', paymentHash: 'hash-ev', status: 'PENDING' });
-    const settledTransfer = makeTransfer({ id: 'tf-event', paymentHash: 'hash-ev', status: 'COMPLETED' });
+    const settledTransfer = makeTransfer({
+      id: 'tf-event',
+      paymentHash: 'hash-ev',
+      status: 'COMPLETED',
+    });
 
     let capturedListener: ((...args: unknown[]) => void) | undefined;
     const on = vi.fn((event: string, listener: (...args: unknown[]) => void) => {
@@ -309,7 +326,9 @@ describe('SparkNode onInvoiceEvents', () => {
     const statuses: string[] = [];
     const promise = node.onInvoiceEvents(
       { paymentHash: 'hash-ev', pollingDelaySec: 1, maxPollingSec: 5 },
-      (status) => { statuses.push(status); },
+      (status) => {
+        statuses.push(status);
+      }
     );
 
     // Wait for initial lookupInvoice + listener registration
@@ -350,7 +369,7 @@ describe('SparkNode onInvoiceEvents', () => {
     });
     const off = vi.fn();
     const getTransfer = vi.fn(async (transferId: string) =>
-      transferId === 'tf-target' ? targetTransfer : unrelatedTransfer,
+      transferId === 'tf-target' ? targetTransfer : unrelatedTransfer
     );
     const wallet = createMockWallet({ transfers: [], getTransfer, on, off });
 
@@ -360,7 +379,9 @@ describe('SparkNode onInvoiceEvents', () => {
     const statuses: string[] = [];
     const promise = node.onInvoiceEvents(
       { search: 'target order', pollingDelaySec: 1, maxPollingSec: 5 },
-      (status) => { statuses.push(status); },
+      (status) => {
+        statuses.push(status);
+      }
     );
 
     await new Promise((r) => setTimeout(r, 100));
@@ -390,7 +411,9 @@ describe('SparkNode onInvoiceEvents', () => {
     const statuses: string[] = [];
     await node.onInvoiceEvents(
       { paymentHash: 'hash-poll', pollingDelaySec: 1, maxPollingSec: 5 },
-      (status) => { statuses.push(status); },
+      (status) => {
+        statuses.push(status);
+      }
     );
 
     expect(statuses).toContain('success');

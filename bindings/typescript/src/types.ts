@@ -282,17 +282,13 @@ export interface LightningNode {
 
 export interface OnchainPayments {
   prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>;
-  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse>;
+  payOnchain(
+    transaction: OnchainTransaction,
+    options?: PayOnchainOptions
+  ): Promise<PayOnchainResponse>;
 }
 
-export type BackendNodeKind =
-  | 'phoenixd'
-  | 'cln'
-  | 'lnd'
-  | 'nwc'
-  | 'strike'
-  | 'speed'
-  | 'blink';
+export type BackendNodeKind = 'phoenixd' | 'cln' | 'lnd' | 'nwc' | 'strike' | 'speed' | 'blink';
 
 export type BackendNodeConfig =
   | { kind: 'phoenixd'; config: PhoenixdConfig }

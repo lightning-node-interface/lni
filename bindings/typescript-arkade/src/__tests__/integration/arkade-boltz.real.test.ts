@@ -24,19 +24,23 @@ describe('Real integration from crates/lni/.env > ArkadeBoltzNode', () => {
       referralId: nonEmpty(process.env.ARKADE_BOLTZ_REFERRAL_ID),
     });
 
-  itIf(enabled)('getInfo + createInvoice + listTransactions', async () => {
-    const node = makeNode();
-    const info = await node.getInfo();
-    expect(typeof info.alias).toBe('string');
+  itIf(enabled)(
+    'getInfo + createInvoice + listTransactions',
+    async () => {
+      const node = makeNode();
+      const info = await node.getInfo();
+      expect(typeof info.alias).toBe('string');
 
-    const invoice = await node.createInvoice({
-      amountMsats: 1_000_000,
-      description: testInvoiceLabel('arkade-boltz'),
-    });
-    console.log('Arkade Boltz Invoice', invoice);
-    expect(invoice.invoice.length).toBeGreaterThan(0);
+      const invoice = await node.createInvoice({
+        amountMsats: 1_000_000,
+        description: testInvoiceLabel('arkade-boltz'),
+      });
+      console.log('Arkade Boltz Invoice', invoice);
+      expect(invoice.invoice.length).toBeGreaterThan(0);
 
-    const txs = await node.listTransactions({ from: 0, limit: 25 });
-    expect(Array.isArray(txs)).toBe(true);
-  }, timeout);
+      const txs = await node.listTransactions({ from: 0, limit: 25 });
+      expect(Array.isArray(txs)).toBe(true);
+    },
+    timeout
+  );
 });

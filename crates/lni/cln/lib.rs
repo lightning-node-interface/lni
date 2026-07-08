@@ -2,12 +2,12 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
-use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams, Offer,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
-};
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
+use crate::{
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -67,7 +67,9 @@ impl ClnNode {
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl ClnNode {
     pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
-        Ok(crate::permissions::parse_cln_rune_permissions(&self.config.rune))
+        Ok(crate::permissions::parse_cln_rune_permissions(
+            &self.config.rune,
+        ))
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
@@ -356,12 +358,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_offer() {
         use crate::CreateOfferParams;
-        
+
         // Test 1: Create offer with no amount (reusable)
-        match NODE.create_offer(CreateOfferParams {
-            description: Some("Test offer from LNI CLN".to_string()),
-            amount_msats: None,
-        }).await {
+        match NODE
+            .create_offer(CreateOfferParams {
+                description: Some("Test offer from LNI CLN".to_string()),
+                amount_msats: None,
+            })
+            .await
+        {
             Ok(resp) => {
                 println!("Create Offer (no amount) resp: {:?}", resp);
                 assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
@@ -374,10 +379,13 @@ mod tests {
         }
 
         // Test 2: Create offer with specific amount
-        match NODE.create_offer(CreateOfferParams {
-            description: Some("5000 sat CLN offer".to_string()),
-            amount_msats: Some(5_000_000), // 5000 sats
-        }).await {
+        match NODE
+            .create_offer(CreateOfferParams {
+                description: Some("5000 sat CLN offer".to_string()),
+                amount_msats: Some(5_000_000), // 5000 sats
+            })
+            .await
+        {
             Ok(resp) => {
                 println!("Create Offer (with amount) resp: {:?}", resp);
                 assert!(!resp.bolt12.is_empty(), "Offer should not be empty");
@@ -524,6 +532,7 @@ mod tests {
             ..Default::default()
         };
         let callback = OnInvoiceEventCallback {};
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
     }
 }

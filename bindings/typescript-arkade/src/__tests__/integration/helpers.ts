@@ -44,7 +44,10 @@ function isKnownError(error: unknown, patterns: string[]): boolean {
   return patterns.some((pattern) => message.includes(pattern.toLowerCase()));
 }
 
-export async function runOrSkipKnownError(action: () => Promise<void>, patterns: string[]): Promise<void> {
+export async function runOrSkipKnownError(
+  action: () => Promise<void>,
+  patterns: string[]
+): Promise<void> {
   try {
     await action();
   } catch (error) {

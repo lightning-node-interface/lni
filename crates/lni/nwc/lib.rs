@@ -2,12 +2,12 @@
 use napi_derive::napi;
 
 use crate::types::NodeInfo;
+#[cfg(not(feature = "uniffi"))]
+use crate::LightningNode;
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
     Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
-#[cfg(not(feature = "uniffi"))]
-use crate::LightningNode;
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -83,16 +83,24 @@ impl NwcNode {
         crate::nwc::api::get_info(self.config.clone()).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::nwc::api::create_invoice(self.config.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::nwc::api::pay_invoice(self.config.clone(), params).await
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for NwcNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for NwcNode".to_string(),
+        })
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
@@ -112,8 +120,12 @@ impl NwcNode {
         crate::nwc::api::pay_offer(&self.config, offer, amount_msats, payer_note).await
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<crate::Transaction, ApiError> {
-        crate::nwc::api::lookup_invoice(self.config.clone(), params.payment_hash, params.search).await
+    pub async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<crate::Transaction, ApiError> {
+        crate::nwc::api::lookup_invoice(self.config.clone(), params.payment_hash, params.search)
+            .await
     }
 
     pub async fn list_transactions(
@@ -200,7 +212,8 @@ mod tests {
     #[test]
     fn test_lightning_address_from_nwc_uri_requires_lud16() {
         let config = NwcConfig {
-            nwc_uri: "nostr+walletconnect://wallet?secret=test&relay=wss%3A%2F%2Frelay.example".to_string(),
+            nwc_uri: "nostr+walletconnect://wallet?secret=test&relay=wss%3A%2F%2Frelay.example"
+                .to_string(),
             ..Default::default()
         };
 
@@ -229,12 +242,15 @@ mod tests {
         let description = "Test NWC invoice".to_string();
         let expiry = 3600;
 
-        match NODE.create_invoice(CreateInvoiceParams {
-            amount_msats: Some(amount_msats),
-            description: Some(description.clone()),
-            expiry: Some(expiry),
-            ..Default::default()
-        }).await {
+        match NODE
+            .create_invoice(CreateInvoiceParams {
+                amount_msats: Some(amount_msats),
+                description: Some(description.clone()),
+                expiry: Some(expiry),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("BOLT11 create_invoice: {:?}", txn);
                 assert!(
@@ -270,10 +286,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lookup_invoice() {
-        match NODE.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            ..Default::default()
-        }).await {
+        match NODE
+            .lookup_invoice(LookupInvoiceParams {
+                payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 dbg!(&txn);
                 assert!(
@@ -362,7 +381,8 @@ mod tests {
         };
 
         // Start the event listener
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
 
         // Check if events were received
         let received_events = events.lock().unwrap();

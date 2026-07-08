@@ -14,8 +14,9 @@ use std::time::Duration;
 
 // Helper function to create NWC client
 async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
-    let uri = NostrWalletConnectURI::from_str(&config.nwc_uri)
-        .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
+    let uri = NostrWalletConnectURI::from_str(&config.nwc_uri).map_err(|e| ApiError::Api {
+        reason: format!("Invalid NWC URI: {}", e),
+    })?;
 
     let relay_opts = RelayOptions::default()
         .verify_subscriptions(true)
@@ -83,69 +84,76 @@ fn map_nwc_error(error: nwc::Error, fallback_prefix: &str) -> ApiError {
 }
 
 pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
-        let nwc = create_nwc_client(&config).await?;
-        let timeout = nwc_request_timeout(&config);
-        
-        // Get balance first
-        let balance = execute_nwc_request(timeout, nwc.get_balance(), "Failed to get balance").await?;
-        
-        // Try to get more info using get_info method if available
-        let info_result = execute_nwc_request(timeout, nwc.get_info(), "Failed to get info").await;
-        
-        match info_result {
-            Ok(nwc_info) => {
-                Ok(NodeInfo {
-                    alias: nwc_info.alias.unwrap_or_else(|| "NWC Node".to_string()),
-                    color: nwc_info.color.unwrap_or_default(),
-                    pubkey: nwc_info.pubkey.map(|pk| pk.to_string()).unwrap_or_else(|| {
-                        // If no pubkey in get_info, try to extract from URI
-                        config.nwc_uri.split("?").next()
-                            .and_then(|part| part.strip_prefix("nostr+walletconnect://"))
-                            .unwrap_or_default()
-                            .to_string()
-                    }),
-                    network: nwc_info.network.unwrap_or_else(|| "mainnet".to_string()),
-                    block_height: nwc_info.block_height.unwrap_or(0) as i64,
-                    block_hash: nwc_info.block_hash.unwrap_or_default(),
-                    send_balance_msat: balance as i64,
-                    receive_balance_msat: 0, // NWC doesn't provide separate receive balance
-                    fee_credit_balance_msat: 0,
-                    unsettled_send_balance_msat: 0,
-                    unsettled_receive_balance_msat: 0,
-                    pending_open_send_balance: 0,
-                    pending_open_receive_balance: 0,
-                })
-            }
-            Err(_) => {
-                // Fallback: extract pubkey from NWC URI if get_info is not available
-                let pubkey = config.nwc_uri.split("?").next()
-                    .and_then(|part| part.strip_prefix("nostr+walletconnect://"))
-                    .unwrap_or_default()
-                    .to_string();
-                
-                Ok(NodeInfo {
-                    alias: "NWC Node".to_string(),
-                    color: "".to_string(),
-                    pubkey,
-                    network: "mainnet".to_string(),
-                    block_height: 0,
-                    block_hash: "".to_string(),
-                    send_balance_msat: balance as i64,
-                    receive_balance_msat: 0,
-                    fee_credit_balance_msat: 0,
-                    unsettled_send_balance_msat: 0,
-                    unsettled_receive_balance_msat: 0,
-                    pending_open_send_balance: 0,
-                    pending_open_receive_balance: 0,
-                })
-            }
+    let nwc = create_nwc_client(&config).await?;
+    let timeout = nwc_request_timeout(&config);
+
+    // Get balance first
+    let balance = execute_nwc_request(timeout, nwc.get_balance(), "Failed to get balance").await?;
+
+    // Try to get more info using get_info method if available
+    let info_result = execute_nwc_request(timeout, nwc.get_info(), "Failed to get info").await;
+
+    match info_result {
+        Ok(nwc_info) => {
+            Ok(NodeInfo {
+                alias: nwc_info.alias.unwrap_or_else(|| "NWC Node".to_string()),
+                color: nwc_info.color.unwrap_or_default(),
+                pubkey: nwc_info.pubkey.map(|pk| pk.to_string()).unwrap_or_else(|| {
+                    // If no pubkey in get_info, try to extract from URI
+                    config
+                        .nwc_uri
+                        .split("?")
+                        .next()
+                        .and_then(|part| part.strip_prefix("nostr+walletconnect://"))
+                        .unwrap_or_default()
+                        .to_string()
+                }),
+                network: nwc_info.network.unwrap_or_else(|| "mainnet".to_string()),
+                block_height: nwc_info.block_height.unwrap_or(0) as i64,
+                block_hash: nwc_info.block_hash.unwrap_or_default(),
+                send_balance_msat: balance as i64,
+                receive_balance_msat: 0, // NWC doesn't provide separate receive balance
+                fee_credit_balance_msat: 0,
+                unsettled_send_balance_msat: 0,
+                unsettled_receive_balance_msat: 0,
+                pending_open_send_balance: 0,
+                pending_open_receive_balance: 0,
+            })
         }
+        Err(_) => {
+            // Fallback: extract pubkey from NWC URI if get_info is not available
+            let pubkey = config
+                .nwc_uri
+                .split("?")
+                .next()
+                .and_then(|part| part.strip_prefix("nostr+walletconnect://"))
+                .unwrap_or_default()
+                .to_string();
+
+            Ok(NodeInfo {
+                alias: "NWC Node".to_string(),
+                color: "".to_string(),
+                pubkey,
+                network: "mainnet".to_string(),
+                block_height: 0,
+                block_hash: "".to_string(),
+                send_balance_msat: balance as i64,
+                receive_balance_msat: 0,
+                fee_credit_balance_msat: 0,
+                unsettled_send_balance_msat: 0,
+                unsettled_receive_balance_msat: 0,
+                pending_open_send_balance: 0,
+                pending_open_receive_balance: 0,
+            })
+        }
+    }
 }
 
 pub async fn get_permissions(config: NwcConfig) -> Result<crate::Permissions, ApiError> {
     let nwc = create_nwc_client(&config).await?;
     let timeout = nwc_request_timeout(&config);
-    let info = execute_nwc_request(timeout, nwc.get_info(), "Failed to get NWC permissions").await?;
+    let info =
+        execute_nwc_request(timeout, nwc.get_info(), "Failed to get NWC permissions").await?;
 
     if info.methods.is_empty() {
         Ok(crate::permissions::nwc_method_permissions())
@@ -161,24 +169,30 @@ pub fn lightning_address_from_nwc_uri(config: &NwcConfig) -> Result<String, ApiE
         .replace("nostr+walletconnect://", "http://")
         .replace("nostrwalletconnect:", "http://")
         .replace("nostr+walletconnect:", "http://");
-    let uri = reqwest::Url::parse(&normalized_uri)
-        .map_err(|e| ApiError::Api { reason: format!("Invalid NWC URI: {}", e) })?;
+    let uri = reqwest::Url::parse(&normalized_uri).map_err(|e| ApiError::Api {
+        reason: format!("Invalid NWC URI: {}", e),
+    })?;
     let lightning_address = uri
         .query_pairs()
         .find(|(key, _)| key == "lud16")
         .map(|(_, value)| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| ApiError::InvalidInput("NWC URI does not include a lud16 Lightning Address".to_string()))?;
+        .ok_or_else(|| {
+            ApiError::InvalidInput("NWC URI does not include a lud16 Lightning Address".to_string())
+        })?;
 
     match crate::lnurl::PaymentDestination::parse(&lightning_address)? {
         crate::lnurl::PaymentDestination::LightningAddress { .. } => Ok(lightning_address),
-        _ => Err(ApiError::InvalidInput("NWC lud16 value must be a Lightning Address".to_string())),
+        _ => Err(ApiError::InvalidInput(
+            "NWC lud16 value must be a Lightning Address".to_string(),
+        )),
     }
 }
 
 pub async fn get_lightning_address(config: NwcConfig) -> Result<NwcLightningAddress, ApiError> {
     let lightning_address = lightning_address_from_nwc_uri(&config)?;
-    let lnurl_verify_supported = crate::lnurl::lightning_address_lnurl_verify_supported(&lightning_address).await;
+    let lnurl_verify_supported =
+        crate::lnurl::lightning_address_lnurl_verify_supported(&lightning_address).await;
 
     Ok(NwcLightningAddress {
         lightning_address,
@@ -186,19 +200,27 @@ pub async fn get_lightning_address(config: NwcConfig) -> Result<NwcLightningAddr
     })
 }
 
-pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+pub async fn create_invoice(
+    config: NwcConfig,
+    params: CreateInvoiceParams,
+) -> Result<Transaction, ApiError> {
     let nwc = create_nwc_client(&config).await?;
     let timeout = nwc_request_timeout(&config);
-    
+
     let request = MakeInvoiceRequest {
         amount: params.amount_msats.unwrap_or(0) as u64,
         description: params.description.clone(),
         description_hash: None,
         expiry: params.expiry.map(|e| e as u64),
     };
-    
-    let response = execute_nwc_request(timeout, nwc.make_invoice(request), "Failed to create invoice").await?;
-    
+
+    let response = execute_nwc_request(
+        timeout,
+        nwc.make_invoice(request),
+        "Failed to create invoice",
+    )
+    .await?;
+
     Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: response.invoice,
@@ -216,25 +238,30 @@ pub async fn create_invoice(config: NwcConfig, params: CreateInvoiceParams) -> R
     })
 }
 
-pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+pub async fn pay_invoice(
+    config: NwcConfig,
+    params: PayInvoiceParams,
+) -> Result<PayInvoiceResponse, ApiError> {
     let nwc = create_nwc_client(&config).await?;
     let timeout = nwc_request_timeout(&config);
-    
+
     let request = PayInvoiceRequest::new(params.invoice);
-    
-    let response = execute_nwc_request(timeout, nwc.pay_invoice(request), "Failed to pay invoice").await?;
-    
+
+    let response =
+        execute_nwc_request(timeout, nwc.pay_invoice(request), "Failed to pay invoice").await?;
+
     // Compute payment hash from preimage (payment_hash = SHA256(preimage))
     let payment_hash = if !response.preimage.is_empty() {
-        let preimage_bytes = hex::decode(&response.preimage)
-            .map_err(|e| ApiError::Api { reason: format!("Invalid preimage hex: {}", e) })?;
+        let preimage_bytes = hex::decode(&response.preimage).map_err(|e| ApiError::Api {
+            reason: format!("Invalid preimage hex: {}", e),
+        })?;
         let mut hasher = Sha256::new();
         hasher.update(preimage_bytes);
         hex::encode(hasher.finalize())
     } else {
         "".to_string()
     };
-    
+
     Ok(PayInvoiceResponse {
         payment_hash,
         preimage: response.preimage,
@@ -244,12 +271,19 @@ pub async fn pay_invoice(config: NwcConfig, params: PayInvoiceParams) -> Result<
 
 pub async fn get_offer(_config: &NwcConfig, _search: Option<String>) -> Result<Offer, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
-    Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
+    Err(ApiError::Api {
+        reason: "NWC does not support offers (BOLT12) yet".to_string(),
+    })
 }
 
-pub async fn list_offers(_config: &NwcConfig, _search: Option<String>) -> Result<Vec<Offer>, ApiError> {
+pub async fn list_offers(
+    _config: &NwcConfig,
+    _search: Option<String>,
+) -> Result<Vec<Offer>, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
-    Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
+    Err(ApiError::Api {
+        reason: "NWC does not support offers (BOLT12) yet".to_string(),
+    })
 }
 
 pub async fn pay_offer(
@@ -259,7 +293,9 @@ pub async fn pay_offer(
     _payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
     // NWC doesn't support offers/BOLT12 yet
-    Err(ApiError::Api { reason: "NWC does not support offers (BOLT12) yet".to_string() })
+    Err(ApiError::Api {
+        reason: "NWC does not support offers (BOLT12) yet".to_string(),
+    })
 }
 
 pub async fn lookup_invoice(
@@ -272,12 +308,22 @@ pub async fn lookup_invoice(
         .or_else(|| invoice_payment_hash(invoice.as_deref()));
     let request = LookupInvoiceRequest {
         payment_hash: lookup_payment_hash.clone(),
-        invoice: if lookup_payment_hash.is_some() { None } else { invoice.clone() },
+        invoice: if lookup_payment_hash.is_some() {
+            None
+        } else {
+            invoice.clone()
+        },
     };
     let nwc = create_nwc_client(&config).await?;
     let timeout = nwc_request_timeout(&config);
 
-    let response = match execute_nwc_request(timeout, nwc.lookup_invoice(request), "Failed to lookup invoice").await {
+    let response = match execute_nwc_request(
+        timeout,
+        nwc.lookup_invoice(request),
+        "Failed to lookup invoice",
+    )
+    .await
+    {
         Ok(response) => response,
         Err(error) => {
             if is_network_error(&error) {
@@ -298,7 +344,10 @@ pub async fn lookup_invoice(
         }
     };
 
-    Ok(lookup_response_to_transaction(response, lookup_payment_hash.or(payment_hash)))
+    Ok(lookup_response_to_transaction(
+        response,
+        lookup_payment_hash.or(payment_hash),
+    ))
 }
 
 async fn lookup_invoice_from_transactions(
@@ -384,7 +433,10 @@ fn lookup_response_to_transaction(
     }
 }
 
-pub async fn list_transactions(config: NwcConfig, params: ListTransactionsParams) -> Result<Vec<Transaction>, ApiError> {
+pub async fn list_transactions(
+    config: NwcConfig,
+    params: ListTransactionsParams,
+) -> Result<Vec<Transaction>, ApiError> {
     list_transactions_page(&config, &params, None).await
 }
 
@@ -408,7 +460,12 @@ async fn list_transactions_page_raw(
     let request = list_transactions_request(params, offset);
     let nwc = create_nwc_client(config).await?;
     let timeout = nwc_request_timeout(config);
-    let response = execute_nwc_request(timeout, nwc.list_transactions(request), "Failed to list transactions").await?;
+    let response = execute_nwc_request(
+        timeout,
+        nwc.list_transactions(request),
+        "Failed to list transactions",
+    )
+    .await?;
 
     Ok(response
         .into_iter()
@@ -416,7 +473,10 @@ async fn list_transactions_page_raw(
         .collect())
 }
 
-fn list_transactions_request(params: &ListTransactionsParams, offset: Option<u64>) -> ListTransactionsRequest {
+fn list_transactions_request(
+    params: &ListTransactionsParams,
+    offset: Option<u64>,
+) -> ListTransactionsRequest {
     let from = params.created_after.unwrap_or(params.from).max(0) as u64;
     let until = params
         .created_before
@@ -509,7 +569,9 @@ pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
 }
 
 // Core logic shared with other implementations - processes lookup result and determines status
-fn process_invoice_lookup_result(transaction_result: Result<Transaction, ApiError>) -> (String, Option<Transaction>) {
+fn process_invoice_lookup_result(
+    transaction_result: Result<Transaction, ApiError>,
+) -> (String, Option<Transaction>) {
     match transaction_result {
         Ok(transaction) => {
             if transaction.settled_at > 0 {
@@ -565,10 +627,10 @@ pub async fn poll_invoice_events<F>(
             params.search.clone(),
         )
         .await;
-        
+
         let (status, transaction) = process_invoice_lookup_result(lookup_result);
         let should_continue = handle_poll_status(&status, transaction, &mut callback);
-        
+
         if !should_continue {
             break;
         }
@@ -728,8 +790,20 @@ mod tests {
         };
 
         assert!(transaction_matches_lookup(&transaction, Some("hash"), None));
-        assert!(!transaction_matches_lookup(&transaction, Some("other"), Some("invoice")));
-        assert!(transaction_matches_lookup(&transaction, None, Some("invoice")));
-        assert!(!transaction_matches_lookup(&transaction, Some("other"), Some("other")));
+        assert!(!transaction_matches_lookup(
+            &transaction,
+            Some("other"),
+            Some("invoice")
+        ));
+        assert!(transaction_matches_lookup(
+            &transaction,
+            None,
+            Some("invoice")
+        ));
+        assert!(!transaction_matches_lookup(
+            &transaction,
+            Some("other"),
+            Some("other")
+        ));
     }
 }

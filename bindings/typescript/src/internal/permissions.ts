@@ -70,10 +70,7 @@ const STRIKE_SCOPE_PERMISSIONS: Array<{
   },
   {
     permission: PERMISSION_PAY_INVOICE,
-    scopes: [
-      'partner.payment-quote.lightning.create',
-      'partner.payment-quote.execute',
-    ],
+    scopes: ['partner.payment-quote.lightning.create', 'partner.payment-quote.execute'],
   },
   {
     permission: PERMISSION_LOOKUP_INVOICE,
@@ -200,7 +197,10 @@ export function normalizeLndPermissions(values: Iterable<string | null | undefin
       (has('/lnrpc.Lightning/GetInfo') && has('/lnrpc.Lightning/ChannelBalance')) ||
       (has('info:read') && has('offchain:read')),
     createInvoice: has('/lnrpc.Lightning/AddInvoice') || has('invoices:write'),
-    payInvoice: has('/lnrpc.Lightning/SendPaymentSync') || has('/routerrpc.Router/SendPaymentV2') || has('offchain:write'),
+    payInvoice:
+      has('/lnrpc.Lightning/SendPaymentSync') ||
+      has('/routerrpc.Router/SendPaymentV2') ||
+      has('offchain:write'),
     lookupInvoice: has('/lnrpc.Lightning/LookupInvoice') || has('invoices:read'),
     listTransactions:
       has('/lnrpc.Lightning/ListInvoices') ||
@@ -304,10 +304,16 @@ function permissionsFromValues(values: string[]): Permissions {
       has('/lnrpc.Lightning/SendPaymentSync') ||
       has('/routerrpc.Router/SendPaymentV2') ||
       has('offchain:write'),
-    createOffer: has(PERMISSION_CREATE_OFFER) || has('create_offer') || has('offer') || has('offers:write'),
-    getOffer: has(PERMISSION_GET_OFFER) || has('get_offer') || has('listoffers') || has('offers:read'),
-    listOffers: has(PERMISSION_LIST_OFFERS) || has('list_offers') || has('listoffers') || has('offers:read'),
-    payOffer: has(PERMISSION_PAY_OFFER) || has('pay_offer') || (has('fetchinvoice') && (has('pay') || has(PERMISSION_PAY_INVOICE))),
+    createOffer:
+      has(PERMISSION_CREATE_OFFER) || has('create_offer') || has('offer') || has('offers:write'),
+    getOffer:
+      has(PERMISSION_GET_OFFER) || has('get_offer') || has('listoffers') || has('offers:read'),
+    listOffers:
+      has(PERMISSION_LIST_OFFERS) || has('list_offers') || has('listoffers') || has('offers:read'),
+    payOffer:
+      has(PERMISSION_PAY_OFFER) ||
+      has('pay_offer') ||
+      (has('fetchinvoice') && (has('pay') || has(PERMISSION_PAY_INVOICE))),
     lookupInvoice:
       has(PERMISSION_LOOKUP_INVOICE) ||
       has('lookup_invoice') ||
@@ -353,7 +359,10 @@ function decodeJwtPayload(accessToken: string): Record<string, unknown> | null {
   }
 
   try {
-    return JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as Record<string, unknown>;
+    return JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return null;
   }

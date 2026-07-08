@@ -60,7 +60,11 @@ where
     S: AsRef<str>,
 {
     let values = normalized_value_set(permissions);
-    let has = |permission: &str| values.iter().any(|value| value.eq_ignore_ascii_case(permission));
+    let has = |permission: &str| {
+        values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(permission))
+    };
 
     Permissions {
         get_info: has("get_balance"),
@@ -99,9 +103,7 @@ where
 pub fn parse_cln_rune_permissions(rune: &str) -> Permissions {
     let decoded = match base64::decode_config(pad_base64_url(rune), base64::URL_SAFE) {
         Ok(bytes) => bytes,
-        Err(_) => {
-            return normalize_cln_permissions(CLN_METHOD_PERMISSIONS.iter().copied())
-        }
+        Err(_) => return normalize_cln_permissions(CLN_METHOD_PERMISSIONS.iter().copied()),
     };
     let text = String::from_utf8_lossy(&decoded);
     let matcher = Regex::new(r"method(?:=|\^)[A-Za-z0-9_.:-]+").expect("valid rune method regex");
@@ -155,7 +157,11 @@ where
     S: AsRef<str>,
 {
     let values = normalized_value_set(permissions);
-    let has = |permission: &str| values.iter().any(|value| value.eq_ignore_ascii_case(permission));
+    let has = |permission: &str| {
+        values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(permission))
+    };
 
     Permissions {
         get_info: (has("/lnrpc.Lightning/GetInfo") && has("/lnrpc.Lightning/ChannelBalance"))
@@ -181,7 +187,11 @@ where
     S: AsRef<str>,
 {
     let values = normalized_value_set(permissions);
-    let has = |permission: &str| values.iter().any(|value| value.eq_ignore_ascii_case(permission));
+    let has = |permission: &str| {
+        values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(permission))
+    };
 
     Permissions {
         get_info: has("getinfo") && has("listfunds"),
@@ -204,7 +214,10 @@ pub fn parse_strike_oauth_permissions(access_token: &str) -> Option<Permissions>
     let mut permissions = vec!["decode".to_string()];
 
     for (permission, required_scopes) in STRIKE_SCOPE_PERMISSIONS {
-        if required_scopes.iter().all(|scope| scopes.iter().any(|item| item == scope)) {
+        if required_scopes
+            .iter()
+            .all(|scope| scopes.iter().any(|item| item == scope))
+        {
             permissions.push((*permission).to_string());
         }
     }
@@ -221,7 +234,10 @@ pub fn parse_blink_token_permissions(token: &str) -> Option<Permissions> {
     let mut permissions = vec!["decode".to_string()];
 
     for (permission, required_scopes) in BLINK_SCOPE_PERMISSIONS {
-        if required_scopes.iter().all(|scope| scopes.iter().any(|item| item == scope)) {
+        if required_scopes
+            .iter()
+            .all(|scope| scopes.iter().any(|item| item == scope))
+        {
             permissions.push((*permission).to_string());
         }
     }
@@ -269,9 +285,8 @@ fn permissions_from_values(values: &[String]) -> Permissions {
         || has("/lnrpc.Lightning/ListPayments")
         || has("invoices:read")
         || has("offchain:read");
-    permissions.decode = has("decode")
-        || has("/lnrpc.Lightning/DecodePayReq")
-        || has("address:read");
+    permissions.decode =
+        has("decode") || has("/lnrpc.Lightning/DecodePayReq") || has("address:read");
     permissions.on_invoice_events = has("on_invoice_events")
         || has("lookup_invoice")
         || has("listinvoices")
@@ -311,7 +326,11 @@ fn read_scope_values(payload: &serde_json::Value) -> Vec<String> {
                 scopes.extend(value.split_whitespace().map(|scope| scope.to_string()));
             }
             Some(serde_json::Value::Array(values)) => {
-                scopes.extend(values.iter().filter_map(|value| value.as_str().map(|scope| scope.to_string())));
+                scopes.extend(
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(|scope| scope.to_string())),
+                );
             }
             _ => {}
         }
@@ -416,6 +435,8 @@ mod tests {
     }
 
     fn base64_url_json(value: &serde_json::Value) -> String {
-        base64::encode_config(value.to_string(), base64::URL_SAFE).trim_end_matches('=').to_string()
+        base64::encode_config(value.to_string(), base64::URL_SAFE)
+            .trim_end_matches('=')
+            .to_string()
     }
 }

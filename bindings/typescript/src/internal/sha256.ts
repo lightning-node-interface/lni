@@ -20,5 +20,8 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
     return bytesToHex(new Uint8Array(digest));
   }
 
-  throw new LniError('Api', 'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.');
+  throw new LniError(
+    'Api',
+    'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.'
+  );
 }

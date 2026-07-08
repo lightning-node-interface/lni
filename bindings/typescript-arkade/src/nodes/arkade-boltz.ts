@@ -22,7 +22,12 @@ import {
   type Transaction,
 } from '@sunnyln/lni';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '@sunnyln/lni/internal/transform';
+import {
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  satsToMsats,
+} from '@sunnyln/lni/internal/transform';
 import type {
   ArkadeBoltzConfig,
   ArkadeBoltzNetwork,
@@ -90,7 +95,10 @@ type ArkadeSubmarineSwap = {
   };
 };
 
-type ArkadePendingSwap = ArkadeReverseSwap | ArkadeSubmarineSwap | { id: string; type: string; createdAt: number; status: string };
+type ArkadePendingSwap =
+  | ArkadeReverseSwap
+  | ArkadeSubmarineSwap
+  | { id: string; type: string; createdAt: number; status: string };
 
 type ArkadeSwapsLike = {
   createLightningInvoice(args: { amount: number; description?: string }): Promise<{
@@ -197,12 +205,14 @@ function isOutgoingSuccess(status: string): boolean {
 }
 
 function isFailed(status: string): boolean {
-  return status === 'invoice.expired'
-    || status === 'invoice.failedToPay'
-    || status === 'swap.expired'
-    || status === 'transaction.failed'
-    || status === 'transaction.lockupFailed'
-    || status === 'transaction.refunded';
+  return (
+    status === 'invoice.expired' ||
+    status === 'invoice.failedToPay' ||
+    status === 'swap.expired' ||
+    status === 'transaction.failed' ||
+    status === 'transaction.lockupFailed' ||
+    status === 'transaction.refunded'
+  );
 }
 
 function isReverseSwap(swap: ArkadePendingSwap): swap is ArkadeReverseSwap {
@@ -232,7 +242,7 @@ export class ArkadeBoltzNode implements LightningNode {
 
   constructor(
     private readonly config: ArkadeBoltzConfig,
-    _options: NodeRequestOptions = {},
+    _options: NodeRequestOptions = {}
   ) {}
 
   private async getContext(): Promise<ArkadeBoltzContext> {
@@ -243,10 +253,10 @@ export class ArkadeBoltzNode implements LightningNode {
   }
 
   private async initContext(): Promise<ArkadeBoltzContext> {
-    const [{ InMemoryContractRepository, InMemoryWalletRepository, MnemonicIdentity, Wallet }, boltz] = await Promise.all([
-      import('@arkade-os/sdk'),
-      import('@arkade-os/boltz-swap'),
-    ]);
+    const [
+      { InMemoryContractRepository, InMemoryWalletRepository, MnemonicIdentity, Wallet },
+      boltz,
+    ] = await Promise.all([import('@arkade-os/sdk'), import('@arkade-os/boltz-swap')]);
 
     const identity = MnemonicIdentity.fromMnemonic(this.config.mnemonic, {
       isMainnet: toArkadeNetwork(this.config.network) === 'bitcoin',
@@ -265,7 +275,9 @@ export class ArkadeBoltzNode implements LightningNode {
       }) as StorageConfig,
     });
 
-    const network = toArkadeNetwork(this.config.network ?? (wallet as ArkadeWalletLike).networkName);
+    const network = toArkadeNetwork(
+      this.config.network ?? (wallet as ArkadeWalletLike).networkName
+    );
     const swapProvider = new boltz.BoltzSwapProvider({
       network,
       apiUrl: this.config.swapApiUrl,
@@ -276,7 +288,8 @@ export class ArkadeBoltzNode implements LightningNode {
       wallet,
       swapProvider,
       swapManager: this.config.swapManager,
-      swapRepository: (this.config.swapRepository ?? new InMemoryArkadeSwapRepository()) as SwapRepository,
+      swapRepository: (this.config.swapRepository ??
+        new InMemoryArkadeSwapRepository()) as SwapRepository,
     } satisfies ArkadeSwapsCreateConfig);
 
     return {
@@ -307,7 +320,10 @@ export class ArkadeBoltzNode implements LightningNode {
     });
   }
 
-  private submarineSwapToTransaction(swap: ArkadeSubmarineSwap, decoded: ArkadeLightningInvoice): Transaction {
+  private submarineSwapToTransaction(
+    swap: ArkadeSubmarineSwap,
+    decoded: ArkadeLightningInvoice
+  ): Transaction {
     const amountMsats = satsToMsats(decoded.amountSats);
     const expectedMsats = satsToMsats(swap.response.expectedAmount);
     const settled = isOutgoingSuccess(swap.status);
@@ -329,7 +345,10 @@ export class ArkadeBoltzNode implements LightningNode {
     });
   }
 
-  private mapSwapHistory(swaps: ArkadePendingSwap[], decodeInvoice: ArkadeBoltzContext['decodeInvoice']): Transaction[] {
+  private mapSwapHistory(
+    swaps: ArkadePendingSwap[],
+    decodeInvoice: ArkadeBoltzContext['decodeInvoice']
+  ): Transaction[] {
     const txs: Transaction[] = [];
 
     for (const swap of swaps) {
@@ -345,16 +364,18 @@ export class ArkadeBoltzNode implements LightningNode {
       try {
         txs.push(this.submarineSwapToTransaction(swap, decodeInvoice(swap.request.invoice)));
       } catch {
-        txs.push(emptyTransaction({
-          type: 'outgoing',
-          invoice: swap.request.invoice,
-          paymentHash: swap.preimageHash ?? '',
-          amountMsats: 0,
-          feesPaid: satsToMsats(swap.response.expectedAmount),
-          createdAt: swap.createdAt,
-          settledAt: isOutgoingSuccess(swap.status) || isFailed(swap.status) ? swap.createdAt : 0,
-          externalId: swap.id,
-        }));
+        txs.push(
+          emptyTransaction({
+            type: 'outgoing',
+            invoice: swap.request.invoice,
+            paymentHash: swap.preimageHash ?? '',
+            amountMsats: 0,
+            feesPaid: satsToMsats(swap.response.expectedAmount),
+            createdAt: swap.createdAt,
+            settledAt: isOutgoingSuccess(swap.status) || isFailed(swap.status) ? swap.createdAt : 0,
+            externalId: swap.id,
+          })
+        );
       }
     }
 
@@ -368,13 +389,13 @@ export class ArkadeBoltzNode implements LightningNode {
   async getInfo(): Promise<NodeInfo> {
     try {
       const { wallet } = await this.getContext();
-        const balance = await wallet.getBalance();
+      const balance = await wallet.getBalance();
 
-        return emptyNodeInfo({
-          alias: 'Arkade Boltz Node',
-          network: toLniNetwork(wallet.networkName ?? this.config.network),
-          sendBalanceMsat: satsToMsats(toNumber(balance.available)),
-        });
+      return emptyNodeInfo({
+        alias: 'Arkade Boltz Node',
+        network: toLniNetwork(wallet.networkName ?? this.config.network),
+        sendBalanceMsat: satsToMsats(toNumber(balance.available)),
+      });
     } catch (error) {
       throw asLniError(error);
     }
@@ -392,7 +413,10 @@ export class ArkadeBoltzNode implements LightningNode {
       const { swaps } = await this.getContext();
       const amountSats = Math.floor(params.amountMsats / 1000);
       if (amountSats <= 0) {
-        throw new LniError('InvalidInput', 'ArkadeBoltzNode createInvoice requires amountMsats > 0.');
+        throw new LniError(
+          'InvalidInput',
+          'ArkadeBoltzNode createInvoice requires amountMsats > 0.'
+        );
       }
 
       const response = await swaps.createLightningInvoice({
@@ -453,7 +477,11 @@ export class ArkadeBoltzNode implements LightningNode {
     throw new LniError('Api', 'Bolt12 is not implemented for ArkadeBoltzNode.');
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
     throw new LniError('Api', 'Bolt12 is not implemented for ArkadeBoltzNode.');
   }
 
@@ -515,7 +543,10 @@ export class ArkadeBoltzNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,

@@ -34,7 +34,7 @@ describe('provider error normalization', () => {
         status: 500,
         body: JSON.stringify(root),
       }),
-      { provider: 'test', operation: 'pay_invoice' },
+      { provider: 'test', operation: 'pay_invoice' }
     );
 
     expect(error).toMatchObject({
@@ -55,8 +55,8 @@ describe('provider error normalization', () => {
             message: 'Unable to find a route',
           },
         },
-        { status: 500 },
-      ),
+        { status: 500 }
+      )
     );
     const node = new ClnNode({ url: 'https://cln.test', rune: 'test-rune' }, { fetch: fetchMock });
 
@@ -79,9 +79,12 @@ describe('provider error normalization', () => {
             path: ['me'],
           },
         ],
-      }),
+      })
     );
-    const node = new BlinkNode({ apiKey: 'bad-token', baseUrl: 'https://blink.test/graphql' }, { fetch: fetchMock });
+    const node = new BlinkNode(
+      { apiKey: 'bad-token', baseUrl: 'https://blink.test/graphql' },
+      { fetch: fetchMock }
+    );
 
     await expect(node.getInfo()).rejects.toMatchObject({
       name: 'NwcError',
@@ -105,9 +108,12 @@ describe('provider error normalization', () => {
             message: 'Not authorized',
           },
         ],
-      }),
+      })
     );
-    const node = new BlinkNode({ apiKey: 'bad-token', baseUrl: 'https://blink.test/graphql' }, { fetch: fetchMock });
+    const node = new BlinkNode(
+      { apiKey: 'bad-token', baseUrl: 'https://blink.test/graphql' },
+      { fetch: fetchMock }
+    );
 
     await expect(node.getInfo()).rejects.toMatchObject({
       name: 'NwcError',
@@ -129,7 +135,7 @@ describe('provider error normalization', () => {
           status: 'FAILED',
           failure_reason: 'FAILURE_REASON_INSUFFICIENT_BALANCE',
         },
-      }),
+      })
     );
     const node = new LndNode({ url: 'https://lnd.test', macaroon: '00' }, { fetch: fetchMock });
 
@@ -152,7 +158,7 @@ describe('provider error normalization', () => {
           status: 'FAILED',
           failure_reason: 'FAILURE_REASON_NONE',
         },
-      }),
+      })
     );
     const node = new LndNode({ url: 'https://lnd.test', macaroon: '00' }, { fetch: fetchMock });
 
@@ -167,7 +173,10 @@ describe('provider error normalization', () => {
 
   it('maps Phoenixd lookup 404s to not found', async () => {
     const fetchMock = vi.fn<FetchLike>(async () => new Response('Not found', { status: 404 }));
-    const node = new PhoenixdNode({ url: 'https://phoenixd.test', password: 'secret' }, { fetch: fetchMock });
+    const node = new PhoenixdNode(
+      { url: 'https://phoenixd.test', password: 'secret' },
+      { fetch: fetchMock }
+    );
 
     await expect(node.lookupInvoice({ paymentHash: 'hash-1' })).rejects.toMatchObject({
       name: 'NwcError',
@@ -188,11 +197,16 @@ describe('provider error normalization', () => {
         withdraw_request: 'lnbc1testinvoice',
         created: 1,
         speed_fee: { amount: 0 },
-      }),
+      })
     );
-    const node = new SpeedNode({ apiKey: 'sk_test', baseUrl: 'https://speed.test' }, { fetch: fetchMock });
+    const node = new SpeedNode(
+      { apiKey: 'sk_test', baseUrl: 'https://speed.test' },
+      { fetch: fetchMock }
+    );
 
-    await expect(node.payInvoice({ invoice: 'lnbc1testinvoice', amountMsats: 1000 })).rejects.toMatchObject({
+    await expect(
+      node.payInvoice({ invoice: 'lnbc1testinvoice', amountMsats: 1000 })
+    ).rejects.toMatchObject({
       name: 'NwcError',
       nwcCode: 'PAYMENT_FAILED',
       operation: 'pay_invoice',

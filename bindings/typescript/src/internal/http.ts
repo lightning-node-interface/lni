@@ -23,10 +23,17 @@ export function resolveFetch(customFetch?: FetchLike): FetchLike {
     return globalThis.fetch.bind(globalThis);
   }
 
-  throw new LniError('InvalidInput', 'No fetch implementation found. Pass fetch via NodeRequestOptions.');
+  throw new LniError(
+    'InvalidInput',
+    'No fetch implementation found. Pass fetch via NodeRequestOptions.'
+  );
 }
 
-export function buildUrl(baseUrl: string, path: string, query?: Record<string, QueryValue>): string {
+export function buildUrl(
+  baseUrl: string,
+  path: string,
+  query?: Record<string, QueryValue>
+): string {
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
   const url = new URL(normalizedPath, normalizedBase);
@@ -59,7 +66,10 @@ interface TimeoutSignal {
   clear: () => void;
 }
 
-function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefined): TimeoutSignal {
+function withTimeout(
+  signal: AbortSignal | undefined,
+  timeoutMs: number | undefined
+): TimeoutSignal {
   if (!timeoutMs || timeoutMs <= 0) {
     return {
       signal,
@@ -97,7 +107,7 @@ function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefi
     () => {
       clear();
     },
-    { once: true },
+    { once: true }
   );
 
   return {
@@ -106,7 +116,11 @@ function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefi
   };
 }
 
-export async function requestText(fetchFn: FetchLike, url: string, args: RequestArgs = {}): Promise<string> {
+export async function requestText(
+  fetchFn: FetchLike,
+  url: string,
+  args: RequestArgs = {}
+): Promise<string> {
   const headers = new Headers(args.headers);
   let body: BodyInit | null | undefined = args.body;
 
@@ -133,9 +147,13 @@ export async function requestText(fetchFn: FetchLike, url: string, args: Request
       signal: timeout.signal,
     });
   } catch (error) {
-    throw new LniError('NetworkError', `Network request failed: ${(error as Error)?.message ?? 'unknown error'}`, {
-      cause: error,
-    });
+    throw new LniError(
+      'NetworkError',
+      `Network request failed: ${(error as Error)?.message ?? 'unknown error'}`,
+      {
+        cause: error,
+      }
+    );
   } finally {
     timeout.clear();
   }
@@ -152,7 +170,11 @@ export async function requestText(fetchFn: FetchLike, url: string, args: Request
   return text;
 }
 
-export async function requestJson<T>(fetchFn: FetchLike, url: string, args: RequestArgs = {}): Promise<T> {
+export async function requestJson<T>(
+  fetchFn: FetchLike,
+  url: string,
+  args: RequestArgs = {}
+): Promise<T> {
   const text = await requestText(fetchFn, url, args);
 
   if (!text) {
@@ -162,14 +184,22 @@ export async function requestJson<T>(fetchFn: FetchLike, url: string, args: Requ
   try {
     return JSON.parse(text) as T;
   } catch (error) {
-    throw new LniError('Json', `Failed to parse JSON response: ${(error as Error)?.message ?? 'unknown error'}`, {
-      body: text,
-      cause: error,
-    });
+    throw new LniError(
+      'Json',
+      `Failed to parse JSON response: ${(error as Error)?.message ?? 'unknown error'}`,
+      {
+        body: text,
+        cause: error,
+      }
+    );
   }
 }
 
-export async function requestMaybeJson<T>(fetchFn: FetchLike, url: string, args: RequestArgs = {}): Promise<T | string> {
+export async function requestMaybeJson<T>(
+  fetchFn: FetchLike,
+  url: string,
+  args: RequestArgs = {}
+): Promise<T | string> {
   const text = await requestText(fetchFn, url, args);
 
   if (!text) {
