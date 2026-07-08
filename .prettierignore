@@ -1,0 +1,16 @@
+**/node_modules/**
+**/dist/**
+**/target/**
+**/.turbo/**
+**/.vite/**
+**/.build/**
+**/build/**
+**/lib/**
+**/rust_modules/**
+**/src/generated/**
+**/cpp/generated/**
+**/android/**
+**/apple/**
+*.tgz
+*.tsbuildinfo
+Cargo.lock
