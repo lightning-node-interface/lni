@@ -1,8 +1,7 @@
-use serde::{Deserialize, Serialize};
 use crate::InvoiceType;
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct InfoResponse {
@@ -56,7 +55,6 @@ pub struct Bolt12Req {
     #[serde(rename = "description", skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InvoiceResponse {
@@ -122,7 +120,6 @@ pub struct PayResponse {
     pub routing_fee_sat: i64,
 }
 
-
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bolt11Resp {
@@ -133,8 +130,6 @@ pub struct Bolt11Resp {
     #[serde(rename = "serialized")]
     pub serialized: String,
 }
-
-
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Debug, Serialize, Deserialize)]

@@ -5,7 +5,11 @@ export function encodeBase64(input: string): string {
     return globalThis.btoa(input);
   }
 
-  const maybeBuffer = (globalThis as { Buffer?: { from(value: string, encoding?: string): { toString(enc: string): string } } }).Buffer;
+  const maybeBuffer = (
+    globalThis as {
+      Buffer?: { from(value: string, encoding?: string): { toString(enc: string): string } };
+    }
+  ).Buffer;
   if (maybeBuffer) {
     return maybeBuffer.from(input, 'utf8').toString('base64');
   }
@@ -60,7 +64,11 @@ export function decodeBase64(input: string): Uint8Array {
     return out;
   }
 
-  const maybeBuffer = (globalThis as { Buffer?: { from(value: string, encoding?: string): { values(): Iterable<number> } } }).Buffer;
+  const maybeBuffer = (
+    globalThis as {
+      Buffer?: { from(value: string, encoding?: string): { values(): Iterable<number> } };
+    }
+  ).Buffer;
   if (maybeBuffer) {
     return Uint8Array.from(maybeBuffer.from(normalized, 'base64').values());
   }

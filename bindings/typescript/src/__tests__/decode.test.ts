@@ -25,7 +25,9 @@ describe('decode helpers', () => {
     expect(decoded.type).toBe('bolt11_invoice');
     expect(decoded.amount).toBe('250000000');
     expect(decoded.amountMsats).toBe(250000000);
-    expect(decoded.payment_hash).toBe('0001020304050607080900010203040506070809000102030405060708090102');
+    expect(decoded.payment_hash).toBe(
+      '0001020304050607080900010203040506070809000102030405060708090102'
+    );
     expect(decoded.description).toBe('1 cup coffee');
     expect(decoded.expiry).toBe(60);
     expect(decoded.expiresAt).toBe(1496314718);
@@ -65,7 +67,9 @@ describe('decode helpers', () => {
     expect(decoded.paths?.[0]?.blindingPoint).toMatch(/^02[0-9a-f]+$/);
     expect(decoded.paths?.[0]?.blindedHops.length).toBeGreaterThan(0);
     expect(decoded.paths?.[0]?.blindedHops[0]?.encryptedPayload).toMatch(/^[0-9a-f]+$/);
-    expect(decoded.sections.find((section) => section.name === 'paths')?.value).toEqual(decoded.paths);
+    expect(decoded.sections.find((section) => section.name === 'paths')?.value).toEqual(
+      decoded.paths
+    );
   });
 
   it('rejects BOLT12 blinded paths with too many hops', () => {
@@ -73,7 +77,9 @@ describe('decode helpers', () => {
   });
 
   it('rejects BOLT12 blinded path payload lengths above the safe integer range', () => {
-    expect(() => decodeOffer(makeOfferWithOversizedPayloadLength())).toThrow(/collection length exceeds safe integer range/);
+    expect(() => decodeOffer(makeOfferWithOversizedPayloadLength())).toThrow(
+      /collection length exceeds safe integer range/
+    );
   });
 });
 
@@ -84,12 +90,7 @@ function makeOfferWithBlindedPathHopCount(numHops: number): string {
     2,
     ...new Array(32).fill(1),
     numHops,
-    ...Array.from({ length: numHops }, () => [
-      2,
-      ...new Array(32).fill(2),
-      0,
-      0,
-    ]).flat(),
+    ...Array.from({ length: numHops }, () => [2, ...new Array(32).fill(2), 0, 0]).flat(),
   ];
   const tlv = [16, ...encodeBigSize(path.length), ...path];
   return `lno1${bytesToBech32Words(tlv)}`;

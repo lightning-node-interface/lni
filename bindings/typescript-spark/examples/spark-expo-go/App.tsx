@@ -6,11 +6,7 @@ import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import * as Clipboard from 'expo-clipboard';
 import { openDatabaseSync } from 'expo-sqlite';
-import {
-  type InvoiceEventStatus,
-  type StorageProvider,
-  type Transaction,
-} from '@sunnyln/lni';
+import { type InvoiceEventStatus, type StorageProvider, type Transaction } from '@sunnyln/lni';
 import {
   SparkNode,
   installSparkRuntime,
@@ -71,8 +67,12 @@ const DEFAULT_FORM: SparkFormState = {
 export const sparkTransactionsCache = sqliteTable('spark_transactions_cache', {
   paymentHash: text('payment_hash').primaryKey(),
   transferId: text('transfer_id').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
 });
 
 export type SparkTransactionCache = typeof sparkTransactionsCache.$inferSelect;
@@ -109,9 +109,12 @@ lniDb.run(sql`CREATE TABLE IF NOT EXISTS spark_transactions (
 )`);
 
 function loadCachedTransactions(limit: number): TxRow[] {
-  const rows = lniDb.select().from(sparkTransactions)
+  const rows = lniDb
+    .select()
+    .from(sparkTransactions)
     .orderBy(desc(sparkTransactions.createdAt))
-    .limit(limit).all();
+    .limit(limit)
+    .all();
   return rows.map((row) => {
     const amountSats = Math.floor(row.amountMsats / 1000);
     const isIncoming = row.type === 'incoming';
@@ -128,7 +131,8 @@ function loadCachedTransactions(limit: number): TxRow[] {
 function saveCachedTransactions(txs: Transaction[]): void {
   for (const tx of txs) {
     if (!tx.paymentHash) continue;
-    lniDb.insert(sparkTransactions)
+    lniDb
+      .insert(sparkTransactions)
       .values({
         paymentHash: tx.paymentHash,
         type: tx.type,
@@ -145,7 +149,8 @@ function saveCachedTransactions(txs: Transaction[]): void {
           memo: tx.description,
           settledAt: tx.settledAt,
         },
-      }).run();
+      })
+      .run();
   }
 }
 
@@ -155,31 +160,42 @@ const drizzleStorageProvider: StorageProvider = {
   async get(key: string) {
     if (!key.startsWith(CACHE_PREFIX)) return null;
     const paymentHash = key.slice(CACHE_PREFIX.length);
-    const row = lniDb.select().from(sparkTransactionsCache)
-      .where(eq(sparkTransactionsCache.paymentHash, paymentHash)).get();
+    const row = lniDb
+      .select()
+      .from(sparkTransactionsCache)
+      .where(eq(sparkTransactionsCache.paymentHash, paymentHash))
+      .get();
     return row?.transferId ?? null;
   },
   async set(key: string, value: string) {
     if (!key.startsWith(CACHE_PREFIX)) return;
     const paymentHash = key.slice(CACHE_PREFIX.length);
-    lniDb.insert(sparkTransactionsCache)
+    lniDb
+      .insert(sparkTransactionsCache)
       .values({ paymentHash, transferId: value })
       .onConflictDoUpdate({
         target: sparkTransactionsCache.paymentHash,
         set: { transferId: value, updatedAt: new Date() },
-      }).run();
+      })
+      .run();
   },
   async remove(key: string) {
     if (!key.startsWith(CACHE_PREFIX)) return;
     const paymentHash = key.slice(CACHE_PREFIX.length);
-    lniDb.delete(sparkTransactionsCache).where(eq(sparkTransactionsCache.paymentHash, paymentHash)).run();
+    lniDb
+      .delete(sparkTransactionsCache)
+      .where(eq(sparkTransactionsCache.paymentHash, paymentHash))
+      .run();
   },
 };
 
 function numberFromUnknown(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'bigint') return Number(value);
-  if (typeof value === 'string') { const p = Number(value); return Number.isFinite(p) ? p : 0; }
+  if (typeof value === 'string') {
+    const p = Number(value);
+    return Number.isFinite(p) ? p : 0;
+  }
   return 0;
 }
 
@@ -235,11 +251,14 @@ function TransactionRow({ tx, onPress }: { tx: TxRow; onPress?: () => void }) {
         </Text>
       </View>
       <View style={s.txDetails}>
-        <Text style={s.txMemo} numberOfLines={1}>{tx.memo}</Text>
+        <Text style={s.txMemo} numberOfLines={1}>
+          {tx.memo}
+        </Text>
         <Text style={s.txTime}>{tx.time}</Text>
       </View>
       <Text style={[s.txAmount, isIncoming ? s.txAmountIn : s.txAmountOut]}>
-        {isIncoming ? '+' : '-'}{formatSats(tx.amountSats)} sats
+        {isIncoming ? '+' : '-'}
+        {formatSats(tx.amountSats)} sats
       </Text>
     </Pressable>
   );
@@ -303,7 +322,7 @@ export default function App() {
 
   const transferLimit = useMemo(() => {
     const parsed = Number(form.transferLimit);
-    return (!Number.isFinite(parsed) || parsed <= 0) ? 25 : Math.min(100, Math.floor(parsed));
+    return !Number.isFinite(parsed) || parsed <= 0 ? 25 : Math.min(100, Math.floor(parsed));
   }, [form.transferLimit]);
 
   const updateForm = useCallback((patch: Partial<SparkFormState>) => {
@@ -321,9 +340,12 @@ export default function App() {
     const runtime = globalThis as typeof globalThis & { __LNI_SPARK_DEBUG__?: unknown };
     runtime.__LNI_SPARK_DEBUG__ = {
       enabled: true,
-      emit: (cp: SparkDebugCheckpoint) => appendDebug({ phase: cp.phase, ts: cp.ts, meta: cp.meta }),
+      emit: (cp: SparkDebugCheckpoint) =>
+        appendDebug({ phase: cp.phase, ts: cp.ts, meta: cp.meta }),
     };
-    return () => { delete runtime.__LNI_SPARK_DEBUG__; };
+    return () => {
+      delete runtime.__LNI_SPARK_DEBUG__;
+    };
   }, [appendDebug]);
 
   // Runtime
@@ -336,11 +358,16 @@ export default function App() {
     const node = nodeRef.current;
     nodeRef.current = null;
     if (!node) return;
-    try { await node.cleanupConnections(); } catch {}
+    try {
+      await node.cleanupConnections();
+    } catch {}
   }, []);
 
   useEffect(() => {
-    return () => { void disconnectNode(); sparkRuntimeRef.current?.restore(); };
+    return () => {
+      void disconnectNode();
+      sparkRuntimeRef.current?.restore();
+    };
   }, [disconnectNode]);
 
   // Persistence
@@ -364,7 +391,9 @@ export default function App() {
 
   useEffect(() => {
     void loadSavedForm()
-      .then((has) => { if (has) shouldAutoConnect.current = true; })
+      .then((has) => {
+        if (has) shouldAutoConnect.current = true;
+      })
       .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
   }, [loadSavedForm]);
 
@@ -407,7 +436,10 @@ export default function App() {
 
   // Connect
   const connectWallet = useCallback(async () => {
-    if (!form.mnemonic.trim()) { setStatus('Seed phrase is required'); return; }
+    if (!form.mnemonic.trim()) {
+      setStatus('Seed phrase is required');
+      return;
+    }
     setStatus('Connecting...');
     setConnecting(true);
     try {
@@ -446,36 +478,47 @@ export default function App() {
   // Decode pasted invoice
   useEffect(() => {
     const inv = sendInvoice.trim();
-    if (!inv || !nodeRef.current) { setInvoiceInfo(''); return; }
+    if (!inv || !nodeRef.current) {
+      setInvoiceInfo('');
+      return;
+    }
     let cancelled = false;
-    nodeRef.current.decode(inv).then((json) => {
-      if (cancelled) return;
-      try {
-        const decoded = JSON.parse(json);
-        const sections = Array.isArray(decoded.sections) ? decoded.sections : [];
-        const amountMsats = sections.find((s: { name?: string }) => s.name === 'amount')?.value;
-        const expiry = decoded.expiry ?? sections.find((s: { name?: string }) => s.name === 'expiry')?.value;
-        const timestamp = sections.find((s: { name?: string }) => s.name === 'timestamp')?.value;
-        const parts: string[] = [];
-        if (amountMsats && Number(amountMsats) > 0) {
-          parts.push(`${Math.floor(Number(amountMsats) / 1000)} sats`);
-        } else {
-          parts.push('No amount (open)');
+    nodeRef.current
+      .decode(inv)
+      .then((json) => {
+        if (cancelled) return;
+        try {
+          const decoded = JSON.parse(json);
+          const sections = Array.isArray(decoded.sections) ? decoded.sections : [];
+          const amountMsats = sections.find((s: { name?: string }) => s.name === 'amount')?.value;
+          const expiry =
+            decoded.expiry ?? sections.find((s: { name?: string }) => s.name === 'expiry')?.value;
+          const timestamp = sections.find((s: { name?: string }) => s.name === 'timestamp')?.value;
+          const parts: string[] = [];
+          if (amountMsats && Number(amountMsats) > 0) {
+            parts.push(`${Math.floor(Number(amountMsats) / 1000)} sats`);
+          } else {
+            parts.push('No amount (open)');
+          }
+          if (timestamp && expiry) {
+            const expiresAt = new Date((Number(timestamp) + Number(expiry)) * 1000);
+            const now = new Date();
+            const diffMin = Math.floor((expiresAt.getTime() - now.getTime()) / 60000);
+            if (diffMin <= 0) parts.push('Expired');
+            else if (diffMin < 60) parts.push(`Expires in ${diffMin}m`);
+            else parts.push(`Expires in ${Math.floor(diffMin / 60)}h ${diffMin % 60}m`);
+          }
+          setInvoiceInfo(parts.join('  \u00b7  '));
+        } catch {
+          setInvoiceInfo('');
         }
-        if (timestamp && expiry) {
-          const expiresAt = new Date((Number(timestamp) + Number(expiry)) * 1000);
-          const now = new Date();
-          const diffMin = Math.floor((expiresAt.getTime() - now.getTime()) / 60000);
-          if (diffMin <= 0) parts.push('Expired');
-          else if (diffMin < 60) parts.push(`Expires in ${diffMin}m`);
-          else parts.push(`Expires in ${Math.floor(diffMin / 60)}h ${diffMin % 60}m`);
-        }
-        setInvoiceInfo(parts.join('  \u00b7  '));
-      } catch {
-        setInvoiceInfo('');
-      }
-    }).catch(() => { if (!cancelled) setInvoiceInfo(''); });
-    return () => { cancelled = true; };
+      })
+      .catch(() => {
+        if (!cancelled) setInvoiceInfo('');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [sendInvoice]);
 
   // Disconnect
@@ -491,27 +534,37 @@ export default function App() {
   }, [disconnectNode]);
 
   // Success animation
-  const showSuccessAnimation = useCallback((label = 'Success!') => {
-    setSuccessMsg(label);
-    successScale.setValue(0);
-    successOpacity.setValue(0);
-    setShowSuccess(true);
-    Animated.parallel([
-      Animated.spring(successScale, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }),
-      Animated.timing(successOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
-    setTimeout(() => {
-      Animated.timing(successOpacity, { toValue: 0, duration: 300, useNativeDriver: true })
-        .start(() => setShowSuccess(false));
-    }, 2200);
-  }, [successOpacity, successScale]);
+  const showSuccessAnimation = useCallback(
+    (label = 'Success!') => {
+      setSuccessMsg(label);
+      successScale.setValue(0);
+      successOpacity.setValue(0);
+      setShowSuccess(true);
+      Animated.parallel([
+        Animated.spring(successScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+      setTimeout(() => {
+        Animated.timing(successOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(
+          () => setShowSuccess(false)
+        );
+      }, 2200);
+    },
+    [successOpacity, successScale]
+  );
 
   // Receive
   const createInvoiceReceive = useCallback(async () => {
     const node = nodeRef.current;
     if (!node) return;
     const parsed = Number(recvAmountMsats.trim());
-    const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) * 1000 : undefined;
+    const amountMsats =
+      Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) * 1000 : undefined;
     const description = recvDescription.trim() || undefined;
 
     setStatus('Creating invoice...');
@@ -525,17 +578,19 @@ export default function App() {
       setInvoicePollingStatus('Waiting for payment...');
       setStatus('');
 
-      node.onInvoiceEvents(
-        { paymentHash: tx.paymentHash, pollingDelaySec: 3, maxPollingSec: 300 },
-        (eventStatus: InvoiceEventStatus) => {
-          if (eventStatus === 'success') {
-            setInvoicePollingStatus('Paid!');
-            setStatus('');
-            showSuccessAnimation('Invoice Paid!');
-            void refresh();
+      node
+        .onInvoiceEvents(
+          { paymentHash: tx.paymentHash, pollingDelaySec: 3, maxPollingSec: 300 },
+          (eventStatus: InvoiceEventStatus) => {
+            if (eventStatus === 'success') {
+              setInvoicePollingStatus('Paid!');
+              setStatus('');
+              showSuccessAnimation('Invoice Paid!');
+              void refresh();
+            }
           }
-        },
-      ).catch((e: unknown) => console.warn('onInvoiceEvents error:', e));
+        )
+        .catch((e: unknown) => console.warn('onInvoiceEvents error:', e));
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     }
@@ -546,7 +601,10 @@ export default function App() {
     const node = nodeRef.current;
     if (!node) return;
     const invoice = sendInvoice.trim();
-    if (!invoice) { setStatus('Paste an invoice first'); return; }
+    if (!invoice) {
+      setStatus('Paste an invoice first');
+      return;
+    }
     const parsed = Number(sendAmountMsats.trim());
     const amountMsats = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
 
@@ -582,16 +640,25 @@ export default function App() {
 
   const copyInvoice = useCallback(async () => {
     if (!invoiceString) return;
-    try { await Clipboard.setStringAsync(invoiceString); setStatus('Copied!'); } catch {}
+    try {
+      await Clipboard.setStringAsync(invoiceString);
+      setStatus('Copied!');
+    } catch {}
   }, [invoiceString]);
 
   const copyDebug = useCallback(async () => {
-    try { await Clipboard.setStringAsync(debugJson); setStatus('Log copied'); } catch {}
+    try {
+      await Clipboard.setStringAsync(debugJson);
+      setStatus('Log copied');
+    } catch {}
   }, [debugJson]);
 
   const copyPerfResults = useCallback(async () => {
     if (!perfResults) return;
-    try { await Clipboard.setStringAsync(perfResults); setStatus('Results copied'); } catch {}
+    try {
+      await Clipboard.setStringAsync(perfResults);
+      setStatus('Results copied');
+    } catch {}
   }, [perfResults]);
 
   // Perf benchmark
@@ -604,7 +671,10 @@ export default function App() {
     const now = Math.floor(Date.now() / 1000);
     const lines: string[] = [];
 
-    const bench = async (label: string, params: { from: number; limit: number; createdAfter?: number; createdBefore?: number }) => {
+    const bench = async (
+      label: string,
+      params: { from: number; limit: number; createdAfter?: number; createdBefore?: number }
+    ) => {
       const t0 = performance.now();
       try {
         setupRuntime(form.apiKey);
@@ -635,7 +705,9 @@ export default function App() {
     for (const row of rows) {
       const created = row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt;
       const updated = row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt;
-      console.log(`  ${row.paymentHash} -> ${row.transferId}  (created: ${created}, updated: ${updated})`);
+      console.log(
+        `  ${row.paymentHash} -> ${row.transferId}  (created: ${created}, updated: ${updated})`
+      );
     }
     console.log('--- end dump ---');
     setStatus(`Dumped ${rows.length} rows to console`);
@@ -656,31 +728,47 @@ export default function App() {
             <TextInput
               value={form.mnemonic}
               onChangeText={(v) => updateForm({ mnemonic: v })}
-              multiline={showMnemonic} secureTextEntry={!showMnemonic}
-              autoCapitalize="none" autoCorrect={false}
+              multiline={showMnemonic}
+              secureTextEntry={!showMnemonic}
+              autoCapitalize="none"
+              autoCorrect={false}
               placeholder="Enter your 12 or 24 word mnemonic..."
-              placeholderTextColor="#555" style={[s.input, s.secretInput, !showMnemonic && { minHeight: undefined }]}
+              placeholderTextColor="#555"
+              style={[s.input, s.secretInput, !showMnemonic && { minHeight: undefined }]}
             />
             <Pressable style={s.eyeBtn} onPress={() => setShowMnemonic((v) => !v)} hitSlop={8}>
-              <Text style={s.eyeIcon}>{showMnemonic ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}</Text>
+              <Text style={s.eyeIcon}>
+                {showMnemonic ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}
+              </Text>
             </Pressable>
           </View>
 
           <Text style={s.fieldLabel}>Network</Text>
           <View style={s.networkRow}>
             {NETWORKS.map((n) => (
-              <Pressable key={n} style={[s.chip, form.network === n && s.chipActive]} onPress={() => updateForm({ network: n })}>
+              <Pressable
+                key={n}
+                style={[s.chip, form.network === n && s.chipActive]}
+                onPress={() => updateForm({ network: n })}
+              >
                 <Text style={[s.chipText, form.network === n && s.chipTextActive]}>{n}</Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={s.fieldLabel}>API Key <Text style={s.optionalTag}>(optional)</Text></Text>
+          <Text style={s.fieldLabel}>
+            API Key <Text style={s.optionalTag}>(optional)</Text>
+          </Text>
           <View style={s.secretField}>
             <TextInput
-              value={form.apiKey} onChangeText={(v) => updateForm({ apiKey: v })}
-              secureTextEntry={!showApiKey} autoCapitalize="none" autoCorrect={false}
-              placeholder="Optional" placeholderTextColor="#555" style={[s.input, s.secretInput]}
+              value={form.apiKey}
+              onChangeText={(v) => updateForm({ apiKey: v })}
+              secureTextEntry={!showApiKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Optional"
+              placeholderTextColor="#555"
+              style={[s.input, s.secretInput]}
             />
             <Pressable style={s.eyeBtn} onPress={() => setShowApiKey((v) => !v)} hitSlop={8}>
               <Text style={s.eyeIcon}>{showApiKey ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}</Text>
@@ -693,7 +781,10 @@ export default function App() {
             disabled={connecting}
           >
             {connecting ? (
-              <View style={s.btnRow}><ActivityIndicator size="small" color="#000" /><Text style={s.btnTextDark}>Connecting...</Text></View>
+              <View style={s.btnRow}>
+                <ActivityIndicator size="small" color="#000" />
+                <Text style={s.btnTextDark}>Connecting...</Text>
+              </View>
             ) : (
               <Text style={s.btnTextDark}>Connect Wallet</Text>
             )}
@@ -713,25 +804,39 @@ export default function App() {
         <View style={s.header}>
           <Text style={s.headerTitle}>Spark Wallet</Text>
           <View style={s.headerActions}>
-            <Pressable onPress={() => void refresh()} hitSlop={8}><Text style={s.headerIcon}>&#x21bb;</Text></Pressable>
-            <Pressable onPress={() => setShowSettings((v) => !v)} hitSlop={8}><Text style={s.headerIcon}>&#x2699;</Text></Pressable>
-            <Pressable onPress={() => void disconnect()} hitSlop={8}><Text style={s.headerIcon}>&#x23fb;</Text></Pressable>
+            <Pressable onPress={() => void refresh()} hitSlop={8}>
+              <Text style={s.headerIcon}>&#x21bb;</Text>
+            </Pressable>
+            <Pressable onPress={() => setShowSettings((v) => !v)} hitSlop={8}>
+              <Text style={s.headerIcon}>&#x2699;</Text>
+            </Pressable>
+            <Pressable onPress={() => void disconnect()} hitSlop={8}>
+              <Text style={s.headerIcon}>&#x23fb;</Text>
+            </Pressable>
           </View>
         </View>
 
         {/* Balance */}
         <View style={s.balanceCard}>
           <Text style={s.balanceLabel}>BALANCE</Text>
-          <Text style={s.balanceValue}>{formatSats(balanceSats)} <Text style={s.balanceUnit}>sats</Text></Text>
+          <Text style={s.balanceValue}>
+            {formatSats(balanceSats)} <Text style={s.balanceUnit}>sats</Text>
+          </Text>
           {status !== '' && <Text style={s.balanceStatus}>{status}</Text>}
         </View>
 
         {/* Send / Receive buttons */}
         <View style={s.tabBar}>
-          <Pressable style={[s.tabBtn, s.tabSend, activeTab === 'send' && s.tabActive]} onPress={() => setActiveTab(activeTab === 'send' ? null : 'send')}>
+          <Pressable
+            style={[s.tabBtn, s.tabSend, activeTab === 'send' && s.tabActive]}
+            onPress={() => setActiveTab(activeTab === 'send' ? null : 'send')}
+          >
             <Text style={s.tabSendText}>{'\u2191'} Send</Text>
           </Pressable>
-          <Pressable style={[s.tabBtn, s.tabRecv, activeTab === 'recv' && s.tabActive]} onPress={() => setActiveTab(activeTab === 'recv' ? null : 'recv')}>
+          <Pressable
+            style={[s.tabBtn, s.tabRecv, activeTab === 'recv' && s.tabActive]}
+            onPress={() => setActiveTab(activeTab === 'recv' ? null : 'recv')}
+          >
             <Text style={s.tabRecvText}>{'\u2193'} Receive</Text>
           </Pressable>
         </View>
@@ -741,17 +846,24 @@ export default function App() {
           <View style={s.panel}>
             <Text style={s.fieldLabel}>Invoice</Text>
             <TextInput
-              value={sendInvoice} onChangeText={setSendInvoice}
-              multiline autoCapitalize="none" autoCorrect={false}
+              value={sendInvoice}
+              onChangeText={setSendInvoice}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
               placeholder="Paste a Lightning invoice (lnbc...)"
-              placeholderTextColor="#555" style={[s.input, s.textarea]}
+              placeholderTextColor="#555"
+              style={[s.input, s.textarea]}
             />
             {invoiceInfo !== '' && <Text style={s.invoiceInfo}>{invoiceInfo}</Text>}
             <Text style={s.fieldLabel}>Amount (msats, optional)</Text>
             <TextInput
-              value={sendAmountMsats} onChangeText={setSendAmountMsats}
-              keyboardType="number-pad" placeholder="For zero-amount invoices"
-              placeholderTextColor="#555" style={s.input}
+              value={sendAmountMsats}
+              onChangeText={setSendAmountMsats}
+              keyboardType="number-pad"
+              placeholder="For zero-amount invoices"
+              placeholderTextColor="#555"
+              style={s.input}
             />
             <Pressable
               style={[s.btn, s.btnOrange, sending && s.btnDisabled]}
@@ -759,7 +871,10 @@ export default function App() {
               disabled={sending}
             >
               {sending ? (
-                <View style={s.btnRow}><ActivityIndicator size="small" color="#000" /><Text style={s.btnTextDark}>Sending...</Text></View>
+                <View style={s.btnRow}>
+                  <ActivityIndicator size="small" color="#000" />
+                  <Text style={s.btnTextDark}>Sending...</Text>
+                </View>
               ) : (
                 <Text style={s.btnTextDark}>Send Payment</Text>
               )}
@@ -773,27 +888,38 @@ export default function App() {
           <View style={s.panel}>
             <Text style={s.fieldLabel}>Amount (sats)</Text>
             <TextInput
-              value={recvAmountMsats} onChangeText={setRecvAmountMsats}
-              keyboardType="number-pad" placeholder="e.g. 25"
-              placeholderTextColor="#555" style={s.input}
+              value={recvAmountMsats}
+              onChangeText={setRecvAmountMsats}
+              keyboardType="number-pad"
+              placeholder="e.g. 25"
+              placeholderTextColor="#555"
+              style={s.input}
             />
             <Text style={s.fieldLabel}>Description</Text>
             <TextInput
-              value={recvDescription} onChangeText={setRecvDescription}
-              autoCapitalize="none" autoCorrect={false}
-              placeholder="Optional memo" placeholderTextColor="#555" style={s.input}
+              value={recvDescription}
+              onChangeText={setRecvDescription}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Optional memo"
+              placeholderTextColor="#555"
+              style={s.input}
             />
             <Pressable style={[s.btn, s.btnOrange]} onPress={() => void createInvoiceReceive()}>
               <Text style={s.btnTextDark}>Create Invoice</Text>
             </Pressable>
 
             {invoicePollingStatus !== '' && (
-              <Text style={[
-                s.pollingText,
-                invoicePollingStatus === 'Paid!' && { color: '#4ade80' },
-                invoicePollingStatus === 'Failed' && { color: '#f87171' },
-                invoicePollingStatus === 'Timed out' && { color: '#fbbf24' },
-              ]}>{invoicePollingStatus}</Text>
+              <Text
+                style={[
+                  s.pollingText,
+                  invoicePollingStatus === 'Paid!' && { color: '#4ade80' },
+                  invoicePollingStatus === 'Failed' && { color: '#f87171' },
+                  invoicePollingStatus === 'Timed out' && { color: '#fbbf24' },
+                ]}
+              >
+                {invoicePollingStatus}
+              </Text>
             )}
 
             {invoiceString !== '' && (
@@ -813,45 +939,83 @@ export default function App() {
               <TextInput
                 value={form.mnemonic}
                 onChangeText={(v) => updateForm({ mnemonic: v })}
-                multiline={showMnemonic} secureTextEntry={!showMnemonic}
-                autoCapitalize="none" autoCorrect={false}
+                multiline={showMnemonic}
+                secureTextEntry={!showMnemonic}
+                autoCapitalize="none"
+                autoCorrect={false}
                 placeholder="12 or 24 word mnemonic..."
-                placeholderTextColor="#555" style={[s.input, s.secretInput, !showMnemonic && { minHeight: undefined }]}
+                placeholderTextColor="#555"
+                style={[s.input, s.secretInput, !showMnemonic && { minHeight: undefined }]}
               />
               <Pressable style={s.eyeBtn} onPress={() => setShowMnemonic((v) => !v)} hitSlop={8}>
-                <Text style={s.eyeIcon}>{showMnemonic ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}</Text>
+                <Text style={s.eyeIcon}>
+                  {showMnemonic ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}
+                </Text>
               </Pressable>
             </View>
-            <Text style={s.fieldLabel}>API Key <Text style={s.optionalTag}>(optional)</Text></Text>
+            <Text style={s.fieldLabel}>
+              API Key <Text style={s.optionalTag}>(optional)</Text>
+            </Text>
             <View style={s.secretField}>
               <TextInput
-                value={form.apiKey} onChangeText={(v) => updateForm({ apiKey: v })}
-                secureTextEntry={!showApiKey} autoCapitalize="none" autoCorrect={false}
-                placeholder="Optional" placeholderTextColor="#555" style={[s.input, s.secretInput]}
+                value={form.apiKey}
+                onChangeText={(v) => updateForm({ apiKey: v })}
+                secureTextEntry={!showApiKey}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Optional"
+                placeholderTextColor="#555"
+                style={[s.input, s.secretInput]}
               />
               <Pressable style={s.eyeBtn} onPress={() => setShowApiKey((v) => !v)} hitSlop={8}>
-                <Text style={s.eyeIcon}>{showApiKey ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}</Text>
+                <Text style={s.eyeIcon}>
+                  {showApiKey ? '\u{1F441}' : '\u{2022}\u{2022}\u{2022}'}
+                </Text>
               </Pressable>
             </View>
-            <Text style={s.fieldLabel}>SSP Base URL <Text style={s.optionalTag}>(optional)</Text></Text>
+            <Text style={s.fieldLabel}>
+              SSP Base URL <Text style={s.optionalTag}>(optional)</Text>
+            </Text>
             <TextInput
-              value={form.sspBaseUrl} onChangeText={(v) => updateForm({ sspBaseUrl: v })}
-              autoCapitalize="none" autoCorrect={false}
-              placeholder="https://..." placeholderTextColor="#555" style={s.input}
+              value={form.sspBaseUrl}
+              onChangeText={(v) => updateForm({ sspBaseUrl: v })}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="https://..."
+              placeholderTextColor="#555"
+              style={s.input}
             />
-            <Text style={s.fieldLabel}>SSP Identity Public Key <Text style={s.optionalTag}>(optional)</Text></Text>
+            <Text style={s.fieldLabel}>
+              SSP Identity Public Key <Text style={s.optionalTag}>(optional)</Text>
+            </Text>
             <TextInput
-              value={form.sspIdentityPublicKey} onChangeText={(v) => updateForm({ sspIdentityPublicKey: v })}
-              autoCapitalize="none" autoCorrect={false}
-              placeholder="Hex pubkey" placeholderTextColor="#555" style={s.input}
+              value={form.sspIdentityPublicKey}
+              onChangeText={(v) => updateForm({ sspIdentityPublicKey: v })}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Hex pubkey"
+              placeholderTextColor="#555"
+              style={s.input}
             />
-            <Text style={s.fieldLabel}>Transaction Limit <Text style={s.optionalTag}>(optional)</Text></Text>
+            <Text style={s.fieldLabel}>
+              Transaction Limit <Text style={s.optionalTag}>(optional)</Text>
+            </Text>
             <TextInput
-              value={form.transferLimit} onChangeText={(v) => updateForm({ transferLimit: v })}
-              keyboardType="number-pad" placeholder="25"
-              placeholderTextColor="#555" style={s.input}
+              value={form.transferLimit}
+              onChangeText={(v) => updateForm({ transferLimit: v })}
+              keyboardType="number-pad"
+              placeholder="25"
+              placeholderTextColor="#555"
+              style={s.input}
             />
-            <Pressable style={[s.btn, s.btnGhost]} onPress={() => { void persistForm(form); setStatus('Settings saved'); setShowSettings(false); }}>
+            <Pressable
+              style={[s.btn, s.btnGhost]}
+              onPress={() => {
+                void persistForm(form);
+                setStatus('Settings saved');
+                setShowSettings(false);
+              }}
+            >
               <Text style={s.btnTextLight}>Save Settings</Text>
             </Pressable>
           </View>
@@ -863,12 +1027,21 @@ export default function App() {
           {transactions.length === 0 ? (
             <Text style={s.txEmpty}>No transactions yet</Text>
           ) : (
-            transactions.map((tx, i) => <TransactionRow key={`${i}-${tx.paymentHash}`} tx={tx} onPress={() => setSelectedTx(tx)} />)
+            transactions.map((tx, i) => (
+              <TransactionRow
+                key={`${i}-${tx.paymentHash}`}
+                tx={tx}
+                onPress={() => setSelectedTx(tx)}
+              />
+            ))
           )}
         </View>
 
         {/* Perf benchmark */}
-        <Pressable style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 16 }]} onPress={() => setShowPerf((v) => !v)}>
+        <Pressable
+          style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 16 }]}
+          onPress={() => setShowPerf((v) => !v)}
+        >
           <Text style={s.btnTextLight}>{showPerf ? 'Hide Perf' : 'Perf Benchmark'}</Text>
         </Pressable>
 
@@ -882,7 +1055,10 @@ export default function App() {
               disabled={perfRunning}
             >
               {perfRunning ? (
-                <View style={s.btnRow}><ActivityIndicator size="small" color="#000" /><Text style={s.btnTextDark}>Running...</Text></View>
+                <View style={s.btnRow}>
+                  <ActivityIndicator size="small" color="#000" />
+                  <Text style={s.btnTextDark}>Running...</Text>
+                </View>
               ) : (
                 <Text style={s.btnTextDark}>Run Benchmark</Text>
               )}
@@ -890,7 +1066,9 @@ export default function App() {
             {perfResults !== '' && (
               <>
                 <Pressable onPress={() => void copyPerfResults()}>
-                  <Text selectable style={s.perfResults}>{perfResults}</Text>
+                  <Text selectable style={s.perfResults}>
+                    {perfResults}
+                  </Text>
                   <Text style={s.copyHint}>Tap to copy</Text>
                 </Pressable>
               </>
@@ -902,7 +1080,10 @@ export default function App() {
         )}
 
         {/* Log toggle */}
-        <Pressable style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 8 }]} onPress={() => setShowLog((v) => !v)}>
+        <Pressable
+          style={[s.btn, s.btnGhost, { marginHorizontal: 20, marginTop: 8 }]}
+          onPress={() => setShowLog((v) => !v)}
+        >
           <Text style={s.btnTextLight}>{showLog ? 'Hide Log' : 'Show Log'}</Text>
         </Pressable>
 
@@ -911,7 +1092,9 @@ export default function App() {
             <Pressable style={[s.btn, s.btnGhost]} onPress={() => void copyDebug()}>
               <Text style={s.btnTextLight}>Copy Log</Text>
             </Pressable>
-            <Text selectable style={s.logText}>{debugJson}</Text>
+            <Text selectable style={s.logText}>
+              {debugJson}
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -920,23 +1103,52 @@ export default function App() {
       {selectedTx && (
         <Pressable style={s.txDetailOverlay} onPress={() => setSelectedTx(null)}>
           <View style={s.txDetailCard}>
-            <View style={[s.txDetailIcon, selectedTx.type === 'incoming' ? s.txIconIn : s.txIconOut]}>
-              <Text style={[s.txDetailIconText, selectedTx.type === 'incoming' ? s.txIconTextIn : s.txIconTextOut]}>
+            <View
+              style={[s.txDetailIcon, selectedTx.type === 'incoming' ? s.txIconIn : s.txIconOut]}
+            >
+              <Text
+                style={[
+                  s.txDetailIconText,
+                  selectedTx.type === 'incoming' ? s.txIconTextIn : s.txIconTextOut,
+                ]}
+              >
                 {selectedTx.type === 'incoming' ? '\u2193' : '\u2191'}
               </Text>
             </View>
-            <Text style={[s.txDetailAmount, selectedTx.type === 'incoming' ? s.txAmountIn : s.txAmountOut]}>
-              {selectedTx.type === 'incoming' ? '+' : '-'}{formatSats(selectedTx.amountSats)} sats
+            <Text
+              style={[
+                s.txDetailAmount,
+                selectedTx.type === 'incoming' ? s.txAmountIn : s.txAmountOut,
+              ]}
+            >
+              {selectedTx.type === 'incoming' ? '+' : '-'}
+              {formatSats(selectedTx.amountSats)} sats
             </Text>
-            <Text style={s.txDetailType}>{selectedTx.type === 'incoming' ? 'Received' : 'Sent'}</Text>
+            <Text style={s.txDetailType}>
+              {selectedTx.type === 'incoming' ? 'Received' : 'Sent'}
+            </Text>
             <View style={s.txDetailRows}>
-              <View style={s.txDetailRow}><Text style={s.txDetailLabel}>Memo</Text><Text style={s.txDetailValue}>{selectedTx.memo}</Text></View>
-              <View style={s.txDetailRow}><Text style={s.txDetailLabel}>Time</Text><Text style={s.txDetailValue}>{selectedTx.time}</Text></View>
+              <View style={s.txDetailRow}>
+                <Text style={s.txDetailLabel}>Memo</Text>
+                <Text style={s.txDetailValue}>{selectedTx.memo}</Text>
+              </View>
+              <View style={s.txDetailRow}>
+                <Text style={s.txDetailLabel}>Time</Text>
+                <Text style={s.txDetailValue}>{selectedTx.time}</Text>
+              </View>
               {selectedTx.paymentHash ? (
-                <View style={s.txDetailRow}><Text style={s.txDetailLabel}>Payment Hash</Text><Text style={s.txDetailHash} selectable>{selectedTx.paymentHash}</Text></View>
+                <View style={s.txDetailRow}>
+                  <Text style={s.txDetailLabel}>Payment Hash</Text>
+                  <Text style={s.txDetailHash} selectable>
+                    {selectedTx.paymentHash}
+                  </Text>
+                </View>
               ) : null}
             </View>
-            <Pressable style={[s.btn, s.btnGhost, { marginTop: 16 }]} onPress={() => setSelectedTx(null)}>
+            <Pressable
+              style={[s.btn, s.btnGhost, { marginTop: 16 }]}
+              onPress={() => setSelectedTx(null)}
+            >
               <Text style={s.btnTextLight}>Close</Text>
             </Pressable>
           </View>
@@ -946,10 +1158,17 @@ export default function App() {
       {/* Success overlay */}
       {showSuccess && (
         <Pressable style={s.successOverlay} onPress={() => setShowSuccess(false)}>
-          <Animated.View style={[s.successCircle, { transform: [{ scale: successScale }], opacity: successOpacity }]}>
+          <Animated.View
+            style={[
+              s.successCircle,
+              { transform: [{ scale: successScale }], opacity: successOpacity },
+            ]}
+          >
             <Text style={s.successCheck}>{'\u2713'}</Text>
           </Animated.View>
-          <Animated.Text style={[s.successLabel, { opacity: successOpacity }]}>{successMsg}</Animated.Text>
+          <Animated.Text style={[s.successLabel, { opacity: successOpacity }]}>
+            {successMsg}
+          </Animated.Text>
         </Pressable>
       )}
     </SafeAreaView>
@@ -972,18 +1191,47 @@ const s = StyleSheet.create({
   logoSub: { textAlign: 'center', color: '#64748b', fontSize: 13, marginBottom: 8 },
 
   // Fields
-  fieldLabel: { color: '#64748b', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
+  fieldLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 6,
+  },
   optionalTag: { color: '#475569', fontWeight: '400', textTransform: 'none', letterSpacing: 0 },
-  input: { borderWidth: 1, borderColor: '#1e293b', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#f1f5f9', backgroundColor: '#0f172a', fontSize: 15 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#f1f5f9',
+    backgroundColor: '#0f172a',
+    fontSize: 15,
+  },
   secretField: { position: 'relative' as const },
   secretInput: { paddingRight: 48 },
-  eyeBtn: { position: 'absolute' as const, right: 12, top: 0, bottom: 0, justifyContent: 'center' as const },
+  eyeBtn: {
+    position: 'absolute' as const,
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center' as const,
+  },
   eyeIcon: { fontSize: 18, color: '#64748b' },
   textarea: { minHeight: 80, textAlignVertical: 'top' },
 
   // Networks
   networkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  chip: { borderWidth: 1, borderColor: '#1e293b', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#0f172a' },
+  chip: {
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#0f172a',
+  },
   chipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
   chipText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
   chipTextActive: { color: '#000' },
@@ -1001,7 +1249,14 @@ const s = StyleSheet.create({
 
   // Wallet
   walletContainer: { paddingBottom: 40 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   headerTitle: { color: '#64748b', fontWeight: '700', fontSize: 15 },
   headerActions: { flexDirection: 'row', gap: 16 },
   headerIcon: { color: '#64748b', fontSize: 18 },
@@ -1009,7 +1264,13 @@ const s = StyleSheet.create({
   // Balance
   balanceCard: { alignItems: 'center', paddingVertical: 32 },
   balanceLabel: { color: '#64748b', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  balanceValue: { color: '#f1f5f9', fontSize: 42, fontWeight: '800', marginTop: 8, letterSpacing: -1 },
+  balanceValue: {
+    color: '#f1f5f9',
+    fontSize: 42,
+    fontWeight: '800',
+    marginTop: 8,
+    letterSpacing: -1,
+  },
   balanceUnit: { fontSize: 18, fontWeight: '600', color: '#64748b' },
   balanceStatus: { color: '#64748b', fontSize: 12, marginTop: 6 },
 
@@ -1025,19 +1286,41 @@ const s = StyleSheet.create({
   // Panel
   panel: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
   invoiceInfo: { color: '#60a5fa', fontSize: 13, fontWeight: '600' },
-  resultText: { backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b', borderRadius: 10, padding: 12, fontFamily: 'Courier', fontSize: 12, color: '#94a3b8', lineHeight: 16 },
+  resultText: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    fontFamily: 'Courier',
+    fontSize: 12,
+    color: '#94a3b8',
+    lineHeight: 16,
+  },
   pollingText: { color: '#60a5fa', fontSize: 13, fontWeight: '600' },
   copyHint: { color: '#475569', fontSize: 11, textAlign: 'center', marginTop: 4 },
 
   // Settings
-  settingsPanel: { paddingHorizontal: 20, paddingVertical: 16, gap: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  settingsPanel: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+  },
 
   // Transactions
   txSection: { paddingHorizontal: 20, paddingTop: 8 },
   txTitle: { color: '#f1f5f9', fontSize: 15, fontWeight: '700', marginBottom: 12 },
   txEmpty: { color: '#475569', fontSize: 14, textAlign: 'center', paddingVertical: 40 },
   txRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  txIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  txIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   txIconIn: { backgroundColor: 'rgba(74, 222, 128, 0.12)' },
   txIconOut: { backgroundColor: 'rgba(248, 113, 113, 0.12)' },
   txIconText: { fontSize: 16, fontWeight: '700' },
@@ -1054,28 +1337,100 @@ const s = StyleSheet.create({
   perfSection: { paddingHorizontal: 20, paddingTop: 10, gap: 10 },
   perfTitle: { color: '#f1f5f9', fontSize: 15, fontWeight: '700' },
   perfDesc: { color: '#64748b', fontSize: 12 },
-  perfResults: { backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#1e293b', borderRadius: 10, padding: 12, fontFamily: 'Courier', fontSize: 13, color: '#4ade80', lineHeight: 22 },
+  perfResults: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    fontFamily: 'Courier',
+    fontSize: 13,
+    color: '#4ade80',
+    lineHeight: 22,
+  },
 
   // Log
   logSection: { paddingHorizontal: 20, paddingTop: 10, gap: 8 },
-  logText: { backgroundColor: '#020617', borderWidth: 1, borderColor: '#1e293b', borderRadius: 10, padding: 12, color: '#475569', fontFamily: 'Courier', fontSize: 10, lineHeight: 14 },
+  logText: {
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    color: '#475569',
+    fontFamily: 'Courier',
+    fontSize: 10,
+    lineHeight: 14,
+  },
 
   // Transaction detail modal
-  txDetailOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
-  txDetailCard: { backgroundColor: '#111827', borderRadius: 20, padding: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: '#1e293b' },
-  txDetailIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  txDetailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+  },
+  txDetailCard: {
+    backgroundColor: '#111827',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  txDetailIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
   txDetailIconText: { fontSize: 24, fontWeight: '700' },
   txDetailAmount: { fontSize: 28, fontWeight: '800', marginBottom: 4 },
-  txDetailType: { color: '#64748b', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 20 },
+  txDetailType: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 20,
+  },
   txDetailRows: { width: '100%', gap: 12 },
   txDetailRow: { borderBottomWidth: 1, borderBottomColor: '#1e293b', paddingBottom: 10 },
-  txDetailLabel: { color: '#64748b', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
+  txDetailLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
   txDetailValue: { color: '#f1f5f9', fontSize: 14 },
   txDetailHash: { color: '#94a3b8', fontSize: 11, fontFamily: 'Courier' },
 
   // Success
-  successOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  successCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#4ade80', alignItems: 'center', justifyContent: 'center', shadowColor: '#4ade80', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 30, elevation: 20 },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  successCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#4ade80',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4ade80',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 20,
+  },
   successCheck: { color: '#fff', fontSize: 48, fontWeight: '700' },
   successLabel: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 16 },
 });

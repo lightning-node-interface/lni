@@ -19,7 +19,7 @@ class EventEmitter {
     if (!list) return this;
     this._events.set(
       event,
-      list.filter((entry) => entry !== listener),
+      list.filter((entry) => entry !== listener)
     );
     return this;
   }

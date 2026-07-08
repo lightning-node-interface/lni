@@ -171,7 +171,6 @@ pub struct LndPayInvoiceResponseWrapper {
     pub result: LndPayInvoiceResponse,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct Hop {
     pub chan_id: String,

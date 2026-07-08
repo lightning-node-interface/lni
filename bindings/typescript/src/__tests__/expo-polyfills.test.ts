@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const originalMessageChannelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'MessageChannel');
+const originalMessageChannelDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'MessageChannel'
+);
 
 function restoreMessageChannel(): void {
   if (originalMessageChannelDescriptor) {

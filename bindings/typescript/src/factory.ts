@@ -20,34 +20,37 @@ import type {
 
 export function createNode(
   input: { kind: 'phoenixd'; config: PhoenixdConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): PhoenixdNode;
 export function createNode(
   input: { kind: 'cln'; config: ClnConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): ClnNode;
 export function createNode(
   input: { kind: 'lnd'; config: LndConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): LndNode;
 export function createNode(
   input: { kind: 'nwc'; config: NwcConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): NwcNode;
 export function createNode(
   input: { kind: 'strike'; config: StrikeConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): StrikeNode;
 export function createNode(
   input: { kind: 'speed'; config: SpeedConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): SpeedNode;
 export function createNode(
   input: { kind: 'blink'; config: BlinkConfig },
-  options?: NodeRequestOptions,
+  options?: NodeRequestOptions
 ): BlinkNode;
 export function createNode(input: BackendNodeConfig, options?: NodeRequestOptions): LightningNode;
-export function createNode(input: BackendNodeConfig, options: NodeRequestOptions = {}): LightningNode {
+export function createNode(
+  input: BackendNodeConfig,
+  options: NodeRequestOptions = {}
+): LightningNode {
   switch (input.kind) {
     case 'phoenixd':
       return new PhoenixdNode(input.config, options);

@@ -48,7 +48,11 @@ export interface DecodedOfferSection {
 export interface DecodedBlindedPath {
   introductionNode:
     | { type: 'node_id'; nodeId: string }
-    | { type: 'directed_short_channel_id'; direction: 'node_one' | 'node_two'; shortChannelId: string };
+    | {
+        type: 'directed_short_channel_id';
+        direction: 'node_one' | 'node_two';
+        shortChannelId: string;
+      };
   blindingPoint: string;
   blindedHops: Array<{
     blindedNodeId: string;
@@ -166,7 +170,11 @@ export function decodeOffer(offer: string): DecodedOffer {
       }
       case 10:
         decoded.description = textFromBytes(record.value);
-        decoded.sections.push({ name: 'description', type: record.type, value: decoded.description });
+        decoded.sections.push({
+          name: 'description',
+          type: record.type,
+          value: decoded.description,
+        });
         break;
       case 12:
         decoded.features = hex;
@@ -174,7 +182,11 @@ export function decodeOffer(offer: string): DecodedOffer {
         break;
       case 14:
         decoded.absoluteExpiry = Number(integerFromBytes(record.value));
-        decoded.sections.push({ name: 'absolute_expiry', type: record.type, value: decoded.absoluteExpiry });
+        decoded.sections.push({
+          name: 'absolute_expiry',
+          type: record.type,
+          value: decoded.absoluteExpiry,
+        });
         break;
       case 16: {
         const paths = parseBlindedPaths(record.value);
@@ -190,7 +202,11 @@ export function decodeOffer(offer: string): DecodedOffer {
       case 20: {
         const quantity = integerFromBytes(record.value);
         decoded.quantityMax = quantity === 0n ? 'unbounded' : Number(quantity);
-        decoded.sections.push({ name: 'quantity_max', type: record.type, value: decoded.quantityMax });
+        decoded.sections.push({
+          name: 'quantity_max',
+          type: record.type,
+          value: decoded.quantityMax,
+        });
         break;
       }
       case 22:
@@ -198,7 +214,11 @@ export function decodeOffer(offer: string): DecodedOffer {
         decoded.sections.push({ name: 'issuer_id', type: record.type, value: hex });
         break;
       default:
-        decoded.sections.push({ name: record.type % 2 === 0 ? 'unknown_required' : 'unknown', type: record.type, value: hex });
+        decoded.sections.push({
+          name: record.type % 2 === 0 ? 'unknown_required' : 'unknown',
+          type: record.type,
+          value: hex,
+        });
         break;
     }
   }
@@ -297,7 +317,10 @@ function normalizeBolt12Bech32(input: string): string {
     }
   }
 
-  return chunks.map((chunk, index) => (index === 0 ? chunk : chunk.trimStart())).join('').toLowerCase();
+  return chunks
+    .map((chunk, index) => (index === 0 ? chunk : chunk.trimStart()))
+    .join('')
+    .toLowerCase();
 }
 
 function convertBits(values: number[], fromBits: number, toBits: number, pad: boolean): Uint8Array {
@@ -379,7 +402,11 @@ function readBigSize(bytes: Uint8Array, offset: number): { value: bigint; offset
   }
 
   const value = integerFromBytes(bytes.slice(start, end));
-  if ((first === 0xfd && value < 0xfdn) || (first === 0xfe && value <= 0xffffn) || (first === 0xff && value <= 0xffffffffn)) {
+  if (
+    (first === 0xfd && value < 0xfdn) ||
+    (first === 0xfe && value <= 0xffffn) ||
+    (first === 0xff && value <= 0xffffffffn)
+  ) {
     throw new Error('Non-canonical BOLT12 offer BigSize value.');
   }
 
@@ -399,7 +426,10 @@ function parseBlindedPaths(bytes: Uint8Array): DecodedBlindedPath[] {
   return paths;
 }
 
-function parseBlindedPath(bytes: Uint8Array, offset: number): { path: DecodedBlindedPath; offset: number } {
+function parseBlindedPath(
+  bytes: Uint8Array,
+  offset: number
+): { path: DecodedBlindedPath; offset: number } {
   const first = readByte(bytes, offset, 'introduction node');
   let currentOffset = offset + 1;
 
@@ -413,7 +443,10 @@ function parseBlindedPath(bytes: Uint8Array, offset: number): { path: DecodedBli
       shortChannelId: shortChannelId.toString(),
     };
   } else if (first === 2 || first === 3) {
-    const nodeId = Uint8Array.from([first, ...readBytes(bytes, currentOffset, 32, 'introduction node id')]);
+    const nodeId = Uint8Array.from([
+      first,
+      ...readBytes(bytes, currentOffset, 32, 'introduction node id'),
+    ]);
     currentOffset += 32;
     introductionNode = { type: 'node_id', nodeId: bytesToHex(nodeId) };
   } else {
@@ -462,7 +495,10 @@ function parseBlindedPath(bytes: Uint8Array, offset: number): { path: DecodedBli
   };
 }
 
-function readCollectionLength(bytes: Uint8Array, offset: number): { value: bigint; offset: number } {
+function readCollectionLength(
+  bytes: Uint8Array,
+  offset: number
+): { value: bigint; offset: number } {
   const marker = readBytes(bytes, offset, 2, 'collection length');
   let value = integerFromBytes(marker);
   if (value !== 0xffffn) {

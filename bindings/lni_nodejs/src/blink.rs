@@ -27,7 +27,11 @@ impl BlinkNode {
     BlinkConfig {
       base_url: self.inner.base_url.clone(),
       api_key: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -100,7 +104,9 @@ impl BlinkNode {
 
   #[napi]
   pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
-    Err(napi::Error::from_reason("Bolt12 not implemented for Blink".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented for Blink".to_string(),
+    ))
   }
 
   #[napi]

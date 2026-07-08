@@ -40,7 +40,7 @@ const MAX_PROVIDER_ERROR_SEARCH_STEPS = 500;
 function findProperty<T>(
   value: unknown,
   key: string,
-  coerce: (value: unknown) => T | undefined,
+  coerce: (value: unknown) => T | undefined
 ): T | undefined {
   const queue: unknown[] = [value];
   let steps = 0;
@@ -111,7 +111,9 @@ export function providerInfoFromJsonErrorBody(error: unknown): ProviderErrorInfo
 
   const raw = parseProviderJsonBody(error);
   if (raw === undefined) {
-    return error.body || error.status !== undefined ? { status: error.status, message: error.body } : undefined;
+    return error.body || error.status !== undefined
+      ? { status: error.status, message: error.body }
+      : undefined;
   }
 
   const source = isRecord(raw) && isRecord(raw.error) ? raw.error : raw;
@@ -131,16 +133,32 @@ export function mapProviderMessage(message: string | undefined): NwcErrorCode | 
   if (normalized.includes('rate limit') || normalized.includes('too many requests')) {
     return 'RATE_LIMITED';
   }
-  if (normalized.includes('unauthorized') || normalized.includes('unauthenticated') || normalized.includes('not authorized')) {
+  if (
+    normalized.includes('unauthorized') ||
+    normalized.includes('unauthenticated') ||
+    normalized.includes('not authorized')
+  ) {
     return 'UNAUTHORIZED';
   }
-  if (normalized.includes('permission denied') || normalized.includes('forbidden') || normalized.includes('scope')) {
+  if (
+    normalized.includes('permission denied') ||
+    normalized.includes('forbidden') ||
+    normalized.includes('scope')
+  ) {
     return 'RESTRICTED';
   }
-  if (normalized.includes('insufficient') || normalized.includes('balance too low') || normalized.includes('not enough funds')) {
+  if (
+    normalized.includes('insufficient') ||
+    normalized.includes('balance too low') ||
+    normalized.includes('not enough funds')
+  ) {
     return 'INSUFFICIENT_BALANCE';
   }
-  if (normalized.includes('quota') || normalized.includes('limit exceeded') || normalized.includes('amount too high')) {
+  if (
+    normalized.includes('quota') ||
+    normalized.includes('limit exceeded') ||
+    normalized.includes('amount too high')
+  ) {
     return 'QUOTA_EXCEEDED';
   }
   if (
@@ -175,7 +193,7 @@ function mapLniErrorCode(error: LniError): NwcErrorCode {
 
 export function normalizeProviderError(
   error: unknown,
-  options: ProviderErrorNormalizationOptions,
+  options: ProviderErrorNormalizationOptions
 ): NwcError {
   if (error instanceof NwcError) {
     const operation = options.operation ?? error.operation;
@@ -195,7 +213,8 @@ export function normalizeProviderError(
   }
 
   const providerInfo = options.extractProviderError?.(error);
-  const providerStatus = providerInfo?.status ?? (error instanceof LniError ? error.status : undefined);
+  const providerStatus =
+    providerInfo?.status ?? (error instanceof LniError ? error.status : undefined);
   const nwcCode =
     (providerInfo ? options.mapProviderError?.(providerInfo) : undefined) ??
     mapProviderMessage(providerInfo?.message) ??
@@ -203,8 +222,7 @@ export function normalizeProviderError(
     (error instanceof LniError ? mapLniErrorCode(error) : 'OTHER');
 
   const message =
-    providerInfo?.message ??
-    (error instanceof Error ? error.message : 'Unknown provider error');
+    providerInfo?.message ?? (error instanceof Error ? error.message : 'Unknown provider error');
 
   return new NwcError(nwcCode, message, {
     operation: options.operation,
@@ -218,7 +236,7 @@ export function normalizeProviderError(
 
 export function throwNormalizedProviderError(
   error: unknown,
-  options: ProviderErrorNormalizationOptions,
+  options: ProviderErrorNormalizationOptions
 ): never {
   throw normalizeProviderError(error, options);
 }

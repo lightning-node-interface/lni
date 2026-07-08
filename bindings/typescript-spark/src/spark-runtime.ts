@@ -76,10 +76,7 @@ function getRequestUrl(input: RequestInfo | URL): URL | null {
   return null;
 }
 
-function shouldAttachApiKeyHeader(
-  input: RequestInfo | URL,
-  sameOriginOnly: boolean,
-): boolean {
+function shouldAttachApiKeyHeader(input: RequestInfo | URL, sameOriginOnly: boolean): boolean {
   if (!sameOriginOnly) {
     return true;
   }
@@ -102,12 +99,10 @@ function shouldAttachApiKeyHeader(
 }
 
 function createFallbackReaderResponse(response: Response): Response {
-  let reader:
-    | {
-        read(): Promise<{ done: boolean; value?: Uint8Array }>;
-        cancel(): Promise<void>;
-      }
-    | null = null;
+  let reader: {
+    read(): Promise<{ done: boolean; value?: Uint8Array }>;
+    cancel(): Promise<void>;
+  } | null = null;
 
   const fallbackBody = {
     getReader() {
@@ -173,7 +168,7 @@ export function withHeaderFetch(
   headerValue: string,
   options: {
     sameOriginOnly?: boolean;
-  } = {},
+  } = {}
 ): FetchLike {
   const trimmedValue = headerValue.trim();
   if (!trimmedValue) {
@@ -229,7 +224,7 @@ export function installSparkRuntime(options: SparkRuntimeOptions = {}): SparkRun
       options.apiKey,
       {
         sameOriginOnly: options.apiKeySameOriginOnly !== false,
-      },
+      }
     );
   }
 

@@ -1,11 +1,33 @@
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { mapProviderMessage, providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
+import {
+  mapProviderMessage,
+  providerInfoFromJsonErrorBody,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { buildUrl, requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, satsToMsats } from '../internal/transform.js';
 import { encodeBase64 } from '../internal/encoding.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type SpeedConfig, type Transaction } from '../types.js';
+import {
+  InvoiceType,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeInfo,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type Permissions,
+  type SpeedConfig,
+  type Transaction,
+} from '../types.js';
 
 interface SpeedBalanceResponse {
   available: Array<{
@@ -63,7 +85,7 @@ function speedNwcError(
   code: NwcErrorCode,
   message: string,
   operation: NwcErrorOperation,
-  info?: ProviderErrorInfo,
+  info?: ProviderErrorInfo
 ): NwcError {
   return new NwcError(code, message, {
     operation,
@@ -79,7 +101,10 @@ export class SpeedNode implements LightningNode {
   private readonly timeoutMs?: number;
   private readonly baseUrl: string;
 
-  constructor(private readonly config: SpeedConfig, options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: SpeedConfig,
+    options: NodeRequestOptions = {}
+  ) {
     this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.tryspeed.com';
@@ -97,7 +122,7 @@ export class SpeedNode implements LightningNode {
   private async getJson<T>(
     path: string,
     query?: Record<string, string | number | undefined>,
-    operation?: NwcErrorOperation,
+    operation?: NwcErrorOperation
   ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path, query), {
@@ -113,7 +138,11 @@ export class SpeedNode implements LightningNode {
     }
   }
 
-  private async postJson<T>(path: string, json?: unknown, operation?: NwcErrorOperation): Promise<T> {
+  private async postJson<T>(
+    path: string,
+    json?: unknown,
+    operation?: NwcErrorOperation
+  ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
         method: 'POST',
@@ -129,11 +158,18 @@ export class SpeedNode implements LightningNode {
     }
   }
 
-  private async fetchSendTransactions(status?: string[], withdrawRequest?: string): Promise<SpeedSendResponse[]> {
-    const payload = await this.postJson<SpeedSendFilterResponse>('/send/filter', {
-      status,
-      withdraw_request: withdrawRequest,
-    }, withdrawRequest ? 'lookup_invoice' : 'list_transactions');
+  private async fetchSendTransactions(
+    status?: string[],
+    withdrawRequest?: string
+  ): Promise<SpeedSendResponse[]> {
+    const payload = await this.postJson<SpeedSendFilterResponse>(
+      '/send/filter',
+      {
+        status,
+        withdraw_request: withdrawRequest,
+      },
+      withdrawRequest ? 'lookup_invoice' : 'list_transactions'
+    );
 
     return payload.data;
   }
@@ -146,7 +182,7 @@ export class SpeedNode implements LightningNode {
       amountMsats: satsToMsats(send.target_amount),
       feesPaid: satsToMsats(send.speed_fee.amount),
       createdAt: send.created,
-      settledAt: send.status === 'paid' ? send.modified ?? send.created : 0,
+      settledAt: send.status === 'paid' ? (send.modified ?? send.created) : 0,
       description: send.note ?? '',
       descriptionHash: '',
       payerNote: send.note,
@@ -157,7 +193,7 @@ export class SpeedNode implements LightningNode {
   async getPermissions(): Promise<Permissions> {
     throw new LniError(
       'InvalidInput',
-      'Speed API keys cannot be introspected. Manually test permissions against Speed REST endpoints.',
+      'Speed API keys cannot be introspected. Manually test permissions against Speed REST endpoints.'
     );
   }
 
@@ -174,15 +210,23 @@ export class SpeedNode implements LightningNode {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw speedNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for SpeedNode.', 'make_invoice');
+      throw speedNwcError(
+        'NOT_IMPLEMENTED',
+        'Bolt12 is not implemented for SpeedNode.',
+        'make_invoice'
+      );
     }
 
-    const payload = await this.postJson<SpeedCreatePaymentResponse>('/payments', {
-      amount: (params.amountMsats ?? 0) / 1000,
-      currency: 'SATS',
-      memo: params.description,
-      external_id: null,
-    }, 'make_invoice');
+    const payload = await this.postJson<SpeedCreatePaymentResponse>(
+      '/payments',
+      {
+        amount: (params.amountMsats ?? 0) / 1000,
+        currency: 'SATS',
+        memo: params.description,
+        external_id: null,
+      },
+      'make_invoice'
+    );
 
     const lightning = payload.payment_method_options?.lightning;
 
@@ -204,18 +248,25 @@ export class SpeedNode implements LightningNode {
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
     if (params.amountMsats === undefined) {
-      throw new LniError('InvalidInput', 'Speed payInvoice requires amountMsats for frontend mode.');
+      throw new LniError(
+        'InvalidInput',
+        'Speed payInvoice requires amountMsats for frontend mode.'
+      );
     }
 
-    const payload = await this.postJson<SpeedSendResponse>('/send', {
-      amount: params.amountMsats / 1000,
-      currency: 'SATS',
-      target_currency: 'SATS',
-      withdraw_method: 'lightning',
-      withdraw_request: params.invoice,
-      note: 'LNI payment',
-      external_id: null,
-    }, 'pay_invoice');
+    const payload = await this.postJson<SpeedSendResponse>(
+      '/send',
+      {
+        amount: params.amountMsats / 1000,
+        currency: 'SATS',
+        target_currency: 'SATS',
+        withdraw_method: 'lightning',
+        withdraw_request: params.invoice,
+        note: 'LNI payment',
+        external_id: null,
+      },
+      'pay_invoice'
+    );
 
     if (payload.status === 'failed') {
       throw speedNwcError('PAYMENT_FAILED', 'Speed payment failed', 'pay_invoice', {
@@ -239,39 +290,64 @@ export class SpeedNode implements LightningNode {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw speedNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for SpeedNode.', 'make_invoice');
+    throw speedNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for SpeedNode.',
+      'make_invoice'
+    );
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw speedNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for SpeedNode.', 'lookup_invoice');
+    throw speedNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for SpeedNode.',
+      'lookup_invoice'
+    );
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw speedNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for SpeedNode.', 'list_transactions');
+    throw speedNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for SpeedNode.',
+      'list_transactions'
+    );
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw speedNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for SpeedNode.', 'pay_invoice');
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
+    throw speedNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for SpeedNode.',
+      'pay_invoice'
+    );
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
-    const rows = await this.fetchSendTransactions(
-      ['paid', 'unpaid', 'failed'],
-      params.search,
-    );
+    const rows = await this.fetchSendTransactions(['paid', 'unpaid', 'failed'], params.search);
 
     const txs = rows.map((row) => this.sendToTransaction(row));
 
     if (params.paymentHash) {
       const tx = txs.find((candidate) => candidate.paymentHash === params.paymentHash);
       if (!tx) {
-        throw speedNwcError('NOT_FOUND', `Transaction not found for payment hash: ${params.paymentHash}`, 'lookup_invoice');
+        throw speedNwcError(
+          'NOT_FOUND',
+          `Transaction not found for payment hash: ${params.paymentHash}`,
+          'lookup_invoice'
+        );
       }
       return tx;
     }
 
     if (!txs.length) {
-      throw speedNwcError('NOT_FOUND', 'No transactions found matching lookup parameters.', 'lookup_invoice');
+      throw speedNwcError(
+        'NOT_FOUND',
+        'No transactions found matching lookup parameters.',
+        'lookup_invoice'
+      );
     }
 
     return txs[0]!;
@@ -280,7 +356,7 @@ export class SpeedNode implements LightningNode {
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
     const rows = await this.fetchSendTransactions(
       params.search ? undefined : ['unpaid', 'paid', 'failed'],
-      params.search,
+      params.search
     );
 
     const mapped = rows.map((row) => this.sendToTransaction(row));
@@ -291,9 +367,7 @@ export class SpeedNode implements LightningNode {
     const start = Math.max(0, params.from || 0);
     const end = params.limit > 0 ? start + params.limit : undefined;
 
-    return filtered
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(start, end);
+    return filtered.sort((a, b) => b.createdAt - a.createdAt).slice(start, end);
   }
 
   async decode(str: string): Promise<string> {
@@ -304,7 +378,10 @@ export class SpeedNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,

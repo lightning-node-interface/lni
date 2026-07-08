@@ -1,11 +1,40 @@
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { isRecord, mapProviderMessage, providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
+import {
+  isRecord,
+  mapProviderMessage,
+  providerInfoFromJsonErrorBody,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats, toUnixSeconds } from '../internal/transform.js';
+import {
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  satsToMsats,
+  toUnixSeconds,
+} from '../internal/transform.js';
 import { encodeBase64 } from '../internal/encoding.js';
-import { InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type PhoenixdConfig, type Transaction, type NodeInfo } from '../types.js';
+import {
+  InvoiceType,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type Permissions,
+  type PhoenixdConfig,
+  type Transaction,
+  type NodeInfo,
+} from '../types.js';
 
 interface PhoenixdInfoResponse {
   nodeId: string;
@@ -87,7 +116,7 @@ function phoenixdNwcError(
   code: NwcErrorCode,
   message: string,
   operation: NwcErrorOperation,
-  info?: ProviderErrorInfo,
+  info?: ProviderErrorInfo
 ): NwcError {
   return new NwcError(code, message, {
     operation,
@@ -98,7 +127,10 @@ function phoenixdNwcError(
   });
 }
 
-function phoenixdPaymentFailure(payload: unknown, operation: NwcErrorOperation): NwcError | undefined {
+function phoenixdPaymentFailure(
+  payload: unknown,
+  operation: NwcErrorOperation
+): NwcError | undefined {
   if (!isRecord(payload)) {
     return undefined;
   }
@@ -125,14 +157,22 @@ function phoenixdPaymentFailure(payload: unknown, operation: NwcErrorOperation):
     message,
   };
 
-  return phoenixdNwcError(mapPhoenixdProviderError(info) ?? 'PAYMENT_FAILED', message, operation, info);
+  return phoenixdNwcError(
+    mapPhoenixdProviderError(info) ?? 'PAYMENT_FAILED',
+    message,
+    operation,
+    info
+  );
 }
 
 export class PhoenixdNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
 
-  constructor(private readonly config: PhoenixdConfig, options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: PhoenixdConfig,
+    options: NodeRequestOptions = {}
+  ) {
     this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
   }
@@ -144,7 +184,7 @@ export class PhoenixdNode implements LightningNode {
   private async requestJson<T>(
     path: string,
     args: Parameters<typeof requestJson<T>>[2],
-    operation?: NwcErrorOperation,
+    operation?: NwcErrorOperation
   ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path, args?.query), {
@@ -166,7 +206,7 @@ export class PhoenixdNode implements LightningNode {
   private async requestText(
     path: string,
     args: Parameters<typeof requestText>[2],
-    operation?: NwcErrorOperation,
+    operation?: NwcErrorOperation
   ): Promise<string> {
     try {
       return await requestText(this.fetchFn, buildUrl(this.config.url, path, args?.query), {
@@ -188,7 +228,7 @@ export class PhoenixdNode implements LightningNode {
   async getPermissions(): Promise<Permissions> {
     throw new LniError(
       'InvalidInput',
-      'Phoenixd passwords cannot be introspected. Manually test permissions against Phoenixd REST endpoints.',
+      'Phoenixd passwords cannot be introspected. Manually test permissions against Phoenixd REST endpoints.'
     );
   }
 
@@ -214,13 +254,17 @@ export class PhoenixdNode implements LightningNode {
     const invoiceType = params.invoiceType ?? InvoiceType.Bolt11;
 
     if (invoiceType === InvoiceType.Bolt12) {
-      const offer = await this.requestText('/createoffer', {
-        method: 'POST',
-        form: {
-          description: params.description,
-          amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+      const offer = await this.requestText(
+        '/createoffer',
+        {
+          method: 'POST',
+          form: {
+            description: params.description,
+            amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+          },
         },
-      }, 'make_invoice');
+        'make_invoice'
+      );
 
       return emptyTransaction({
         type: 'incoming',
@@ -234,14 +278,18 @@ export class PhoenixdNode implements LightningNode {
       });
     }
 
-    const payload = await this.requestJson<PhoenixdBolt11Response>('/createinvoice', {
-      method: 'POST',
-      form: {
-        amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : 0,
-        expirySeconds: params.expiry ?? 3600,
-        description: params.description,
+    const payload = await this.requestJson<PhoenixdBolt11Response>(
+      '/createinvoice',
+      {
+        method: 'POST',
+        form: {
+          amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : 0,
+          expirySeconds: params.expiry ?? 3600,
+          description: params.description,
+        },
       },
-    }, 'make_invoice');
+      'make_invoice'
+    );
 
     return emptyTransaction({
       type: 'incoming',
@@ -257,13 +305,17 @@ export class PhoenixdNode implements LightningNode {
   }
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
-    const payload = await this.requestJson<PhoenixdPayResponse>('/payinvoice', {
-      method: 'POST',
-      form: {
-        invoice: params.invoice,
-        amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+    const payload = await this.requestJson<PhoenixdPayResponse>(
+      '/payinvoice',
+      {
+        method: 'POST',
+        form: {
+          invoice: params.invoice,
+          amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+        },
       },
-    }, 'pay_invoice');
+      'pay_invoice'
+    );
 
     const paymentFailure = phoenixdPaymentFailure(payload, 'pay_invoice');
     if (paymentFailure) {
@@ -278,13 +330,17 @@ export class PhoenixdNode implements LightningNode {
   }
 
   async createOffer(params: CreateOfferParams): Promise<Offer> {
-    const bolt12 = await this.requestText('/createoffer', {
-      method: 'POST',
-      form: {
-        description: params.description,
-        amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+    const bolt12 = await this.requestText(
+      '/createoffer',
+      {
+        method: 'POST',
+        form: {
+          description: params.description,
+          amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
+        },
       },
-    }, 'make_invoice');
+      'make_invoice'
+    );
 
     return {
       offerId: '',
@@ -309,15 +365,23 @@ export class PhoenixdNode implements LightningNode {
     return [];
   }
 
-  async payOffer(offer: string, amountMsats: number, payerNote?: string): Promise<PayInvoiceResponse> {
-    const payload = await this.requestJson<PhoenixdPayResponse>('/payoffer', {
-      method: 'POST',
-      form: {
-        offer,
-        amountSat: Math.floor(amountMsats / 1000),
-        message: payerNote,
+  async payOffer(
+    offer: string,
+    amountMsats: number,
+    payerNote?: string
+  ): Promise<PayInvoiceResponse> {
+    const payload = await this.requestJson<PhoenixdPayResponse>(
+      '/payoffer',
+      {
+        method: 'POST',
+        form: {
+          offer,
+          amountSat: Math.floor(amountMsats / 1000),
+          message: payerNote,
+        },
       },
-    }, 'pay_invoice');
+      'pay_invoice'
+    );
 
     const paymentFailure = phoenixdPaymentFailure(payload, 'pay_invoice');
     if (paymentFailure) {
@@ -334,7 +398,10 @@ export class PhoenixdNode implements LightningNode {
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
     if (!params.paymentHash) {
       if (!params.search) {
-        throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search for PhoenixdNode.');
+        throw new LniError(
+          'InvalidInput',
+          'lookupInvoice requires paymentHash or search for PhoenixdNode.'
+        );
       }
 
       const txs = await this.listTransactions({ from: 0, limit: 100, search: params.search });
@@ -345,11 +412,16 @@ export class PhoenixdNode implements LightningNode {
       return tx;
     }
 
-    const invoice = await this.requestJson<PhoenixdInvoiceResponse>(`/payments/incoming/${params.paymentHash}`, {
-      method: 'GET',
-    }, 'lookup_invoice');
+    const invoice = await this.requestJson<PhoenixdInvoiceResponse>(
+      `/payments/incoming/${params.paymentHash}`,
+      {
+        method: 'GET',
+      },
+      'lookup_invoice'
+    );
 
-    const settledAt = invoice.completedAt && invoice.isPaid ? toUnixSeconds(invoice.completedAt) : 0;
+    const settledAt =
+      invoice.completedAt && invoice.isPaid ? toUnixSeconds(invoice.completedAt) : 0;
 
     return emptyTransaction({
       type: 'incoming',
@@ -375,15 +447,23 @@ export class PhoenixdNode implements LightningNode {
       all: false,
     };
 
-    const incoming = await this.requestJson<PhoenixdInvoiceResponse[]>('/payments/incoming', {
-      method: 'GET',
-      query,
-    }, 'list_transactions');
+    const incoming = await this.requestJson<PhoenixdInvoiceResponse[]>(
+      '/payments/incoming',
+      {
+        method: 'GET',
+        query,
+      },
+      'list_transactions'
+    );
 
-    const outgoing = await this.requestJson<PhoenixdOutgoingPaymentResponse[]>('/payments/outgoing', {
-      method: 'GET',
-      query,
-    }, 'list_transactions');
+    const outgoing = await this.requestJson<PhoenixdOutgoingPaymentResponse[]>(
+      '/payments/outgoing',
+      {
+        method: 'GET',
+        query,
+      },
+      'list_transactions'
+    );
 
     const txs: Transaction[] = [];
 
@@ -443,7 +523,10 @@ export class PhoenixdNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,

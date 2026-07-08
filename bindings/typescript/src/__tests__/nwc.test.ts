@@ -49,7 +49,7 @@ vi.mock('@getalby/sdk/nwc', () => ({
     }),
     {
       parseWalletConnectUrl: vi.fn(() => ({ walletPubkey: 'wallet-pubkey' })),
-    },
+    }
   ),
 }));
 
@@ -66,7 +66,8 @@ import { registerSha256DigestFallback } from '../internal/sha256.js';
 const PAYMENT_HASH = '31b06bf9be4c938914030eb23d583a4fe6f6e2f3374293170f027be248ed6370';
 const OTHER_PAYMENT_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
 const ZERO_PREIMAGE = '0000000000000000000000000000000000000000000000000000000000000000';
-const ZERO_PREIMAGE_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
+const ZERO_PREIMAGE_PAYMENT_HASH =
+  '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
 const BOLT11_INVOICE = 'lnbc1testinvoice';
 const NWC_URI = 'nostr+walletconnect://wallet?relay=wss://relay.example&secret=test';
 const NWC_URI_WITH_LUD16 = `${NWC_URI}&lud16=test%40example.com`;
@@ -178,7 +179,7 @@ describe('NwcNode.payInvoice', () => {
       {
         replyTimeout: 15_000,
         publishTimeout: 5_000,
-      },
+      }
     );
     expect(nwcMocks.payInvoice).not.toHaveBeenCalled();
   });
@@ -211,7 +212,9 @@ describe('NwcNode.payInvoice', () => {
       message: 'quota spent',
     });
 
-    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toBeInstanceOf(NwcError);
+    await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toBeInstanceOf(
+      NwcError
+    );
   });
 
   it('preserves LniError status and body when rewrapping request failures', async () => {
@@ -219,7 +222,7 @@ describe('NwcNode.payInvoice', () => {
       new LniError('Http', 'gateway timeout', {
         status: 504,
         body: '{"error":"timeout"}',
-      }),
+      })
     );
 
     await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toMatchObject({
@@ -266,7 +269,7 @@ describe('NwcNode.payInvoice', () => {
     });
 
     await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toThrow(
-      'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.',
+      'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.'
     );
   });
 });
@@ -282,17 +285,20 @@ describe('NwcNode.getLightningAddress', () => {
           minSendable: 1,
           metadata: '[["text/plain","test"]]',
           tag: 'payRequest',
-        }),
+        })
       )
       .mockResolvedValueOnce(
         makeJsonResponse({
           pr: 'lnbc1testinvoice',
           verify: 'https://example.com/lnurl/verify',
-        }),
+        })
       )
       .mockResolvedValueOnce(makeJsonResponse({ status: 'OK' }));
 
-    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+    const response = await new NwcNode(
+      { nwcUri: NWC_URI_WITH_LUD16 },
+      { fetch: fetchMock }
+    ).getLightningAddress();
 
     expect(response).toEqual({
       lightningAddress: 'test@example.com',
@@ -314,11 +320,14 @@ describe('NwcNode.getLightningAddress', () => {
           minSendable: 1,
           metadata: '[["text/plain","test"]]',
           tag: 'payRequest',
-        }),
+        })
       )
       .mockResolvedValueOnce(makeJsonResponse({ pr: 'lnbc1testinvoice' }));
 
-    const response = await new NwcNode({ nwcUri: NWC_URI_WITH_LUD16 }, { fetch: fetchMock }).getLightningAddress();
+    const response = await new NwcNode(
+      { nwcUri: NWC_URI_WITH_LUD16 },
+      { fetch: fetchMock }
+    ).getLightningAddress();
 
     expect(response).toEqual({
       lightningAddress: 'test@example.com',
@@ -329,12 +338,14 @@ describe('NwcNode.getLightningAddress', () => {
 
   it('throws clearly when the NWC URI has no lud16 value', async () => {
     await expect(makeNode().getLightningAddress()).rejects.toThrow(
-      'NWC URI does not include a lud16 Lightning Address.',
+      'NWC URI does not include a lud16 Lightning Address.'
     );
   });
 
   it('rejects malformed lud16 values before treating LNURL verify as unsupported', async () => {
-    await expect(new NwcNode({ nwcUri: NWC_URI_WITH_MALFORMED_LUD16 }).getLightningAddress()).rejects.toMatchObject({
+    await expect(
+      new NwcNode({ nwcUri: NWC_URI_WITH_MALFORMED_LUD16 }).getLightningAddress()
+    ).rejects.toMatchObject({
       code: 'InvalidInput',
       message: 'Invalid Lightning Address format.',
     });
@@ -409,7 +420,7 @@ describe('NwcNode.lookupInvoice', () => {
       nwcTransaction({
         payment_hash: `${OTHER_PAYMENT_HASH.slice(0, -2)}${String(index).padStart(2, '0')}`,
         invoice: `lnbc1other${index}`,
-      }),
+      })
     );
     nwcMocks.listTransactions
       .mockResolvedValueOnce({ transactions: firstPage })
@@ -419,8 +430,16 @@ describe('NwcNode.lookupInvoice', () => {
 
     expect(tx.paymentHash).toBe(PAYMENT_HASH);
     expect(tx.amountMsats).toBe(7000);
-    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(1, { from: 0, limit: 100, offset: 0 });
-    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(2, { from: 0, limit: 100, offset: 100 });
+    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(1, {
+      from: 0,
+      limit: 100,
+      offset: 0,
+    });
+    expect(nwcMocks.listTransactions).toHaveBeenNthCalledWith(2, {
+      from: 0,
+      limit: 100,
+      offset: 100,
+    });
     expect(consoleError).not.toHaveBeenCalled();
   });
 
@@ -433,7 +452,7 @@ describe('NwcNode.lookupInvoice', () => {
     });
 
     await expect(makeNode().lookupInvoice({ paymentHash: PAYMENT_HASH })).rejects.toThrow(
-      'Failed to lookup invoice: BAD_DECRYPT',
+      'Failed to lookup invoice: BAD_DECRYPT'
     );
 
     expect(consoleError).toHaveBeenCalledTimes(1);
@@ -447,7 +466,7 @@ describe('NwcNode.lookupInvoice', () => {
     nwcMocks.listTransactions.mockRejectedValue(new Error('list_transactions failed'));
 
     await expect(makeNode().lookupInvoice({ paymentHash: PAYMENT_HASH })).rejects.toThrow(
-      'Failed to lookup invoice: BAD_DECRYPT',
+      'Failed to lookup invoice: BAD_DECRYPT'
     );
 
     expect(consoleError).toHaveBeenCalledTimes(1);

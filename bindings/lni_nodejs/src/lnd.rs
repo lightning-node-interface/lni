@@ -1,5 +1,6 @@
 use lni::{
-  lnd::lib::LndConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
+  lnd::lib::LndConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  PayInvoiceParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -25,7 +26,11 @@ impl LndNode {
     LndConfig {
       url: self.inner.url.clone(),
       macaroon: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -43,7 +48,9 @@ impl LndNode {
   #[napi]
   pub fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::types::Offer> {
     // LND doesn't support BOLT12 offers yet
-    Err(napi::Error::from_reason("Bolt12 not implemented for LND".to_string()))
+    Err(napi::Error::from_reason(
+      "Bolt12 not implemented for LND".to_string(),
+    ))
   }
 
   #[napi]
@@ -184,10 +191,7 @@ impl LndNode {
   }
 
   #[napi]
-  pub async fn list_offers_async(
-    &self,
-    _search: Option<String>,
-  ) -> Result<Vec<lni::types::Offer>> {
+  pub async fn list_offers_async(&self, _search: Option<String>) -> Result<Vec<lni::types::Offer>> {
     // Since BOLT12 is not implemented, we return the same error asynchronously
     Err(napi::Error::from_reason(
       "Bolt12 not implemented".to_string(),

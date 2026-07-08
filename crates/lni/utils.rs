@@ -40,8 +40,9 @@ pub fn calculate_fee_msats(
 }
 
 pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
-    let invoice = Bolt11Invoice::from_str(&str)
-        .map_err(|e| crate::ApiError::InvalidInput(format!("Failed to parse BOLT11 invoice: {}", e)))?;
+    let invoice = Bolt11Invoice::from_str(&str).map_err(|e| {
+        crate::ApiError::InvalidInput(format!("Failed to parse BOLT11 invoice: {}", e))
+    })?;
 
     let mut decoded = Map::new();
     decoded.insert("paymentRequest".to_string(), json!(str));
@@ -56,7 +57,10 @@ pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
     let expiry = invoice.expiry_time().as_secs();
     decoded.insert("timestamp".to_string(), json!(timestamp));
     decoded.insert("expiresAt".to_string(), json!(timestamp + expiry));
-    decoded.insert("payment_hash".to_string(), json!(invoice.payment_hash().to_string()));
+    decoded.insert(
+        "payment_hash".to_string(),
+        json!(invoice.payment_hash().to_string()),
+    );
 
     match invoice.description() {
         Bolt11InvoiceDescriptionRef::Direct(description) => {
@@ -67,7 +71,10 @@ pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
         }
     }
 
-    decoded.insert("payment_secret".to_string(), json!(hex::encode(invoice.payment_secret().0)));
+    decoded.insert(
+        "payment_secret".to_string(),
+        json!(hex::encode(invoice.payment_secret().0)),
+    );
     decoded.insert("expiry".to_string(), json!(expiry));
     decoded.insert(
         "min_final_cltv_expiry".to_string(),
@@ -86,13 +93,13 @@ pub fn decode_bolt11(str: String) -> Result<String, crate::ApiError> {
         .collect();
     decoded.insert("route_hints".to_string(), json!(route_hints));
 
-    serde_json::to_string(&Value::Object(decoded))
-    .map_err(crate::ApiError::from)
+    serde_json::to_string(&Value::Object(decoded)).map_err(crate::ApiError::from)
 }
 
 pub fn decode_offer(str: String) -> Result<String, crate::ApiError> {
-    let offer = Bolt12Offer::from_str(&str)
-        .map_err(|e| crate::ApiError::InvalidInput(format!("Failed to parse BOLT12 offer: {:?}", e)))?;
+    let offer = Bolt12Offer::from_str(&str).map_err(|e| {
+        crate::ApiError::InvalidInput(format!("Failed to parse BOLT12 offer: {:?}", e))
+    })?;
 
     let mut sections = vec![json!({
         "name": "offer",
@@ -120,8 +127,13 @@ pub fn decode_offer(str: String) -> Result<String, crate::ApiError> {
     }
 
     let (currency, amount, amount_msats) = match offer.amount() {
-        Some(Amount::Bitcoin { amount_msats }) => (None, Some(amount_msats.to_string()), Some(amount_msats)),
-        Some(Amount::Currency { iso4217_code, amount }) => (
+        Some(Amount::Bitcoin { amount_msats }) => {
+            (None, Some(amount_msats.to_string()), Some(amount_msats))
+        }
+        Some(Amount::Currency {
+            iso4217_code,
+            amount,
+        }) => (
             Some(iso4217_code.to_string()),
             Some(amount.to_string()),
             None,
@@ -141,7 +153,9 @@ pub fn decode_offer(str: String) -> Result<String, crate::ApiError> {
         }));
     }
 
-    let description = offer.description().map(|description| description.to_string());
+    let description = offer
+        .description()
+        .map(|description| description.to_string());
     if let Some(description) = &description {
         sections.push(json!({
             "name": "description",
@@ -188,7 +202,9 @@ pub fn decode_offer(str: String) -> Result<String, crate::ApiError> {
         "value": quantity_max.clone(),
     }));
 
-    let issuer_signing_pubkey = offer.issuer_signing_pubkey().map(|pubkey| pubkey.to_string());
+    let issuer_signing_pubkey = offer
+        .issuer_signing_pubkey()
+        .map(|pubkey| pubkey.to_string());
     if let Some(issuer_signing_pubkey) = &issuer_signing_pubkey {
         sections.push(json!({
             "name": "issuer_id",
@@ -263,7 +279,8 @@ fn normalize_blinded_paths(paths: &[BlindedMessagePath]) -> Vec<serde_json::Valu
 #[cfg(test)]
 mod decode_tests {
     const BOLT11: &str = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
-    const BOLT12_OFFER: &str = "lno1pgx9getnwss8vetrw3hhyuckyypwa3eyt44h6txtxquqh7lz5djge4afgfjn7k4rgrkuag0jsd5xvxg";
+    const BOLT12_OFFER: &str =
+        "lno1pgx9getnwss8vetrw3hhyuckyypwa3eyt44h6txtxquqh7lz5djge4afgfjn7k4rgrkuag0jsd5xvxg";
     const BOLT12_OFFER_WITH_CURRENCY_AMOUNT: &str = "lno1qcp4256ypqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj";
     const BOLT12_OFFER_WITH_PATH: &str = "lno1pgx9getnwss8vetrw3hhyucs5ypjgef743p5fzqq9nqxh0ah7y87rzv3ud0eleps9kl2d5348hq2k8qzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqpqqqqqqqqqqqqqqqqqqqqqqqqqqqzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqqzq3zyg3zyg3zyg3vggzamrjghtt05kvkvpcp0a79gmy3nt6jsn98ad2xs8de6sl9qmgvcvs";
 
@@ -289,7 +306,13 @@ mod decode_tests {
         let value: serde_json::Value = serde_json::from_str(&decoded).unwrap();
         assert_eq!(value["offer"], BOLT12_OFFER);
         assert_eq!(value["type"], "bolt12_offer");
-        assert!(value["issuerSigningPubkey"].as_str().unwrap_or_default().len() > 0);
+        assert!(
+            value["issuerSigningPubkey"]
+                .as_str()
+                .unwrap_or_default()
+                .len()
+                > 0
+        );
     }
 
     #[test]

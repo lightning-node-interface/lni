@@ -1,4 +1,7 @@
-use lni::{cln::lib::ClnConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams};
+use lni::{
+  cln::lib::ClnConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  PayInvoiceParams,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 #[napi]
@@ -23,7 +26,11 @@ impl ClnNode {
     ClnConfig {
       url: self.inner.url.clone(),
       rune: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -39,13 +46,17 @@ impl ClnNode {
 
   #[napi]
   pub async fn get_info(&self) -> napi::Result<lni::NodeInfo> {
-    let info =
-      lni::cln::api::get_info(self.inner.clone()).await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let info = lni::cln::api::get_info(self.inner.clone())
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(info)
   }
 
   #[napi]
-  pub async fn create_invoice(&self, params: CreateInvoiceParams) -> napi::Result<lni::Transaction> {
+  pub async fn create_invoice(
+    &self,
+    params: CreateInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
     let txn = lni::cln::api::create_invoice(
       self.inner.clone(),
       params.invoice_type.unwrap_or(lni::InvoiceType::Bolt11),
@@ -55,35 +66,43 @@ impl ClnNode {
       params.description_hash,
       params.expiry,
     )
-    .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
   #[napi]
-  pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<lni::types::PayInvoiceResponse> {
+  pub async fn pay_invoice(
+    &self,
+    params: PayInvoiceParams,
+  ) -> Result<lni::types::PayInvoiceResponse> {
     let invoice = lni::cln::api::pay_invoice(self.inner.clone(), params)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(invoice)
   }
 
   #[napi]
   pub async fn create_offer(&self, params: CreateOfferParams) -> Result<lni::Offer> {
     let offer = lni::cln::api::create_offer(self.inner.clone(), params)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
   pub async fn get_offer(&self, search: Option<String>) -> Result<lni::types::Offer> {
     let offer = lni::cln::api::get_offer(self.inner.clone(), search)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
   pub async fn list_offers(&self, search: Option<String>) -> Result<Vec<lni::types::Offer>> {
     let offers = lni::cln::api::list_offers(self.inner.clone(), search)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offers)
   }
 
@@ -95,15 +114,25 @@ impl ClnNode {
     payer_note: Option<String>,
   ) -> napi::Result<lni::PayInvoiceResponse> {
     let offer = lni::cln::api::pay_offer(self.inner.clone(), offer, amount_msats, payer_note)
-      .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(offer)
   }
 
   #[napi]
-  pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> napi::Result<lni::Transaction> {
-    let txn =
-      lni::cln::api::lookup_invoice(self.inner.clone(), params.payment_hash, None, None, params.search)
-        .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+  pub async fn lookup_invoice(
+    &self,
+    params: LookupInvoiceParams,
+  ) -> napi::Result<lni::Transaction> {
+    let txn = lni::cln::api::lookup_invoice(
+      self.inner.clone(),
+      params.payment_hash,
+      None,
+      None,
+      params.search,
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txn)
   }
 
@@ -112,23 +141,28 @@ impl ClnNode {
     &self,
     params: lni::types::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns =
-      lni::cln::api::list_transactions(self.inner.clone(), params.from, params.limit, params.search)
-        .await.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::cln::api::list_transactions(
+      self.inner.clone(),
+      params.from,
+      params.limit,
+      params.search,
+    )
+    .await
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
   #[napi]
   pub fn decode(&self, str: String) -> Result<String> {
-    let decoded = lni::cln::api::decode(str)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let decoded =
+      lni::cln::api::decode(str).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
   #[napi]
   pub fn decode_offer(&self, offer: String) -> Result<String> {
-    let decoded = lni::cln::api::decode_offer(offer)
-      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let decoded =
+      lni::cln::api::decode_offer(offer).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(decoded)
   }
 
@@ -139,14 +173,16 @@ impl ClnNode {
     callback: T,
   ) -> Result<()> {
     let config = self.inner.clone();
-    
+
     // Block on the async function in the current thread, similar to LND's sync approach
     tokio::runtime::Runtime::new().unwrap().block_on(async {
       lni::cln::api::poll_invoice_events(config, params, move |status, tx| {
-        let _ = callback(status.clone(), tx.clone()).map_err(|err| napi::Error::from_reason(err.to_string()));
-      }).await;
+        let _ = callback(status.clone(), tx.clone())
+          .map_err(|err| napi::Error::from_reason(err.to_string()));
+      })
+      .await;
     });
-    
+
     Ok(())
   }
 }

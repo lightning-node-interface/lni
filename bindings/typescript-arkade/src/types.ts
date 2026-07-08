@@ -1,4 +1,10 @@
-export type ArkadeBoltzNetwork = 'mainnet' | 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest';
+export type ArkadeBoltzNetwork =
+  | 'mainnet'
+  | 'bitcoin'
+  | 'testnet'
+  | 'signet'
+  | 'mutinynet'
+  | 'regtest';
 
 export interface ArkadeBoltzSwapFilter {
   id?: string | string[];

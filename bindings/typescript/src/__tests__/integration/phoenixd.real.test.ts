@@ -11,31 +11,43 @@ describe('Real integration from crates/lni/.env > PhoenixdNode', () => {
       password: process.env.PHOENIXD_PASSWORD!,
     });
 
-  itIf(enabled)('getInfo', async () => {
-    await runOrSkipKnownError(async () => {
-      const node = makeNode();
-      const info = await node.getInfo();
-      expect(typeof info.pubkey).toBe('string');
-      expect(info.pubkey.length).toBeGreaterThan(0);
-    }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
-  }, timeout);
+  itIf(enabled)(
+    'getInfo',
+    async () => {
+      await runOrSkipKnownError(async () => {
+        const node = makeNode();
+        const info = await node.getInfo();
+        expect(typeof info.pubkey).toBe('string');
+        expect(info.pubkey.length).toBeGreaterThan(0);
+      }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
+    },
+    timeout
+  );
 
-  itIf(enabled)('createInvoice + lookupInvoice + listTransactions', async () => {
-    await runOrSkipKnownError(async () => {
-      const node = makeNode();
-      const invoice = await node.createInvoice({
-        amountMsats: 2_000,
-        description: testInvoiceLabel('phoenixd'),
-      });
-      console.log('Phoenixd Invoice:', invoice);
-      expect(invoice.invoice.length).toBeGreaterThan(0);
-      expect(invoice.paymentHash.length).toBeGreaterThan(0);
+  itIf(enabled)(
+    'createInvoice + lookupInvoice + listTransactions',
+    async () => {
+      await runOrSkipKnownError(async () => {
+        const node = makeNode();
+        const invoice = await node.createInvoice({
+          amountMsats: 2_000,
+          description: testInvoiceLabel('phoenixd'),
+        });
+        console.log('Phoenixd Invoice:', invoice);
+        expect(invoice.invoice.length).toBeGreaterThan(0);
+        expect(invoice.paymentHash.length).toBeGreaterThan(0);
 
-      const lookedUp = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
-      expect(lookedUp.paymentHash).toBe(invoice.paymentHash);
+        const lookedUp = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
+        expect(lookedUp.paymentHash).toBe(invoice.paymentHash);
 
-      const txs = await node.listTransactions({ from: 0, limit: 25, paymentHash: invoice.paymentHash });
-      expect(Array.isArray(txs)).toBe(true);
-    }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
-  }, timeout);
+        const txs = await node.listTransactions({
+          from: 0,
+          limit: 25,
+          paymentHash: invoice.paymentHash,
+        });
+        expect(Array.isArray(txs)).toBe(true);
+      }, ['fetch failed', 'econnrefused', 'enotfound', 'timed out']);
+    },
+    timeout
+  );
 });

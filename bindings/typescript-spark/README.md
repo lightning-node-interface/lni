@@ -7,7 +7,8 @@ import { SparkNode, installSparkRuntime } from '@sunnyln/lni-spark';
 
 const runtime = installSparkRuntime();
 const node = new SparkNode({
-  mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+  mnemonic:
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
   network: 'mainnet',
 });
 

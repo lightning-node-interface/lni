@@ -9,8 +9,42 @@ import {
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { btcToMsats, emptyNodeInfo, emptyTransaction, matchesSearch, msatsToBtc, parseOptionalNumber, toUnixSeconds } from '../internal/transform.js';
-import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type OnchainTransaction, type PrepareOnchainTransactionParams, type StrikeConfig, type Transaction } from '../types.js';
+import {
+  btcToMsats,
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  msatsToBtc,
+  parseOptionalNumber,
+  toUnixSeconds,
+} from '../internal/transform.js';
+import {
+  DEFAULT_ONCHAIN_FEE_GUARDRAIL,
+  InvoiceType,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeInfo,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type OnchainFeeGuardrail,
+  type OnchainFeePayer,
+  type OnchainFeePreference,
+  type OnchainPayments,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type PayOnchainOptions,
+  type PayOnchainResponse,
+  type Permissions,
+  type OnchainTransaction,
+  type PrepareOnchainTransactionParams,
+  type StrikeConfig,
+  type Transaction,
+} from '../types.js';
 
 interface StrikeBalance {
   currency: string;
@@ -172,7 +206,10 @@ function normalizeStrikeTierSpeed(fee: OnchainFeePreference): 'fast' | 'standard
   }
 
   if (fee.type !== 'speed') {
-    throw new LniError('InvalidInput', `Strike payOnchain does not support ${fee.type} fee preferences.`);
+    throw new LniError(
+      'InvalidInput',
+      `Strike payOnchain does not support ${fee.type} fee preferences.`
+    );
   }
 
   switch (fee.speed) {
@@ -240,7 +277,7 @@ function strikeNwcError(
   code: NwcErrorCode,
   message: string,
   operation: NwcErrorOperation,
-  info?: ProviderErrorInfo,
+  info?: ProviderErrorInfo
 ): NwcError {
   return new NwcError(code, message, {
     operation,
@@ -283,7 +320,12 @@ function containsDuplicatePaymentQuoteCode(value: unknown): boolean {
 }
 
 function duplicatePaymentQuoteFromError(error: unknown): DuplicatePaymentQuote | undefined {
-  if (!(error instanceof LniError) || error.code !== 'Http' || error.status !== 422 || !error.body) {
+  if (
+    !(error instanceof LniError) ||
+    error.code !== 'Http' ||
+    error.status !== 422 ||
+    !error.body
+  ) {
     return undefined;
   }
 
@@ -312,14 +354,17 @@ function assertValidGuardrailLimit(value: number, name: string): void {
   }
 }
 
-function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<OnchainFeeGuardrail> | undefined {
+function resolveOnchainFeeGuardrail(
+  options?: PayOnchainOptions
+): Required<OnchainFeeGuardrail> | undefined {
   if (options?.dangerouslyDisableFeeGuardrail) {
     return undefined;
   }
 
   const guardrail = {
     maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
-    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+    maxFeePercent:
+      options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
   };
 
   assertValidGuardrailLimit(guardrail.maxFeeSats, 'feeGuardrail.maxFeeSats');
@@ -328,7 +373,10 @@ function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<Oncha
   return guardrail;
 }
 
-function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+function assertOnchainFeeGuardrail(
+  transaction: OnchainTransaction,
+  options?: PayOnchainOptions
+): void {
   const guardrail = resolveOnchainFeeGuardrail(options);
   if (!guardrail) {
     return;
@@ -338,22 +386,28 @@ function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: Pa
   if (feeSats === undefined) {
     throw new LniError(
       'InvalidInput',
-      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.',
+      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.'
     );
   }
 
   if (!Number.isSafeInteger(feeSats) || feeSats < 0) {
-    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because feeSats is invalid.'
+    );
   }
 
   if (!Number.isSafeInteger(transaction.amountSats) || transaction.amountSats <= 0) {
-    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because amountSats is invalid.'
+    );
   }
 
   if (feeSats > guardrail.maxFeeSats) {
     throw new LniError(
       'InvalidInput',
-      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`,
+      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`
     );
   }
 
@@ -361,7 +415,7 @@ function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: Pa
   if (feePercent > guardrail.maxFeePercent) {
     throw new LniError(
       'InvalidInput',
-      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`,
+      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`
     );
   }
 }
@@ -371,7 +425,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   private readonly timeoutMs?: number;
   private readonly baseUrl: string;
 
-  constructor(private readonly config: StrikeConfig, options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: StrikeConfig,
+    options: NodeRequestOptions = {}
+  ) {
     this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
@@ -388,7 +445,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   private async getJson<T>(
     path: string,
     query?: Record<string, string | number | undefined>,
-    operation?: NwcErrorOperation,
+    operation?: NwcErrorOperation
   ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path, query), {
@@ -408,7 +465,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     path: string,
     json?: unknown,
     headers?: HeadersInit,
-    operation?: NwcErrorOperation,
+    operation?: NwcErrorOperation
   ): Promise<T> {
     try {
       return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
@@ -452,7 +509,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     if (!permissions) {
       throw new LniError(
         'InvalidInput',
-        'Strike API keys cannot be introspected. Use an OAuth access token or manually test permissions against Strike REST endpoints.',
+        'Strike API keys cannot be introspected. Use an OAuth access token or manually test permissions against Strike REST endpoints.'
       );
     }
 
@@ -473,7 +530,11 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
+      throw strikeNwcError(
+        'NOT_IMPLEMENTED',
+        'Bolt12 is not implemented for StrikeNode.',
+        'make_invoice'
+      );
     }
 
     const response = await this.postJson<StrikeCreateReceiveResponse>(
@@ -495,7 +556,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         targetCurrency: 'BTC',
       },
       undefined,
-      'make_invoice',
+      'make_invoice'
     );
 
     const bolt11 = response.bolt11;
@@ -532,12 +593,12 @@ export class StrikeNode implements LightningNode, OnchainPayments {
             : undefined,
       },
       undefined,
-      'pay_invoice',
+      'pay_invoice'
     );
 
     const execution = await this.patchJson<StrikePaymentExecutionResponse>(
       `/payment-quotes/${quote.paymentQuoteId}/execute`,
-      'pay_invoice',
+      'pay_invoice'
     );
     let payment: StrikePaymentResponse | undefined;
     try {
@@ -546,7 +607,9 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       // payment.read is optional for payInvoice; without it we still know the payment was executed.
     }
 
-    const feeMsats = payment?.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0;
+    const feeMsats = payment?.lightning?.networkFee
+      ? btcToMsats(payment.lightning.networkFee.amount)
+      : 0;
 
     return {
       paymentHash: payment?.lightning?.paymentHash ?? paymentHashFromInvoice(params.invoice),
@@ -555,7 +618,9 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     };
   }
 
-  async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
+  async prepareOnchainTransaction(
+    params: PrepareOnchainTransactionParams
+  ): Promise<OnchainTransaction> {
     const amountSats = params.amountSats;
     assertValidOnchainAmount(amountSats);
 
@@ -578,7 +643,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
           },
           onchainTierId,
         },
-        params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined,
+        params.idempotencyKey ? { 'idempotency-key': params.idempotencyKey } : undefined
       );
     } catch (error) {
       const duplicate = duplicatePaymentQuoteFromError(error);
@@ -586,20 +651,31 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         throw error;
       }
 
-      return this.onchainTransactionFromDuplicate(params.address, amountSats, fee, feePayer, duplicate);
+      return this.onchainTransactionFromDuplicate(
+        params.address,
+        amountSats,
+        fee,
+        feePayer,
+        duplicate
+      );
     }
 
     return this.onchainTransactionFromQuote(params.address, amountSats, fee, feePayer, quote);
   }
 
-  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
+  async payOnchain(
+    transaction: OnchainTransaction,
+    options?: PayOnchainOptions
+  ): Promise<PayOnchainResponse> {
     if (!transaction.id) {
       throw new LniError('InvalidInput', 'payOnchain requires an on-chain transaction id.');
     }
 
     assertOnchainFeeGuardrail(transaction, options);
 
-    const execution = await this.patchJson<StrikePaymentExecutionResponse>(`/payment-quotes/${transaction.id}/execute`);
+    const execution = await this.patchJson<StrikePaymentExecutionResponse>(
+      `/payment-quotes/${transaction.id}/execute`
+    );
     let payment: StrikePaymentResponse | undefined;
     try {
       payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
@@ -610,25 +686,36 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     return this.payOnchainResponseFromPayment(transaction, execution, payment);
   }
 
-  private async resolveOnchainTierId(address: string, amountSats: number, fee: OnchainFeePreference): Promise<string> {
+  private async resolveOnchainTierId(
+    address: string,
+    amountSats: number,
+    fee: OnchainFeePreference
+  ): Promise<string> {
     if (fee.type === 'backend') {
       if (!fee.value) {
-        throw new LniError('InvalidInput', 'Strike backend fee preference requires a tier id value.');
+        throw new LniError(
+          'InvalidInput',
+          'Strike backend fee preference requires a tier id value.'
+        );
       }
       return fee.value;
     }
 
     const tierSpeed = normalizeStrikeTierSpeed(fee);
-    const tiers = await this.postJson<StrikeOnchainTierResponse[]>('/payment-quotes/onchain/tiers', {
-      btcAddress: address,
-      amount: {
-        amount: satsToBtc(amountSats),
-        currency: 'BTC',
-      },
-    });
+    const tiers = await this.postJson<StrikeOnchainTierResponse[]>(
+      '/payment-quotes/onchain/tiers',
+      {
+        btcAddress: address,
+        amount: {
+          amount: satsToBtc(amountSats),
+          currency: 'BTC',
+        },
+      }
+    );
 
-    const preferredTier = tiers.find((tier) => tier.id === `tier_${tierSpeed}`)
-      ?? tiers.find((tier) => tier.id.toLowerCase().includes(tierSpeed));
+    const preferredTier =
+      tiers.find((tier) => tier.id === `tier_${tierSpeed}`) ??
+      tiers.find((tier) => tier.id.toLowerCase().includes(tierSpeed));
 
     if (!preferredTier) {
       throw new LniError('Api', `Strike did not return an on-chain fee tier for ${tierSpeed}.`);
@@ -642,7 +729,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     amountSats: number,
     fee: OnchainFeePreference,
     feePayer: OnchainFeePayer,
-    quote: StrikeOnchainPaymentQuoteResponse,
+    quote: StrikeOnchainPaymentQuoteResponse
   ): OnchainTransaction {
     return {
       id: quote.paymentQuoteId,
@@ -654,9 +741,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       feePayer,
       fee,
       expiresAt: quote.validUntil ? toUnixSeconds(Date.parse(quote.validUntil)) : undefined,
-      estimatedDeliverySeconds: quote.estimatedDeliveryDurationInMin !== undefined
-        ? quote.estimatedDeliveryDurationInMin * 60
-        : undefined,
+      estimatedDeliverySeconds:
+        quote.estimatedDeliveryDurationInMin !== undefined
+          ? quote.estimatedDeliveryDurationInMin * 60
+          : undefined,
       raw: quote,
     };
   }
@@ -666,7 +754,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     amountSats: number,
     fee: OnchainFeePreference,
     feePayer: OnchainFeePayer,
-    duplicate: DuplicatePaymentQuote,
+    duplicate: DuplicatePaymentQuote
   ): OnchainTransaction {
     return {
       id: duplicate.paymentQuoteId,
@@ -681,11 +769,15 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   private payOnchainResponseFromPayment(
     transaction: OnchainTransaction,
     execution: StrikePaymentExecutionResponse,
-    payment?: StrikePaymentResponse,
+    payment?: StrikePaymentResponse
   ): PayOnchainResponse {
-    const amountSats = onchainAmountToSats(payment?.amount ?? execution.amount) ?? transaction.amountSats;
-    const feeSats = onchainAmountToSats(payment?.totalFee ?? execution.totalFee) ?? transaction.feeSats;
-    const totalAmountSats = onchainAmountToSats(payment?.totalAmount ?? execution.totalAmount) ?? transaction.totalAmountSats;
+    const amountSats =
+      onchainAmountToSats(payment?.amount ?? execution.amount) ?? transaction.amountSats;
+    const feeSats =
+      onchainAmountToSats(payment?.totalFee ?? execution.totalFee) ?? transaction.feeSats;
+    const totalAmountSats =
+      onchainAmountToSats(payment?.totalAmount ?? execution.totalAmount) ??
+      transaction.totalAmountSats;
     const createdAt = payment?.created ? toUnixSeconds(Date.parse(payment.created)) : undefined;
 
     return {
@@ -703,19 +795,39 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
+    throw strikeNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for StrikeNode.',
+      'make_invoice'
+    );
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'lookup_invoice');
+    throw strikeNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for StrikeNode.',
+      'lookup_invoice'
+    );
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'list_transactions');
+    throw strikeNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for StrikeNode.',
+      'list_transactions'
+    );
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'pay_invoice');
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
+    throw strikeNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for StrikeNode.',
+      'pay_invoice'
+    );
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
@@ -726,9 +838,9 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const receives = await this.getJson<StrikeReceivesResponse>(
       '/receive-requests/receives',
       {
-        '$paymentHash': params.paymentHash,
+        $paymentHash: params.paymentHash,
       },
-      'lookup_invoice',
+      'lookup_invoice'
     );
 
     const item = receives.items[0];
@@ -744,7 +856,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       amountMsats: btcToMsats(item.amountReceived.amount),
       feesPaid: 0,
       createdAt: toUnixSeconds(Date.parse(item.created)),
-      settledAt: item.state === 'COMPLETED' && item.completed ? toUnixSeconds(Date.parse(item.completed)) : 0,
+      settledAt:
+        item.state === 'COMPLETED' && item.completed
+          ? toUnixSeconds(Date.parse(item.completed))
+          : 0,
       description: item.lightning.description ?? item.lightning.descriptionHash ?? '',
       descriptionHash: item.lightning.descriptionHash ?? '',
       externalId: item.receiveRequestId,
@@ -756,10 +871,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const receives = await this.getJson<StrikeReceivesResponse>(
       '/receive-requests/receives',
       {
-        '$skip': params.from,
-        '$top': params.limit,
+        $skip: params.from,
+        $top: params.limit,
       },
-      'list_transactions',
+      'list_transactions'
     );
 
     let outgoing: StrikePaymentsResponse = { data: [] };
@@ -767,10 +882,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       outgoing = await this.getJson<StrikePaymentsResponse>(
         '/payments',
         {
-          '$skip': params.from,
-          '$top': params.limit,
+          $skip: params.from,
+          $top: params.limit,
         },
-        'list_transactions',
+        'list_transactions'
       );
     } catch (error) {
       if (!this.isNotFoundError(error)) {
@@ -794,7 +909,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         amountMsats: btcToMsats(receive.amountReceived.amount),
         feesPaid: 0,
         createdAt: toUnixSeconds(Date.parse(receive.created)),
-        settledAt: receive.state === 'COMPLETED' && receive.completed ? toUnixSeconds(Date.parse(receive.completed)) : 0,
+        settledAt:
+          receive.state === 'COMPLETED' && receive.completed
+            ? toUnixSeconds(Date.parse(receive.completed))
+            : 0,
         description: receive.lightning.description ?? receive.lightning.descriptionHash ?? '',
         descriptionHash: receive.lightning.descriptionHash ?? '',
         externalId: receive.receiveRequestId,
@@ -810,9 +928,14 @@ export class StrikeNode implements LightningNode, OnchainPayments {
         invoice: payment.lightning?.paymentRequest ?? '',
         paymentHash: payment.lightning?.paymentHash ?? '',
         amountMsats: btcToMsats(payment.amount.amount),
-        feesPaid: payment.lightning?.networkFee ? btcToMsats(payment.lightning.networkFee.amount) : 0,
+        feesPaid: payment.lightning?.networkFee
+          ? btcToMsats(payment.lightning.networkFee.amount)
+          : 0,
         createdAt: toUnixSeconds(Date.parse(payment.created)),
-        settledAt: payment.state === 'COMPLETED' && payment.completed ? toUnixSeconds(Date.parse(payment.completed)) : 0,
+        settledAt:
+          payment.state === 'COMPLETED' && payment.completed
+            ? toUnixSeconds(Date.parse(payment.completed))
+            : 0,
         description: payment.description ?? '',
         descriptionHash: '',
         externalId: payment.id,
@@ -841,7 +964,10 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,

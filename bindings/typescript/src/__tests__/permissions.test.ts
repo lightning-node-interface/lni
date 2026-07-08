@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { encodeBase64Bytes } from '../internal/encoding.js';
-import { getBlinkTokenPermissions, getStrikeOauthPermissions, parseClnRunePermissions } from '../internal/permissions.js';
+import {
+  getBlinkTokenPermissions,
+  getStrikeOauthPermissions,
+  parseClnRunePermissions,
+} from '../internal/permissions.js';
 import { BlinkNode } from '../nodes/blink.js';
 import { LndNode } from '../nodes/lnd.js';
 import { PhoenixdNode } from '../nodes/phoenixd.js';
@@ -13,14 +17,16 @@ describe('permissions helpers', () => {
     const raw = new TextEncoder().encode('unique-id&method^list|method=getinfo');
     const rune = encodeBase64Bytes(raw).replace(/\+/g, '-').replace(/\//g, '_');
 
-    expect(parseClnRunePermissions(rune)).toEqual(permissions({
-      getInfo: true,
-      getOffer: true,
-      listOffers: true,
-      lookupInvoice: true,
-      listTransactions: true,
-      onInvoiceEvents: true,
-    }));
+    expect(parseClnRunePermissions(rune)).toEqual(
+      permissions({
+        getInfo: true,
+        getOffer: true,
+        listOffers: true,
+        lookupInvoice: true,
+        listTransactions: true,
+        onInvoiceEvents: true,
+      })
+    );
   });
 
   it('checks LND macaroon permissions against the node permission map', async () => {
@@ -58,12 +64,14 @@ describe('permissions helpers', () => {
 
           return new Response('not found', { status: 404 });
         },
-      },
+      }
     );
 
-    await expect(node.getPermissions()).resolves.toEqual(permissions({
-      getInfo: true,
-    }));
+    await expect(node.getPermissions()).resolves.toEqual(
+      permissions({
+        getInfo: true,
+      })
+    );
   });
 
   it('maps Strike OAuth JWT scopes to LNI permissions', () => {
@@ -82,14 +90,16 @@ describe('permissions helpers', () => {
       'signature',
     ].join('.');
 
-    expect(getStrikeOauthPermissions(accessToken)).toEqual(permissions({
-      getInfo: true,
-      createInvoice: true,
-      payInvoice: true,
-      lookupInvoice: true,
-      decode: true,
-      onInvoiceEvents: true,
-    }));
+    expect(getStrikeOauthPermissions(accessToken)).toEqual(
+      permissions({
+        getInfo: true,
+        createInvoice: true,
+        payInvoice: true,
+        lookupInvoice: true,
+        decode: true,
+        onInvoiceEvents: true,
+      })
+    );
   });
 
   it('rejects opaque Strike API keys for permission introspection', async () => {
@@ -107,15 +117,17 @@ describe('permissions helpers', () => {
       'signature',
     ].join('.');
 
-    expect(getBlinkTokenPermissions(token)).toEqual(permissions({
-      getInfo: true,
-      createInvoice: true,
-      payInvoice: true,
-      lookupInvoice: true,
-      listTransactions: true,
-      decode: true,
-      onInvoiceEvents: true,
-    }));
+    expect(getBlinkTokenPermissions(token)).toEqual(
+      permissions({
+        getInfo: true,
+        createInvoice: true,
+        payInvoice: true,
+        lookupInvoice: true,
+        listTransactions: true,
+        decode: true,
+        onInvoiceEvents: true,
+      })
+    );
   });
 
   it('rejects opaque Blink API keys for permission introspection', async () => {

@@ -6,7 +6,8 @@ Optional Arkade Boltz adapter for `@sunnyln/lni`.
 import { ArkadeBoltzNode } from '@sunnyln/lni-arkade';
 
 const node = new ArkadeBoltzNode({
-  mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+  mnemonic:
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
   arkServerUrl: 'https://mutinynet.arkade.sh',
   network: 'mutinynet',
 });

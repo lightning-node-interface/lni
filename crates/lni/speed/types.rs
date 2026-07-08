@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SpeedPayment {
     pub id: String,
-    pub object: String, // "payment"
-    pub status: String, // "paid", "pending", "failed", etc.
+    pub object: String,   // "payment"
+    pub status: String,   // "paid", "pending", "failed", etc.
     pub currency: String, // "SATS"
     pub amount: f64,
     pub conversion: Option<f64>,
@@ -27,7 +27,7 @@ pub struct SpeedPayment {
     pub speed_fee: Option<SpeedFee>,
     pub payment_request_paid_by: Option<String>,
     pub net_target_amount_paid: Option<f64>,
-    pub created: i64, // Unix timestamp in millis
+    pub created: i64,          // Unix timestamp in millis
     pub modified: Option<i64>, // Unix timestamp in millis
 }
 

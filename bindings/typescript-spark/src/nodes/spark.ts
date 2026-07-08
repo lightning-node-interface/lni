@@ -23,11 +23,35 @@ import {
   tweakPublicKeyPackage,
 } from '../vendor/frosts-bridge.js';
 import { decrypt as eciesDecrypt, encrypt as eciesEncrypt } from 'eciesjs';
-import { decodeOfferToJson, LniError, InvoiceType, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type PayInvoiceParams, type PayInvoiceResponse, type Permissions, type StorageProvider, type Transaction } from '@sunnyln/lni';
+import {
+  decodeOfferToJson,
+  LniError,
+  InvoiceType,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeInfo,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type Permissions,
+  type StorageProvider,
+  type Transaction,
+} from '@sunnyln/lni';
 import { decode as decodeBolt11 } from '@sunnyln/lni';
 import { bytesToHex, hexToBytes } from '@sunnyln/lni/internal/encoding';
 import { pollInvoiceEvents } from '@sunnyln/lni/internal/polling';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, toUnixSeconds } from '@sunnyln/lni/internal/transform';
+import {
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  toUnixSeconds,
+} from '@sunnyln/lni/internal/transform';
 import type { SparkConfig } from '../types.js';
 
 type SparkSdkEntry = 'auto' | 'bare' | 'native' | 'default';
@@ -67,7 +91,7 @@ type SparkWalletLike = {
     limit?: number,
     offset?: number,
     createdAfter?: Date,
-    createdBefore?: Date,
+    createdBefore?: Date
   ): Promise<{ transfers: unknown[]; offset: number }>;
   getTransfer?(id: string): Promise<unknown | undefined>;
   on?(event: string, listener: (...args: unknown[]) => void): unknown;
@@ -122,14 +146,16 @@ type SparkFrostLike = {
   splitSecretWithProofs(
     secret: Uint8Array,
     threshold: number,
-    numShares: number,
+    numShares: number
   ): Promise<Array<{ threshold: number; index: number; share: Uint8Array; proofs: Uint8Array[] }>>;
-  recoverSecret(shares: Array<{ threshold: number; index: number; share: Uint8Array }>): Promise<Uint8Array>;
+  recoverSecret(
+    shares: Array<{ threshold: number; index: number; share: Uint8Array }>
+  ): Promise<Uint8Array>;
   validateShare(
     share: Uint8Array,
     index: number,
     threshold: number,
-    proofs: Uint8Array[],
+    proofs: Uint8Array[]
   ): Promise<void>;
 };
 
@@ -144,7 +170,9 @@ const SPARK_SDK_NATIVE_ENTRY = '@buildonspark/spark-sdk/native';
 function createUserIdentifier(): any {
   return FrostIdentifier.derive(Secp256K1Sha256TR, new TextEncoder().encode('user'));
 }
-function mapNetworkToSpark(network?: SparkConfig['network']): 'MAINNET' | 'REGTEST' | 'TESTNET' | 'SIGNET' | 'LOCAL' {
+function mapNetworkToSpark(
+  network?: SparkConfig['network']
+): 'MAINNET' | 'REGTEST' | 'TESTNET' | 'SIGNET' | 'LOCAL' {
   switch ((network ?? 'mainnet').toLowerCase()) {
     case 'mainnet':
       return 'MAINNET';
@@ -167,7 +195,9 @@ function numberFromUnknown(value: unknown): number {
   }
   if (typeof value === 'bigint') {
     if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
-      throw new Error(`BigInt value ${value} exceeds Number.MAX_SAFE_INTEGER and cannot be safely converted.`);
+      throw new Error(
+        `BigInt value ${value} exceeds Number.MAX_SAFE_INTEGER and cannot be safely converted.`
+      );
     }
     return Number(value);
   }
@@ -227,7 +257,7 @@ function removeUndefinedValues(value: Record<string, unknown>): Record<string, u
 
 async function resolveWalletBalanceSats(
   wallet: SparkWalletLike,
-  rawBalance: { balance: number | bigint } | undefined,
+  rawBalance: { balance: number | bigint } | undefined
 ): Promise<number> {
   const directBalance = numberFromUnknown(rawBalance?.balance);
   if (directBalance > 0) {
@@ -274,19 +304,22 @@ function identifierToHex(identifier: any): string {
 
 function buildUserKeyPackage(
   params: SignFrostBindingParamsLike['keyPackage'],
-  identifierOverride?: any,
+  identifierOverride?: any
 ): any {
   const userIdentifier = identifierOverride ?? createUserIdentifier();
   const signingShare = FrostSigningShare.deserialize(Secp256K1Sha256TR, params.secretKey);
   const verifyingShare = FrostVerifyingShare.deserialize(Secp256K1Sha256TR, params.publicKey);
-  const verifyingKey = FrostVerifyingKey.deserialize(Secp256K1Sha256TR, params.verifyingKey).toElement();
+  const verifyingKey = FrostVerifyingKey.deserialize(
+    Secp256K1Sha256TR,
+    params.verifyingKey
+  ).toElement();
   const base = new FrostKeyPackage(
     Secp256K1Sha256TR,
     userIdentifier,
     signingShare,
     verifyingShare,
     verifyingKey,
-    1,
+    1
   );
   const tweaked = tweakKeyPackage(base as any, new Uint8Array()) as any;
   const evenY = intoEvenYKeyPackage(base as any, hasEvenYPublicKey(params.verifyingKey)) as any;
@@ -296,7 +329,7 @@ function buildUserKeyPackage(
     evenY.signingShare,
     evenY.verifyingShare,
     tweaked.verifyingKey,
-    evenY.minSigners,
+    evenY.minSigners
   );
 }
 
@@ -304,7 +337,7 @@ function buildSigningPackage(
   message: Uint8Array,
   selfCommitment: SparkSigningCommitmentLike,
   selfIdentifier: any,
-  statechainCommitments?: Record<string, SparkSigningCommitmentLike>,
+  statechainCommitments?: Record<string, SparkSigningCommitmentLike>
 ): any {
   const commitments = new Map<any, any>();
   const userIdHex = identifierToHex(selfIdentifier);
@@ -324,7 +357,7 @@ function buildSigningPackage(
 
     commitments.set(
       identifier === userIdHex ? selfIdentifier : identifierFromHex(identifier),
-      signingCommitmentFromBinding(commitment),
+      signingCommitmentFromBinding(commitment)
     );
   }
 
@@ -341,7 +374,7 @@ function normalizeAdaptorPublicKey(adaptorPubKey?: Uint8Array): Uint8Array | und
     if (prefix !== 0x02 && prefix !== 0x03) {
       throw new LniError(
         'InvalidInput',
-        'Spark adaptor public key (33-byte form) must use compressed secp256k1 prefix 0x02/0x03.',
+        'Spark adaptor public key (33-byte form) must use compressed secp256k1 prefix 0x02/0x03.'
       );
     }
     return adaptorPubKey;
@@ -368,7 +401,7 @@ function scalarFromLike(value: unknown, label: string): bigint {
     'toScalar' in value &&
     typeof (value as { toScalar?: unknown }).toScalar === 'function'
   ) {
-    return ((value as { toScalar: () => bigint }).toScalar());
+    return (value as { toScalar: () => bigint }).toScalar();
   }
 
   throw new LniError('Api', `Spark signer expected scalar-like value for ${label}.`);
@@ -418,7 +451,10 @@ function toXOnlyPublicKey(pubkey: Uint8Array): Uint8Array {
     return pubkey.slice(1);
   }
 
-  throw new LniError('InvalidInput', `Spark public key must be 32-byte x-only or 33-byte compressed, got ${pubkey.length} bytes.`);
+  throw new LniError(
+    'InvalidInput',
+    `Spark public key must be 32-byte x-only or 33-byte compressed, got ${pubkey.length} bytes.`
+  );
 }
 
 function validateOutboundAdaptorSignatureLocal(params: {
@@ -451,7 +487,12 @@ function validateOutboundAdaptorSignatureLocal(params: {
     const signerPoint = schnorr.utils.lift_x(bytesToBigInt(xOnlyPubkey));
     signerPoint.assertValidity();
 
-    const challengeBytes = schnorr.utils.taggedHash('BIP0340/challenge', r, signerPoint.toBytes().slice(1), message);
+    const challengeBytes = schnorr.utils.taggedHash(
+      'BIP0340/challenge',
+      r,
+      signerPoint.toBytes().slice(1),
+      message
+    );
     const challengeScalar = bytesToBigInt(challengeBytes) % secp256k1.CURVE.n;
     const negChallenge = (secp256k1.CURVE.n - challengeScalar) % secp256k1.CURVE.n;
 
@@ -502,7 +543,10 @@ function computeSignatureShareRustCompat(params: {
 
   const bindingFactorScalar = scalarFromLike(params.bindingFactor, 'bindingFactor');
   const lambdaScalar = scalarFromLike(params.lambdaI, 'lambdaI');
-  let signingShareScalar = scalarFromLike(params.keyPackage.signingShare, 'keyPackage.signingShare');
+  let signingShareScalar = scalarFromLike(
+    params.keyPackage.signingShare,
+    'keyPackage.signingShare'
+  );
   const challengeScalar = scalarFromLike(params.challenge, 'challenge');
 
   const bindingTimesRho = Secp256K1Sha256TR.scalarMul(adjustedBinding, bindingFactorScalar);
@@ -514,23 +558,22 @@ function computeSignatureShareRustCompat(params: {
   return FrostSignatureShare.fromScalar(Secp256K1Sha256TR, zShare as any).serialize();
 }
 
-function normalizePublicKeyPackageForPreAggregate<T extends {
-  verifyingKey: any;
-  verifyingShares: Map<string, any>;
-}>(publicKeyPackage: T): T {
+function normalizePublicKeyPackageForPreAggregate<
+  T extends {
+    verifyingKey: any;
+    verifyingShares: Map<string, any>;
+  },
+>(publicKeyPackage: T): T {
   if (hasEvenYPublicKey(publicKeyPackage.verifyingKey)) {
     return publicKeyPackage;
   }
 
   const negatedVerifyingShares = new Map<string, any>();
   for (const [identifier, share] of publicKeyPackage.verifyingShares.entries()) {
-    const shareElement =
-      typeof share?.toElement === 'function'
-        ? share.toElement()
-        : share;
+    const shareElement = typeof share?.toElement === 'function' ? share.toElement() : share;
     negatedVerifyingShares.set(
       identifier,
-      Secp256K1Sha256TR.elementSub(Secp256K1Sha256TR.identity(), shareElement),
+      Secp256K1Sha256TR.elementSub(Secp256K1Sha256TR.identity(), shareElement)
     );
   }
 
@@ -538,7 +581,7 @@ function normalizePublicKeyPackageForPreAggregate<T extends {
     ...publicKeyPackage,
     verifyingKey: Secp256K1Sha256TR.elementSub(
       Secp256K1Sha256TR.identity(),
-      publicKeyPackage.verifyingKey,
+      publicKeyPackage.verifyingKey
     ),
     verifyingShares: negatedVerifyingShares,
   };
@@ -668,7 +711,10 @@ function lagrangeCoefficientAtZero(indices: bigint[], current: bigint): bigint {
   return scalarMod(numerator * scalarInverse(denominator));
 }
 
-function computeExpectedSharePoint(index: number, proofs: Uint8Array[]): InstanceType<typeof secp256k1.Point> {
+function computeExpectedSharePoint(
+  index: number,
+  proofs: Uint8Array[]
+): InstanceType<typeof secp256k1.Point> {
   if (!Number.isInteger(index) || index <= 0) {
     throw new LniError('InvalidInput', 'Secret share index must be a positive integer.');
   }
@@ -689,25 +735,33 @@ function computeExpectedSharePoint(index: number, proofs: Uint8Array[]): Instanc
 async function pureSplitSecretWithProofs(
   secret: Uint8Array,
   threshold: number,
-  numShares: number,
+  numShares: number
 ): Promise<Array<{ threshold: number; index: number; share: Uint8Array; proofs: Uint8Array[] }>> {
   if (secret.length !== 32) {
     throw new LniError('InvalidInput', 'Spark splitSecretWithProofs expects a 32-byte secret.');
   }
   if (!Number.isInteger(threshold) || threshold <= 0) {
-    throw new LniError('InvalidInput', 'Spark splitSecretWithProofs threshold must be a positive integer.');
+    throw new LniError(
+      'InvalidInput',
+      'Spark splitSecretWithProofs threshold must be a positive integer.'
+    );
   }
   if (!Number.isInteger(numShares) || numShares < threshold) {
-    throw new LniError('InvalidInput', 'Spark splitSecretWithProofs numShares must be >= threshold.');
+    throw new LniError(
+      'InvalidInput',
+      'Spark splitSecretWithProofs numShares must be >= threshold.'
+    );
   }
 
   const coefficients: bigint[] = [scalarFromBytes32(secret, 'Spark secret')];
   for (let i = 1; i < threshold; i += 1) {
-    coefficients.push(scalarFromBytes32(secp256k1.utils.randomPrivateKey(), `Spark coefficient ${i}`));
+    coefficients.push(
+      scalarFromBytes32(secp256k1.utils.randomPrivateKey(), `Spark coefficient ${i}`)
+    );
   }
 
   const proofs = coefficients.map((coefficient) =>
-    Uint8Array.from(secp256k1.getPublicKey(scalarToBytes32(coefficient), true)),
+    Uint8Array.from(secp256k1.getPublicKey(scalarToBytes32(coefficient), true))
   );
 
   return Array.from({ length: numShares }, (_, offset) => {
@@ -723,7 +777,7 @@ async function pureSplitSecretWithProofs(
 }
 
 async function pureRecoverSecret(
-  shares: Array<{ threshold: number; index: number; share: Uint8Array }>,
+  shares: Array<{ threshold: number; index: number; share: Uint8Array }>
 ): Promise<Uint8Array> {
   if (!shares.length) {
     throw new LniError('InvalidInput', 'recoverSecret requires at least one share.');
@@ -731,13 +785,19 @@ async function pureRecoverSecret(
 
   const threshold = shares[0]?.threshold ?? 0;
   if (!Number.isInteger(threshold) || threshold <= 0) {
-    throw new LniError('InvalidInput', 'recoverSecret requires a valid threshold on the provided shares.');
+    throw new LniError(
+      'InvalidInput',
+      'recoverSecret requires a valid threshold on the provided shares.'
+    );
   }
 
   const uniqueShares = new Map<number, Uint8Array>();
   for (const share of shares) {
     if (share.threshold !== threshold) {
-      throw new LniError('InvalidInput', 'recoverSecret requires all shares to use the same threshold.');
+      throw new LniError(
+        'InvalidInput',
+        'recoverSecret requires all shares to use the same threshold.'
+      );
     }
     if (!Number.isInteger(share.index) || share.index <= 0) {
       throw new LniError('InvalidInput', 'recoverSecret requires positive share indices.');
@@ -746,7 +806,10 @@ async function pureRecoverSecret(
   }
 
   if (uniqueShares.size < threshold) {
-    throw new LniError('InvalidInput', `recoverSecret requires at least ${threshold} unique shares.`);
+    throw new LniError(
+      'InvalidInput',
+      `recoverSecret requires at least ${threshold} unique shares.`
+    );
   }
 
   const selectedEntries = Array.from(uniqueShares.entries()).slice(0, threshold);
@@ -766,7 +829,7 @@ async function pureValidateShare(
   share: Uint8Array,
   index: number,
   threshold: number,
-  proofs: Uint8Array[],
+  proofs: Uint8Array[]
 ): Promise<void> {
   if (!Number.isInteger(threshold) || threshold <= 0) {
     throw new LniError('InvalidInput', 'Spark share threshold must be a positive integer.');
@@ -776,7 +839,9 @@ async function pureValidateShare(
   }
 
   const expectedPoint = computeExpectedSharePoint(index, proofs);
-  const actualPoint = secp256k1.Point.BASE.multiply(scalarFromBytes32(share, `Spark share ${index}`));
+  const actualPoint = secp256k1.Point.BASE.multiply(
+    scalarFromBytes32(share, `Spark share ${index}`)
+  );
 
   if (!expectedPoint.equals(actualPoint)) {
     throw new LniError('InvalidInput', `Spark share validation failed for index ${index}.`);
@@ -810,7 +875,7 @@ async function pureSignFrost(params: SignFrostBindingParamsLike): Promise<Uint8A
       params.message,
       params.selfCommitment,
       userIdentifier,
-      params.statechainCommitments,
+      params.statechainCommitments
     );
 
     const adaptorPublicKey = normalizeAdaptorPublicKey(params.adaptorPubKey);
@@ -824,7 +889,7 @@ async function pureSignFrost(params: SignFrostBindingParamsLike): Promise<Uint8A
     const bindingFactorList = Secp256K1Sha256TR.computeBindingFactorList(
       signingPackage,
       preSignedKeyPackage.verifyingKey,
-      new Uint8Array(),
+      new Uint8Array()
     );
     const bindingFactor = bindingFactorList.get(preSignedKeyPackage.identifier);
     if (!bindingFactor) {
@@ -832,7 +897,10 @@ async function pureSignFrost(params: SignFrostBindingParamsLike): Promise<Uint8A
     }
     emitSparkDebugCheckpoint('sign_frost:binding_factor_ready');
 
-    const groupCommitment = Secp256K1Sha256TR.computeGroupCommitment(signingPackage, bindingFactorList);
+    const groupCommitment = Secp256K1Sha256TR.computeGroupCommitment(
+      signingPackage,
+      bindingFactorList
+    );
     const challengeCommitment = adaptorPublicKey
       ? Secp256K1Sha256TR.elementAdd(groupCommitment.toElement(), adaptorPublicKey)
       : groupCommitment.toElement();
@@ -840,7 +908,7 @@ async function pureSignFrost(params: SignFrostBindingParamsLike): Promise<Uint8A
     const challenge = Secp256K1Sha256TR.challenge(
       challengeCommitment,
       preSignedKeyPackage.verifyingKey,
-      signingPackage.message,
+      signingPackage.message
     );
     emitSparkDebugCheckpoint('sign_frost:challenge_ready');
 
@@ -881,44 +949,61 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
       params.message,
       params.selfCommitment,
       createUserIdentifier(),
-      params.statechainCommitments,
+      params.statechainCommitments
     );
 
     const signatureShares = new Map<any, any>();
     for (const [identifier, shareBytes] of Object.entries(params.statechainSignatures ?? {})) {
-      signatureShares.set(identifierFromHex(identifier), FrostSignatureShare.deserialize(Secp256K1Sha256TR, shareBytes));
+      signatureShares.set(
+        identifierFromHex(identifier),
+        FrostSignatureShare.deserialize(Secp256K1Sha256TR, shareBytes)
+      );
     }
     const selfIdentifier = createUserIdentifier();
-    signatureShares.set(selfIdentifier, FrostSignatureShare.deserialize(Secp256K1Sha256TR, params.selfSignature));
+    signatureShares.set(
+      selfIdentifier,
+      FrostSignatureShare.deserialize(Secp256K1Sha256TR, params.selfSignature)
+    );
 
     const verifyingShares = new Map<string, any>();
     for (const [identifier, publicKey] of Object.entries(params.statechainPublicKeys ?? {})) {
-      verifyingShares.set(identifier, FrostVerifyingShare.deserialize(Secp256K1Sha256TR, publicKey));
+      verifyingShares.set(
+        identifier,
+        FrostVerifyingShare.deserialize(Secp256K1Sha256TR, publicKey)
+      );
     }
-    verifyingShares.set(identifierToHex(selfIdentifier), FrostVerifyingShare.deserialize(Secp256K1Sha256TR, params.selfPublicKey));
+    verifyingShares.set(
+      identifierToHex(selfIdentifier),
+      FrostVerifyingShare.deserialize(Secp256K1Sha256TR, params.selfPublicKey)
+    );
 
-    const verifyingKey = FrostVerifyingKey.deserialize(Secp256K1Sha256TR, params.verifyingKey).toElement();
+    const verifyingKey = FrostVerifyingKey.deserialize(
+      Secp256K1Sha256TR,
+      params.verifyingKey
+    ).toElement();
     const publicKeyPackage = new FrostPublicKeyPackage(
       Secp256K1Sha256TR,
       verifyingShares,
       verifyingKey,
-      1,
+      1
     );
     const adaptorPublicKey = normalizeAdaptorPublicKey(params.adaptorPubKey);
 
     const tweakedPublicKeyPackage = tweakPublicKeyPackage(
       publicKeyPackage as any,
-      new Uint8Array(),
+      new Uint8Array()
     ) as any;
-    const preAggregatedPublicKeyPackage = normalizePublicKeyPackageForPreAggregate(
-      tweakedPublicKeyPackage,
-    );
+    const preAggregatedPublicKeyPackage =
+      normalizePublicKeyPackageForPreAggregate(tweakedPublicKeyPackage);
     const bindingFactorList = Secp256K1Sha256TR.computeBindingFactorList(
       signingPackage,
       preAggregatedPublicKeyPackage.verifyingKey,
-      new Uint8Array(),
+      new Uint8Array()
     );
-    const groupCommitment = Secp256K1Sha256TR.computeGroupCommitment(signingPackage, bindingFactorList);
+    const groupCommitment = Secp256K1Sha256TR.computeGroupCommitment(
+      signingPackage,
+      bindingFactorList
+    );
 
     if (!adaptorPublicKey) {
       let z = Secp256K1Sha256TR.scalarZero();
@@ -935,7 +1020,7 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
 
     const challengeCommitment = Secp256K1Sha256TR.elementAdd(
       groupCommitment.toElement(),
-      adaptorPublicKey,
+      adaptorPublicKey
     );
     const adaptedGroupCommitment = hasEvenYPublicKey(challengeCommitment)
       ? challengeCommitment
@@ -946,10 +1031,7 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
       z = Secp256K1Sha256TR.scalarAdd(z, scalarFromLike(signatureShare, 'signatureShare'));
     }
 
-    const zCandidates = [
-      z,
-      Secp256K1Sha256TR.scalarSub(Secp256K1Sha256TR.scalarZero(), z),
-    ];
+    const zCandidates = [z, Secp256K1Sha256TR.scalarSub(Secp256K1Sha256TR.scalarZero(), z)];
 
     let fallbackSerialized: Uint8Array | undefined;
     const candidateDiagnostics: Array<Record<string, unknown>> = [];
@@ -986,7 +1068,7 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
     });
     throw new LniError(
       'Api',
-      `Adaptor signature validation failed: no z-candidate passed validation (${candidateDiagnostics.length} tried).`,
+      `Adaptor signature validation failed: no z-candidate passed validation (${candidateDiagnostics.length} tried).`
     );
   } catch (error) {
     emitSparkDebugCheckpoint('aggregate_frost:error', {
@@ -996,7 +1078,10 @@ async function pureAggregateFrost(params: AggregateFrostBindingParamsLike): Prom
   }
 }
 
-async function pureCreateDummyTx(address: string, amountSats: bigint): Promise<{ tx: Uint8Array; txid: string }> {
+async function pureCreateDummyTx(
+  address: string,
+  amountSats: bigint
+): Promise<{ tx: Uint8Array; txid: string }> {
   const tx = new BtcTransaction({ version: 3 });
   tx.addInput({
     txid: new Uint8Array(32),
@@ -1014,7 +1099,10 @@ async function pureEncryptEcies(msg: Uint8Array, publicKey: Uint8Array): Promise
   return Uint8Array.from(eciesEncrypt(publicKey, msg));
 }
 
-async function pureDecryptEcies(encryptedMsg: Uint8Array, privateKey: Uint8Array): Promise<Uint8Array> {
+async function pureDecryptEcies(
+  encryptedMsg: Uint8Array,
+  privateKey: Uint8Array
+): Promise<Uint8Array> {
   return Uint8Array.from(eciesDecrypt(privateKey, encryptedMsg));
 }
 
@@ -1068,7 +1156,10 @@ class TransferCache {
     if (hit) return hit;
     if (this.storage) {
       const stored = await this.storage.get(`lni:txcache:${paymentHash}`);
-      if (stored) { this.mem.set(paymentHash, stored); return stored; }
+      if (stored) {
+        this.mem.set(paymentHash, stored);
+        return stored;
+      }
     }
     return undefined;
   }
@@ -1119,7 +1210,8 @@ function mapSparkTransferToTransaction(transfer: unknown): Transaction {
     (typeof requestInvoice.encodedInvoice === 'string' ? requestInvoice.encodedInvoice : '') ||
     (typeof item.sparkInvoice === 'string' ? item.sparkInvoice : '');
 
-  const paymentPreimage = typeof userRequest.paymentPreimage === 'string' ? userRequest.paymentPreimage : '';
+  const paymentPreimage =
+    typeof userRequest.paymentPreimage === 'string' ? userRequest.paymentPreimage : '';
   const paymentHash =
     (typeof requestInvoice.paymentHash === 'string' ? requestInvoice.paymentHash : '') ||
     (typeof userRequest.paymentHash === 'string' ? userRequest.paymentHash : '') ||
@@ -1131,7 +1223,8 @@ function mapSparkTransferToTransaction(transfer: unknown): Transaction {
     toUnixSecondsFromAny(requestInvoice.expiresAt) ||
     (createdAt ? createdAt + extractExpiryFromInvoice(invoice) : 0);
   const feeMsats = mapCurrencyAmountToMsats(userRequest.fee);
-  const transferDirection = typeof item.transferDirection === 'string' ? item.transferDirection : '';
+  const transferDirection =
+    typeof item.transferDirection === 'string' ? item.transferDirection : '';
 
   return emptyTransaction({
     type: transferDirection === 'INCOMING' ? 'incoming' : 'outgoing',
@@ -1182,7 +1275,10 @@ export class SparkNode implements LightningNode {
   private pureFrostInstalled = false;
   private readonly transferCache: TransferCache;
 
-  constructor(private readonly config: SparkConfig, _options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: SparkConfig,
+    _options: NodeRequestOptions = {}
+  ) {
     if (!config.mnemonic?.trim()) {
       throw new LniError('InvalidInput', 'Spark mnemonic is required.');
     }
@@ -1201,7 +1297,7 @@ export class SparkNode implements LightningNode {
           ? [SPARK_SDK_NATIVE_ENTRY]
           : entry === 'default'
             ? [SPARK_SDK_DEFAULT_ENTRY]
-          : entry === 'bare'
+            : entry === 'bare'
               ? [SPARK_SDK_PACKAGED_BARE_ENTRY]
               : isNodeRuntime()
                 ? [SPARK_SDK_DEFAULT_ENTRY]
@@ -1222,7 +1318,7 @@ export class SparkNode implements LightningNode {
       throw new LniError(
         'Api',
         `Failed to load Spark SDK entry (${candidates.join(', ')}): ${(lastError as Error)?.message ?? 'unknown error'}`,
-        { cause: lastError },
+        { cause: lastError }
       );
     })();
 
@@ -1246,7 +1342,10 @@ export class SparkNode implements LightningNode {
       return sparkFrost;
     };
 
-    if (typeof module.setSparkFrostOnce === 'function' && typeof module.SparkFrostBase === 'function') {
+    if (
+      typeof module.setSparkFrostOnce === 'function' &&
+      typeof module.SparkFrostBase === 'function'
+    ) {
       const sparkFrost = applyPureMethods(new module.SparkFrostBase());
       module.setSparkFrostOnce(sparkFrost);
       this.pureFrostInstalled = true;
@@ -1256,7 +1355,7 @@ export class SparkNode implements LightningNode {
     if (typeof module.getSparkFrost !== 'function') {
       throw new LniError(
         'Api',
-        'Spark SDK entry does not expose SparkFrost hooks required for pure TypeScript mode.',
+        'Spark SDK entry does not expose SparkFrost hooks required for pure TypeScript mode.'
       );
     }
 
@@ -1298,7 +1397,7 @@ export class SparkNode implements LightningNode {
   async getPermissions(): Promise<Permissions> {
     throw new LniError(
       'InvalidInput',
-      'Spark wallet credentials cannot be introspected. Manually test permissions against Spark wallet operations.',
+      'Spark wallet credentials cannot be introspected. Manually test permissions against Spark wallet operations.'
     );
   }
 
@@ -1334,14 +1433,21 @@ export class SparkNode implements LightningNode {
       descriptionHash: params.descriptionHash,
     });
 
-    const invoiceObject = (response as { invoice?: { encodedInvoice?: string; paymentHash?: string; memo?: string; expiresAt?: unknown } }).invoice;
+    const invoiceObject = (
+      response as {
+        invoice?: {
+          encodedInvoice?: string;
+          paymentHash?: string;
+          memo?: string;
+          expiresAt?: unknown;
+        };
+      }
+    ).invoice;
     const invoice = invoiceObject?.encodedInvoice ?? '';
     const paymentHash = invoiceObject?.paymentHash ?? extractPaymentHashFromInvoice(invoice);
     const createdAt = toUnixSecondsFromAny((response as { createdAt?: unknown }).createdAt) || now;
     const expirySeconds = params.expiry ?? (extractExpiryFromInvoice(invoice) || 3600);
-    const expiresAt =
-      toUnixSecondsFromAny(invoiceObject?.expiresAt) ||
-      (createdAt + expirySeconds);
+    const expiresAt = toUnixSecondsFromAny(invoiceObject?.expiresAt) || createdAt + expirySeconds;
 
     return emptyTransaction({
       type: 'incoming',
@@ -1370,29 +1476,24 @@ export class SparkNode implements LightningNode {
     });
 
     if (isAmountlessInvoice && (!providedAmountMsats || providedAmountMsats <= 0)) {
-      throw new LniError(
-        'InvalidInput',
-        'Spark amountless invoice requires amountMsats.',
-      );
+      throw new LniError('InvalidInput', 'Spark amountless invoice requires amountMsats.');
     }
 
     try {
       const wallet = await this.getWallet();
       emitSparkDebugCheckpoint('pay_invoice:wallet_ready');
 
-      const amountSatsToSend = isAmountlessInvoice && providedAmountMsats
-        ? Math.max(1, Math.floor(providedAmountMsats / 1000))
-        : undefined;
+      const amountSatsToSend =
+        isAmountlessInvoice && providedAmountMsats
+          ? Math.max(1, Math.floor(providedAmountMsats / 1000))
+          : undefined;
       const maxFeeSats = params.feeLimitMsat
         ? Math.max(1, Math.ceil(params.feeLimitMsat / 1000))
         : (this.config.defaultMaxFeeSats ?? DEFAULT_MAX_FEE_SATS);
 
       emitSparkDebugCheckpoint('pay_invoice:submit', {
         hasAmountSatsToSend: amountSatsToSend !== undefined,
-        amountSource:
-          providedAmountMsats !== undefined
-            ? 'params'
-            : 'none',
+        amountSource: providedAmountMsats !== undefined ? 'params' : 'none',
         maxFeeSats,
       });
       const response = await wallet.payLightningInvoice({
@@ -1499,20 +1600,22 @@ export class SparkNode implements LightningNode {
     throw new LniError('Api', 'Bolt12 offers are not implemented for SparkNode.');
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
     throw new LniError('Api', 'Bolt12 offers are not implemented for SparkNode.');
   }
 
-  private async scanTransactions(
-    params: {
-      from: number;
-      limit: number;
-      paymentHash?: string;
-      search?: string;
-      createdAfter?: number;
-      createdBefore?: number;
-    },
-  ): Promise<Transaction[]> {
+  private async scanTransactions(params: {
+    from: number;
+    limit: number;
+    paymentHash?: string;
+    search?: string;
+    createdAfter?: number;
+    createdBefore?: number;
+  }): Promise<Transaction[]> {
     const wallet = await this.getWallet();
     const from = Math.max(0, params.from || 0);
     const limit = params.limit > 0 ? params.limit : DEFAULT_SCAN_LIMIT;
@@ -1522,7 +1625,9 @@ export class SparkNode implements LightningNode {
     let scanned = 0;
 
     const createdAfterDate = params.createdAfter ? new Date(params.createdAfter * 1000) : undefined;
-    const createdBeforeDate = params.createdBefore ? new Date(params.createdBefore * 1000) : undefined;
+    const createdBeforeDate = params.createdBefore
+      ? new Date(params.createdBefore * 1000)
+      : undefined;
 
     while (results.length < limit && scanned < DEFAULT_SCAN_LIMIT) {
       const page = await wallet.getTransfers(pageSize, offset, createdAfterDate, createdBeforeDate);
@@ -1582,7 +1687,10 @@ export class SparkNode implements LightningNode {
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
     if (!params.paymentHash && !params.search) {
-      throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash or search for SparkNode.');
+      throw new LniError(
+        'InvalidInput',
+        'lookupInvoice requires paymentHash or search for SparkNode.'
+      );
     }
 
     // 1. Cache hit — O(1) direct lookup
@@ -1636,7 +1744,7 @@ export class SparkNode implements LightningNode {
     if (!tx) {
       throw new LniError(
         'Api',
-        `Invoice not found for SparkNode (paymentHash=${params.paymentHash ?? ''}, search=${params.search ?? ''}).`,
+        `Invoice not found for SparkNode (paymentHash=${params.paymentHash ?? ''}, search=${params.search ?? ''}).`
       );
     }
     return tx;
@@ -1663,7 +1771,10 @@ export class SparkNode implements LightningNode {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     const wallet = await this.getWallet();
 
     // Try event-based approach if SDK supports it
@@ -1686,7 +1797,7 @@ export class SparkNode implements LightningNode {
   private eventBasedInvoiceWatch(
     wallet: SparkWalletLike,
     params: OnInvoiceEventParams,
-    callback: InvoiceEventCallback,
+    callback: InvoiceEventCallback
   ): Promise<void> {
     return new Promise<void>((resolve) => {
       let settled = false;
@@ -1701,7 +1812,8 @@ export class SparkNode implements LightningNode {
         if (settled) return;
         try {
           const event = (args[0] ?? {}) as { transferId?: string };
-          const transferId = event.transferId ?? (typeof args[0] === 'string' ? args[0] : undefined);
+          const transferId =
+            event.transferId ?? (typeof args[0] === 'string' ? args[0] : undefined);
           if (!transferId) return;
 
           const tx = await this.lookupByTransferId(transferId);
@@ -1724,19 +1836,21 @@ export class SparkNode implements LightningNode {
       this.lookupInvoice({
         paymentHash: params.paymentHash,
         search: params.search,
-      }).then((tx) => {
-        if (settled) return;
-        if (tx.settledAt > 0) {
-          settled = true;
-          callback('success', tx);
-          resolve();
-          return;
-        }
-        callback('pending', tx);
-      }).catch(() => {
-        if (settled) return;
-        callback('pending');
-      });
+      })
+        .then((tx) => {
+          if (settled) return;
+          if (tx.settledAt > 0) {
+            settled = true;
+            callback('success', tx);
+            resolve();
+            return;
+          }
+          callback('pending', tx);
+        })
+        .catch(() => {
+          if (settled) return;
+          callback('pending');
+        });
 
       wallet.on!('transfer:claimed', listener);
 

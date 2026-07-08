@@ -1,6 +1,47 @@
-# Security Check Script
+# Repository Scripts
 
-This directory contains repository maintenance scripts. The current security helper is:
+This directory contains repository maintenance scripts.
+
+## Formatting
+
+Install the tracked pre-commit hook once per checkout:
+
+```bash
+scripts/install-hooks.sh
+```
+
+The hook formats staged Rust files with `cargo fmt` and staged files in the
+TypeScript packages with a pinned Prettier version through `npm exec`. It does
+not require a global Prettier, Husky, or lefthook install.
+
+Run a full repository format pass before opening a formatting-only PR:
+
+```bash
+scripts/format.sh
+```
+
+Check formatting without writing changes:
+
+```bash
+scripts/format-check.sh
+```
+
+The full pass runs:
+
+```text
+cargo fmt --all --manifest-path Cargo.toml
+scripts/format-typescript.sh --write
+```
+
+Review large formatting changes with whitespace hidden when needed:
+
+```bash
+git diff -w
+```
+
+## Security Check Script
+
+The current security helper is:
 
 ```bash
 node scripts/security-check.mjs

@@ -4,18 +4,16 @@ use napi_derive::napi;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use breez_sdk_spark::{
-    connect, default_config, BreezSdk, ConnectRequest, Network, Seed,
-};
+use breez_sdk_spark::{connect, default_config, BreezSdk, ConnectRequest, Network, Seed};
 use tokio::sync::RwLock;
 
 use crate::types::NodeInfo;
-use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams,
-    LookupInvoiceParams, Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
-};
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
+use crate::{
+    ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
+    Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -76,7 +74,7 @@ impl SparkConfig {
 pub struct SparkNode {
     pub config: SparkConfig,
     sdk: Arc<BreezSdk>,
-    spark_transactions_cache: Arc<RwLock<HashMap<String, String>>>,  // paymentHash → paymentId
+    spark_transactions_cache: Arc<RwLock<HashMap<String, String>>>, // paymentHash → paymentId
 }
 
 // Constructor is inherent, not part of the trait
@@ -175,11 +173,17 @@ impl SparkNode {
         crate::spark::api::get_info(self.sdk.clone(), network).await
     }
 
-    pub async fn create_invoice(&self, params: CreateInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn create_invoice(
+        &self,
+        params: CreateInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::spark::api::create_invoice(self.sdk.clone(), params).await
     }
 
-    pub async fn pay_invoice(&self, params: PayInvoiceParams) -> Result<PayInvoiceResponse, ApiError> {
+    pub async fn pay_invoice(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<PayInvoiceResponse, ApiError> {
         crate::spark::api::pay_invoice(self.sdk.clone(), params).await
     }
 
@@ -189,7 +193,10 @@ impl SparkNode {
         })
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::spark::api::lookup_invoice(
             self.sdk.clone(),
             params.payment_hash,
@@ -235,7 +242,8 @@ impl SparkNode {
             params,
             callback,
             self.spark_transactions_cache.clone(),
-        ).await
+        )
+        .await
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {
@@ -262,7 +270,10 @@ crate::impl_lightning_node!(SparkNode);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CreateInvoiceParams, InvoiceType, ListTransactionsParams, LookupInvoiceParams, PayInvoiceParams};
+    use crate::{
+        CreateInvoiceParams, InvoiceType, ListTransactionsParams, LookupInvoiceParams,
+        PayInvoiceParams,
+    };
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
@@ -393,13 +404,19 @@ mod tests {
         let node = get_node().await.expect("Failed to connect");
         // Note: This test requires a valid invoice to pay
         // For now we'll just test that the function exists and handles errors
-        match node.pay_invoice(PayInvoiceParams {
-            invoice: "lnbc1***".to_string(), // Invalid invoice for testing
-            ..Default::default()
-        }).await {
+        match node
+            .pay_invoice(PayInvoiceParams {
+                invoice: "lnbc1***".to_string(), // Invalid invoice for testing
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("txn: {:?}", txn);
-                assert!(!txn.payment_hash.is_empty(), "Payment hash should not be empty");
+                assert!(
+                    !txn.payment_hash.is_empty(),
+                    "Payment hash should not be empty"
+                );
             }
             Err(e) => {
                 println!("Expected error for invalid invoice: {:?}", e);
@@ -446,10 +463,13 @@ mod tests {
         }
 
         let node = get_node().await.expect("Failed to connect");
-        match node.lookup_invoice(LookupInvoiceParams {
-            payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
-            ..Default::default()
-        }).await {
+        match node
+            .lookup_invoice(LookupInvoiceParams {
+                payment_hash: Some(TEST_PAYMENT_HASH.to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txn) => {
                 println!("txn: {:?}", txn);
                 assert!(txn.amount_msats > 0, "Invoice should contain an amount");
@@ -568,18 +588,28 @@ mod tests {
 
         // Verify it's a 12-word mnemonic
         let word_count = mnemonic_str.split_whitespace().count();
-        assert_eq!(word_count, 12, "Expected 12-word mnemonic, got {}", word_count);
+        assert_eq!(
+            word_count, 12,
+            "Expected 12-word mnemonic, got {}",
+            word_count
+        );
 
         // 2. Create a new SparkNode with the fresh mnemonic
         let config = SparkConfig {
             mnemonic: mnemonic_str,
             api_key: Some(API_KEY.clone()),
-            storage_dir: format!("{}/new_wallet_{}", STORAGE_DIR.clone(), uuid::Uuid::new_v4()),
+            storage_dir: format!(
+                "{}/new_wallet_{}",
+                STORAGE_DIR.clone(),
+                uuid::Uuid::new_v4()
+            ),
             network: Some("mainnet".to_string()),
             passphrase: None,
         };
 
-        let node = SparkNode::new(config).await.expect("Failed to connect with new wallet");
+        let node = SparkNode::new(config)
+            .await
+            .expect("Failed to connect with new wallet");
 
         // 3. Create an invoice with the new wallet
         let invoice_params = CreateInvoiceParams {
@@ -590,7 +620,10 @@ mod tests {
             ..Default::default()
         };
 
-        let invoice = node.create_invoice(invoice_params).await.expect("Failed to create invoice");
+        let invoice = node
+            .create_invoice(invoice_params)
+            .await
+            .expect("Failed to create invoice");
 
         println!("Created invoice: {}", invoice.invoice);
         assert!(!invoice.invoice.is_empty(), "Invoice should not be empty");

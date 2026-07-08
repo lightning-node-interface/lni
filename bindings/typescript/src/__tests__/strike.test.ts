@@ -28,7 +28,7 @@ describe('StrikeNode error normalization', () => {
               message: 'Insufficient funds',
             },
           },
-          { status: 422 },
+          { status: 422 }
         );
       }
 
@@ -37,7 +37,7 @@ describe('StrikeNode error normalization', () => {
 
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const payment = node.payInvoice({ invoice: 'lnbc1testinvoice' });
@@ -58,7 +58,7 @@ describe('StrikeNode error normalization', () => {
   it('maps unsupported Bolt12 flows to not implemented NWC errors', async () => {
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: vi.fn<FetchLike>() },
+      { fetch: vi.fn<FetchLike>() }
     );
 
     await expect(node.createOffer({})).rejects.toMatchObject({
@@ -82,7 +82,7 @@ describe('StrikeNode error normalization', () => {
               message: 'Invalid lightning invoice.',
             },
           },
-          { status: 422 },
+          { status: 422 }
         );
       }
 
@@ -91,7 +91,7 @@ describe('StrikeNode error normalization', () => {
 
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(node.payInvoice({ invoice: 'not-an-invoice' })).rejects.toMatchObject({
@@ -116,7 +116,7 @@ describe('StrikeNode error normalization', () => {
 
     const node = new StrikeNode(
       { apiKey: 'bad-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(node.getInfo()).rejects.toMatchObject({
@@ -191,7 +191,7 @@ describe('StrikeNode on-chain payments', () => {
 
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const transaction = await node.prepareOnchainTransaction({
@@ -240,7 +240,7 @@ describe('StrikeNode on-chain payments', () => {
               paymentQuoteId: 'quote-original',
             },
           },
-          { status: 422 },
+          { status: 422 }
         );
       }
 
@@ -249,7 +249,7 @@ describe('StrikeNode on-chain payments', () => {
 
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const transaction = await node.prepareOnchainTransaction({
@@ -302,7 +302,7 @@ describe('StrikeNode on-chain payments', () => {
 
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const payment = await node.payOnchain({
@@ -333,7 +333,7 @@ describe('StrikeNode on-chain payments', () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(
@@ -344,7 +344,7 @@ describe('StrikeNode on-chain payments', () => {
         feeSats: 3_000,
         feePayer: 'sender',
         fee: { type: 'speed', speed: 'normal' },
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });
@@ -369,7 +369,7 @@ describe('StrikeNode on-chain payments', () => {
     });
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     const payment = await node.payOnchain(
@@ -383,7 +383,7 @@ describe('StrikeNode on-chain payments', () => {
         feePayer: 'sender',
         fee: { type: 'speed', speed: 'normal' },
       },
-      { dangerouslyDisableFeeGuardrail: true },
+      { dangerouslyDisableFeeGuardrail: true }
     );
 
     expect(payment).toMatchObject({
@@ -398,7 +398,7 @@ describe('StrikeNode on-chain payments', () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(
@@ -408,7 +408,7 @@ describe('StrikeNode on-chain payments', () => {
         amountSats: 10_000,
         feePayer: 'sender',
         fee: { type: 'speed', speed: 'free' },
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });
@@ -419,7 +419,7 @@ describe('StrikeNode on-chain payments', () => {
     const fetchMock = vi.fn<FetchLike>();
     const node = new StrikeNode(
       { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
-      { fetch: fetchMock },
+      { fetch: fetchMock }
     );
 
     await expect(
@@ -427,7 +427,7 @@ describe('StrikeNode on-chain payments', () => {
         address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
         amountSats: 10_000,
         fee: { type: 'satsPerVbyte', satsPerVbyte: 5 },
-      }),
+      })
     ).rejects.toMatchObject({
       code: 'InvalidInput',
     });

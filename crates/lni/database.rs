@@ -1,10 +1,10 @@
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-#[cfg(feature = "napi_rs")]
-use napi_derive::napi;
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -81,7 +81,7 @@ impl Db {
         drop(data); // Explicitly drop the lock before saving
         self.save()
     }
- 
+
     pub fn lookup_payment(&self, payment_id: String) -> Result<Option<Payment>, DbError> {
         let data = self.data.lock().unwrap();
         Ok(data

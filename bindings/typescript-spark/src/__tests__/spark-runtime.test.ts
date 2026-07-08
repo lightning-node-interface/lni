@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createStreamCompatibleFetch, installSparkRuntime, withHeaderFetch } from '../spark-runtime.js';
+import {
+  createStreamCompatibleFetch,
+  installSparkRuntime,
+  withHeaderFetch,
+} from '../spark-runtime.js';
 import type { FetchLike } from '@sunnyln/lni';
 
 const globalRuntime = globalThis as typeof globalThis & { fetch?: typeof fetch };
@@ -27,7 +31,9 @@ describe('spark-runtime helpers', () => {
     expect(body).toBeDefined();
     expect(typeof body?.getReader).toBe('function');
 
-    const reader = (body as { getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }> } }).getReader();
+    const reader = (
+      body as { getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }> } }
+    ).getReader();
 
     const chunk = await reader.read();
     expect(chunk.done).toBe(false);
@@ -39,11 +45,7 @@ describe('spark-runtime helpers', () => {
 
   it('injects header via withHeaderFetch', async () => {
     const fetchMock = vi.fn<FetchLike>(async () => new Response('{}'));
-    const wrapped = withHeaderFetch(
-      fetchMock as unknown as typeof fetch,
-      'x-api-key',
-      'demo-key',
-    );
+    const wrapped = withHeaderFetch(fetchMock as unknown as typeof fetch, 'x-api-key', 'demo-key');
 
     await wrapped('https://example.com');
 
@@ -54,11 +56,7 @@ describe('spark-runtime helpers', () => {
 
   it('removes incompatible signal before fetch', async () => {
     const fetchMock = vi.fn<FetchLike>(async () => new Response('{}'));
-    const wrapped = withHeaderFetch(
-      fetchMock as unknown as typeof fetch,
-      'x-api-key',
-      'demo-key',
-    );
+    const wrapped = withHeaderFetch(fetchMock as unknown as typeof fetch, 'x-api-key', 'demo-key');
 
     await wrapped('https://example.com', {
       signal: { aborted: false } as unknown as AbortSignal,

@@ -1,5 +1,6 @@
 use lni::{
-  nwc::lib::NwcConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams, PayInvoiceParams,
+  nwc::lib::NwcConfig, CreateInvoiceParams, CreateOfferParams, LookupInvoiceParams,
+  PayInvoiceParams,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -20,7 +21,11 @@ impl NwcNode {
   pub fn get_config(&self) -> NwcConfig {
     NwcConfig {
       nwc_uri: "<redacted>".to_string(),
-      socks5_proxy: self.inner.socks5_proxy.as_ref().map(|_| "<redacted>".to_string()),
+      socks5_proxy: self
+        .inner
+        .socks5_proxy
+        .as_ref()
+        .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
     }
@@ -66,7 +71,9 @@ impl NwcNode {
 
   #[napi]
   pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<lni::Offer> {
-    Err(napi::Error::from_reason("NWC does not support offers (BOLT12) yet".to_string()))
+    Err(napi::Error::from_reason(
+      "NWC does not support offers (BOLT12) yet".to_string(),
+    ))
   }
 
   #[napi]

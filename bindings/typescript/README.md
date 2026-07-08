@@ -21,11 +21,7 @@ npm install @sunnyln/lni
 ### Node API
 
 ```ts
-import {
-  createNode,
-  InvoiceType,
-  type BackendNodeConfig,
-} from '@sunnyln/lni';
+import { createNode, InvoiceType, type BackendNodeConfig } from '@sunnyln/lni';
 
 const backend: BackendNodeConfig = {
   kind: 'lnd',
@@ -139,7 +135,11 @@ If an offer amount is denominated in bitcoin, `amountMsats` is set. If the offer
 type DecodedBlindedPath = {
   introductionNode:
     | { type: 'node_id'; nodeId: string }
-    | { type: 'directed_short_channel_id'; direction: 'node_one' | 'node_two'; shortChannelId: string };
+    | {
+        type: 'directed_short_channel_id';
+        direction: 'node_one' | 'node_two';
+        shortChannelId: string;
+      };
   blindingPoint: string;
   blindedHops: Array<{
     blindedNodeId: string;
@@ -173,7 +173,7 @@ await node.onInvoiceEvents(
       // maxPollingSec exceeded without settlement
       console.log('Invoice was not paid within the timeout');
     }
-  },
+  }
 );
 ```
 

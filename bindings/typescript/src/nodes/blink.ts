@@ -1,11 +1,46 @@
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { mapProviderMessage, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
+import {
+  mapProviderMessage,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getBlinkTokenPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
-import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats } from '../internal/transform.js';
-import { DEFAULT_ONCHAIN_FEE_GUARDRAIL, InvoiceType, type BlinkConfig, type CreateInvoiceParams, type CreateOfferParams, type InvoiceEventCallback, type LightningNode, type ListTransactionsParams, type LookupInvoiceParams, type NodeInfo, type NodeRequestOptions, type Offer, type OnInvoiceEventParams, type OnchainFeeGuardrail, type OnchainFeePayer, type OnchainFeePreference, type OnchainPayments, type OnchainTransaction, type PayInvoiceParams, type PayInvoiceResponse, type PayOnchainOptions, type PayOnchainResponse, type Permissions, type PrepareOnchainTransactionParams, type Transaction } from '../types.js';
+import {
+  emptyNodeInfo,
+  emptyTransaction,
+  matchesSearch,
+  satsToMsats,
+} from '../internal/transform.js';
+import {
+  DEFAULT_ONCHAIN_FEE_GUARDRAIL,
+  InvoiceType,
+  type BlinkConfig,
+  type CreateInvoiceParams,
+  type CreateOfferParams,
+  type InvoiceEventCallback,
+  type LightningNode,
+  type ListTransactionsParams,
+  type LookupInvoiceParams,
+  type NodeInfo,
+  type NodeRequestOptions,
+  type Offer,
+  type OnInvoiceEventParams,
+  type OnchainFeeGuardrail,
+  type OnchainFeePayer,
+  type OnchainFeePreference,
+  type OnchainPayments,
+  type OnchainTransaction,
+  type PayInvoiceParams,
+  type PayInvoiceResponse,
+  type PayOnchainOptions,
+  type PayOnchainResponse,
+  type Permissions,
+  type PrepareOnchainTransactionParams,
+  type Transaction,
+} from '../types.js';
 
 interface GraphQLError {
   message: string;
@@ -114,7 +149,8 @@ interface BlinkTransactionsQuery {
   };
 }
 
-type BlinkTransactionNode = BlinkTransactionsQuery['me']['defaultAccount']['transactions']['edges'][number]['node'];
+type BlinkTransactionNode =
+  BlinkTransactionsQuery['me']['defaultAccount']['transactions']['edges'][number]['node'];
 
 interface BlinkTransactionsPage {
   transactions: Transaction[];
@@ -131,7 +167,10 @@ function resolveBlinkFeeSpeed(fee: OnchainFeePreference): 'FAST' | 'MEDIUM' | 'S
   }
 
   if (fee.type !== 'speed') {
-    throw new LniError('InvalidInput', `Blink payOnchain does not support ${fee.type} fee preferences.`);
+    throw new LniError(
+      'InvalidInput',
+      `Blink payOnchain does not support ${fee.type} fee preferences.`
+    );
   }
 
   switch (fee.speed) {
@@ -142,7 +181,10 @@ function resolveBlinkFeeSpeed(fee: OnchainFeePreference): 'FAST' | 'MEDIUM' | 'S
     case 'slow':
       return 'SLOW';
     case 'free':
-      throw new LniError('InvalidInput', 'Blink payOnchain does not support free on-chain fee speed.');
+      throw new LniError(
+        'InvalidInput',
+        'Blink payOnchain does not support free on-chain fee speed.'
+      );
   }
 }
 
@@ -185,14 +227,17 @@ function assertValidGuardrailLimit(value: number, name: string): void {
   }
 }
 
-function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<OnchainFeeGuardrail> | undefined {
+function resolveOnchainFeeGuardrail(
+  options?: PayOnchainOptions
+): Required<OnchainFeeGuardrail> | undefined {
   if (options?.dangerouslyDisableFeeGuardrail) {
     return undefined;
   }
 
   const guardrail = {
     maxFeeSats: options?.feeGuardrail?.maxFeeSats ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeeSats,
-    maxFeePercent: options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
+    maxFeePercent:
+      options?.feeGuardrail?.maxFeePercent ?? DEFAULT_ONCHAIN_FEE_GUARDRAIL.maxFeePercent,
   };
 
   assertValidGuardrailLimit(guardrail.maxFeeSats, 'feeGuardrail.maxFeeSats');
@@ -201,7 +246,10 @@ function resolveOnchainFeeGuardrail(options?: PayOnchainOptions): Required<Oncha
   return guardrail;
 }
 
-function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: PayOnchainOptions): void {
+function assertOnchainFeeGuardrail(
+  transaction: OnchainTransaction,
+  options?: PayOnchainOptions
+): void {
   const guardrail = resolveOnchainFeeGuardrail(options);
   if (!guardrail) {
     return;
@@ -211,22 +259,28 @@ function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: Pa
   if (feeSats === undefined) {
     throw new LniError(
       'InvalidInput',
-      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.',
+      'Cannot pay on-chain transaction because feeSats is unknown. Re-prepare the transaction or pass dangerouslyDisableFeeGuardrail: true.'
     );
   }
 
   if (!Number.isSafeInteger(feeSats) || feeSats < 0) {
-    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because feeSats is invalid.');
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because feeSats is invalid.'
+    );
   }
 
   if (!Number.isSafeInteger(transaction.amountSats) || transaction.amountSats <= 0) {
-    throw new LniError('InvalidInput', 'Cannot pay on-chain transaction because amountSats is invalid.');
+    throw new LniError(
+      'InvalidInput',
+      'Cannot pay on-chain transaction because amountSats is invalid.'
+    );
   }
 
   if (feeSats > guardrail.maxFeeSats) {
     throw new LniError(
       'InvalidInput',
-      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`,
+      `On-chain fee ${feeSats} sats exceeds guardrail maxFeeSats ${guardrail.maxFeeSats}.`
     );
   }
 
@@ -234,12 +288,15 @@ function assertOnchainFeeGuardrail(transaction: OnchainTransaction, options?: Pa
   if (feePercent > guardrail.maxFeePercent) {
     throw new LniError(
       'InvalidInput',
-      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`,
+      `On-chain fee ${feePercent.toFixed(2)}% exceeds guardrail maxFeePercent ${guardrail.maxFeePercent}%.`
     );
   }
 }
 
-function blinkTransactionAmountToSats(amount: number | undefined, currency: string | undefined): number | undefined {
+function blinkTransactionAmountToSats(
+  amount: number | undefined,
+  currency: string | undefined
+): number | undefined {
   return currency === 'BTC' && amount !== undefined ? Math.abs(amount) : undefined;
 }
 
@@ -269,7 +326,11 @@ function mapBlinkCode(code: unknown): NwcErrorCode | undefined {
   if (normalized.includes('AUTHENTICATION') || normalized.includes('UNAUTHORIZED')) {
     return 'UNAUTHORIZED';
   }
-  if (normalized.includes('FORBIDDEN') || normalized.includes('PERMISSION') || normalized.includes('SCOPE')) {
+  if (
+    normalized.includes('FORBIDDEN') ||
+    normalized.includes('PERMISSION') ||
+    normalized.includes('SCOPE')
+  ) {
     return 'RESTRICTED';
   }
   if (normalized.includes('INSUFFICIENT') || normalized.includes('BALANCE')) {
@@ -278,7 +339,11 @@ function mapBlinkCode(code: unknown): NwcErrorCode | undefined {
   if (normalized.includes('LIMIT') || normalized.includes('QUOTA')) {
     return 'QUOTA_EXCEEDED';
   }
-  if (normalized.includes('INVALID_INVOICE') || normalized.includes('NO_ROUTE') || normalized.includes('PAYMENT')) {
+  if (
+    normalized.includes('INVALID_INVOICE') ||
+    normalized.includes('NO_ROUTE') ||
+    normalized.includes('PAYMENT')
+  ) {
     return 'PAYMENT_FAILED';
   }
 
@@ -298,7 +363,7 @@ function blinkNwcError(
   code: NwcErrorCode,
   message: string,
   operation: NwcErrorOperation,
-  info?: ProviderErrorInfo,
+  info?: ProviderErrorInfo
 ): NwcError {
   return new NwcError(code, message, {
     operation,
@@ -309,9 +374,18 @@ function blinkNwcError(
   });
 }
 
-function blinkErrorsToNwcError(errors: GraphQLError[], operation: NwcErrorOperation, fallbackCode: NwcErrorCode = 'OTHER'): NwcError {
+function blinkErrorsToNwcError(
+  errors: GraphQLError[],
+  operation: NwcErrorOperation,
+  fallbackCode: NwcErrorCode = 'OTHER'
+): NwcError {
   const info = blinkProviderInfoFromErrors(errors);
-  return blinkNwcError(mapBlinkProviderError(info) ?? fallbackCode, info.message ?? 'Blink GraphQL error', operation, info);
+  return blinkNwcError(
+    mapBlinkProviderError(info) ?? fallbackCode,
+    info.message ?? 'Blink GraphQL error',
+    operation,
+    info
+  );
 }
 
 function throwBlinkProviderError(error: unknown, operation: NwcErrorOperation): never {
@@ -384,7 +458,10 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     }
   `;
 
-  constructor(private readonly config: BlinkConfig, options: NodeRequestOptions = {}) {
+  constructor(
+    private readonly config: BlinkConfig,
+    options: NodeRequestOptions = {}
+  ) {
     this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.blink.sv/graphql';
@@ -401,7 +478,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
   private async gql<T>(
     query: string,
     variables: Record<string, unknown> | undefined,
-    operation: NwcErrorOperation,
+    operation: NwcErrorOperation
   ): Promise<T> {
     let payload: GraphQLResponse<T>;
     try {
@@ -456,7 +533,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     if (!permissions) {
       throw new LniError(
         'InvalidInput',
-        'Blink API keys cannot be introspected. Use a JWT-style token with scopes or manually test permissions against Blink GraphQL operations.',
+        'Blink API keys cannot be introspected. Use a JWT-style token with scopes or manually test permissions against Blink GraphQL operations.'
       );
     }
 
@@ -477,7 +554,11 @@ export class BlinkNode implements LightningNode, OnchainPayments {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'make_invoice');
+      throw blinkNwcError(
+        'NOT_IMPLEMENTED',
+        'Bolt12 is not implemented for BlinkNode.',
+        'make_invoice'
+      );
     }
 
     const walletId = await this.getBtcWalletId();
@@ -499,13 +580,17 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       }
     `;
 
-    const response = await this.gql<BlinkInvoiceCreateResponse>(query, {
-      input: {
-        amount: Math.floor((params.amountMsats ?? 0) / 1000),
-        walletId,
-        memo: params.description,
+    const response = await this.gql<BlinkInvoiceCreateResponse>(
+      query,
+      {
+        input: {
+          amount: Math.floor((params.amountMsats ?? 0) / 1000),
+          walletId,
+          memo: params.description,
+        },
       },
-    }, 'make_invoice');
+      'make_invoice'
+    );
 
     if (response.lnInvoiceCreate.errors?.length) {
       throw blinkErrorsToNwcError(response.lnInvoiceCreate.errors, 'make_invoice');
@@ -513,7 +598,11 @@ export class BlinkNode implements LightningNode, OnchainPayments {
 
     const invoice = response.lnInvoiceCreate.invoice;
     if (!invoice) {
-      throw blinkNwcError('INTERNAL', 'No invoice returned from Blink invoice creation.', 'make_invoice');
+      throw blinkNwcError(
+        'INTERNAL',
+        'No invoice returned from Blink invoice creation.',
+        'make_invoice'
+      );
     }
 
     return emptyTransaction({
@@ -551,11 +640,15 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           walletId,
         },
       },
-      'pay_invoice',
+      'pay_invoice'
     );
 
     if (feeProbe.lnInvoiceFeeProbe.errors?.length) {
-      throw blinkErrorsToNwcError(feeProbe.lnInvoiceFeeProbe.errors, 'pay_invoice', 'PAYMENT_FAILED');
+      throw blinkErrorsToNwcError(
+        feeProbe.lnInvoiceFeeProbe.errors,
+        'pay_invoice',
+        'PAYMENT_FAILED'
+      );
     }
 
     const payment = await this.gql<BlinkPaymentSendResponse>(
@@ -577,11 +670,15 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           walletId,
         },
       },
-      'pay_invoice',
+      'pay_invoice'
     );
 
     if (payment.lnInvoicePaymentSend.errors?.length) {
-      throw blinkErrorsToNwcError(payment.lnInvoicePaymentSend.errors, 'pay_invoice', 'PAYMENT_FAILED');
+      throw blinkErrorsToNwcError(
+        payment.lnInvoicePaymentSend.errors,
+        'pay_invoice',
+        'PAYMENT_FAILED'
+      );
     }
 
     if (payment.lnInvoicePaymentSend.status !== 'SUCCESS') {
@@ -590,7 +687,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         status === 'FAILED' ? 'PAYMENT_FAILED' : 'OTHER',
         `Blink payment failed with status ${status}`,
         'pay_invoice',
-        { code: status, message: status },
+        { code: status, message: status }
       );
     }
 
@@ -601,7 +698,9 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     };
   }
 
-  async prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
+  async prepareOnchainTransaction(
+    params: PrepareOnchainTransactionParams
+  ): Promise<OnchainTransaction> {
     const amountSats = params.amountSats;
     assertValidOnchainAmount(amountSats);
 
@@ -624,7 +723,7 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         amount: amountSats,
         speed,
       },
-      'pay_invoice',
+      'pay_invoice'
     );
 
     const feeSats = response.onChainTxFee.amount;
@@ -646,7 +745,10 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     };
   }
 
-  async payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions): Promise<PayOnchainResponse> {
+  async payOnchain(
+    transaction: OnchainTransaction,
+    options?: PayOnchainOptions
+  ): Promise<PayOnchainResponse> {
     assertValidOnchainAmount(transaction.amountSats);
     resolveBlinkFeePayer(transaction.feePayer);
     const speed = resolveBlinkFeeSpeed(transaction.fee);
@@ -688,20 +790,28 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           speed,
         },
       },
-      'pay_invoice',
+      'pay_invoice'
     );
 
     if (payment.onChainPaymentSend.errors?.length) {
-      throw blinkErrorsToNwcError(payment.onChainPaymentSend.errors, 'pay_invoice', 'PAYMENT_FAILED');
+      throw blinkErrorsToNwcError(
+        payment.onChainPaymentSend.errors,
+        'pay_invoice',
+        'PAYMENT_FAILED'
+      );
     }
 
     const paymentTransaction = payment.onChainPaymentSend.transaction;
     const feeSats =
-      blinkTransactionAmountToSats(paymentTransaction?.settlementFee, paymentTransaction?.settlementCurrency)
-        ?? transaction.feeSats;
+      blinkTransactionAmountToSats(
+        paymentTransaction?.settlementFee,
+        paymentTransaction?.settlementCurrency
+      ) ?? transaction.feeSats;
     const amountSats =
-      blinkTransactionAmountToSats(paymentTransaction?.settlementAmount, paymentTransaction?.settlementCurrency)
-        ?? transaction.amountSats;
+      blinkTransactionAmountToSats(
+        paymentTransaction?.settlementAmount,
+        paymentTransaction?.settlementCurrency
+      ) ?? transaction.amountSats;
 
     return {
       paymentId: paymentTransaction?.id,
@@ -717,19 +827,39 @@ export class BlinkNode implements LightningNode, OnchainPayments {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'make_invoice');
+    throw blinkNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for BlinkNode.',
+      'make_invoice'
+    );
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'lookup_invoice');
+    throw blinkNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for BlinkNode.',
+      'lookup_invoice'
+    );
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'list_transactions');
+    throw blinkNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for BlinkNode.',
+      'list_transactions'
+    );
   }
 
-  async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw blinkNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for BlinkNode.', 'pay_invoice');
+  async payOffer(
+    _offer: string,
+    _amountMsats: number,
+    _payerNote?: string
+  ): Promise<PayInvoiceResponse> {
+    throw blinkNwcError(
+      'NOT_IMPLEMENTED',
+      'Bolt12 is not implemented for BlinkNode.',
+      'pay_invoice'
+    );
   }
 
   private mapTransaction(node: BlinkTransactionNode): Transaction {
@@ -738,10 +868,14 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         ? (node.initiationVia.paymentHash ?? '')
         : '';
     const preimage =
-      node.settlementVia?.__typename === 'SettlementViaLn' ? (node.settlementVia.preImage ?? '') : '';
+      node.settlementVia?.__typename === 'SettlementViaLn'
+        ? (node.settlementVia.preImage ?? '')
+        : '';
 
-    const amountMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementAmount ?? 0)) : 0;
-    const feeMsats = node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementFee ?? 0)) : 0;
+    const amountMsats =
+      node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementAmount ?? 0)) : 0;
+    const feeMsats =
+      node.settlementCurrency === 'BTC' ? satsToMsats(Math.abs(node.settlementFee ?? 0)) : 0;
 
     return emptyTransaction({
       type: node.direction === 'SEND' ? 'outgoing' : 'incoming',
@@ -764,10 +898,14 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     paymentHash?: string;
     search?: string;
   }): Promise<BlinkTransactionsPage> {
-    const response: BlinkTransactionsQuery = await this.gql<BlinkTransactionsQuery>(BlinkNode.TRANSACTIONS_QUERY, {
-      first: Math.max(args.first, 1),
-      after: args.after ?? null,
-    }, args.paymentHash ? 'lookup_invoice' : 'list_transactions');
+    const response: BlinkTransactionsQuery = await this.gql<BlinkTransactionsQuery>(
+      BlinkNode.TRANSACTIONS_QUERY,
+      {
+        first: Math.max(args.first, 1),
+        after: args.after ?? null,
+      },
+      args.paymentHash ? 'lookup_invoice' : 'list_transactions'
+    );
 
     const page: BlinkTransactionsQuery['me']['defaultAccount']['transactions'] =
       response.me.defaultAccount.transactions;
@@ -788,7 +926,8 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       };
     }
 
-    const nextCursor: string | null = page.pageInfo.endCursor ?? edges[edges.length - 1]?.cursor ?? null;
+    const nextCursor: string | null =
+      page.pageInfo.endCursor ?? edges[edges.length - 1]?.cursor ?? null;
     return {
       transactions,
       nextCursor: nextCursor && nextCursor !== args.after ? nextCursor : null,
@@ -822,7 +961,11 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       after = page.nextCursor;
     }
 
-    throw blinkNwcError('NOT_FOUND', `Transaction not found for payment hash: ${params.paymentHash}`, 'lookup_invoice');
+    throw blinkNwcError(
+      'NOT_FOUND',
+      `Transaction not found for payment hash: ${params.paymentHash}`,
+      'lookup_invoice'
+    );
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
@@ -878,7 +1021,10 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     return decodeOfferToJson(offer);
   }
 
-  async onInvoiceEvents(params: OnInvoiceEventParams, callback: InvoiceEventCallback): Promise<void> {
+  async onInvoiceEvents(
+    params: OnInvoiceEventParams,
+    callback: InvoiceEventCallback
+  ): Promise<void> {
     await pollInvoiceEvents({
       params,
       callback,

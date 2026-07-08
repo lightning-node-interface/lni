@@ -1,12 +1,16 @@
 #[cfg(feature = "napi_rs")]
 use napi_derive::napi;
 
-use crate::types::{ListTransactionsParams, LookupInvoiceParams, NodeInfo, OnInvoiceEventCallback, OnInvoiceEventParams};
-use crate::{
-    ApiError, CreateInvoiceParams, CreateOfferParams, Offer, PayInvoiceParams, PayInvoiceResponse, Transaction,
+use crate::types::{
+    ListTransactionsParams, LookupInvoiceParams, NodeInfo, OnInvoiceEventCallback,
+    OnInvoiceEventParams,
 };
 #[cfg(not(feature = "uniffi"))]
 use crate::LightningNode;
+use crate::{
+    ApiError, CreateInvoiceParams, CreateOfferParams, Offer, PayInvoiceParams, PayInvoiceResponse,
+    Transaction,
+};
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -91,10 +95,15 @@ impl SpeedNode {
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api { reason: "create_offer not implemented for SpeedNode".to_string() })
+        Err(ApiError::Api {
+            reason: "create_offer not implemented for SpeedNode".to_string(),
+        })
     }
 
-    pub async fn lookup_invoice(&self, params: LookupInvoiceParams) -> Result<Transaction, ApiError> {
+    pub async fn lookup_invoice(
+        &self,
+        params: LookupInvoiceParams,
+    ) -> Result<Transaction, ApiError> {
         crate::speed::api::lookup_invoice(
             &self.config,
             params.payment_hash,
@@ -343,7 +352,8 @@ mod tests {
             search: Some(TEST_PAYMENT_REQUEST.to_string()), // Also provide the withdraw_request as search term
         };
 
-        NODE.on_invoice_events(params, std::sync::Arc::new(callback)).await;
+        NODE.on_invoice_events(params, std::sync::Arc::new(callback))
+            .await;
 
         // Check that some events were captured
         let events_guard = events.lock().unwrap();
