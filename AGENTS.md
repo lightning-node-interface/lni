@@ -24,6 +24,11 @@ This file defines stable, repository-level guidance for future coding agents.
 - Ensure `npm run typecheck` passes.
 - Ensure `npm run pack:dry-run` succeeds and does not include tests/secrets.
 
+## TypeScript Package Versioning
+- Keep `@sunnyln/lni`, `@sunnyln/lni-arkade`, and `@sunnyln/lni-spark` on the same npm version unless a release explicitly says otherwise.
+- When bumping the core TypeScript package, also bump Arkade and Spark package versions plus their `@sunnyln/lni` peer dependency ranges.
+- Refresh the affected `package-lock.json` files after version changes so local `file:` package metadata points at the same version.
+
 ## Security Expectations
 - Never commit credentials or local machine details.
 - Do not print sensitive runtime values in tests/logging:
