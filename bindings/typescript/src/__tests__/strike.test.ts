@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { NwcError } from '../errors.js';
 import { StrikeNode } from '../nodes/strike.js';
 import type { FetchLike } from '../types.js';
 
@@ -11,6 +12,122 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
     },
   });
 }
+
+describe('StrikeNode error normalization', () => {
+  it('maps Strike insufficient-balance payment quote errors to NwcError', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+        return jsonResponse(
+          {
+            traceId: 'trace-1',
+            data: {
+              status: '422',
+              code: 'BALANCE_TOO_LOW',
+              message: 'Insufficient funds',
+            },
+          },
+          { status: 422 },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    const payment = node.payInvoice({ invoice: 'lnbc1testinvoice' });
+
+    await expect(payment).rejects.toMatchObject({
+      name: 'NwcError',
+      code: 'NwcError',
+      nwcCode: 'INSUFFICIENT_BALANCE',
+      operation: 'pay_invoice',
+      provider: 'strike',
+      providerCode: 'BALANCE_TOO_LOW',
+      providerStatus: 422,
+      providerMessage: 'Insufficient funds',
+    });
+    await expect(payment).rejects.toBeInstanceOf(NwcError);
+  });
+
+  it('maps unsupported Bolt12 flows to not implemented NWC errors', async () => {
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: vi.fn<FetchLike>() },
+    );
+
+    await expect(node.createOffer({})).rejects.toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'NOT_IMPLEMENTED',
+      operation: 'make_invoice',
+      provider: 'strike',
+    });
+  });
+
+  it('maps Strike invalid invoice errors to payment failures', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+        return jsonResponse(
+          {
+            data: {
+              status: 422,
+              code: 'INVALID_LN_INVOICE',
+              message: 'Invalid lightning invoice.',
+            },
+          },
+          { status: 422 },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(node.payInvoice({ invoice: 'not-an-invoice' })).rejects.toMatchObject({
+      nwcCode: 'PAYMENT_FAILED',
+      operation: 'pay_invoice',
+      provider: 'strike',
+      providerCode: 'INVALID_LN_INVOICE',
+      providerStatus: 422,
+    });
+  });
+
+  it('falls back from Strike HTTP status when the error body is not structured JSON', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/balances') {
+        return new Response('Invalid or unspecified identity.', { status: 401 });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'bad-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock },
+    );
+
+    await expect(node.getInfo()).rejects.toMatchObject({
+      name: 'NwcError',
+      nwcCode: 'UNAUTHORIZED',
+      operation: 'get_info',
+      provider: 'strike',
+      providerStatus: 401,
+    });
+  });
+});
 
 describe('StrikeNode on-chain payments', () => {
   it('prepares an on-chain transaction using Strike tiers and fee policy', async () => {

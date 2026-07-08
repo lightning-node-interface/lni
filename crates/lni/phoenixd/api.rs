@@ -3,10 +3,15 @@ use super::types::{
     PayResponse, PhoenixPayInvoiceResp,
 };
 use super::PhoenixdConfig;
+use crate::error_normalization::{
+    map_provider_message, nwc_error, provider_error_from_response, provider_info_from_body,
+    transport_error, ProviderErrorInfo,
+};
 use crate::ListTransactionsParams;
 use crate::{
-    phoenixd::types::GetBalanceResponse, ApiError, CreateOfferParams, InvoiceType, NodeInfo, Offer, OnInvoiceEventCallback,
-    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
+    phoenixd::types::GetBalanceResponse, ApiError, CreateOfferParams, InvoiceType, NodeInfo, Offer,
+    OnInvoiceEventCallback, OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse,
+    Transaction,
 };
 use lightning_invoice::Bolt11Invoice;
 use serde_urlencoded;
@@ -20,6 +25,18 @@ use tokio::time::sleep;
 
 // https://phoenix.acinq.co/server/api
 
+fn map_phoenixd_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    map_provider_message(info.message.as_deref())
+}
+
+fn phoenixd_error_from_body(status: Option<reqwest::StatusCode>, body: String) -> ApiError {
+    let info = provider_info_from_body(status.map(|status| status.as_u16()), &body);
+    let code = map_phoenixd_provider_error(&info)
+        .or_else(|| crate::error_normalization::map_http_status(info.status))
+        .unwrap_or("PAYMENT_FAILED");
+    nwc_error(code, info.message.unwrap_or(body))
+}
+
 fn client(config: &PhoenixdConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
@@ -29,9 +46,10 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
                 client_builder = client_builder.danger_accept_invalid_certs(true);
             }
             if let Some(timeout) = config.http_timeout {
-                client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+                client_builder =
+                    client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
             }
-            
+
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
                     match client_builder.proxy(proxy).build() {
@@ -43,7 +61,7 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
             }
         }
     }
-    
+
     // Default client creation
     let mut client_builder = reqwest::ClientBuilder::new();
     if config.accept_invalid_certs.unwrap_or(false) {
@@ -52,7 +70,9 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    client_builder
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
@@ -64,9 +84,18 @@ pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "get_info", e))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "get_info",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
@@ -79,15 +108,21 @@ pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
-    let balance_response_text = balance_response
-        .text()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "get_info", e))?;
+    if !balance_response.status().is_success() {
+        let status = balance_response.status();
+        let error_text = balance_response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "get_info",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
+    let balance_response_text = balance_response.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     // println!("balance_response: {}", balance_response_text);
 
     // Now process the results in  context
@@ -138,9 +173,19 @@ pub async fn create_invoice(
                 .form(&bolt11_req)
                 .send()
                 .await
-                .map_err(|e| ApiError::Http {
-                    reason: e.to_string(),
-                })?;
+                .map_err(|e| transport_error("phoenixd", "make_invoice", e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(provider_error_from_response(
+                    "phoenixd",
+                    "make_invoice",
+                    status,
+                    error_text,
+                    map_phoenixd_provider_error,
+                ));
+            }
 
             // println!("Status: {}", response.status());
 
@@ -185,9 +230,19 @@ pub async fn create_invoice(
                 .form(&bolt12_req)
                 .send()
                 .await
-                .map_err(|e| ApiError::Http {
-                    reason: e.to_string(),
-                })?;
+                .map_err(|e| transport_error("phoenixd", "make_invoice", e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(provider_error_from_response(
+                    "phoenixd",
+                    "make_invoice",
+                    status,
+                    error_text,
+                    map_phoenixd_provider_error,
+                ));
+            }
 
             // println!("Status: {}", response.status());
 
@@ -236,17 +291,25 @@ pub async fn pay_invoice(
         .form(&params)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "pay_invoice", e))?;
+    let status = response.status();
     // println!("Status: {}", response.status());
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
-    let pay_invoice_resp: PhoenixPayInvoiceResp =
-        serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
-            reason: format!("Failed to parse pay_invoice response: {}", e),
-        })?;
+    if !status.is_success() {
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "pay_invoice",
+            status,
+            response_text,
+            map_phoenixd_provider_error,
+        ));
+    }
+    let pay_invoice_resp: PhoenixPayInvoiceResp = match serde_json::from_str(&response_text) {
+        Ok(resp) => resp,
+        Err(_) => return Err(phoenixd_error_from_body(None, response_text.clone())),
+    };
 
     Ok(PayInvoiceResponse {
         payment_hash: pay_invoice_resp.payment_hash,
@@ -284,9 +347,19 @@ pub async fn create_offer(
         .form(&bolt12_req)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "make_invoice", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "make_invoice",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
 
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
@@ -312,9 +385,18 @@ pub async fn get_offer(config: PhoenixdConfig) -> Result<Offer, ApiError> {
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "lookup_invoice", e))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "lookup_invoice",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
@@ -347,20 +429,24 @@ pub async fn pay_offer(
         ])
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "pay_invoice", e))?;
+    let status = response.status();
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
+    if !status.is_success() {
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "pay_invoice",
+            status,
+            response_text,
+            map_phoenixd_provider_error,
+        ));
+    }
     let response_text = response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
-        Err(_e) => {
-            return Err(ApiError::Json {
-                reason: response_text.to_string(),
-            })
-        }
+        Err(_e) => return Err(phoenixd_error_from_body(None, response_text.to_string())),
     };
     Ok(PayInvoiceResponse {
         payment_hash: pay_resp.payment_hash,
@@ -391,9 +477,21 @@ pub async fn lookup_invoice(
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "lookup_invoice", e))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(nwc_error("NOT_FOUND", "Payment not found"));
+    }
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "lookup_invoice",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: e.to_string(),
     })?;
@@ -402,10 +500,10 @@ pub async fn lookup_invoice(
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
 
     let settled_at = if inv.completed_at.is_some() && inv.is_paid {
-            (inv.completed_at.unwrap_or(0) / 1000) as i64
-        } else {
-            0
-        };
+        (inv.completed_at.unwrap_or(0) / 1000) as i64
+    } else {
+        0
+    };
 
     // Determine the amount: use received_sat if paid, otherwise decode from invoice
     let amount_msats = if inv.received_sat > 0 {
@@ -413,10 +511,8 @@ pub async fn lookup_invoice(
     } else if let Some(invoice_str) = &inv.invoice {
         // Try to decode the invoice to get the amount
         match Bolt11Invoice::from_str(invoice_str) {
-            Ok(decoded_invoice) => {
-                decoded_invoice.amount_milli_satoshis().unwrap_or(0) as i64
-            }
-            Err(_) => 0
+            Ok(decoded_invoice) => decoded_invoice.amount_milli_satoshis().unwrap_or(0) as i64,
+            Err(_) => 0,
         }
     } else {
         0
@@ -466,15 +562,21 @@ pub async fn list_transactions(
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
-    let incoming_text = incoming_resp
-        .text()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "list_transactions", e))?;
+    if !incoming_resp.status().is_success() {
+        let status = incoming_resp.status();
+        let error_text = incoming_resp.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "list_transactions",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
+    let incoming_text = incoming_resp.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     let incoming_text = incoming_text.as_str();
     let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
 
@@ -539,15 +641,21 @@ pub async fn list_transactions(
         .basic_auth("", Some(config.password.clone()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
-    let outgoing_text = outgoing_resp
-        .text()
-        .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| transport_error("phoenixd", "list_transactions", e))?;
+    if !outgoing_resp.status().is_success() {
+        let status = outgoing_resp.status();
+        let error_text = outgoing_resp.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "phoenixd",
+            "list_transactions",
+            status,
+            error_text,
+            map_phoenixd_provider_error,
+        ));
+    }
+    let outgoing_text = outgoing_resp.text().await.map_err(|e| ApiError::Http {
+        reason: e.to_string(),
+    })?;
     let outgoing_text = outgoing_text.as_str();
     let outgoing_payments: Vec<OutgoingPaymentResponse> =
         serde_json::from_str(&outgoing_text).unwrap();
@@ -625,7 +733,9 @@ pub async fn poll_invoice_events<F>(
                 created_after: None,
                 created_before: None,
             },
-        ).await {
+        )
+        .await
+        {
             Ok(transactions) => {
                 if transactions.is_empty() {
                     ("pending".to_string(), None)
@@ -669,5 +779,6 @@ pub async fn on_invoice_events(
         "pending" => callback.pending(tx),
         "failure" => callback.failure(tx),
         _ => {}
-    }).await;
+    })
+    .await;
 }

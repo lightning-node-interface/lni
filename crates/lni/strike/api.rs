@@ -11,6 +11,9 @@ use super::types::{
     StrikeReceiveRequestResponse, StrikeReceivesWithCountResponse,
 };
 use super::StrikeConfig;
+use crate::error_normalization::{
+    provider_error_from_response, transport_error, ProviderErrorInfo,
+};
 use crate::types::NodeInfo;
 use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
@@ -81,6 +84,45 @@ fn get_base_url(config: &StrikeConfig) -> &str {
         .base_url
         .as_deref()
         .unwrap_or("https://api.strike.me/v1")
+}
+
+fn map_strike_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    match info.code.as_deref()?.to_ascii_uppercase().as_str() {
+        "BALANCE_TOO_LOW" => Some("INSUFFICIENT_BALANCE"),
+        "RATE_LIMIT_EXCEEDED" | "TOO_MANY_ATTEMPTS" => Some("RATE_LIMITED"),
+        "FORBIDDEN" => Some("RESTRICTED"),
+        "UNAUTHORIZED" => Some("UNAUTHORIZED"),
+        "AMOUNT_TOO_HIGH" | "TOO_MANY_TRANSACTIONS" | "DEPOSIT_LIMIT_EXCEEDED" => {
+            Some("QUOTA_EXCEEDED")
+        }
+        "INVALID_LN_INVOICE"
+        | "INVALID_STATE_FOR_INVOICE_EXPIRED"
+        | "LN_ROUTE_NOT_FOUND"
+        | "PAYMENT_QUOTE_EXPIRED"
+        | "INVALID_RECIPIENT" => Some("PAYMENT_FAILED"),
+        "EXCHANGE_RATE_NOT_AVAILABLE"
+        | "LN_UNAVAILABLE"
+        | "SERVICE_UNAVAILABLE"
+        | "MAINTENANCE_MODE"
+        | "BAD_GATEWAY"
+        | "GATEWAY_TIMEOUT"
+        | "INTERNAL_SERVER_ERROR" => Some("INTERNAL"),
+        "NOT_FOUND" => Some("NOT_FOUND"),
+        _ => None,
+    }
+}
+
+fn strike_nwc_error_from_response(
+    status: reqwest::StatusCode,
+    body: String,
+    operation: &str,
+    _context: &str,
+) -> ApiError {
+    provider_error_from_response("strike", operation, status, body, map_strike_provider_error)
+}
+
+fn strike_nwc_error_from_transport(error: reqwest::Error, operation: &str) -> ApiError {
+    transport_error("strike", operation, error)
 }
 
 fn sats_to_btc_amount(amount_sats: i64) -> Result<Amount, ApiError> {
@@ -244,16 +286,17 @@ pub async fn get_info(config: StrikeConfig) -> Result<NodeInfo, ApiError> {
         .get(&format!("{}/balances", get_base_url(&config)))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "get_info"))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("HTTP {} - {}", status, error_text),
-        });
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "get_info",
+            "Failed to get balances",
+        ));
     }
 
     let balances: Vec<super::types::StrikeBalance> =
@@ -325,19 +368,17 @@ pub async fn create_invoice(
                 .json(&create_request)
                 .send()
                 .await
-                .map_err(|e| ApiError::Http {
-                    reason: e.to_string(),
-                })?;
+                .map_err(|e| strike_nwc_error_from_transport(e, "make_invoice"))?;
 
             if !response.status().is_success() {
                 let status = response.status();
                 let error_text = response.text().await.unwrap_or_default();
-                return Err(ApiError::Http {
-                    reason: format!(
-                        "Failed to create receive request: {} - {}",
-                        status, error_text
-                    ),
-                });
+                return Err(strike_nwc_error_from_response(
+                    status,
+                    error_text,
+                    "make_invoice",
+                    "Failed to create receive request",
+                ));
             }
 
             let response_text = response.text().await.unwrap();
@@ -406,19 +447,17 @@ pub async fn pay_invoice(
         .json(&quote_request)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "pay_invoice"))?;
 
     if !quote_response.status().is_success() {
         let status = quote_response.status();
         let error_text = quote_response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!(
-                "Failed to create payment quote: {} - {}",
-                status, error_text
-            ),
-        });
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "pay_invoice",
+            "Failed to create payment quote",
+        ));
     }
 
     let quote_text = quote_response.text().await.unwrap();
@@ -434,16 +473,17 @@ pub async fn pay_invoice(
         .patch(&execute_url)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "pay_invoice"))?;
 
     if !execute_response.status().is_success() {
         let status = execute_response.status();
         let error_text = execute_response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("Failed to execute payment: {} - {}", status, error_text),
-        });
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "pay_invoice",
+            "Failed to execute payment",
+        ));
     }
 
     let execute_text = execute_response.text().await.unwrap();
@@ -457,16 +497,17 @@ pub async fn pay_invoice(
         .get(&payment_url)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "pay_invoice"))?;
 
     if !payment_response.status().is_success() {
         let status = payment_response.status();
         let error_text = payment_response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("Failed to get payment details: {} - {}", status, error_text),
-        });
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "pay_invoice",
+            "Failed to get payment details",
+        ));
     }
 
     let payment_text = payment_response.text().await.unwrap();
@@ -870,22 +911,24 @@ pub async fn lookup_invoice(
         .get(&receives_url)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "lookup_invoice"))?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(ApiError::Json {
-            reason: "Receive not found".to_string(),
+        return Err(ApiError::Nwc {
+            code: "NOT_FOUND".to_string(),
+            message: "Receive not found".to_string(),
         });
     }
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
-        return Err(ApiError::Http {
-            reason: format!("Failed to get receives: {} - {}", status, error_text),
-        });
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "lookup_invoice",
+            "Failed to get receives",
+        ));
     }
 
     let response_text = response.text().await.unwrap();
@@ -970,9 +1013,7 @@ pub async fn list_transactions(
         .get(&receives_url)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "list_transactions"))?;
 
     let mut transactions: Vec<Transaction> = Vec::new();
 
@@ -1027,6 +1068,15 @@ pub async fn list_transactions(
                 });
             }
         }
+    } else {
+        let status = receives_response.status();
+        let error_text = receives_response.text().await.unwrap_or_default();
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "list_transactions",
+            "Failed to list receives",
+        ));
     }
 
     // Get payments (outgoing)
@@ -1040,9 +1090,7 @@ pub async fn list_transactions(
         .get(&payments_url)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: e.to_string(),
-        })?;
+        .map_err(|e| strike_nwc_error_from_transport(e, "list_transactions"))?;
 
     if payments_response.status().is_success() {
         let payments_text = payments_response.text().await.unwrap();
@@ -1106,6 +1154,15 @@ pub async fn list_transactions(
                 external_id: Some(payment.id),
             });
         }
+    } else if payments_response.status() != reqwest::StatusCode::NOT_FOUND {
+        let status = payments_response.status();
+        let error_text = payments_response.text().await.unwrap_or_default();
+        return Err(strike_nwc_error_from_response(
+            status,
+            error_text,
+            "list_transactions",
+            "Failed to list payments",
+        ));
     }
 
     // Sort by created date descending
@@ -1206,6 +1263,62 @@ mod tests {
             expires_at: None,
             estimated_delivery_seconds: None,
             raw: None,
+        }
+    }
+
+    #[test]
+    fn maps_strike_balance_too_low_to_insufficient_balance() {
+        let error = strike_nwc_error_from_response(
+            reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+            r#"{"data":{"status":422,"code":"BALANCE_TOO_LOW","message":"Balance is too low"}}"#
+                .to_string(),
+            "pay_invoice",
+            "Failed to create payment quote",
+        );
+
+        match error {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "INSUFFICIENT_BALANCE");
+                assert_eq!(message, "Balance is too low");
+            }
+            other => panic!("expected structured NWC error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn maps_strike_invalid_invoice_to_payment_failed() {
+        let error = strike_nwc_error_from_response(
+            reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+            r#"{"data":{"code":"INVALID_LN_INVOICE","message":"Invalid lightning invoice"}}"#
+                .to_string(),
+            "pay_invoice",
+            "Failed to create payment quote",
+        );
+
+        match error {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "PAYMENT_FAILED");
+                assert_eq!(message, "Invalid lightning invoice");
+            }
+            other => panic!("expected structured NWC error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn maps_unstructured_unauthorized_status_to_unauthorized() {
+        let error = strike_nwc_error_from_response(
+            reqwest::StatusCode::UNAUTHORIZED,
+            "unauthorized".to_string(),
+            "get_info",
+            "Failed to get balances",
+        );
+
+        match error {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "UNAUTHORIZED");
+                assert_eq!(message, "unauthorized");
+            }
+            other => panic!("expected structured NWC error, got {:?}", other),
         }
     }
 

@@ -1,5 +1,6 @@
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
 import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
+import { isRecord, mapProviderMessage, providerInfoFromJsonErrorBody, throwNormalizedProviderError, type ProviderErrorInfo } from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import { emptyNodeInfo, emptyTransaction, matchesSearch, satsToMsats, toUnixSeconds } from '../internal/transform.js';
@@ -55,6 +56,78 @@ interface PhoenixdOutgoingPaymentResponse {
   externalId?: string;
 }
 
+function mapPhoenixdProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  const messageCode = mapProviderMessage(info.message);
+  if (messageCode) {
+    return messageCode;
+  }
+
+  switch (info.status) {
+    case 401:
+      return 'UNAUTHORIZED';
+    case 403:
+      return 'RESTRICTED';
+    case 404:
+      return 'NOT_FOUND';
+    default:
+      return undefined;
+  }
+}
+
+function throwPhoenixdError(error: unknown, operation: NwcErrorOperation): never {
+  throwNormalizedProviderError(error, {
+    provider: 'phoenixd',
+    operation,
+    extractProviderError: providerInfoFromJsonErrorBody,
+    mapProviderError: mapPhoenixdProviderError,
+  });
+}
+
+function phoenixdNwcError(
+  code: NwcErrorCode,
+  message: string,
+  operation: NwcErrorOperation,
+  info?: ProviderErrorInfo,
+): NwcError {
+  return new NwcError(code, message, {
+    operation,
+    provider: 'phoenixd',
+    providerCode: info?.code,
+    providerStatus: info?.status,
+    providerMessage: info?.message ?? message,
+  });
+}
+
+function phoenixdPaymentFailure(payload: unknown, operation: NwcErrorOperation): NwcError | undefined {
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+
+  if (typeof payload.paymentHash === 'string' && typeof payload.paymentPreimage === 'string') {
+    return undefined;
+  }
+
+  const message =
+    typeof payload.message === 'string'
+      ? payload.message
+      : typeof payload.reason === 'string'
+        ? payload.reason
+        : typeof payload.error === 'string'
+          ? payload.error
+          : undefined;
+
+  if (!message) {
+    return undefined;
+  }
+
+  const info = {
+    code: typeof payload.code === 'string' ? payload.code : undefined,
+    message,
+  };
+
+  return phoenixdNwcError(mapPhoenixdProviderError(info) ?? 'PAYMENT_FAILED', message, operation, info);
+}
+
 export class PhoenixdNode implements LightningNode {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
@@ -68,26 +141,48 @@ export class PhoenixdNode implements LightningNode {
     return `Basic ${encodeBase64(`:${this.config.password}`)}`;
   }
 
-  private async requestJson<T>(path: string, args: Parameters<typeof requestJson<T>>[2]): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.config.url, path), {
-      ...args,
-      timeoutMs: args?.timeoutMs ?? this.timeoutMs,
-      headers: {
-        authorization: this.authHeader(),
-        ...(args?.headers ?? {}),
-      },
-    });
+  private async requestJson<T>(
+    path: string,
+    args: Parameters<typeof requestJson<T>>[2],
+    operation?: NwcErrorOperation,
+  ): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.config.url, path, args?.query), {
+        ...args,
+        timeoutMs: args?.timeoutMs ?? this.timeoutMs,
+        headers: {
+          authorization: this.authHeader(),
+          ...(args?.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (operation) {
+        throwPhoenixdError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async requestText(path: string, args: Parameters<typeof requestText>[2]): Promise<string> {
-    return requestText(this.fetchFn, buildUrl(this.config.url, path), {
-      ...args,
-      timeoutMs: args?.timeoutMs ?? this.timeoutMs,
-      headers: {
-        authorization: this.authHeader(),
-        ...(args?.headers ?? {}),
-      },
-    });
+  private async requestText(
+    path: string,
+    args: Parameters<typeof requestText>[2],
+    operation?: NwcErrorOperation,
+  ): Promise<string> {
+    try {
+      return await requestText(this.fetchFn, buildUrl(this.config.url, path, args?.query), {
+        ...args,
+        timeoutMs: args?.timeoutMs ?? this.timeoutMs,
+        headers: {
+          authorization: this.authHeader(),
+          ...(args?.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (operation) {
+        throwPhoenixdError(error, operation);
+      }
+      throw error;
+    }
   }
 
   async getPermissions(): Promise<Permissions> {
@@ -99,8 +194,8 @@ export class PhoenixdNode implements LightningNode {
 
   async getInfo(): Promise<NodeInfo> {
     const [info, balance] = await Promise.all([
-      this.requestJson<PhoenixdInfoResponse>('/getinfo', { method: 'GET' }),
-      this.requestJson<PhoenixdBalanceResponse>('/getbalance', { method: 'GET' }),
+      this.requestJson<PhoenixdInfoResponse>('/getinfo', { method: 'GET' }, 'get_info'),
+      this.requestJson<PhoenixdBalanceResponse>('/getbalance', { method: 'GET' }, 'get_info'),
     ]);
 
     const firstChannel = info.channels[0];
@@ -125,7 +220,7 @@ export class PhoenixdNode implements LightningNode {
           description: params.description,
           amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
         },
-      });
+      }, 'make_invoice');
 
       return emptyTransaction({
         type: 'incoming',
@@ -146,7 +241,7 @@ export class PhoenixdNode implements LightningNode {
         expirySeconds: params.expiry ?? 3600,
         description: params.description,
       },
-    });
+    }, 'make_invoice');
 
     return emptyTransaction({
       type: 'incoming',
@@ -168,7 +263,12 @@ export class PhoenixdNode implements LightningNode {
         invoice: params.invoice,
         amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
       },
-    });
+    }, 'pay_invoice');
+
+    const paymentFailure = phoenixdPaymentFailure(payload, 'pay_invoice');
+    if (paymentFailure) {
+      throw paymentFailure;
+    }
 
     return {
       paymentHash: payload.paymentHash,
@@ -184,7 +284,7 @@ export class PhoenixdNode implements LightningNode {
         description: params.description,
         amountSat: params.amountMsats ? Math.floor(params.amountMsats / 1000) : undefined,
       },
-    });
+    }, 'make_invoice');
 
     return {
       offerId: '',
@@ -198,7 +298,7 @@ export class PhoenixdNode implements LightningNode {
   }
 
   async getOffer(): Promise<Offer> {
-    const bolt12 = await this.requestText('/getoffer', { method: 'GET' });
+    const bolt12 = await this.requestText('/getoffer', { method: 'GET' }, 'lookup_invoice');
     return {
       offerId: '',
       bolt12: bolt12.trim(),
@@ -217,7 +317,12 @@ export class PhoenixdNode implements LightningNode {
         amountSat: Math.floor(amountMsats / 1000),
         message: payerNote,
       },
-    });
+    }, 'pay_invoice');
+
+    const paymentFailure = phoenixdPaymentFailure(payload, 'pay_invoice');
+    if (paymentFailure) {
+      throw paymentFailure;
+    }
 
     return {
       paymentHash: payload.paymentHash,
@@ -235,14 +340,14 @@ export class PhoenixdNode implements LightningNode {
       const txs = await this.listTransactions({ from: 0, limit: 100, search: params.search });
       const tx = txs[0];
       if (!tx) {
-        throw new LniError('Api', 'No matching transactions');
+        throw phoenixdNwcError('NOT_FOUND', 'No matching transactions', 'lookup_invoice');
       }
       return tx;
     }
 
     const invoice = await this.requestJson<PhoenixdInvoiceResponse>(`/payments/incoming/${params.paymentHash}`, {
       method: 'GET',
-    });
+    }, 'lookup_invoice');
 
     const settledAt = invoice.completedAt && invoice.isPaid ? toUnixSeconds(invoice.completedAt) : 0;
 
@@ -270,25 +375,15 @@ export class PhoenixdNode implements LightningNode {
       all: false,
     };
 
-    const incoming = await requestJson<PhoenixdInvoiceResponse[]>(
-      this.fetchFn,
-      buildUrl(this.config.url, '/payments/incoming', query),
-      {
-        method: 'GET',
-        timeoutMs: this.timeoutMs,
-        headers: { authorization: this.authHeader() },
-      },
-    );
+    const incoming = await this.requestJson<PhoenixdInvoiceResponse[]>('/payments/incoming', {
+      method: 'GET',
+      query,
+    }, 'list_transactions');
 
-    const outgoing = await requestJson<PhoenixdOutgoingPaymentResponse[]>(
-      this.fetchFn,
-      buildUrl(this.config.url, '/payments/outgoing', query),
-      {
-        method: 'GET',
-        timeoutMs: this.timeoutMs,
-        headers: { authorization: this.authHeader() },
-      },
-    );
+    const outgoing = await this.requestJson<PhoenixdOutgoingPaymentResponse[]>('/payments/outgoing', {
+      method: 'GET',
+      query,
+    }, 'list_transactions');
 
     const txs: Transaction[] = [];
 
@@ -360,7 +455,7 @@ export class PhoenixdNode implements LightningNode {
         return this.listTransactions({ from: 0, limit: 100 }).then((txs) => {
           const tx = txs[0];
           if (!tx) {
-            throw new LniError('Api', 'No matching transactions');
+            throw phoenixdNwcError('NOT_FOUND', 'No matching transactions', 'lookup_invoice');
           }
           return tx;
         });

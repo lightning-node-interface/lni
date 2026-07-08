@@ -48,17 +48,38 @@ export class NwcError extends LniError {
   public readonly nwcCode: NwcErrorCode;
   public readonly nwcMessage: string;
   public readonly operation?: NwcErrorOperation;
+  public readonly provider?: string;
+  public readonly providerCode?: string | number;
+  public readonly providerStatus?: number;
+  public readonly providerMessage?: string;
 
   constructor(
     nwcCode: NwcErrorCode,
     message: string,
-    options?: { operation?: NwcErrorOperation; cause?: unknown },
+    options?: {
+      operation?: NwcErrorOperation;
+      cause?: unknown;
+      provider?: string;
+      providerCode?: string | number;
+      providerStatus?: number;
+      providerMessage?: string;
+    },
   ) {
-    super('NwcError', message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    super(
+      'NwcError',
+      message,
+      options?.cause !== undefined
+        ? { cause: options.cause, status: options.providerStatus }
+        : { status: options?.providerStatus },
+    );
     this.name = 'NwcError';
     this.nwcCode = nwcCode;
     this.nwcMessage = message;
     this.operation = options?.operation;
+    this.provider = options?.provider;
+    this.providerCode = options?.providerCode;
+    this.providerStatus = options?.providerStatus;
+    this.providerMessage = options?.providerMessage;
   }
 }
 

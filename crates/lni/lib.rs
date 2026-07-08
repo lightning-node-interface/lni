@@ -246,6 +246,8 @@ pub mod spark {
 
 pub mod lnurl;
 
+pub mod error_normalization;
+
 pub mod permissions;
 
 pub mod types;

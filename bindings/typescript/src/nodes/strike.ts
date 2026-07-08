@@ -1,5 +1,11 @@
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { LniError } from '../errors.js';
+import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
+import {
+  findStringProperty,
+  providerInfoFromJsonErrorBody,
+  throwNormalizedProviderError,
+  type ProviderErrorInfo,
+} from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
@@ -190,35 +196,68 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function findStringProperty(value: unknown, key: string): string | undefined {
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      const nested = findStringProperty(child, key);
-      if (nested) {
-        return nested;
-      }
-    }
+function strikeProviderErrorInfo(error: unknown): ProviderErrorInfo | undefined {
+  return providerInfoFromJsonErrorBody(error);
+}
 
-    return undefined;
+function mapStrikeProviderError(info: ProviderErrorInfo): NwcErrorCode | undefined {
+  switch (info.code) {
+    case 'BALANCE_TOO_LOW':
+      return 'INSUFFICIENT_BALANCE';
+    case 'RATE_LIMIT_EXCEEDED':
+    case 'TOO_MANY_ATTEMPTS':
+      return 'RATE_LIMITED';
+    case 'FORBIDDEN':
+      return 'RESTRICTED';
+    case 'UNAUTHORIZED':
+      return 'UNAUTHORIZED';
+    case 'AMOUNT_TOO_HIGH':
+    case 'TOO_MANY_TRANSACTIONS':
+    case 'DEPOSIT_LIMIT_EXCEEDED':
+      return 'QUOTA_EXCEEDED';
+    case 'INVALID_LN_INVOICE':
+    case 'INVALID_STATE_FOR_INVOICE_EXPIRED':
+    case 'LN_ROUTE_NOT_FOUND':
+    case 'PAYMENT_QUOTE_EXPIRED':
+    case 'INVALID_RECIPIENT':
+      return 'PAYMENT_FAILED';
+    case 'EXCHANGE_RATE_NOT_AVAILABLE':
+    case 'LN_UNAVAILABLE':
+    case 'SERVICE_UNAVAILABLE':
+    case 'MAINTENANCE_MODE':
+    case 'BAD_GATEWAY':
+    case 'GATEWAY_TIMEOUT':
+    case 'INTERNAL_SERVER_ERROR':
+      return 'INTERNAL';
+    case 'NOT_FOUND':
+      return 'NOT_FOUND';
+    default:
+      return undefined;
   }
+}
 
-  if (!isRecord(value)) {
-    return undefined;
-  }
+function strikeNwcError(
+  code: NwcErrorCode,
+  message: string,
+  operation: NwcErrorOperation,
+  info?: ProviderErrorInfo,
+): NwcError {
+  return new NwcError(code, message, {
+    operation,
+    provider: 'strike',
+    providerCode: info?.code,
+    providerStatus: info?.status,
+    providerMessage: info?.message ?? message,
+  });
+}
 
-  const direct = value[key];
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
-  }
-
-  for (const child of Object.values(value)) {
-    const nested = findStringProperty(child, key);
-    if (nested) {
-      return nested;
-    }
-  }
-
-  return undefined;
+function throwStrikeError(error: unknown, operation: NwcErrorOperation): never {
+  throwNormalizedProviderError(error, {
+    provider: 'strike',
+    operation,
+    extractProviderError: strikeProviderErrorInfo,
+    mapProviderError: mapStrikeProviderError,
+  });
 }
 
 function containsDuplicatePaymentQuoteCode(value: unknown): boolean {
@@ -346,33 +385,66 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     };
   }
 
-  private async getJson<T>(path: string, query?: Record<string, string | number | undefined>): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path, query), {
-      method: 'GET',
-      headers: this.headers(),
-      timeoutMs: this.timeoutMs,
-    });
+  private async getJson<T>(
+    path: string,
+    query?: Record<string, string | number | undefined>,
+    operation?: NwcErrorOperation,
+  ): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path, query), {
+        method: 'GET',
+        headers: this.headers(),
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwStrikeError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async postJson<T>(path: string, json?: unknown, headers?: HeadersInit): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
-      method: 'POST',
-      headers: this.headers(headers),
-      json,
-      timeoutMs: this.timeoutMs,
-    });
+  private async postJson<T>(
+    path: string,
+    json?: unknown,
+    headers?: HeadersInit,
+    operation?: NwcErrorOperation,
+  ): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
+        method: 'POST',
+        headers: this.headers(headers),
+        json,
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwStrikeError(error, operation);
+      }
+      throw error;
+    }
   }
 
-  private async patchJson<T>(path: string): Promise<T> {
-    return requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
-      method: 'PATCH',
-      headers: this.headers(),
-      timeoutMs: this.timeoutMs,
-    });
+  private async patchJson<T>(path: string, operation?: NwcErrorOperation): Promise<T> {
+    try {
+      return await requestJson<T>(this.fetchFn, buildUrl(this.baseUrl, path), {
+        method: 'PATCH',
+        headers: this.headers(),
+        timeoutMs: this.timeoutMs,
+      });
+    } catch (error) {
+      if (operation) {
+        throwStrikeError(error, operation);
+      }
+      throw error;
+    }
   }
 
   private isNotFoundError(error: unknown): boolean {
-    return error instanceof LniError && error.code === 'Http' && error.status === 404;
+    return (
+      (error instanceof LniError && error.code === 'Http' && error.status === 404) ||
+      (error instanceof NwcError && error.nwcCode === 'NOT_FOUND')
+    );
   }
 
   async getPermissions(): Promise<Permissions> {
@@ -388,7 +460,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async getInfo(): Promise<NodeInfo> {
-    const balances = await this.getJson<StrikeBalance[]>('/balances');
+    const balances = await this.getJson<StrikeBalance[]>('/balances', undefined, 'get_info');
 
     const btcBalance = balances.find((balance) => balance.currency === 'BTC');
 
@@ -401,25 +473,30 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {
     if ((params.invoiceType ?? InvoiceType.Bolt11) !== InvoiceType.Bolt11) {
-      throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+      throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
     }
 
-    const response = await this.postJson<StrikeCreateReceiveResponse>('/receive-requests', {
-      bolt11: {
-        amount:
-          params.amountMsats !== undefined
-            ? {
-                amount: msatsToBtc(params.amountMsats),
-                currency: 'BTC',
-              }
-            : undefined,
-        description: params.description,
-        descriptionHash: params.descriptionHash,
-        expiryInSeconds: params.expiry,
+    const response = await this.postJson<StrikeCreateReceiveResponse>(
+      '/receive-requests',
+      {
+        bolt11: {
+          amount:
+            params.amountMsats !== undefined
+              ? {
+                  amount: msatsToBtc(params.amountMsats),
+                  currency: 'BTC',
+                }
+              : undefined,
+          description: params.description,
+          descriptionHash: params.descriptionHash,
+          expiryInSeconds: params.expiry,
+        },
+        onchain: null,
+        targetCurrency: 'BTC',
       },
-      onchain: null,
-      targetCurrency: 'BTC',
-    });
+      undefined,
+      'make_invoice',
+    );
 
     const bolt11 = response.bolt11;
     if (!bolt11) {
@@ -441,19 +518,27 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
-    const quote = await this.postJson<StrikePaymentQuoteResponse>('/payment-quotes/lightning', {
-      lnInvoice: params.invoice,
-      sourceCurrency: 'BTC',
-      amount:
-        params.amountMsats !== undefined
-          ? {
-              amount: msatsToBtc(params.amountMsats),
-              currency: 'BTC',
-            }
-          : undefined,
-    });
+    const quote = await this.postJson<StrikePaymentQuoteResponse>(
+      '/payment-quotes/lightning',
+      {
+        lnInvoice: params.invoice,
+        sourceCurrency: 'BTC',
+        amount:
+          params.amountMsats !== undefined
+            ? {
+                amount: msatsToBtc(params.amountMsats),
+                currency: 'BTC',
+              }
+            : undefined,
+      },
+      undefined,
+      'pay_invoice',
+    );
 
-    const execution = await this.patchJson<StrikePaymentExecutionResponse>(`/payment-quotes/${quote.paymentQuoteId}/execute`);
+    const execution = await this.patchJson<StrikePaymentExecutionResponse>(
+      `/payment-quotes/${quote.paymentQuoteId}/execute`,
+      'pay_invoice',
+    );
     let payment: StrikePaymentResponse | undefined;
     try {
       payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
@@ -618,19 +703,19 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async createOffer(_params: CreateOfferParams): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'make_invoice');
   }
 
   async getOffer(_search?: string): Promise<Offer> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'lookup_invoice');
   }
 
   async listOffers(_search?: string): Promise<Offer[]> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'list_transactions');
   }
 
   async payOffer(_offer: string, _amountMsats: number, _payerNote?: string): Promise<PayInvoiceResponse> {
-    throw new LniError('Api', 'Bolt12 is not implemented for StrikeNode.');
+    throw strikeNwcError('NOT_IMPLEMENTED', 'Bolt12 is not implemented for StrikeNode.', 'pay_invoice');
   }
 
   async lookupInvoice(params: LookupInvoiceParams): Promise<Transaction> {
@@ -638,9 +723,13 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       throw new LniError('InvalidInput', 'lookupInvoice requires paymentHash for StrikeNode.');
     }
 
-    const receives = await this.getJson<StrikeReceivesResponse>('/receive-requests/receives', {
-      '$paymentHash': params.paymentHash,
-    });
+    const receives = await this.getJson<StrikeReceivesResponse>(
+      '/receive-requests/receives',
+      {
+        '$paymentHash': params.paymentHash,
+      },
+      'lookup_invoice',
+    );
 
     const item = receives.items[0];
     if (!item?.lightning) {
@@ -664,17 +753,25 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
-    const receives = await this.getJson<StrikeReceivesResponse>('/receive-requests/receives', {
-      '$skip': params.from,
-      '$top': params.limit,
-    });
+    const receives = await this.getJson<StrikeReceivesResponse>(
+      '/receive-requests/receives',
+      {
+        '$skip': params.from,
+        '$top': params.limit,
+      },
+      'list_transactions',
+    );
 
     let outgoing: StrikePaymentsResponse = { data: [] };
     try {
-      outgoing = await this.getJson<StrikePaymentsResponse>('/payments', {
-        '$skip': params.from,
-        '$top': params.limit,
-      });
+      outgoing = await this.getJson<StrikePaymentsResponse>(
+        '/payments',
+        {
+          '$skip': params.from,
+          '$top': params.limit,
+        },
+        'list_transactions',
+      );
     } catch (error) {
       if (!this.isNotFoundError(error)) {
         throw error;

@@ -4,16 +4,41 @@ use super::types::{
 };
 use super::ClnConfig;
 use crate::cln::types::Invoice;
+use crate::error_normalization::{
+    nwc_error, provider_error_from_response, provider_info_from_body, transport_error,
+    ProviderErrorInfo,
+};
 use crate::types::NodeInfo;
 use crate::{
-    calculate_fee_msats, ApiError, CreateOfferParams, InvoiceType, Offer, OnInvoiceEventCallback, OnInvoiceEventParams,
-    PayInvoiceParams, PayInvoiceResponse, Transaction,
+    calculate_fee_msats, ApiError, CreateOfferParams, InvoiceType, Offer, OnInvoiceEventCallback,
+    OnInvoiceEventParams, PayInvoiceParams, PayInvoiceResponse, Transaction,
 };
 use reqwest::header;
 use std::time::Duration;
 use tokio::time::sleep;
 
 // https://docs.corelightning.org/reference/get_list_methods_resource
+
+fn map_cln_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
+    match info
+        .code
+        .as_deref()
+        .and_then(|code| code.parse::<i64>().ok())
+    {
+        Some(203 | 205 | 206 | 207 | 210) => Some("PAYMENT_FAILED"),
+        Some(201 | -1 | 900 | 901 | 902 | -32602) => Some("OTHER"),
+        _ => None,
+    }
+}
+
+fn cln_error_from_body(status: Option<reqwest::StatusCode>, body: String) -> ApiError {
+    let info = provider_info_from_body(status.map(|status| status.as_u16()), &body);
+    let code = map_cln_provider_error(&info)
+        .or_else(|| crate::error_normalization::map_provider_message(info.message.as_deref()))
+        .or_else(|| crate::error_normalization::map_http_status(info.status))
+        .unwrap_or("OTHER");
+    nwc_error(code, info.message.unwrap_or(body))
+}
 
 fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
@@ -169,9 +194,19 @@ pub async fn create_invoice(
                     .collect::<serde_json::Value>()))
                 .send()
                 .await
-                .map_err(|e| ApiError::Http {
-                    reason: format!("Failed to create invoice: {}", e),
-                })?;
+                .map_err(|e| transport_error("cln", "make_invoice", e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(provider_error_from_response(
+                    "cln",
+                    "make_invoice",
+                    status,
+                    error_text,
+                    map_cln_provider_error,
+                ));
+            }
 
             let invoice_str = response.text().await.map_err(|e| ApiError::Http {
                 reason: format!("Failed to read invoice response: {}", e),
@@ -200,9 +235,7 @@ pub async fn create_invoice(
         }
         InvoiceType::Bolt12 => {
             if offer.is_none() {
-                return Err(ApiError::Json {
-                    reason: "Offer cannot be empty".to_string(),
-                });
+                return Err(ApiError::InvalidInput("Offer cannot be empty".to_string()));
             }
             let fetch_invoice_resp = fetch_invoice_from_offer(
                 &config,
@@ -291,20 +324,25 @@ pub async fn pay_invoice(
         .json(&params_json)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to pay invoice: {}", e),
-        })?;
+        .map_err(|e| transport_error("cln", "pay_invoice", e))?;
+
+    let pay_status = pay_response.status();
     let pay_response_text = pay_response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read pay response: {}", e),
     })?;
+    if !pay_status.is_success() {
+        return Err(provider_error_from_response(
+            "cln",
+            "pay_invoice",
+            pay_status,
+            pay_response_text,
+            map_cln_provider_error,
+        ));
+    }
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
-        Err(_e) => {
-            return Err(ApiError::Json {
-                reason: pay_response_text.to_string(),
-            })
-        }
+        Err(_e) => return Err(cln_error_from_body(None, pay_response_text.to_string())),
     };
 
     Ok(PayInvoiceResponse {
@@ -326,15 +364,7 @@ pub fn decode_offer(offer: String) -> Result<String, ApiError> {
 pub async fn get_offer(config: ClnConfig, search: Option<String>) -> Result<Offer, ApiError> {
     let offers = list_offers(config, search.clone()).await?;
     if offers.is_empty() {
-        return Ok(Offer {
-            offer_id: "".to_string(),
-            bolt12: "".to_string(),
-            label: None,
-            active: None,
-            single_use: None,
-            used: None,
-            amount_msats: None,
-        });
+        return Err(nwc_error("NOT_FOUND", "Offer not found"));
     }
     Ok(offers.first().unwrap().clone())
 }
@@ -358,9 +388,18 @@ pub async fn list_offers(
             .collect::<serde_json::Value>()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to list offers: {}", e),
-        })?;
+        .map_err(|e| transport_error("cln", "list_transactions", e))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "cln",
+            "list_transactions",
+            status,
+            error_text,
+            map_cln_provider_error,
+        ));
+    }
     let offers = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read offers response: {}", e),
     })?;
@@ -374,46 +413,55 @@ pub async fn list_offers(
 
 // Create a BOLT12 offer and return Offer
 // https://docs.corelightning.org/reference/offer
-pub async fn create_offer(
-    config: ClnConfig,
-    params: CreateOfferParams,
-) -> Result<Offer, ApiError> {
+pub async fn create_offer(config: ClnConfig, params: CreateOfferParams) -> Result<Offer, ApiError> {
     let client = clnrest_client(&config);
     let req_url = format!("{}/v1/offer", config.url);
-    
+
     let mut json_params = serde_json::Map::new();
-    
+
     // Handle amount - if not specified, create a reusable offer with "any" amount
     if let Some(amount_msats) = params.amount_msats {
-        json_params.insert("amount".to_string(), serde_json::json!(format!("{}msat", amount_msats)));
+        json_params.insert(
+            "amount".to_string(),
+            serde_json::json!(format!("{}msat", amount_msats)),
+        );
     } else {
         json_params.insert("amount".to_string(), serde_json::json!("any"));
     }
-    
+
     // Add description if provided
     if let Some(description) = params.description.clone() {
         json_params.insert("description".to_string(), serde_json::json!(description));
     }
-    
+
     let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
         .json(&json_params)
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to create offer: {}", e),
-        })?;
-        
+        .map_err(|e| transport_error("cln", "make_invoice", e))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "cln",
+            "make_invoice",
+            status,
+            error_text,
+            map_cln_provider_error,
+        ));
+    }
+
     let offer_str = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read offer response: {}", e),
     })?;
-    
+
     let bolt12resp: Bolt12Resp =
         serde_json::from_str(&offer_str).map_err(|e| crate::ApiError::Json {
             reason: e.to_string(),
         })?;
-    
+
     Ok(Offer {
         offer_id: bolt12resp.offer_id.unwrap_or_default(),
         bolt12: bolt12resp.bolt12,
@@ -444,20 +492,24 @@ async fn fetch_invoice_from_offer(
         }))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to fetch invoice: {}", e),
-        })?;
+        .map_err(|e| transport_error("cln", "pay_invoice", e))?;
+    let status = response.status();
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read fetch invoice response: {}", e),
     })?;
+    if !status.is_success() {
+        return Err(provider_error_from_response(
+            "cln",
+            "pay_invoice",
+            status,
+            response_text,
+            map_cln_provider_error,
+        ));
+    }
     let response_text = response_text.as_str();
     let fetch_invoice_resp: FetchInvoiceResponse = match serde_json::from_str(&response_text) {
         Ok(resp) => resp,
-        Err(_e) => {
-            return Err(ApiError::Json {
-                reason: response_text.to_string(),
-            })
-        }
+        Err(_e) => return Err(cln_error_from_body(None, response_text.to_string())),
     };
     Ok(fetch_invoice_resp)
 }
@@ -472,9 +524,7 @@ pub async fn pay_offer(
     let fetch_invoice_resp =
         fetch_invoice_from_offer(&config, offer.clone(), amount_msats, payer_note.clone()).await?;
     if fetch_invoice_resp.invoice.is_empty() {
-        return Err(ApiError::Json {
-            reason: "Missing BOLT 12 invoice".to_string(),
-        });
+        return Err(nwc_error("INTERNAL", "Missing BOLT 12 invoice"));
     }
 
     // now pay the bolt 12 invoice lni
@@ -489,20 +539,24 @@ pub async fn pay_offer(
         }))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to pay offer: {}", e),
-        })?;
+        .map_err(|e| transport_error("cln", "pay_invoice", e))?;
+    let status = pay_response.status();
     let pay_response_text = pay_response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read pay offer response: {}", e),
     })?;
+    if !status.is_success() {
+        return Err(provider_error_from_response(
+            "cln",
+            "pay_invoice",
+            status,
+            pay_response_text,
+            map_cln_provider_error,
+        ));
+    }
     let pay_response_text = pay_response_text.as_str();
     let pay_resp: PayResponse = match serde_json::from_str(&pay_response_text) {
         Ok(resp) => resp,
-        Err(_e) => {
-            return Err(ApiError::Json {
-                reason: pay_response_text.to_string(),
-            })
-        }
+        Err(_e) => return Err(cln_error_from_body(None, pay_response_text.to_string())),
     };
 
     Ok(PayInvoiceResponse {
@@ -525,9 +579,7 @@ pub async fn lookup_invoice(
             if let Some(tx) = transactions.first() {
                 Ok(tx.clone())
             } else {
-                Err(ApiError::Api {
-                    reason: "No matching invoice found".to_string(),
-                })
+                Err(nwc_error("NOT_FOUND", "No matching invoice found"))
             }
         }
         Err(e) => Err(e),
@@ -569,12 +621,20 @@ async fn lookup_invoices(
             }))
             .send()
             .await
-            .map_err(|e| ApiError::Http {
-                reason: format!("Failed to query invoices: {}", e),
-            })?;
+            .map_err(|e| transport_error("cln", "lookup_invoice", e))?;
+        let status = response.status();
         let response_text = response.text().await.map_err(|e| ApiError::Http {
             reason: format!("Failed to read invoices response: {}", e),
         })?;
+        if !status.is_success() {
+            return Err(provider_error_from_response(
+                "cln",
+                "lookup_invoice",
+                status,
+                response_text,
+                map_cln_provider_error,
+            ));
+        }
         let response_text = response_text.as_str();
         dbg!(&response_text);
 
@@ -682,12 +742,20 @@ async fn lookup_invoices(
             .collect::<serde_json::Value>()))
         .send()
         .await
-        .map_err(|e| ApiError::Http {
-            reason: format!("Failed to list invoices: {}", e),
-        })?;
+        .map_err(|e| transport_error("cln", "list_transactions", e))?;
+    let status = response.status();
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read list invoices response: {}", e),
     })?;
+    if !status.is_success() {
+        return Err(provider_error_from_response(
+            "cln",
+            "list_transactions",
+            status,
+            response_text,
+            map_cln_provider_error,
+        ));
+    }
     let response_text = response_text.as_str();
     let incoming_payments: InvoicesResponse =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
