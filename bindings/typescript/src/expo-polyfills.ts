@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 import { registerSha256DigestFallback } from './internal/sha256.js';
 
 type MessageListener = (event: MessageEvent) => void;
@@ -111,7 +113,6 @@ export function installExpoPolyfills(): void {
   }
 
   registerSha256DigestFallback(async (bytes) => {
-    const Crypto = await import('expo-crypto');
     return Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes as BufferSource);
   });
 }
