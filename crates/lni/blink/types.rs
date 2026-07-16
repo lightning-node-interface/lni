@@ -107,8 +107,15 @@ pub struct LnInvoicePaymentSendResponse {
 #[derive(Debug, Deserialize)]
 pub struct LnInvoicePaymentResult {
     pub status: String, // "SUCCESS", "FAILURE", "PENDING"
+    pub transaction: Option<LnInvoicePaymentTransaction>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LnInvoicePaymentTransaction {
+    #[serde(rename = "settlementVia")]
+    pub settlement_via: Option<SettlementVia>,
 }
 
 // On-chain payment structures
@@ -265,7 +272,10 @@ pub enum SettlementVia {
         transaction_hash: Option<String>,
     },
     #[serde(rename = "SettlementViaIntraLedger")]
-    SettlementViaIntraLedger {},
+    SettlementViaIntraLedger {
+        #[serde(rename = "preImage")]
+        pre_image: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,4 +315,46 @@ pub struct UserWithTransactions {
 #[derive(Debug, Deserialize)]
 pub struct AccountWithTransactions {
     pub transactions: TransactionConnection,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn send_preimage(settlement_type: &str) -> String {
+        let response: LnInvoicePaymentSendResponse = serde_json::from_value(serde_json::json!({
+            "lnInvoicePaymentSend": {
+                "status": "SUCCESS",
+                "errors": [],
+                "transaction": {
+                    "settlementVia": {
+                        "__typename": settlement_type,
+                        "preImage": "settled-preimage"
+                    }
+                }
+            }
+        }))
+        .expect("payment response should deserialize");
+
+        match response
+            .ln_invoice_payment_send
+            .transaction
+            .and_then(|transaction| transaction.settlement_via)
+        {
+            Some(SettlementVia::SettlementViaLn { pre_image })
+            | Some(SettlementVia::SettlementViaIntraLedger { pre_image }) => {
+                pre_image.unwrap_or_default()
+            }
+            _ => String::new(),
+        }
+    }
+
+    #[test]
+    fn deserializes_ln_and_intra_ledger_send_preimages() {
+        assert_eq!(send_preimage("SettlementViaLn"), "settled-preimage");
+        assert_eq!(
+            send_preimage("SettlementViaIntraLedger"),
+            "settled-preimage"
+        );
+    }
 }

@@ -97,6 +97,7 @@ interface StrikePaymentResponse {
   lightning?: {
     paymentHash?: string;
     paymentRequest?: string;
+    preImage?: string;
     networkFee?: StrikeAmount;
   };
   onchain?: {
@@ -600,11 +601,20 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       `/payment-quotes/${quote.paymentQuoteId}/execute`,
       'pay_invoice'
     );
+
+    // The outgoing payment record exposes the proof once the Lightning payment settles.
     let payment: StrikePaymentResponse | undefined;
-    try {
-      payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
-    } catch {
-      // payment.read is optional for payInvoice; without it we still know the payment was executed.
+    for (let attempt = 0; attempt < 5 && !payment?.lightning?.preImage; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+
+      try {
+        payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
+      } catch {
+        // payment.read is optional for payInvoice; without it we still know execution succeeded.
+        break;
+      }
     }
 
     const feeMsats = payment?.lightning?.networkFee
@@ -613,7 +623,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
     return {
       paymentHash: payment?.lightning?.paymentHash ?? paymentHashFromInvoice(params.invoice),
-      preimage: '',
+      preimage: payment?.lightning?.preImage ?? '',
       feeMsats,
     };
   }

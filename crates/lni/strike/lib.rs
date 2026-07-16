@@ -196,8 +196,8 @@ mod tests {
     };
     use dotenv::dotenv;
     use lazy_static::lazy_static;
-    use std::env;
     use std::sync::{Arc, Mutex};
+    use std::{dbg, env};
 
     const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 
@@ -275,24 +275,28 @@ mod tests {
         }
     }
 
-    // #[tokio::test]
-    // async fn test_pay_invoice() {
-    //     match NODE.pay_invoice(PayInvoiceParams {
-    //         invoice: TEST_PAYMENT_REQUEST.to_string(),
-    //         ..Default::default()
-    //     }).await {
-    //         Ok(invoice_resp) => {
-    //             println!("Strike pay invoice resp: {:?}", invoice_resp);
-    //         }
-    //         Err(e) => {
-    //             println!(
-    //                 "Strike pay invoice failed (expected if no API key or invalid invoice): {:?}",
-    //                 e
-    //             );
-    //             // Don't panic as this requires valid API key and invoice
-    //         }
-    //     }
-    // }
+    #[tokio::test]
+    async fn test_pay_invoice() {
+        match NODE
+            .pay_invoice(PayInvoiceParams {
+                invoice: TEST_PAYMENT_REQUEST.to_string(),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(invoice_resp) => {
+                dbg!("Strike pay invoice resp: {:?}", &invoice_resp);
+                println!("Strike pay invoice resp: {:?}", invoice_resp);
+            }
+            Err(e) => {
+                println!(
+                    "Strike pay invoice failed (expected if no API key or invalid invoice): {:?}",
+                    e
+                );
+                // Don't panic as this requires valid API key and invoice
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_lookup_invoice() {
@@ -335,6 +339,7 @@ mod tests {
         };
         match NODE.list_transactions(params).await {
             Ok(txns) => {
+                dbg!("Strike list transactions: {:?}", &txns);
                 println!("Strike transactions: {:?}", txns);
                 assert!(true, "Should be able to list transactions");
             }

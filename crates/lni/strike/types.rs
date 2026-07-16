@@ -132,9 +132,14 @@ pub struct Payment {
 
 #[derive(Debug, Deserialize)]
 pub struct LightningPayment {
+    #[serde(rename = "networkFee")]
     pub network_fee: Option<Amount>,
+    #[serde(rename = "paymentHash")]
     pub payment_hash: Option<String>,
+    #[serde(rename = "paymentRequest")]
     pub payment_request: Option<String>,
+    #[serde(rename = "preImage")]
+    pub pre_image: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -189,7 +194,9 @@ pub struct PaymentQuoteResponse {
 #[derive(Debug, Deserialize)]
 pub struct LightningDetails {
     #[serde(rename = "networkFee")]
-    pub network_fee: Amount,
+    pub network_fee: Option<Amount>,
+    #[serde(rename = "preImage")]
+    pub pre_image: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -197,14 +204,14 @@ pub struct PaymentExecutionResponse {
     #[serde(rename = "paymentId")]
     pub payment_id: String,
     pub state: String,
-    pub result: String,
+    pub result: Option<String>,
     pub completed: Option<String>,
     pub delivered: Option<String>,
     pub amount: Amount,
     #[serde(rename = "totalFee")]
-    pub total_fee: Amount,
+    pub total_fee: Option<Amount>,
     #[serde(rename = "lightningNetworkFee")]
-    pub lightning_network_fee: Amount,
+    pub lightning_network_fee: Option<Amount>,
     #[serde(rename = "totalAmount")]
     pub total_amount: Amount,
     pub lightning: Option<LightningDetails>,
@@ -500,4 +507,38 @@ pub struct ReceiveRequestResponse {
 pub struct ReceiveRequestsResponse {
     pub data: Vec<ReceiveRequest>,
     pub count: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_payment_detail_lightning_proof() {
+        let payment: PaymentExecutionResponse = serde_json::from_str(
+            r#"{
+                "paymentId": "payment-1",
+                "amount": { "amount": "0.00002500", "currency": "BTC" },
+                "totalAmount": { "amount": "0.00002501", "currency": "BTC" },
+                "state": "COMPLETED",
+                "lightning": {
+                    "networkFee": { "amount": "0.00000001", "currency": "BTC" },
+                    "preImage": "settled-preimage"
+                }
+            }"#,
+        )
+        .expect("payment record should deserialize");
+
+        let lightning = payment
+            .lightning
+            .expect("lightning details should be present");
+        assert_eq!(lightning.pre_image.as_deref(), Some("settled-preimage"));
+        assert_eq!(
+            lightning
+                .network_fee
+                .as_ref()
+                .map(|fee| fee.amount.as_str()),
+            Some("0.00000001")
+        );
+    }
 }

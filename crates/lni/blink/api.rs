@@ -538,6 +538,17 @@ pub async fn pay_invoice(
                     path
                     code
                 }
+                transaction {
+                    settlementVia {
+                        __typename
+                        ... on SettlementViaLn {
+                            preImage
+                        }
+                        ... on SettlementViaIntraLedger {
+                            preImage
+                        }
+                    }
+                }
             }
         }
     "#;
@@ -580,10 +591,21 @@ pub async fn pay_invoice(
         Ok(invoice) => format!("{:x}", invoice.payment_hash()),
         Err(_) => "".to_string(),
     };
+    let preimage = match payment_response
+        .ln_invoice_payment_send
+        .transaction
+        .and_then(|transaction| transaction.settlement_via)
+    {
+        Some(SettlementVia::SettlementViaLn { pre_image })
+        | Some(SettlementVia::SettlementViaIntraLedger { pre_image }) => {
+            pre_image.unwrap_or_default()
+        }
+        _ => "".to_string(),
+    };
 
     Ok(PayInvoiceResponse {
         payment_hash,
-        preimage: "".to_string(), // Blink doesn't expose preimage
+        preimage,
         fee_msats,
     })
 }
@@ -873,6 +895,9 @@ pub async fn list_transactions(
                                     ... on SettlementViaLn {
                                         preImage
                                     }
+                                    ... on SettlementViaIntraLedger {
+                                        preImage
+                                    }
                                 }
                             }
                         }
@@ -912,7 +937,10 @@ pub async fn list_transactions(
         };
 
         let preimage = match node.settlement_via {
-            Some(SettlementVia::SettlementViaLn { pre_image }) => pre_image.unwrap_or_default(),
+            Some(SettlementVia::SettlementViaLn { pre_image })
+            | Some(SettlementVia::SettlementViaIntraLedger { pre_image }) => {
+                pre_image.unwrap_or_default()
+            }
             _ => "".to_string(),
         };
 

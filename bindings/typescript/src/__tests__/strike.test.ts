@@ -3,6 +3,9 @@ import { NwcError } from '../errors.js';
 import { StrikeNode } from '../nodes/strike.js';
 import type { FetchLike } from '../types.js';
 
+const BOLT11 =
+  'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
+
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
     ...init,
@@ -126,6 +129,61 @@ describe('StrikeNode error normalization', () => {
       provider: 'strike',
       providerStatus: 401,
     });
+  });
+});
+
+describe('StrikeNode Lightning payments', () => {
+  it('returns the settled preimage from the outgoing payment record', async () => {
+    vi.useFakeTimers();
+    let paymentReads = 0;
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payments/payment-1') {
+          paymentReads += 1;
+          return jsonResponse({
+            id: 'payment-1',
+            state: 'COMPLETED',
+            created: '2026-07-16T12:00:00Z',
+            amount: { amount: '0.00002500', currency: 'BTC' },
+            lightning: {
+              paymentHash: 'provider-payment-hash',
+              preImage: paymentReads > 1 ? 'settled-preimage' : undefined,
+              networkFee: { amount: '0.00000001', currency: 'BTC' },
+            },
+          });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      await vi.runAllTimersAsync();
+
+      await expect(paymentPromise).resolves.toEqual({
+        paymentHash: 'provider-payment-hash',
+        preimage: 'settled-preimage',
+        feeMsats: 1_000,
+      });
+      expect(paymentReads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

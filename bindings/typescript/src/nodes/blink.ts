@@ -1,5 +1,5 @@
 import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
-import { decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
+import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
 import {
   mapProviderMessage,
   throwNormalizedProviderError,
@@ -88,6 +88,11 @@ interface BlinkFeeProbeResponse {
 interface BlinkPaymentSendResponse {
   lnInvoicePaymentSend: {
     status: string;
+    transaction?: {
+      settlementVia?: {
+        preImage?: string;
+      };
+    };
     errors?: GraphQLError[];
   };
 }
@@ -661,6 +666,16 @@ export class BlinkNode implements LightningNode, OnchainPayments {
             message
             path
           }
+          transaction {
+            settlementVia {
+              ... on SettlementViaLn {
+                preImage
+              }
+              ... on SettlementViaIntraLedger {
+                preImage
+              }
+            }
+          }
         }
       }
       `,
@@ -691,9 +706,19 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       );
     }
 
+    const preimage = payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage ?? '';
+    let paymentHash = '';
+    if (preimage) {
+      try {
+        paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
+      } catch {
+        // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
+      }
+    }
+
     return {
-      paymentHash: '',
-      preimage: '',
+      paymentHash,
+      preimage,
       feeMsats: satsToMsats(feeProbe.lnInvoiceFeeProbe.amount ?? 0),
     };
   }

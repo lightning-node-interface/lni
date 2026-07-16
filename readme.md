@@ -292,6 +292,25 @@ For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `sl
 
 For Blink, LNI maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
 
+Testing Lightning invoice payments
+----------------------------------
+
+Blink's TypeScript integration test can execute a real Lightning payment and verify that the returned preimage hashes to the payment hash. Add a fresh, unpaid invoice from another wallet to `crates/lni/.env`:
+
+```env
+BLINK_API_KEY=...
+BLINK_TEST_PAYMENT_REQUEST=lnbc...
+```
+
+Run only the live payment test:
+
+```bash
+cd bindings/typescript
+npm run test:integration:blink -- -t "payInvoice returns a valid Lightning preimage"
+```
+
+The test runs whenever both values are present. It pays the invoice and spends funds from the configured Blink account; remove or comment out the test after use if you do not want it included in later Blink integration runs.
+
 Testing on-chain payments
 -------------------------
 

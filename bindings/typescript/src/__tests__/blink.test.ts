@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { BlinkNode } from '../nodes/blink.js';
 import type { FetchLike } from '../types.js';
 
+const BOLT11 =
+  'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
+
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
     ...init,
@@ -29,6 +32,62 @@ function meResponse() {
     },
   });
 }
+
+describe('BlinkNode Lightning payments', () => {
+  it('returns the preimage selected by the send mutation', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+
+      if (body.query.includes('query Me')) {
+        return meResponse();
+      }
+
+      if (body.query.includes('mutation lnInvoiceFeeProbe')) {
+        return jsonResponse({
+          data: {
+            lnInvoiceFeeProbe: {
+              amount: 2,
+              errors: [],
+            },
+          },
+        });
+      }
+
+      if (body.query.includes('mutation LnInvoicePaymentSend')) {
+        expect(body.query).toContain('... on SettlementViaLn');
+        expect(body.query).toContain('... on SettlementViaIntraLedger');
+
+        return jsonResponse({
+          data: {
+            lnInvoicePaymentSend: {
+              status: 'SUCCESS',
+              errors: [],
+              transaction: {
+                settlementVia: {
+                  preImage: 'settled-preimage',
+                },
+              },
+            },
+          },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new BlinkNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
+      { fetch: fetchMock }
+    );
+
+    await expect(node.payInvoice({ invoice: BOLT11 })).resolves.toEqual({
+      paymentHash: '0001020304050607080900010203040506070809000102030405060708090102',
+      preimage: 'settled-preimage',
+      feeMsats: 2_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('BlinkNode on-chain payments', () => {
   it('prepares an on-chain transaction using Blink fee estimate and speed mapping', async () => {
