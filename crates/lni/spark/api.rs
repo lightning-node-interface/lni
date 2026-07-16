@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use breez_sdk_spark::{
     BreezSdk, EventListener, GetInfoRequest, GetPaymentRequest, ListPaymentsRequest,
@@ -7,6 +8,7 @@ use breez_sdk_spark::{
     ReceivePaymentRequest, SdkEvent, SendPaymentRequest,
 };
 use tokio::sync::RwLock;
+use tokio::time::Instant;
 
 use crate::types::NodeInfo;
 use crate::{
@@ -22,6 +24,9 @@ struct PaymentInfo {
     preimage: String,
     description: String,
 }
+
+const DEFAULT_PAY_INVOICE_TIMEOUT_SECS: u64 = 60;
+const PAY_INVOICE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Extract invoice/hash/preimage/description from Lightning or Spark payment details.
 /// Returns None for non-Lightning/Spark payment types (Deposit, Withdraw, Token, etc.)
@@ -69,6 +74,10 @@ fn extract_payment_info(payment: &breez_sdk_spark::Payment) -> Option<PaymentInf
         }
         _ => None,
     }
+}
+
+fn has_payment_preimage(payment: &breez_sdk_spark::Payment) -> bool {
+    extract_payment_info(payment).is_some_and(|info| !info.preimage.is_empty())
 }
 
 /// Convert a Breez Payment to an LNI Transaction.
@@ -251,26 +260,50 @@ pub async fn pay_invoice(
             reason: e.to_string(),
         })?;
 
-    let (payment_hash, preimage) = match response.payment.details {
-        Some(PaymentDetails::Lightning {
-            payment_hash,
-            preimage,
-            ..
-        }) => (payment_hash, preimage.unwrap_or_default()),
-        Some(PaymentDetails::Spark { htlc_details, .. }) => {
-            if let Some(htlc) = htlc_details {
-                (htlc.payment_hash, htlc.preimage.unwrap_or_default())
-            } else {
-                ("".to_string(), "".to_string())
-            }
+    let mut payment = response.payment;
+    let timeout_secs = invoice_params
+        .timeout_seconds
+        .and_then(|seconds| u64::try_from(seconds).ok())
+        .unwrap_or(DEFAULT_PAY_INVOICE_TIMEOUT_SECS);
+    let timeout = Duration::from_secs(timeout_secs);
+    let started_at = Instant::now();
+
+    while !has_payment_preimage(&payment)
+        && payment.status != PaymentStatus::Failed
+        && started_at.elapsed() < timeout
+    {
+        let remaining = timeout.saturating_sub(started_at.elapsed());
+        tokio::time::sleep(PAY_INVOICE_POLL_INTERVAL.min(remaining)).await;
+
+        if let Ok(response) = sdk
+            .get_payment(GetPaymentRequest {
+                payment_id: payment.id.clone(),
+            })
+            .await
+        {
+            payment = response.payment;
         }
-        _ => ("".to_string(), "".to_string()),
-    };
+    }
+
+    if payment.status == PaymentStatus::Failed {
+        return Err(ApiError::Api {
+            reason: "Spark Lightning payment failed".to_string(),
+        });
+    }
+
+    let payment_info = extract_payment_info(&payment);
+    let payment_hash = payment_info
+        .as_ref()
+        .map(|info| info.payment_hash.clone())
+        .filter(|payment_hash| !payment_hash.is_empty())
+        .or_else(|| extract_payment_hash(&invoice_params.invoice))
+        .unwrap_or_default();
+    let preimage = payment_info.map(|info| info.preimage).unwrap_or_default();
 
     Ok(PayInvoiceResponse {
         payment_hash,
         preimage,
-        fee_msats: (response.payment.fees as i64) * 1000,
+        fee_msats: (payment.fees as i64) * 1000,
     })
 }
 
@@ -586,4 +619,62 @@ fn extract_payment_hash(invoice: &str) -> Option<String> {
     Bolt11Invoice::from_str(invoice)
         .ok()
         .map(|inv| format!("{:x}", inv.payment_hash()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use breez_sdk_spark::{Payment, PaymentMethod, SparkHtlcDetails, SparkHtlcStatus};
+
+    fn payment(details: PaymentDetails) -> Payment {
+        Payment {
+            id: "payment-1".to_string(),
+            payment_type: PaymentType::Send,
+            status: PaymentStatus::Completed,
+            amount: 1,
+            fees: 0,
+            timestamp: 0,
+            method: PaymentMethod::Lightning,
+            details: Some(details),
+        }
+    }
+
+    #[test]
+    fn extracts_lightning_payment_preimage() {
+        let payment = payment(PaymentDetails::Lightning {
+            description: None,
+            preimage: Some("settled-preimage".to_string()),
+            invoice: "invoice".to_string(),
+            payment_hash: "payment-hash".to_string(),
+            destination_pubkey: "destination".to_string(),
+            lnurl_pay_info: None,
+            lnurl_withdraw_info: None,
+            lnurl_receive_metadata: None,
+        });
+
+        let info =
+            extract_payment_info(&payment).expect("Lightning payment should have proof info");
+        assert_eq!(info.payment_hash, "payment-hash");
+        assert_eq!(info.preimage, "settled-preimage");
+        assert!(has_payment_preimage(&payment));
+    }
+
+    #[test]
+    fn extracts_spark_htlc_payment_preimage() {
+        let mut payment = payment(PaymentDetails::Spark {
+            invoice_details: None,
+            htlc_details: Some(SparkHtlcDetails {
+                payment_hash: "payment-hash".to_string(),
+                preimage: Some("settled-preimage".to_string()),
+                expiry_time: 0,
+                status: SparkHtlcStatus::PreimageShared,
+            }),
+        });
+        payment.method = PaymentMethod::Spark;
+
+        let info = extract_payment_info(&payment).expect("Spark HTLC should have proof info");
+        assert_eq!(info.payment_hash, "payment-hash");
+        assert_eq!(info.preimage, "settled-preimage");
+        assert!(has_payment_preimage(&payment));
+    }
 }
