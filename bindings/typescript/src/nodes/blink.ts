@@ -715,7 +715,6 @@ export class BlinkNode implements LightningNode, OnchainPayments {
         // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
       }
     }
-
     return {
       paymentHash,
       preimage,
