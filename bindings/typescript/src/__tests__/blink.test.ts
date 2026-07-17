@@ -87,6 +87,54 @@ describe('BlinkNode Lightning payments', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('returns the invoice payment hash when the send response omits the preimage', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+
+      if (body.query.includes('query Me')) {
+        return meResponse();
+      }
+
+      if (body.query.includes('mutation lnInvoiceFeeProbe')) {
+        return jsonResponse({
+          data: {
+            lnInvoiceFeeProbe: {
+              amount: 2,
+              errors: [],
+            },
+          },
+        });
+      }
+
+      if (body.query.includes('mutation LnInvoicePaymentSend')) {
+        return jsonResponse({
+          data: {
+            lnInvoicePaymentSend: {
+              status: 'SUCCESS',
+              errors: [],
+              transaction: {
+                settlementVia: {},
+              },
+            },
+          },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    const node = new BlinkNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.blink.test/graphql' },
+      { fetch: fetchMock }
+    );
+
+    await expect(node.payInvoice({ invoice: BOLT11 })).resolves.toEqual({
+      paymentHash: '0001020304050607080900010203040506070809000102030405060708090102',
+      preimage: '',
+      feeMsats: 2_000,
+    });
+  });
 });
 
 describe('BlinkNode on-chain payments', () => {

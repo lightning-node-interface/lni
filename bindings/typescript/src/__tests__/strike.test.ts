@@ -219,6 +219,68 @@ describe('StrikeNode Lightning payments', () => {
       vi.useRealTimers();
     }
   });
+
+  it('retries transient outgoing payment record failures', async () => {
+    vi.useFakeTimers();
+    let paymentReads = 0;
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payments/payment-1') {
+          paymentReads += 1;
+          if (paymentReads === 1) {
+            return new Response('not found', { status: 404 });
+          }
+          if (paymentReads === 2) {
+            return new Response('unavailable', { status: 503 });
+          }
+          if (paymentReads === 3) {
+            return new Response('{not-json', { status: 200 });
+          }
+          return jsonResponse({
+            id: 'payment-1',
+            state: 'COMPLETED',
+            created: '2026-07-16T12:00:00Z',
+            amount: { amount: '0.00002500', currency: 'BTC' },
+            lightning: {
+              paymentHash: 'provider-payment-hash',
+              preImage: 'settled-preimage',
+              networkFee: { amount: '0.00000001', currency: 'BTC' },
+            },
+          });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      await vi.runAllTimersAsync();
+
+      await expect(paymentPromise).resolves.toEqual({
+        paymentHash: 'provider-payment-hash',
+        preimage: 'settled-preimage',
+        feeMsats: 1_000,
+      });
+      expect(paymentReads).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('StrikeNode on-chain payments', () => {

@@ -160,6 +160,22 @@ function paymentHashFromInvoice(invoice: string): string {
   }
 }
 
+function isRetryablePaymentReadError(error: unknown): boolean {
+  if (!(error instanceof LniError)) {
+    // Response body reads can reject with a native error rather than LniError.
+    return true;
+  }
+
+  if (error.code === 'NetworkError' || error.code === 'Json') {
+    return true;
+  }
+
+  return (
+    error.code === 'Http' &&
+    (error.status === 404 || (error.status !== undefined && error.status >= 500))
+  );
+}
+
 function normalizeOnchainState(state?: string): PayOnchainResponse['state'] {
   switch (state?.toUpperCase()) {
     case 'PENDING':
@@ -614,9 +630,11 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
       try {
         payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
-      } catch {
+      } catch (error) {
         // payment.read is optional for payInvoice; without it we still know execution succeeded.
-        break;
+        if (!isRetryablePaymentReadError(error)) {
+          break;
+        }
       }
     }
 

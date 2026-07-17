@@ -708,12 +708,10 @@ export class BlinkNode implements LightningNode, OnchainPayments {
 
     const preimage = payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage ?? '';
     let paymentHash = '';
-    if (preimage) {
-      try {
-        paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
-      } catch {
-        // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
-      }
+    try {
+      paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
+    } catch {
+      // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
     }
     return {
       paymentHash,

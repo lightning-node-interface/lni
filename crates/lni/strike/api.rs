@@ -152,6 +152,10 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
         .map(|btc| (btc * 100_000_000.0).round() as i64)
 }
 
+fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
+}
+
 fn assert_valid_guardrail_limit(value: f64, name: &str) -> Result<(), ApiError> {
     if !value.is_finite() || value < 0.0 {
         return Err(ApiError::InvalidInput(format!(
@@ -511,16 +515,22 @@ pub async fn pay_invoice(
         }
 
         let response = match client.get(&payment_url).send().await {
-            Ok(response) if response.status().is_success() => response,
-            _ => break,
+            Ok(response) => response,
+            Err(_) => continue,
         };
+        if !response.status().is_success() {
+            if is_retryable_payment_read_status(response.status()) {
+                continue;
+            }
+            break;
+        }
         let payment_text = match response.text().await {
             Ok(payment_text) => payment_text,
-            Err(_) => break,
+            Err(_) => continue,
         };
         let parsed = match serde_json::from_str::<PaymentExecutionResponse>(&payment_text) {
             Ok(parsed) => parsed,
-            Err(_) => break,
+            Err(_) => continue,
         };
         payment = Some(parsed);
     }
@@ -1344,6 +1354,19 @@ mod tests {
             }
             other => panic!("expected structured NWC error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn classifies_retryable_payment_read_statuses() {
+        assert!(is_retryable_payment_read_status(
+            reqwest::StatusCode::NOT_FOUND
+        ));
+        assert!(is_retryable_payment_read_status(
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR
+        ));
+        assert!(!is_retryable_payment_read_status(
+            reqwest::StatusCode::UNAUTHORIZED
+        ));
     }
 
     #[test]
