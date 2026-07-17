@@ -88,12 +88,12 @@ interface BlinkFeeProbeResponse {
 interface BlinkPaymentSendResponse {
   lnInvoicePaymentSend: {
     status: string;
-    errors?: GraphQLError[];
     transaction?: {
       settlementVia?: {
         preImage?: string;
       };
     };
+    errors?: GraphQLError[];
   };
 }
 
@@ -706,18 +706,13 @@ export class BlinkNode implements LightningNode, OnchainPayments {
       );
     }
 
-    // The proof of payment: SettlementViaLn and SettlementViaIntraLedger
-    // (payer and payee both on Blink) each expose the settled pre-image.
     const preimage = payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage ?? '';
     let paymentHash = '';
-    if (preimage) {
-      try {
-        paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
-      } catch {
-        paymentHash = '';
-      }
+    try {
+      paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
+    } catch {
+      // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
     }
-
     return {
       paymentHash,
       preimage,

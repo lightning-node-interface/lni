@@ -277,9 +277,6 @@ mod tests {
     use dotenv::dotenv;
     use lazy_static::lazy_static;
     use std::env;
-    use std::sync::Once;
-
-    static INIT: Once = Once::new();
 
     lazy_static! {
         static ref MNEMONIC: String = {
@@ -297,6 +294,10 @@ mod tests {
         static ref TEST_PAYMENT_HASH: String = {
             dotenv().ok();
             env::var("SPARK_TEST_PAYMENT_HASH").unwrap_or_default()
+        };
+        static ref TEST_PAYMENT_REQUEST: String = {
+            dotenv().ok();
+            env::var("SPARK_TEST_PAYMENT_REQUEST").unwrap_or_default()
         };
         static ref TEST_RECEIVER_OFFER: String = {
             dotenv().ok();
@@ -396,34 +397,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_pay_invoice() {
-        if should_skip() {
-            println!("Skipping test: SPARK_MNEMONIC or SPARK_API_KEY not set");
+        if should_skip() || TEST_PAYMENT_REQUEST.is_empty() {
+            println!("Skipping test: credentials or SPARK_TEST_PAYMENT_REQUEST not set");
             return;
         }
 
         let node = get_node().await.expect("Failed to connect");
-        // Note: This test requires a valid invoice to pay
-        // For now we'll just test that the function exists and handles errors
-        match node
+        let result = node
             .pay_invoice(PayInvoiceParams {
-                invoice: "lnbc1***".to_string(), // Invalid invoice for testing
+                invoice: TEST_PAYMENT_REQUEST.to_string(),
                 ..Default::default()
             })
-            .await
-        {
-            Ok(txn) => {
-                println!("txn: {:?}", txn);
-                assert!(
-                    !txn.payment_hash.is_empty(),
-                    "Payment hash should not be empty"
-                );
-            }
-            Err(e) => {
-                println!("Expected error for invalid invoice: {:?}", e);
-                // This is expected to fail with an invalid invoice
-            }
-        }
+            .await;
         let _ = node.disconnect().await;
+
+        let payment = result.expect("pay_invoice should pay the configured Spark test invoice");
+        dbg!(&payment);
     }
 
     #[tokio::test]

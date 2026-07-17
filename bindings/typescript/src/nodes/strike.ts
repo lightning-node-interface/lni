@@ -73,12 +73,20 @@ interface StrikePaymentQuoteResponse {
   paymentQuoteId: string;
 }
 
+interface StrikeLightningPaymentDetails {
+  paymentHash?: string;
+  paymentRequest?: string;
+  preImage?: string;
+  networkFee?: StrikeAmount;
+}
+
 interface StrikePaymentExecutionResponse {
   paymentId: string;
   state?: string;
   amount?: StrikeAmount;
   totalFee?: StrikeAmount;
   totalAmount?: StrikeAmount;
+  lightning?: StrikeLightningPaymentDetails;
   onchain?: {
     txnId?: string;
   };
@@ -94,12 +102,7 @@ interface StrikePaymentResponse {
   amount: StrikeAmount;
   totalFee?: StrikeAmount;
   totalAmount?: StrikeAmount;
-  lightning?: {
-    paymentHash?: string;
-    paymentRequest?: string;
-    networkFee?: StrikeAmount;
-    preImage?: string;
-  };
+  lightning?: StrikeLightningPaymentDetails;
   onchain?: {
     txnId?: string;
   };
@@ -155,6 +158,22 @@ function paymentHashFromInvoice(invoice: string): string {
   } catch {
     return '';
   }
+}
+
+function isRetryablePaymentReadError(error: unknown): boolean {
+  if (!(error instanceof LniError)) {
+    // Response body reads can reject with a native error rather than LniError.
+    return true;
+  }
+
+  if (error.code === 'NetworkError' || error.code === 'Json') {
+    return true;
+  }
+
+  return (
+    error.code === 'Http' &&
+    (error.status === 404 || (error.status !== undefined && error.status >= 500))
+  );
 }
 
 function normalizeOnchainState(state?: string): PayOnchainResponse['state'] {
@@ -601,19 +620,21 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       `/payment-quotes/${quote.paymentQuoteId}/execute`,
       'pay_invoice'
     );
-    let payment: StrikePaymentResponse | undefined;
-    // The pre-image appears on the payment record once it settles (usually
-    // immediately for Lightning) — poll the read briefly to capture the
-    // proof of payment.
-    for (let attempt = 0; attempt < 5 && !payment?.lightning?.preImage; attempt++) {
+
+    // Preserve proof returned by execute; otherwise poll the outgoing record until it settles.
+    let payment: StrikePaymentExecutionResponse | StrikePaymentResponse = execution;
+    for (let attempt = 0; attempt < 5 && !payment?.lightning?.preImage; attempt += 1) {
       if (attempt > 0) {
         await new Promise((resolve) => setTimeout(resolve, 400));
       }
+
       try {
         payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
-      } catch {
-        // payment.read is optional for payInvoice; without it we still know the payment was executed.
-        break;
+      } catch (error) {
+        // payment.read is optional for payInvoice; without it we still know execution succeeded.
+        if (!isRetryablePaymentReadError(error)) {
+          break;
+        }
       }
     }
 

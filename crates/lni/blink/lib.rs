@@ -338,7 +338,7 @@ mod tests {
             Ok(txns) => {
                 dbg!(&txns);
                 // Validate we can parse transactions
-                assert!(txns.len() >= 0, "Should contain at least zero transactions");
+                assert!(true, "Should be able to list transactions");
             }
             Err(e) => {
                 println!(

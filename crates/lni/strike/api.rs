@@ -152,6 +152,10 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
         .map(|btc| (btc * 100_000_000.0).round() as i64)
 }
 
+fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
+}
+
 fn assert_valid_guardrail_limit(value: f64, name: &str) -> Result<(), ApiError> {
     if !value.is_finite() || value < 0.0 {
         return Err(ApiError::InvalidInput(format!(
@@ -489,52 +493,78 @@ pub async fn pay_invoice(
     let execute_text = execute_response.text().await.unwrap();
     let execute_resp: PaymentExecutionResponse = serde_json::from_str(&execute_text)?;
 
-    // Get payment details
-    let payment_id = &execute_resp.payment_id;
-
+    // Get the outgoing payment record. The Lightning proof can appear shortly after execution.
+    let payment_id = execute_resp.payment_id.clone();
     let payment_url = format!("{}/payments/{}", get_base_url(&config), payment_id);
-    let payment_response = client
-        .get(&payment_url)
-        .send()
-        .await
-        .map_err(|e| strike_nwc_error_from_transport(e, "pay_invoice"))?;
+    let mut payment = Some(execute_resp);
 
-    if !payment_response.status().is_success() {
-        let status = payment_response.status();
-        let error_text = payment_response.text().await.unwrap_or_default();
-        return Err(strike_nwc_error_from_response(
-            status,
-            error_text,
-            "pay_invoice",
-            "Failed to get payment details",
-        ));
+    for attempt in 0..5 {
+        let has_preimage = matches!(
+            payment
+                .as_ref()
+                .and_then(|payment| payment.lightning.as_ref())
+                .and_then(|lightning| lightning.pre_image.as_deref()),
+            Some(preimage) if !preimage.is_empty()
+        );
+        if has_preimage {
+            break;
+        }
+
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+        }
+
+        let response = match client.get(&payment_url).send().await {
+            Ok(response) => response,
+            Err(_) => continue,
+        };
+        if !response.status().is_success() {
+            if is_retryable_payment_read_status(response.status()) {
+                continue;
+            }
+            break;
+        }
+        let payment_text = match response.text().await {
+            Ok(payment_text) => payment_text,
+            Err(_) => continue,
+        };
+        let parsed = match serde_json::from_str::<PaymentExecutionResponse>(&payment_text) {
+            Ok(parsed) => parsed,
+            Err(_) => continue,
+        };
+        payment = Some(parsed);
     }
 
-    let payment_text = payment_response.text().await.unwrap();
-    let payment_resp: PaymentExecutionResponse = serde_json::from_str(&payment_text)?;
-
-    let fee_msats = if let Some(lightning) = &payment_resp.lightning {
-        let fee_amount = lightning.network_fee.amount.parse::<f64>().unwrap_or(0.0);
-        if lightning.network_fee.currency == "BTC" {
-            (fee_amount * 100_000_000_000.0) as i64
-        } else {
-            0
-        }
-    } else {
-        0
-    };
+    let fee_msats = payment
+        .as_ref()
+        .and_then(|payment| payment.lightning.as_ref())
+        .and_then(|lightning| lightning.network_fee.as_ref())
+        .or_else(|| {
+            payment
+                .as_ref()
+                .and_then(|payment| payment.lightning_network_fee.as_ref())
+        })
+        .filter(|fee| fee.currency == "BTC")
+        .and_then(|fee| fee.amount.parse::<f64>().ok())
+        .map(|fee| (fee * 100_000_000_000.0) as i64)
+        .unwrap_or(0);
 
     // Extract payment hash from the original BOLT11 invoice
-    let payment_hash = match Bolt11Invoice::from_str(&invoice_params.invoice) {
+    let invoice_payment_hash = match Bolt11Invoice::from_str(&invoice_params.invoice) {
         Ok(invoice) => {
             format!("{:x}", invoice.payment_hash())
         }
         Err(_) => "".to_string(), // If parsing fails, return empty string
     };
+    let preimage = payment
+        .as_ref()
+        .and_then(|payment| payment.lightning.as_ref())
+        .and_then(|lightning| lightning.pre_image.clone())
+        .unwrap_or_default();
 
     Ok(PayInvoiceResponse {
-        payment_hash,             // Extract from BOLT11 invoice
-        preimage: "".to_string(), // Strike doesn't expose preimage
+        payment_hash: invoice_payment_hash,
+        preimage,
         fee_msats,
     })
 }
@@ -1126,7 +1156,11 @@ pub async fn list_transactions(
                     .as_ref()
                     .and_then(|l| l.payment_request.clone())
                     .unwrap_or_default(),
-                preimage: "".to_string(),
+                preimage: payment
+                    .lightning
+                    .as_ref()
+                    .and_then(|lightning| lightning.pre_image.clone())
+                    .unwrap_or_default(),
                 payment_hash: payment
                     .lightning
                     .as_ref()
@@ -1320,6 +1354,19 @@ mod tests {
             }
             other => panic!("expected structured NWC error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn classifies_retryable_payment_read_statuses() {
+        assert!(is_retryable_payment_read_status(
+            reqwest::StatusCode::NOT_FOUND
+        ));
+        assert!(is_retryable_payment_read_status(
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR
+        ));
+        assert!(!is_retryable_payment_read_status(
+            reqwest::StatusCode::UNAUTHORIZED
+        ));
     }
 
     #[test]
