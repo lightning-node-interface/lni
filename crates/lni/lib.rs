@@ -46,8 +46,7 @@ impl From<serde_json::Error> for ApiError {
 ///
 /// # Returns
 /// A space-separated mnemonic phrase
-#[cfg(feature = "uniffi")]
-#[uniffi::export]
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     use bip39::{Language, Mnemonic};
     use rand::rngs::OsRng;
@@ -275,6 +274,12 @@ pub mod spark {
     pub use lib::{SparkConfig, SparkNode};
 }
 
+pub mod lexe {
+    pub mod api;
+    pub mod lib;
+    pub use lib::{LexeConfig, LexeNode};
+}
+
 pub mod lnurl;
 
 pub mod error_normalization;
@@ -400,6 +405,12 @@ pub async fn create_spark_node(
 ) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;
     Ok(Arc::new(node))
+}
+
+/// Create a Lexe node backed by revocable client credentials.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn create_lexe_node(config: lexe::LexeConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
+    Ok(Arc::new(lexe::LexeNode::new(config)?))
 }
 
 #[cfg(feature = "uniffi")]

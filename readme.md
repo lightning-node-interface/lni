@@ -3,7 +3,7 @@ LNI Remote - Lightning Node Interface Remote
 
 Remote connect to all the major lightning node implementations with a standard interface. 
 
-- Supports all major nodes - CLN, LND, Phoenixd, *LNDK (WIP) 
+- Supports all major nodes and wallets - CLN, LND, Phoenixd, Lexe, Spark, *LNDK (WIP)
 - Supports the main protocols - BOLT 11, BOLT 12, and NWC
 - **LNURL & Lightning Address support** - Pay to `user@domain.com` or `lnurl1...`
 - Also popular REST APIs (Custodial) - Strike, Speed, Blink
@@ -19,6 +19,11 @@ Remote connect to all the major lightning node implementations with a standard i
 ```rust
 let lnd_node = LndNode::new(LndConfig { url, macaroon });
 let cln_node = ClnNode::new(ClnConfig { url, rune });
+let lexe_node = LexeNode::new(LexeConfig {
+    client_credentials: "<exported Lexe client credentials>".to_string(),
+    data_dir: Some("./lexe_data".to_string()),
+    network: Some("mainnet".to_string()),
+})?;
 
 let lnd_node_info = lnd_node.get_info();
 let cln_node_info = cln_node.get_info();
