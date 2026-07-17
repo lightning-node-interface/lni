@@ -275,6 +275,15 @@ pub mod spark {
     pub use lib::{SparkConfig, SparkNode};
 }
 
+pub mod bark {
+    pub mod api;
+    pub mod backup;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{BarkConfig, BarkNode};
+    pub use types::{BarkBackup, BarkBackupInfo};
+}
+
 pub mod lnurl;
 
 pub mod error_normalization;
@@ -399,6 +408,14 @@ pub async fn create_spark_node(
     config: spark::SparkConfig,
 ) -> Result<Arc<dyn LightningNode>, ApiError> {
     let node = spark::SparkNode::new(config).await?;
+    Ok(Arc::new(node))
+}
+
+/// Create a Bark node as a polymorphic LightningNode
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn create_bark_node(config: bark::BarkConfig) -> Result<Arc<dyn LightningNode>, ApiError> {
+    let node = bark::BarkNode::new(config).await?;
     Ok(Arc::new(node))
 }
 
@@ -567,6 +584,26 @@ mod debug_redaction_tests {
                 "spark-passphrase-secret",
                 "spark-api-key-secret",
                 "/tmp/lni-spark-secret-path",
+            ],
+        );
+
+        let bark = crate::bark::BarkConfig {
+            mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
+            storage_dir: "/tmp/lni-bark-secret-path".to_string(),
+            server_url: "https://ark.example".to_string(),
+            server_access_token: Some("bark-access-token-secret".to_string()),
+            esplora_url: Some("https://esplora.example".to_string()),
+            network: Some("signet".to_string()),
+            create_if_missing: Some(true),
+            force_create: Some(false),
+        };
+        assert_redacted(
+            "BarkConfig",
+            &format!("{:?}", bark),
+            &[
+                "abandon abandon abandon",
+                "/tmp/lni-bark-secret-path",
+                "bark-access-token-secret",
             ],
         );
     }
