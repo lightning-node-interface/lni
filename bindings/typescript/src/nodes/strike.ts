@@ -73,12 +73,20 @@ interface StrikePaymentQuoteResponse {
   paymentQuoteId: string;
 }
 
+interface StrikeLightningPaymentDetails {
+  paymentHash?: string;
+  paymentRequest?: string;
+  preImage?: string;
+  networkFee?: StrikeAmount;
+}
+
 interface StrikePaymentExecutionResponse {
   paymentId: string;
   state?: string;
   amount?: StrikeAmount;
   totalFee?: StrikeAmount;
   totalAmount?: StrikeAmount;
+  lightning?: StrikeLightningPaymentDetails;
   onchain?: {
     txnId?: string;
   };
@@ -94,12 +102,7 @@ interface StrikePaymentResponse {
   amount: StrikeAmount;
   totalFee?: StrikeAmount;
   totalAmount?: StrikeAmount;
-  lightning?: {
-    paymentHash?: string;
-    paymentRequest?: string;
-    preImage?: string;
-    networkFee?: StrikeAmount;
-  };
+  lightning?: StrikeLightningPaymentDetails;
   onchain?: {
     txnId?: string;
   };
@@ -602,8 +605,8 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       'pay_invoice'
     );
 
-    // The outgoing payment record exposes the proof once the Lightning payment settles.
-    let payment: StrikePaymentResponse | undefined;
+    // Preserve proof returned by execute; otherwise poll the outgoing record until it settles.
+    let payment: StrikePaymentExecutionResponse | StrikePaymentResponse = execution;
     for (let attempt = 0; attempt < 5 && !payment?.lightning?.preImage; attempt += 1) {
       if (attempt > 0) {
         await new Promise((resolve) => setTimeout(resolve, 400));

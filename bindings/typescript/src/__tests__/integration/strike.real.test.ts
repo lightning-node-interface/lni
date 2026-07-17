@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect } from 'vitest';
 import { StrikeNode } from '../../nodes/strike.js';
 import {
@@ -83,6 +84,27 @@ describe('Real integration from crates/lni/.env > StrikeNode', () => {
           throw lastError;
         }
       }, ['no receive found', 'http 404']);
+    },
+    timeout
+  );
+
+  itIf(enabled && hasEnv('STRIKE_TEST_PAYMENT_REQUEST'))(
+    'payInvoice returns a valid Lightning preimage',
+    async () => {
+      const node = makeNode();
+      const payment = await node.payInvoice({
+        invoice: process.env.STRIKE_TEST_PAYMENT_REQUEST!,
+      });
+      console.log('Strike payInvoice result:', payment);
+
+      expect(payment.paymentHash).toMatch(/^[0-9a-f]{64}$/i);
+      expect(payment.preimage).toMatch(/^[0-9a-f]{64}$/i);
+      expect(payment.feeMsats).toBeGreaterThanOrEqual(0);
+
+      const paymentHashFromPreimage = createHash('sha256')
+        .update(Buffer.from(payment.preimage, 'hex'))
+        .digest('hex');
+      expect(paymentHashFromPreimage).toBe(payment.paymentHash.toLowerCase());
     },
     timeout
   );

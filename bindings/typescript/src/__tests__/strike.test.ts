@@ -133,6 +133,40 @@ describe('StrikeNode error normalization', () => {
 });
 
 describe('StrikeNode Lightning payments', () => {
+  it('preserves a preimage returned by execute when payment.read is unavailable', async () => {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+        return jsonResponse({ paymentQuoteId: 'quote-1' });
+      }
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          lightning: {
+            preImage: 'execute-preimage',
+            networkFee: { amount: '0.00000001', currency: 'BTC' },
+          },
+        });
+      }
+
+      return new Response('forbidden', { status: 403 });
+    });
+
+    const node = new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch: fetchMock }
+    );
+
+    await expect(node.payInvoice({ invoice: BOLT11 })).resolves.toEqual({
+      paymentHash: '0001020304050607080900010203040506070809000102030405060708090102',
+      preimage: 'execute-preimage',
+      feeMsats: 1_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('returns the settled preimage from the outgoing payment record', async () => {
     vi.useFakeTimers();
     let paymentReads = 0;

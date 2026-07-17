@@ -276,6 +276,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "pays a real Lightning invoice"]
     async fn test_pay_invoice() {
         match NODE
             .pay_invoice(PayInvoiceParams {
@@ -285,8 +286,12 @@ mod tests {
             .await
         {
             Ok(invoice_resp) => {
-                dbg!("Strike pay invoice resp: {:?}", &invoice_resp);
-                println!("Strike pay invoice resp: {:?}", invoice_resp);
+                println!(
+                    "Strike pay_invoice succeeded: payment_hash_present={}, preimage_present={}, fee_msats={}",
+                    !invoice_resp.payment_hash.is_empty(),
+                    !invoice_resp.preimage.is_empty(),
+                    invoice_resp.fee_msats
+                );
             }
             Err(e) => {
                 println!(
