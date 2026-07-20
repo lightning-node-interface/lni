@@ -44,7 +44,9 @@
     "build": "bob build",
     "pack:dry-run": "npm pack --dry-run",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
+    "prepack": "yarn verify:native",
     "prepare": "bob build",
+    "verify:native": "node scripts/verify-native-artifacts.mjs",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\""
   },

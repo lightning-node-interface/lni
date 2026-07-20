@@ -22,3 +22,6 @@ turboModule:
   ts: src
   spec: NativeLniLexe
   entrypoint: src/index.tsx
+
+noOverwrite:
+  - android/cpp-adapter.cpp

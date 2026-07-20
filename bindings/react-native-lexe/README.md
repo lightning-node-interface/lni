@@ -26,14 +26,26 @@ cd ios && pod install
 ```
 
 To install the package from a local LNI checkout while developing another app,
-pass npm the package directory:
+first build the native libraries for the platforms you use:
+
+```sh
+cd ../lni/bindings/react-native-lexe
+corepack yarn install --immutable
+corepack yarn ubrn:ios
+corepack yarn ubrn:android
+corepack yarn build
+```
+
+Then pass npm the package directory:
 
 ```sh
 npm install ../lni/bindings/react-native-lexe
 ```
 
-Adjust the relative path for your checkout layout. Re-run the command after
-rebuilding the package when native binaries change.
+Adjust the relative paths for your checkout layout. A published npm package
+already contains the native libraries; only source-checkout development needs
+the Rust, Xcode, and Android NDK build steps. Rebuild and reinstall the local
+package whenever its Rust or generated native code changes.
 
 ## Usage
 
@@ -71,8 +83,8 @@ Do not include them in source control or production logs.
 
 ## Building the bindings
 
-The npm package contains prebuilt Rust libraries. Maintainers can regenerate
-them from the repository root with:
+The npm package contains prebuilt Rust libraries, but those binaries are not
+stored in Git. Maintainers can generate them from the repository root with:
 
 ```sh
 cd bindings/react-native-lexe
@@ -82,9 +94,20 @@ yarn ubrn:android
 yarn build
 ```
 
-The prebuilt iOS and Android libraries are stored with Git LFS. Install Git LFS
-and run `git lfs pull` after cloning before building the example or publishing
-the npm package. npm consumers do not need Git LFS.
+`yarn pack:dry-run` verifies that both iOS libraries and all four Android ABIs
+exist before creating a package. Generated TypeScript and C++ bindings remain
+versioned so their changes can be reviewed.
+
+## Publishing
+
+The `Build react-native-lni-lexe` GitHub Actions workflow builds the native
+libraries on macOS, verifies the generated source is current, creates the npm
+tarball, and uploads it as a workflow artifact.
+
+To publish, update the version in `package.json` and push a matching tag such
+as `react-native-lni-lexe-v0.1.0`. Publishing requires the repository's
+`NPM_TOKEN` secret. The workflow can also be started manually without
+publishing to produce a testable npm tarball.
 
 ## License
 

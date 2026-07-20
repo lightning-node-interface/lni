@@ -82,12 +82,10 @@ lib/
 ios/generated
 android/generated
 
-# Native libraries are published with this package so consumers do not need
-# Rust or the Android/iOS cross-compilation toolchains.
-!android/src/main/jniLibs/
-!android/src/main/jniLibs/**
-!ReactNativeLexeFramework.xcframework/
-!ReactNativeLexeFramework.xcframework/**
+# Native libraries are built locally or by release CI. Release CI adds them to
+# the npm tarball so package consumers do not need Rust or native toolchains.
+android/src/main/jniLibs/
+ReactNativeLexeFramework.xcframework/
 
 # The shared repository ignore treats every .env-style filename as secret.
 # React Native's base Xcode environment file is a portable, versioned template;

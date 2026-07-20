@@ -129,9 +129,15 @@ bindings/lni_react_native/cpp/generated/**
 
 **/lni_react_native_old/**
 
-# Prebuilt native artifacts shipped by react-native-lni-lexe.
+# Keep the React Native package's Android source tree; the broad Android
+# patterns above otherwise hide it.
 !bindings/react-native-lexe/android/
 !bindings/react-native-lexe/android/**
 !bindings/react-native-lexe/example/android/
 !bindings/react-native-lexe/example/android/**
 bindings/react-native-lexe/example/android/app/debug.keystore
+
+# Release CI builds these and adds them to the npm tarball. They are not
+# versioned because each build is hundreds of megabytes across all targets.
+bindings/react-native-lexe/ReactNativeLexeFramework.xcframework/
+bindings/react-native-lexe/android/src/main/jniLibs/
