@@ -99,8 +99,8 @@ fn validate_pay_invoice_params(params: &PayInvoiceParams) -> Result<(), ApiError
     if params.max_parts.is_some()
         || params.first_hop_pubkey.is_some()
         || params.last_hop_pubkey.is_some()
-        || params.allow_self_payment.is_some()
-        || params.is_amp.is_some()
+        || params.allow_self_payment.unwrap_or(false)
+        || params.is_amp.unwrap_or(false)
     {
         return Err(invalid_input(
             "Lexe pay_invoice received unsupported routing options",
@@ -113,6 +113,23 @@ fn validate_pay_invoice_params(params: &PayInvoiceParams) -> Result<(), ApiError
         return Err(invalid_input("timeout_seconds must be positive"));
     }
     Ok(())
+}
+
+fn list_transactions_window(params: &ListTransactionsParams) -> Result<(usize, usize), ApiError> {
+    let from =
+        usize::try_from(params.from).map_err(|_| invalid_input("from must be non-negative"))?;
+    let limit =
+        usize::try_from(params.limit).map_err(|_| invalid_input("limit must be non-negative"))?;
+    if limit > PAYMENT_PAGE_SIZE {
+        return Err(invalid_input(format!(
+            "limit must not exceed {PAYMENT_PAGE_SIZE}"
+        )));
+    }
+    Ok((from, limit))
+}
+
+fn payment_selector_is_empty(payment_hash: Option<&str>, search: Option<&str>) -> bool {
+    payment_hash.is_none_or(str::is_empty) && search.is_none_or(str::is_empty)
 }
 
 fn payment_to_transaction(payment: &Payment) -> Result<Transaction, ApiError> {
@@ -273,7 +290,7 @@ async fn matching_payments(
 
     let mut after = None;
     let mut skipped = 0usize;
-    let mut matches = Vec::with_capacity(limit);
+    let mut matches = Vec::with_capacity(limit.min(PAYMENT_PAGE_SIZE));
 
     loop {
         let page = wallet
@@ -311,6 +328,37 @@ async fn matching_payments(
             _ => return Ok(matches),
         }
     }
+}
+
+fn indeterminate_payment_error(detail: impl std::fmt::Display) -> ApiError {
+    ApiError::Nwc {
+        code: "PAYMENT_INDETERMINATE".to_owned(),
+        message: format!(
+            "Lexe payment timed out and its outcome is indeterminate ({detail}); \
+             call lookup_invoice with the invoice payment hash before retrying"
+        ),
+    }
+}
+
+async fn reconcile_timed_out_invoice_payment(
+    wallet: &LexeWallet,
+    payment_hash: &str,
+) -> Result<PayInvoiceResponse, ApiError> {
+    let payments = matching_payments(wallet, Some(payment_hash), None, None, None, 0, 1)
+        .await
+        .map_err(|error| indeterminate_payment_error(format!("reconciliation failed: {error}")))?;
+
+    let Some(payment) = payments.into_iter().next() else {
+        return Err(indeterminate_payment_error(
+            "the payment was not found during reconciliation",
+        ));
+    };
+
+    if payment.status == PaymentStatus::Pending {
+        return Err(indeterminate_payment_error("the payment is still pending"));
+    }
+
+    completed_payment_response(payment)
 }
 
 pub async fn get_info(wallet: &LexeWallet, network: &str) -> Result<NodeInfo, ApiError> {
@@ -393,6 +441,7 @@ pub async fn pay_invoice(
     validate_pay_invoice_params(&params)?;
     let invoice = lexe::types::bitcoin::Invoice::from_str(&params.invoice)
         .map_err(|error| invalid_input(format!("Invalid BOLT 11 invoice: {error}")))?;
+    let payment_hash = invoice.payment_hash().to_string();
     let request = LexePayInvoiceRequest {
         invoice,
         fallback_amount: optional_amount_from_msats(params.amount_msats, "amount_msats")?,
@@ -400,12 +449,17 @@ pub async fn pay_invoice(
     };
 
     let payment = if let Some(timeout_secs) = params.timeout_seconds {
-        tokio::time::timeout(
+        match tokio::time::timeout(
             Duration::from_secs(timeout_secs as u64),
             wallet.pay_invoice(request),
         )
         .await
-        .map_err(|_| ApiError::NetworkError("Lexe payment timed out".to_owned()))?
+        {
+            Ok(payment) => payment,
+            Err(_) => {
+                return reconcile_timed_out_invoice_payment(wallet, &payment_hash).await;
+            }
+        }
     } else {
         wallet.pay_invoice(request).await
     }
@@ -467,10 +521,7 @@ pub async fn list_transactions(
     wallet: &LexeWallet,
     params: ListTransactionsParams,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let from =
-        usize::try_from(params.from).map_err(|_| invalid_input("from must be non-negative"))?;
-    let limit =
-        usize::try_from(params.limit).map_err(|_| invalid_input("limit must be non-negative"))?;
+    let (from, limit) = list_transactions_window(&params)?;
     let payments = matching_payments(
         wallet,
         params.payment_hash.as_deref(),
@@ -489,9 +540,7 @@ pub async fn lookup_invoice(
     wallet: &LexeWallet,
     params: LookupInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    if params.payment_hash.as_deref().is_none_or(str::is_empty)
-        && params.search.as_deref().is_none_or(str::is_empty)
-    {
+    if payment_selector_is_empty(params.payment_hash.as_deref(), params.search.as_deref()) {
         return Err(invalid_input(
             "lookup_invoice requires payment_hash or search",
         ));
@@ -521,6 +570,11 @@ pub async fn on_invoice_events(
     params: OnInvoiceEventParams,
     callback: Arc<dyn OnInvoiceEventCallback>,
 ) {
+    if payment_selector_is_empty(params.payment_hash.as_deref(), params.search.as_deref()) {
+        callback.failure(None);
+        return;
+    }
+
     if params.polling_delay_sec <= 0 || params.max_polling_sec <= 0 {
         callback.failure(None);
         return;
@@ -616,6 +670,76 @@ mod tests {
         };
         let error = validate_pay_invoice_params(&params).unwrap_err();
         assert!(matches!(error, ApiError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn explicitly_disabled_routing_options_are_accepted() {
+        let params = PayInvoiceParams {
+            invoice: "lnbc1example".to_owned(),
+            allow_self_payment: Some(false),
+            is_amp: Some(false),
+            ..Default::default()
+        };
+
+        validate_pay_invoice_params(&params).unwrap();
+    }
+
+    #[test]
+    fn enabled_routing_options_are_rejected() {
+        for params in [
+            PayInvoiceParams {
+                invoice: "lnbc1example".to_owned(),
+                allow_self_payment: Some(true),
+                ..Default::default()
+            },
+            PayInvoiceParams {
+                invoice: "lnbc1example".to_owned(),
+                is_amp: Some(true),
+                ..Default::default()
+            },
+        ] {
+            let error = validate_pay_invoice_params(&params).unwrap_err();
+            assert!(matches!(error, ApiError::InvalidInput(_)));
+        }
+    }
+
+    #[test]
+    fn transaction_limit_is_bounded() {
+        let params = |limit| ListTransactionsParams {
+            from: 0,
+            limit,
+            payment_hash: None,
+            search: None,
+            created_after: None,
+            created_before: None,
+        };
+
+        assert_eq!(
+            list_transactions_window(&params(PAYMENT_PAGE_SIZE as i64)).unwrap(),
+            (0, PAYMENT_PAGE_SIZE)
+        );
+        let error = list_transactions_window(&params(PAYMENT_PAGE_SIZE as i64 + 1)).unwrap_err();
+        assert!(matches!(error, ApiError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn payment_selector_requires_a_nonempty_value() {
+        assert!(payment_selector_is_empty(None, None));
+        assert!(payment_selector_is_empty(Some(""), Some("")));
+        assert!(!payment_selector_is_empty(Some("payment-hash"), None));
+        assert!(!payment_selector_is_empty(None, Some("search")));
+    }
+
+    #[test]
+    fn indeterminate_payment_error_requires_lookup_before_retry() {
+        let error = indeterminate_payment_error("payment is still pending");
+        let ApiError::Nwc { code, message } = error else {
+            panic!("expected a structured LNI error");
+        };
+        assert_eq!(code, "PAYMENT_INDETERMINATE");
+        assert!(message.contains("indeterminate"));
+        assert!(message.contains("lookup_invoice"));
+        assert!(message.contains("before retrying"));
     }
 
     #[test]
