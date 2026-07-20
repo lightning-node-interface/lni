@@ -128,3 +128,10 @@ bindings/lni_react_native/src/generated/**
 bindings/lni_react_native/cpp/generated/**
 
 **/lni_react_native_old/**
+
+# Prebuilt native artifacts shipped by react-native-lni-lexe.
+!bindings/react-native-lexe/android/
+!bindings/react-native-lexe/android/**
+!bindings/react-native-lexe/example/android/
+!bindings/react-native-lexe/example/android/**
+bindings/react-native-lexe/example/android/app/debug.keystore

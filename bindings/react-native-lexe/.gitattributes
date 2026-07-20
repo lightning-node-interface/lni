@@ -1,0 +1,8 @@
+*.pbxproj -text
+# specific for windows script files
+*.bat text eol=crlf
+
+# The npm package ships prebuilt Rust libraries. Keep these large binary
+# artifacts out of normal Git history while retaining them in release tarballs.
+ReactNativeLexeFramework.xcframework/**/*.a filter=lfs diff=lfs merge=lfs -text
+android/src/main/jniLibs/**/*.so filter=lfs diff=lfs merge=lfs -text

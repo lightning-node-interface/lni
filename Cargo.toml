@@ -5,4 +5,5 @@ members = [
     "bindings/lni_nodejs",
     "bindings/kotlin",
     "bindings/swift",
+    "bindings/react-native-lexe/rust",
 ]

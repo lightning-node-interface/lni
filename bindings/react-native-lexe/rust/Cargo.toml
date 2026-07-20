@@ -1,0 +1,15 @@
+[package]
+name = "react-native-lni-lexe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "react_native_lexe"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[dependencies]
+lni = { path = "../../../crates/lni", default-features = false, features = ["rustls-tls"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+uniffi = { version = "0.31.0", features = ["tokio"] }
