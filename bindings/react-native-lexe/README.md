@@ -128,22 +128,6 @@ directory.
 `npm publish --access public`. An npm version can only be published once, so
 bump `package.json` before the next release.
 
-Alternatively, the `Build react-native-lni-lexe` GitHub Actions workflow builds
-the native libraries on macOS, verifies the generated source is current,
-creates the npm tarball, and uploads it as a workflow artifact.
-
-To publish version `0.2.16` through CI, push the matching tag:
-
-```sh
-git tag react-native-lni-lexe-v0.2.16
-git push origin react-native-lni-lexe-v0.2.16
-```
-
-CI publishing requires the repository's `NPM_TOKEN` secret. The workflow can
-also be started manually without publishing to produce a testable npm tarball.
-Use either the local publish command or the release tag for a given version,
-not both.
-
 ## License
 
 MIT
