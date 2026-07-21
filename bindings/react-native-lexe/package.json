@@ -1,6 +1,6 @@
 {
-  "name": "react-native-lni-lexe",
-  "version": "0.1.0",
+  "name": "@sunnyln/react-native-lni-lexe",
+  "version": "0.2.16",
   "description": "React Native bindings for the Lexe Lightning wallet",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -39,14 +39,22 @@
     "example": "yarn workspace react-native-lni-lexe-example",
     "ubrn:ios": "IPHONEOS_DEPLOYMENT_TARGET=13.0 ubrn build ios --config ubrn.config.yaml --release --and-generate && yarn ubrn:postgenerate",
     "ubrn:android": "ubrn build android --config ubrn.config.yaml --release --and-generate && yarn ubrn:postgenerate",
-    "ubrn:postgenerate": "node scripts/fix-ubrn-cmake.mjs && prettier --write src/NativeLniLexe.ts src/index.tsx",
+    "ubrn:postgenerate": "node scripts/fix-ubrn-cmake.mjs && prettier --write src/NativeLniLexe.ts src/index.tsx && yarn verify:native-identity",
     "ubrn:clean": "rm -rf cpp/generated android/generated android/src/main/jniLibs ios/generated ReactNativeLexeFramework.xcframework src/generated src/NativeLniLexe.ts src/index.tsx",
-    "build": "bob build",
+    "build": "bob build && yarn verify:generated-identity",
+    "release:prepare": "yarn ubrn:ios && yarn ubrn:android && yarn build && yarn lint && yarn typecheck && yarn verify:native && yarn verify:android",
+    "release:dry-run": "yarn release:prepare && yarn pack:dry-run",
+    "release:pack": "yarn release:prepare && npm pack",
+    "release:public": "yarn release:prepare && yarn publish:public",
     "pack:dry-run": "npm pack --dry-run",
+    "publish:public": "npm publish --access public",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepack": "yarn verify:native",
-    "prepare": "bob build",
-    "verify:native": "node scripts/verify-native-artifacts.mjs",
+    "prepare": "yarn build",
+    "verify:android": "yarn example build:android",
+    "verify:generated-identity": "node scripts/verify-native-identity.mjs --generated",
+    "verify:native": "node scripts/verify-native-artifacts.mjs && yarn verify:native-identity",
+    "verify:native-identity": "node scripts/verify-native-identity.mjs",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\""
   },
@@ -66,6 +74,7 @@
   },
   "homepage": "https://github.com/lightning-node-interface/lni#readme",
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {

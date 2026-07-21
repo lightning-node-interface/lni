@@ -44,3 +44,17 @@ const ios = await readFile(iosPath, 'utf8');
 if (ios.includes(generatedExample)) {
   await writeFile(iosPath, ios.replace(generatedExample, ''));
 }
+
+const androidAdapterPath = fileURLToPath(
+  new URL('../android/cpp-adapter.cpp', import.meta.url)
+);
+const generatedTestBlock =
+  /\/\/ Automated testing checks [^\n]+\n\/\/ by comparing the whole line here\.\n\/\*\n[\s\S]*?\n\*\/\n\n/;
+const androidAdapter = await readFile(androidAdapterPath, 'utf8');
+const fixedAndroidAdapter = androidAdapter.replace(generatedTestBlock, '');
+const normalizedAndroidAdapter = fixedAndroidAdapter.endsWith('\n')
+  ? fixedAndroidAdapter
+  : `${fixedAndroidAdapter}\n`;
+if (normalizedAndroidAdapter !== androidAdapter) {
+  await writeFile(androidAdapterPath, normalizedAndroidAdapter);
+}

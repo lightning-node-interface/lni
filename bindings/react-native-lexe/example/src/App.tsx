@@ -3,7 +3,7 @@ import { Text, View, StyleSheet } from 'react-native';
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>react-native-lni-lexe</Text>
+      <Text>@sunnyln/react-native-lni-lexe</Text>
     </View>
   );
 }
