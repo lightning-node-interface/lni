@@ -23,4 +23,4 @@ turboModule:
   cpp: cpp
   ts: src
   spec: NativeLniLexe
-  entrypoint: src/index.tsx
+  entrypoint: src/native.tsx

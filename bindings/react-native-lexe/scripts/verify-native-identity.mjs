@@ -28,7 +28,11 @@ function requireText(relativePath, requiredText) {
 }
 
 const expectedIdentity = {
-  'ubrn.config.yaml': ['name: react-native-lni-lexe', 'spec: NativeLniLexe'],
+  'ubrn.config.yaml': [
+    'name: react-native-lni-lexe',
+    'spec: NativeLniLexe',
+    'entrypoint: src/native.tsx',
+  ],
   'android/CMakeLists.txt': [
     'project(LniLexe)',
     'add_library(react-native-lni-lexe',
@@ -72,10 +76,12 @@ const expectedIdentity = {
     'lnilexe::cleanupRustCrate',
   ],
   'LniLexe.podspec': ['s.name         = "LniLexe"'],
-  'src/NativeLniLexe.ts': [
-    "TurboModuleRegistry.getEnforcing<Spec>('LniLexe')",
+  'src/NativeLniLexe.ts': ["TurboModuleRegistry.getEnforcing<Spec>('LniLexe')"],
+  'src/native.tsx': ["import installer from './NativeLniLexe'"],
+  'src/index.tsx': [
+    "export * from './native'",
+    "export * from './LexeLniNode'",
   ],
-  'src/index.tsx': ["import installer from './NativeLniLexe'"],
 };
 
 for (const [relativePath, requiredText] of Object.entries(expectedIdentity)) {
@@ -123,9 +129,14 @@ if (process.argv.includes('--generated')) {
     'lib/module/NativeLniLexe.js': [
       "TurboModuleRegistry.getEnforcing('LniLexe')",
     ],
-    'lib/module/index.js': ['import installer from "./NativeLniLexe.js"'],
-    'lib/typescript/src/NativeLniLexe.d.ts': [
-      'declare const _default: Spec;',
+    'lib/module/native.js': ['import installer from "./NativeLniLexe.js"'],
+    'lib/module/index.js': [
+      'export * from "./native.js"',
+      'export * from "./LexeLniNode.js"',
+    ],
+    'lib/typescript/src/NativeLniLexe.d.ts': ['declare const _default: Spec;'],
+    'lib/typescript/src/LexeLniNode.d.ts': [
+      'export declare class LexeLniNode implements LightningNode',
     ],
   };
 

@@ -39,10 +39,10 @@
     "example": "yarn workspace react-native-lni-lexe-example",
     "ubrn:ios": "IPHONEOS_DEPLOYMENT_TARGET=13.0 ubrn build ios --config ubrn.config.yaml --release --and-generate && yarn ubrn:postgenerate",
     "ubrn:android": "ubrn build android --config ubrn.config.yaml --release --and-generate && yarn ubrn:postgenerate",
-    "ubrn:postgenerate": "node scripts/fix-ubrn-cmake.mjs && prettier --write src/NativeLniLexe.ts src/index.tsx && yarn verify:native-identity",
-    "ubrn:clean": "rm -rf cpp/generated android/generated android/src/main/jniLibs ios/generated ReactNativeLexeFramework.xcframework src/generated src/NativeLniLexe.ts src/index.tsx",
+    "ubrn:postgenerate": "node scripts/fix-ubrn-cmake.mjs && prettier --write src/NativeLniLexe.ts src/native.tsx src/index.tsx && yarn verify:native-identity",
+    "ubrn:clean": "rm -rf cpp/generated android/generated android/src/main/jniLibs ios/generated ReactNativeLexeFramework.xcframework src/generated src/NativeLniLexe.ts src/native.tsx",
     "build": "bob build && yarn verify:generated-identity",
-    "release:prepare": "yarn ubrn:ios && yarn ubrn:android && yarn build && yarn lint && yarn typecheck && yarn verify:native && yarn verify:android",
+    "release:prepare": "yarn ubrn:ios && yarn ubrn:android && yarn build && yarn lint && yarn typecheck && yarn test && yarn verify:native && yarn verify:android",
     "release:dry-run": "yarn release:prepare && yarn pack:dry-run",
     "release:pack": "yarn release:prepare && npm pack",
     "release:public": "yarn release:prepare && yarn publish:public",
@@ -55,6 +55,7 @@
     "verify:generated-identity": "node scripts/verify-native-identity.mjs --generated",
     "verify:native": "node scripts/verify-native-artifacts.mjs && yarn verify:native-identity",
     "verify:native-identity": "node scripts/verify-native-identity.mjs",
+    "test": "vitest run",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\""
   },
@@ -84,6 +85,7 @@
     "@react-native-community/cli": "20.1.0",
     "@react-native/babel-preset": "0.85.0",
     "@react-native/eslint-config": "0.85.0",
+    "@sunnyln/lni": "0.2.16",
     "@types/react": "^19.2.0",
     "del-cli": "^7.0.0",
     "eslint": "^9.39.4",
@@ -95,9 +97,11 @@
     "react-native": "0.85.0",
     "react-native-builder-bob": "^0.43.0",
     "turbo": "^2.9.16",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
+    "@sunnyln/lni": "^0.2.16",
     "react": "*",
     "react-native": "*"
   },
