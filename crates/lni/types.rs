@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-use crate::{cln::ClnNode, lnd::LndNode, nwc::NwcNode, phoenixd::PhoenixdNode};
+#[cfg(not(feature = "uniffi"))]
+use crate::{cln::ClnNode, lexe::LexeNode, lnd::LndNode, nwc::NwcNode, phoenixd::PhoenixdNode};
 
 /// Enum for polymorphic node access in non-UniFFI builds
 #[cfg(not(feature = "uniffi"))]
@@ -12,6 +13,7 @@ pub enum LightningNodeEnum {
     Lnd(LndNode),
     Cln(ClnNode),
     Nwc(NwcNode),
+    Lexe(LexeNode),
 }
 
 /// The core LightningNode trait for polymorphic node operations.

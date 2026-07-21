@@ -1,0 +1,26 @@
+---
+name: react-native-lni-lexe
+
+rust:
+  directory: rust
+  manifestPath: Cargo.toml
+
+bindings:
+  cpp: cpp/generated
+  ts: src/generated
+
+android:
+  directory: android
+  apiLevel: 23
+  jniLibs: src/main/jniLibs
+  useSharedLibrary: true
+
+ios:
+  directory: ios
+  frameworkName: ReactNativeLexeFramework
+
+turboModule:
+  cpp: cpp
+  ts: src
+  spec: NativeLniLexe
+  entrypoint: src/index.tsx
