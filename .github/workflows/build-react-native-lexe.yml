@@ -17,12 +17,6 @@ on:
       - 'crates/lni/**'
       - 'bindings/react-native-lexe/**'
   workflow_dispatch:
-    inputs:
-      publish:
-        description: 'Publish the built tarball to npm'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: react-native-lni-lexe-${{ github.ref }}
@@ -42,6 +36,8 @@ jobs:
     steps:
       # actions/checkout@v4
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         # actions/setup-node@v4
@@ -78,6 +74,9 @@ jobs:
           corepack enable
           yarn install --immutable
 
+      - name: Verify Rust dependency lockfile
+        run: cargo metadata --locked --format-version 1 --no-deps >/dev/null
+
       - name: Build iOS and Android bindings
         working-directory: bindings/react-native-lexe
         run: |
@@ -111,16 +110,9 @@ jobs:
           npm pack --pack-destination "$package_dir"
           package=$(find "$package_dir" -maxdepth 1 -name '*.tgz' -print -quit)
           test -n "$package"
-          for artifact in \
-            package/ReactNativeLexeFramework.xcframework/Info.plist \
-            package/ReactNativeLexeFramework.xcframework/ios-arm64/libreact_native_lexe.a \
-            package/ReactNativeLexeFramework.xcframework/ios-arm64-simulator/libreact_native_lexe.a \
-            package/android/src/main/jniLibs/arm64-v8a/libreact_native_lexe.so \
-            package/android/src/main/jniLibs/armeabi-v7a/libreact_native_lexe.so \
-            package/android/src/main/jniLibs/x86/libreact_native_lexe.so \
-            package/android/src/main/jniLibs/x86_64/libreact_native_lexe.so; do
-            tar -tzf "$package" "$artifact" >/dev/null
-          done
+          while IFS= read -r artifact; do
+            tar -tzf "$package" "package/$artifact" >/dev/null
+          done < <(node scripts/verify-native-artifacts.mjs --list)
 
       - name: Upload npm tarball
         # actions/upload-artifact@v4
@@ -133,9 +125,7 @@ jobs:
 
   publish:
     name: Publish npm package
-    if: >-
-      startsWith(github.ref, 'refs/tags/react-native-lni-lexe-v') ||
-      inputs.publish == true
+    if: startsWith(github.ref, 'refs/tags/react-native-lni-lexe-v')
     needs: build
     runs-on: ubuntu-latest
     permissions:

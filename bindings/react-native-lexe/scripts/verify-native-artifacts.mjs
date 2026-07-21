@@ -38,6 +38,13 @@ const requiredArtifacts = [
   },
 ];
 
+if (process.argv.includes('--list')) {
+  for (const artifact of requiredArtifacts) {
+    console.log(artifact.path);
+  }
+  process.exit(0);
+}
+
 const missingArtifacts = requiredArtifacts.filter((artifact) => {
   try {
     // A real native library is much larger than a Git LFS pointer or an empty

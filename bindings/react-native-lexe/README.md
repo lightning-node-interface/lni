@@ -29,17 +29,18 @@ To install the package from a local LNI checkout while developing another app,
 first build the native libraries for the platforms you use:
 
 ```sh
-cd ../lni/bindings/react-native-lexe
+cd /path/to/lni/bindings/react-native-lexe
 corepack yarn install --immutable
 corepack yarn ubrn:ios
 corepack yarn ubrn:android
 corepack yarn build
 ```
 
-Then pass npm the package directory:
+Then return to the consuming app and pass npm the package directory:
 
 ```sh
-npm install ../lni/bindings/react-native-lexe
+cd /path/to/your-react-native-app
+npm install /path/to/lni/bindings/react-native-lexe
 ```
 
 Adjust the relative paths for your checkout layout. A published npm package

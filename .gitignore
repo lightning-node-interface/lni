@@ -1,6 +1,5 @@
-# Ignore Cargo-specific files
+# Keep the workspace lockfile for reproducible CI and release builds.
 **/target/
-/Cargo.lock
 
 # Ignore Rust-specific files
 **/*.rs.bk
@@ -132,9 +131,10 @@ bindings/lni_react_native/cpp/generated/**
 # Keep the React Native package's Android source tree; the broad Android
 # patterns above otherwise hide it.
 !bindings/react-native-lexe/android/
-!bindings/react-native-lexe/android/**
 !bindings/react-native-lexe/example/android/
-!bindings/react-native-lexe/example/android/**
+
+# The example uses Gradle's standard per-developer debug signing key. Do not
+# commit an additional private key from the generated project scaffold.
 bindings/react-native-lexe/example/android/app/debug.keystore
 
 # Release CI builds these and adds them to the npm tarball. They are not
