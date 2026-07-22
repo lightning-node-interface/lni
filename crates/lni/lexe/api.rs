@@ -132,6 +132,16 @@ fn payment_selector_is_empty(payment_hash: Option<&str>, search: Option<&str>) -
     payment_hash.is_none_or(str::is_empty) && search.is_none_or(str::is_empty)
 }
 
+fn lni_transaction_type(direction: PaymentDirection) -> Option<&'static str> {
+    match direction {
+        PaymentDirection::Inbound => Some("incoming"),
+        PaymentDirection::Outbound => Some("outgoing"),
+        // Lexe info payments are balance-neutral journal entries, not
+        // incoming or outgoing Lightning transactions.
+        PaymentDirection::Info => None,
+    }
+}
+
 fn payment_to_transaction(payment: &Payment) -> Result<Transaction, ApiError> {
     let invoice = payment
         .invoice
@@ -145,13 +155,15 @@ fn payment_to_transaction(payment: &Payment) -> Result<Transaction, ApiError> {
         .unwrap_or_default()
         .to_owned();
 
+    let type_ = lni_transaction_type(payment.direction).ok_or_else(|| {
+        api_error(
+            "Lexe payment",
+            "info journal entry is not an LNI transaction",
+        )
+    })?;
+
     Ok(Transaction {
-        type_: match payment.direction {
-            PaymentDirection::Inbound => "incoming",
-            PaymentDirection::Outbound => "outgoing",
-            PaymentDirection::Info => "info",
-        }
-        .to_owned(),
+        type_: type_.to_owned(),
         invoice,
         description,
         description_hash: String::new(),
@@ -304,6 +316,9 @@ async fn matching_payments(
         let next_index = page.next_index;
 
         for payment in page.payments {
+            if lni_transaction_type(payment.direction).is_none() {
+                continue;
+            }
             if !payment_matches(
                 &payment,
                 payment_hash,
@@ -728,6 +743,19 @@ mod tests {
         assert!(payment_selector_is_empty(Some(""), Some("")));
         assert!(!payment_selector_is_empty(Some("payment-hash"), None));
         assert!(!payment_selector_is_empty(None, Some("search")));
+    }
+
+    #[test]
+    fn balance_neutral_info_payments_are_not_lni_transactions() {
+        assert_eq!(
+            lni_transaction_type(PaymentDirection::Inbound),
+            Some("incoming")
+        );
+        assert_eq!(
+            lni_transaction_type(PaymentDirection::Outbound),
+            Some("outgoing")
+        );
+        assert_eq!(lni_transaction_type(PaymentDirection::Info), None);
     }
 
     #[test]

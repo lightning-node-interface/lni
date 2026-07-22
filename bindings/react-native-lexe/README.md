@@ -16,7 +16,7 @@ development build or a prebuilt native project.
 ## Installation
 
 ```sh
-npm install @sunnyln/react-native-lni-lexe
+npm install @sunnyln/lni @sunnyln/react-native-lni-lexe
 ```
 
 For iOS, install the CocoaPods dependencies after adding the package:
@@ -50,34 +50,42 @@ package whenever its Rust or generated native code changes.
 
 ## Usage
 
-```ts
-import {
-  LexeConfig,
-  LexeNode,
-  PayInvoiceParams,
-} from '@sunnyln/react-native-lni-lexe';
+`LexeLniNode` implements the shared `LightningNode` interface from
+`@sunnyln/lni`. Supply an app-writable directory; the package does not choose or
+create a filesystem location.
 
-const config = LexeConfig.create({
+```ts
+import { LexeLniNode } from '@sunnyln/react-native-lni-lexe';
+
+const node = new LexeLniNode({
   clientCredentials,
   dataDir: appWritableDataDirectory,
   network: 'mainnet',
 });
 
-const node = new LexeNode(config);
 const info = await node.getInfo();
+const payment = await node.payInvoice({ invoice, timeoutSeconds: 60 });
 
-const payment = await node.payInvoice(
-  PayInvoiceParams.create({
-    invoice,
-    timeoutSeconds: 60n,
-  })
-);
+node.close();
 
 // payment contains paymentHash, preimage, and feeMsats.
 ```
 
-Integer amounts and timestamps use JavaScript `bigint` because the Rust API
-uses 64-bit integers.
+The adapter accepts the shared LNI `number` fields and safely converts them to
+the native binding's 64-bit `bigint` fields. Native response values outside
+JavaScript's safe-integer range are rejected with `LniError` instead of being
+silently rounded. Native UniFFI errors are also exposed as the consumer's
+`@sunnyln/lni` `LniError` class.
+
+The generated `LexeNode`, record factories, and native `bigint` API remain
+available as lower-level exports from this package for applications that need
+them.
+
+For an Expo development-build application, create the directory in application
+code and pass its path to the adapter. For example, ZapriteP2P should create
+`Documents/lexe` with Expo FileSystem, construct `LexeLniNode` with that path,
+and pass the node directly to `payLniLightningQuote`. Expo FileSystem is not a
+dependency of this package.
 
 Keep client credentials and returned payment preimages in secure app storage.
 Do not include them in source control or production logs.
@@ -95,11 +103,12 @@ yarn ubrn:android
 yarn build
 ```
 
-`yarn release:dry-run` rebuilds the iOS and Android libraries, runs lint and
-type checking, links the React Native Android example for `arm64-v8a`, verifies
-that both iOS libraries and all four Android ABIs are present, and shows the
-contents of the npm package without publishing it. Generated TypeScript and C++
-bindings remain versioned so their changes can be reviewed.
+`yarn release:dry-run` rebuilds the iOS and Android libraries, runs the adapter
+tests, lint, and type checking, links the React Native Android example for
+`arm64-v8a`, verifies that both iOS libraries and all four Android ABIs are
+present, and shows the contents of the npm package without publishing it.
+Generated TypeScript and C++ bindings remain versioned so their changes can be
+reviewed.
 
 The scoped npm name is intentionally separate from the internal native identity.
 `ubrn.config.yaml` pins that identity to `react-native-lni-lexe`, which generates
@@ -108,7 +117,7 @@ The scoped npm name is intentionally separate from the internal native identity.
 
 ## Publishing
 
-The package version is declared in `package.json` and is currently `0.2.16`.
+The package version is declared in `package.json` and is currently `0.2.17`.
 For a local release, authenticate with npm and inspect the tarball before
 publishing:
 
@@ -122,7 +131,7 @@ corepack yarn release:pack
 corepack yarn release:public
 ```
 
-`release:pack` creates `sunnyln-react-native-lni-lexe-0.2.16.tgz` in this
+`release:pack` creates `sunnyln-react-native-lni-lexe-0.2.17.tgz` in this
 directory.
 `release:public` repeats the native build and validation before running
 `npm publish --access public`. An npm version can only be published once, so

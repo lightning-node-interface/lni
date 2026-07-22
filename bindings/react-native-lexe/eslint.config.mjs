@@ -24,6 +24,12 @@ export default defineConfig([
     },
   },
   {
-    ignores: ['node_modules/', 'lib/', 'src/generated/'],
+    ignores: [
+      'node_modules/',
+      'lib/',
+      'src/generated/',
+      '**/*.config.js',
+      'example/index.js',
+    ],
   },
 ]);
