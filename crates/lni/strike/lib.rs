@@ -281,6 +281,7 @@ mod tests {
         match NODE
             .pay_invoice(PayInvoiceParams {
                 invoice: TEST_PAYMENT_REQUEST.to_string(),
+                fee_limit_percentage: Some(1.0), // 1%
                 ..Default::default()
             })
             .await
@@ -301,6 +302,151 @@ mod tests {
                 // Don't panic as this requires valid API key and invoice
             }
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "requests a real Strike quote but never executes it"]
+    async fn test_inspect_pay_invoice_quote_fees() {
+        let response = reqwest::Client::new()
+            .post(format!(
+                "{}/payment-quotes/lightning",
+                BASE_URL.trim_end_matches('/')
+            ))
+            .bearer_auth(API_KEY.as_str())
+            .json(&crate::strike::types::PaymentQuoteRequest {
+                ln_invoice: TEST_PAYMENT_REQUEST.to_string(),
+                source_currency: "BTC".to_string(),
+                amount: None,
+            })
+            .send()
+            .await
+            .expect("Strike quote request should succeed");
+        let status = response.status();
+        let quote_body = response
+            .text()
+            .await
+            .expect("Strike quote response should be readable");
+        assert!(
+            status.is_success(),
+            "Strike quote request failed with HTTP status {status}"
+        );
+
+        let quote: crate::strike::types::PaymentQuoteResponse =
+            serde_json::from_str(&quote_body).expect("Strike quote should be valid JSON");
+        let lightning_network_fee_msats = quote
+            .lightning_network_fee
+            .as_ref()
+            .and_then(|fee| crate::utils::parse_btc_to_msats_exact(&fee.amount));
+        let total_fee_msats = quote
+            .total_fee
+            .as_ref()
+            .and_then(|fee| crate::utils::parse_btc_to_msats_exact(&fee.amount));
+
+        dbg!(&quote.lightning_network_fee);
+        dbg!(lightning_network_fee_msats);
+        dbg!(&quote.total_fee);
+        dbg!(total_fee_msats);
+        dbg!(&quote.amount);
+        dbg!(&quote.total_amount);
+    }
+
+    #[tokio::test]
+    async fn test_pay_invoice_rejects_fee_above_limit_without_executing_quote() {
+        use std::time::Duration;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test HTTP server should bind");
+        let address = listener
+            .local_addr()
+            .expect("test HTTP server should have an address");
+
+        let server = tokio::spawn(async move {
+            let (mut quote_socket, _) = listener
+                .accept()
+                .await
+                .expect("quote request should connect");
+            let mut request = vec![0_u8; 8_192];
+            let request_len = quote_socket
+                .read(&mut request)
+                .await
+                .expect("quote request should be readable");
+            let request = String::from_utf8_lossy(&request[..request_len]);
+            assert!(
+                request.starts_with("POST /payment-quotes/lightning "),
+                "expected Lightning quote request, got: {request}"
+            );
+
+            let quote = r#"{
+                "paymentQuoteId": "quote-1",
+                "validUntil": "2030-01-01T00:00:00Z",
+                "amount": { "amount": "0.00001000", "currency": "BTC" },
+                "lightningNetworkFee": { "amount": "0.00000001", "currency": "BTC" },
+                "totalFee": { "amount": "0.00000001", "currency": "BTC" },
+                "totalAmount": { "amount": "0.00001001", "currency": "BTC" }
+            }"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                quote.len(),
+                quote
+            );
+            quote_socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("quote response should be writable");
+            quote_socket
+                .shutdown()
+                .await
+                .expect("quote connection should close");
+
+            match tokio::time::timeout(Duration::from_millis(250), listener.accept()).await {
+                Ok(Ok((mut execute_socket, _))) => {
+                    let response = "HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+                    execute_socket
+                        .write_all(response.as_bytes())
+                        .await
+                        .expect("execute failure response should be writable");
+                    true
+                }
+                Ok(Err(error)) => panic!("test HTTP server failed while awaiting execute: {error}"),
+                Err(_) => false,
+            }
+        });
+
+        let node = StrikeNode::new(StrikeConfig {
+            base_url: Some(format!("http://{address}")),
+            api_key: "test-token".to_string(),
+            http_timeout: Some(5),
+            socks5_proxy: Some(String::new()),
+            accept_invalid_certs: Some(false),
+        });
+        let result = node
+            .pay_invoice(PayInvoiceParams {
+                invoice: "lnbc1testinvoice".to_string(),
+                fee_limit_msat: Some(0),
+                ..Default::default()
+            })
+            .await;
+        let execute_attempted = server.await.expect("test HTTP server should finish");
+
+        let error = result.expect_err("positive quoted fee should exceed the zero-msat limit");
+        dbg!(&error);
+        assert!(
+            matches!(&error, ApiError::FeeError(_)),
+            "expected FeeError rejection, got: {error:?}"
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("Set fee_limit_msat to at least 1000 (1 sat)"),
+            "unexpected fee-limit error: {error}"
+        );
+        assert!(
+            !execute_attempted,
+            "Strike must not call the quote execute endpoint after a fee-limit rejection"
+        );
     }
 
     #[tokio::test]

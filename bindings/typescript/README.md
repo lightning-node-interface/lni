@@ -58,6 +58,28 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+`StrikeNode.payInvoice` supports `feeLimitMsat` and `feeLimitPercentage`. Strike does not
+accept a maximum fee in the payment request, so LNI enforces the configured limit by
+validating the returned Lightning quote before executing it. Percentage limits use the
+payment amount before fees, and no fee limit is applied when neither field is provided.
+When a valid quote exceeds the configured limit, `payInvoice` throws a `FeeError` before
+execution. Its friendly message displays exact sat amounts and explains which
+`feeLimitMsat` or `feeLimitPercentage` setting can be increased to allow the payment.
+Invalid limit configuration or an unsafe/malformed quote remains an `InvalidInput`
+`LniError`.
+
+```ts
+import { FeeError } from '@sunnyln/lni';
+
+try {
+  await node.payInvoice({ invoice: invoice.invoice, feeLimitMsat: 1_000 });
+} catch (error) {
+  if (error instanceof FeeError) {
+    console.error(error.message);
+  }
+}
+```
+
 ### On-chain Bitcoin Payments
 
 On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and `BlinkNode`.

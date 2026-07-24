@@ -110,6 +110,59 @@ const listTxnParams = {
 const txns = await node.listTransactions(listTxnParams);
 ```
 
+`StrikeNode.payInvoice` supports `feeLimitMsat` and `feeLimitPercentage`. Strike does not
+accept a maximum fee in the payment request, so LNI enforces the configured limit by
+validating the returned Lightning quote before executing it. Percentage limits use the
+payment amount before fees, and no fee limit is applied when neither field is provided.
+
+#### Fee Errors
+
+Rust adapters can return `ApiError::FeeError(message)`, and TypeScript adapters can throw
+`FeeError`, when a valid quoted fee exceeds a caller-configured fee limit. The message
+includes exact sat amounts and the configured absolute or percentage limit. For Strike
+Lightning payments, this check happens after quote creation and before `/execute`, so an
+over-limit quote is not paid.
+
+```rust
+match node.pay_invoice(PayInvoiceParams {
+    invoice,
+    fee_limit_msat: Some(1_000),
+    ..Default::default()
+}).await {
+    Err(ApiError::FeeError(message)) => {
+        // Example:
+        // "Payment not sent: Strike quoted a Lightning fee of 4 sats, which is
+        // higher than your configured fee limit of 1 sat. Set fee_limit_msat to
+        // at least 4000 (4 sats) to allow this payment."
+        eprintln!("{message}");
+    }
+    Err(error) => return Err(error),
+    Ok(payment) => println!("payment hash: {}", payment.payment_hash),
+}
+```
+
+`FeeError` means the fee was determined successfully but exceeded the configured limit.
+Invalid limits—such as negative values or supplying both limit forms—and quotes whose
+fee cannot be determined safely continue to return `ApiError::InvalidInput`.
+
+```typescript
+import { FeeError } from '@sunnyln/lni';
+
+try {
+    await node.payInvoice({
+        invoice,
+        feeLimitMsat: 1_000,
+    });
+} catch (error) {
+    if (error instanceof FeeError) {
+        console.error(error.message);
+    }
+}
+```
+
+In TypeScript, invalid fee limits and quotes whose fee cannot be determined safely
+continue to throw `LniError` with `code === 'InvalidInput'`.
+
 #### Decode
 
 Decode helpers are pure local functions. They do not require node config.

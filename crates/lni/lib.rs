@@ -29,6 +29,12 @@ pub enum ApiError {
     LnurlError(String),
     #[error("NwcError: {code}: {message}")]
     Nwc { code: String, message: String },
+    /// A valid quoted or provider fee exceeds a caller-configured fee limit.
+    ///
+    /// The message identifies the quoted fee and the absolute or percentage limit
+    /// that was exceeded. Invalid fee-limit inputs remain `InvalidInput`.
+    #[error("FeeError: {0}")]
+    FeeError(String),
 }
 impl From<serde_json::Error> for ApiError {
     fn from(e: serde_json::Error) -> Self {

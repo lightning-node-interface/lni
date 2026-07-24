@@ -75,12 +75,51 @@ export function rHashToHex(value: string): string {
   }
 }
 
+const MSATS_PER_BTC = 100_000_000_000n;
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+export function parseBtcToMsatsExact(amount: string): bigint | undefined {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(amount);
+  if (!match) {
+    return undefined;
+  }
+
+  const fraction = match[2] ?? '';
+  if (fraction.length > 11 && /[1-9]/.test(fraction.slice(11))) {
+    return undefined;
+  }
+
+  const wholeMsats = BigInt(match[1]!) * MSATS_PER_BTC;
+  const fractionalMsats = BigInt((fraction.slice(0, 11) + '0'.repeat(11)).slice(0, 11));
+  const msats = wholeMsats + fractionalMsats;
+  return msats <= MAX_SAFE_INTEGER_BIGINT ? msats : undefined;
+}
+
+export function formatMsatsAsSats(amountMsats: bigint): string {
+  const isNegative = amountMsats < 0n;
+  const absoluteMsats = isNegative ? -amountMsats : amountMsats;
+  const wholeSats = absoluteMsats / 1_000n;
+  const fractionalMsats = absoluteMsats % 1_000n;
+  const sign = isNegative ? '-' : '';
+  const amount =
+    fractionalMsats === 0n
+      ? `${sign}${wholeSats}`
+      : `${sign}${wholeSats}.${fractionalMsats.toString().padStart(3, '0').replace(/0+$/, '')}`;
+  const unit = absoluteMsats === 1_000n ? 'sat' : 'sats';
+
+  return `${amount} ${unit}`;
+}
+
 export function btcToMsats(amount: string | number): number {
-  const num = typeof amount === 'string' ? Number(amount) : amount;
-  if (!Number.isFinite(num)) {
+  if (typeof amount === 'string') {
+    const msats = parseBtcToMsatsExact(amount);
+    return msats === undefined ? 0 : Number(msats);
+  }
+
+  if (!Number.isFinite(amount)) {
     return 0;
   }
-  return Math.round(num * 100_000_000_000);
+  return Math.round(amount * 100_000_000_000);
 }
 
 export function msatsToBtc(amountMsats: number): string {

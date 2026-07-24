@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NwcError } from '../errors.js';
+import { FeeError, NwcError } from '../errors.js';
+import { formatMsatsAsSats } from '../internal/transform.js';
 import { StrikeNode } from '../nodes/strike.js';
 import type { FetchLike } from '../types.js';
 
@@ -133,6 +134,217 @@ describe('StrikeNode error normalization', () => {
 });
 
 describe('StrikeNode Lightning payments', () => {
+  function makeQuoteNode(quote: Record<string, unknown>) {
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = String(input);
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+        return jsonResponse({ paymentQuoteId: 'quote-1', ...quote });
+      }
+
+      if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+        return jsonResponse({
+          paymentId: 'payment-1',
+          lightning: {
+            preImage: 'execute-preimage',
+            networkFee: { amount: '0', currency: 'BTC' },
+          },
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    return {
+      fetchMock,
+      node: new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      ),
+    };
+  }
+
+  it.each([
+    {
+      relation: 'below',
+      quote: {
+        lightningNetworkFee: { amount: '0.00000000999', currency: 'BTC' },
+      },
+      limit: 1_000,
+      executes: true,
+    },
+    {
+      relation: 'equal to',
+      quote: {
+        totalFee: { amount: '0.00000001000', currency: 'BTC' },
+      },
+      limit: 1_000,
+      executes: true,
+    },
+    {
+      relation: 'above',
+      quote: {
+        lightningNetworkFee: { amount: '0.00000001001', currency: 'BTC' },
+      },
+      limit: 1_000,
+      executes: false,
+    },
+  ])('$relation feeLimitMsat is enforced before execution', async ({ quote, limit, executes }) => {
+    const { fetchMock, node } = makeQuoteNode(quote);
+    const payment = node.payInvoice({ invoice: BOLT11, feeLimitMsat: limit });
+
+    if (executes) {
+      await expect(payment).resolves.toMatchObject({ preimage: 'execute-preimage' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } else {
+      await expect(payment).rejects.toMatchObject({
+        name: 'FeeError',
+        code: 'FeeError',
+        message:
+          'Payment not sent: Strike quoted a Lightning fee of 1.001 sats, which is higher than your configured fee limit of 1 sat. Set feeLimitMsat to at least 1001 (1.001 sats) to allow this payment.',
+      });
+      await expect(payment).rejects.toBeInstanceOf(FeeError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it.each([
+    { relation: 'below', limit: 1.01, executes: true },
+    { relation: 'equal to', limit: 1, executes: true },
+    { relation: 'above', limit: 0.99, executes: false },
+  ])(
+    '$relation feeLimitPercentage is enforced against the payment amount',
+    async ({ limit, executes }) => {
+      const { fetchMock, node } = makeQuoteNode({
+        amount: { amount: '0.00001000', currency: 'BTC' },
+        lightningNetworkFee: { amount: '0.00000010', currency: 'BTC' },
+      });
+      const payment = node.payInvoice({
+        invoice: BOLT11,
+        feeLimitPercentage: limit,
+      });
+
+      if (executes) {
+        await expect(payment).resolves.toMatchObject({ preimage: 'execute-preimage' });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } else {
+        await expect(payment).rejects.toMatchObject({
+          name: 'FeeError',
+          code: 'FeeError',
+          message:
+            'Payment not sent: Strike quoted a Lightning fee of 10 sats for a payment amount of 1000 sats, which is higher than your feeLimitPercentage of 0.99%. Increase feeLimitPercentage or set feeLimitMsat to at least 10000 (10 sats) to allow this payment.',
+        });
+        await expect(payment).rejects.toBeInstanceOf(FeeError);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      }
+    }
+  );
+
+  it('allows a fee-free direct Strike quote when amount and totalAmount are equal', async () => {
+    const { fetchMock, node } = makeQuoteNode({
+      amount: { amount: '0.00001000', currency: 'BTC' },
+      totalAmount: { amount: '0.00001000', currency: 'BTC' },
+    });
+
+    await expect(node.payInvoice({ invoice: BOLT11, feeLimitMsat: 0 })).resolves.toMatchObject({
+      preimage: 'execute-preimage',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects both fee limit forms before creating a quote', async () => {
+    const { fetchMock, node } = makeQuoteNode({});
+
+    await expect(
+      node.payInvoice({
+        invoice: BOLT11,
+        feeLimitMsat: 1_000,
+        feeLimitPercentage: 1,
+      })
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+      message: 'Cannot set both feeLimitMsat and feeLimitPercentage.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['negative absolute limit', { feeLimitMsat: -1 }],
+    ['fractional absolute limit', { feeLimitMsat: 0.5 }],
+    ['non-finite absolute limit', { feeLimitMsat: Number.POSITIVE_INFINITY }],
+    ['unsafe absolute limit', { feeLimitMsat: Number.MAX_SAFE_INTEGER + 1 }],
+    ['negative percentage limit', { feeLimitPercentage: -0.1 }],
+    ['non-finite percentage limit', { feeLimitPercentage: Number.NaN }],
+    ['unsafe percentage limit', { feeLimitPercentage: Number.MAX_SAFE_INTEGER + 1 }],
+  ])('rejects an invalid %s', async (_name, limit) => {
+    const { fetchMock, node } = makeQuoteNode({});
+
+    await expect(node.payInvoice({ invoice: BOLT11, ...limit })).rejects.toMatchObject({
+      code: 'InvalidInput',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', {}],
+    [
+      'malformed',
+      {
+        lightningNetworkFee: { amount: '0.000000010005', currency: 'BTC' },
+      },
+    ],
+    [
+      'non-BTC',
+      {
+        totalFee: { amount: '0.00000001', currency: 'USD' },
+      },
+    ],
+  ])('fails closed when a limited quote fee is %s', async (_shape, quote) => {
+    const { fetchMock, node } = makeQuoteNode(quote);
+
+    await expect(node.payInvoice({ invoice: BOLT11, feeLimitMsat: 1_000 })).rejects.toMatchObject({
+      code: 'InvalidInput',
+      message:
+        'Cannot enforce feeLimitMsat 1000 msats because the Strike quote fee could not be determined safely.',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when a percentage-limited quote payment amount is missing', async () => {
+    const { fetchMock, node } = makeQuoteNode({
+      lightningNetworkFee: { amount: '0.00000001', currency: 'BTC' },
+    });
+
+    await expect(node.payInvoice({ invoice: BOLT11, feeLimitPercentage: 1 })).rejects.toMatchObject(
+      {
+        code: 'InvalidInput',
+        message:
+          'Cannot enforce feeLimitPercentage 1% because the Strike quote payment amount could not be determined safely.',
+      }
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves execution behavior when neither fee limit is supplied', async () => {
+    const { fetchMock, node } = makeQuoteNode({
+      lightningNetworkFee: { amount: 'malformed', currency: 'BTC' },
+    });
+
+    await expect(node.payInvoice({ invoice: BOLT11 })).resolves.toMatchObject({
+      preimage: 'execute-preimage',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [0n, '0 sats'],
+    [1_000n, '1 sat'],
+    [1_001n, '1.001 sats'],
+    [4_000n, '4 sats'],
+  ])('formats %s msats as exact sats in fee errors', (msats, expected) => {
+    expect(formatMsatsAsSats(msats)).toBe(expected);
+  });
+
   it('preserves a preimage returned by execute when payment.read is unavailable', async () => {
     const fetchMock = vi.fn<FetchLike>(async (input) => {
       const url = String(input);

@@ -6,6 +6,64 @@ use serde_json::{json, Map, Value};
 use std::error::Error;
 use std::str::FromStr;
 
+const MSATS_PER_BTC: i128 = 100_000_000_000;
+
+pub fn parse_btc_to_msats_exact(amount: &str) -> Option<i64> {
+    let (whole, fraction) = match amount.split_once('.') {
+        Some((whole, fraction)) => (whole, fraction),
+        None => (amount, ""),
+    };
+    if whole.is_empty()
+        || !whole.bytes().all(|byte| byte.is_ascii_digit())
+        || (!fraction.is_empty() && !fraction.bytes().all(|byte| byte.is_ascii_digit()))
+        || amount.ends_with('.')
+    {
+        return None;
+    }
+
+    if fraction.len() > 11 && fraction.as_bytes()[11..].iter().any(|byte| *byte != b'0') {
+        return None;
+    }
+
+    let whole_msats = whole.parse::<i128>().ok()?.checked_mul(MSATS_PER_BTC)?;
+    let significant_fraction = &fraction[..fraction.len().min(11)];
+    let fractional_msats = if significant_fraction.is_empty() {
+        0
+    } else {
+        significant_fraction
+            .parse::<i128>()
+            .ok()?
+            .checked_mul(10_i128.checked_pow((11 - significant_fraction.len()) as u32)?)?
+    };
+
+    i64::try_from(whole_msats.checked_add(fractional_msats)?).ok()
+}
+
+pub fn msats_to_btc(amount_msats: i64) -> String {
+    format!("{:.8}", amount_msats as f64 / MSATS_PER_BTC as f64)
+}
+
+pub fn format_msats_as_sats(amount_msats: i64) -> String {
+    let is_negative = amount_msats < 0;
+    let absolute_msats = i128::from(amount_msats).abs();
+    let whole_sats = absolute_msats / 1_000;
+    let fractional_msats = absolute_msats % 1_000;
+    let sign = if is_negative { "-" } else { "" };
+    let amount = if fractional_msats == 0 {
+        format!("{sign}{whole_sats}")
+    } else {
+        let fraction = format!("{fractional_msats:03}");
+        format!("{sign}{whole_sats}.{}", fraction.trim_end_matches('0'))
+    };
+    let unit = if absolute_msats == 1_000 {
+        "sat"
+    } else {
+        "sats"
+    };
+
+    format!("{amount} {unit}")
+}
+
 pub fn calculate_fee_msats(
     bolt11: &str,
     fee_percentage: f64,
@@ -283,6 +341,26 @@ mod decode_tests {
         "lno1pgx9getnwss8vetrw3hhyuckyypwa3eyt44h6txtxquqh7lz5djge4afgfjn7k4rgrkuag0jsd5xvxg";
     const BOLT12_OFFER_WITH_CURRENCY_AMOUNT: &str = "lno1qcp4256ypqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj";
     const BOLT12_OFFER_WITH_PATH: &str = "lno1pgx9getnwss8vetrw3hhyucs5ypjgef743p5fzqq9nqxh0ah7y87rzv3ud0eleps9kl2d5348hq2k8qzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqpqqqqqqqqqqqqqqqqqqqqqqqqqqqzqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqqzq3zyg3zyg3zyg3vggzamrjghtt05kvkvpcp0a79gmy3nt6jsn98ad2xs8de6sl9qmgvcvs";
+
+    #[test]
+    fn parses_btc_amounts_to_msats_exactly() {
+        assert_eq!(super::parse_btc_to_msats_exact("0.00000000999"), Some(999));
+        assert_eq!(
+            super::parse_btc_to_msats_exact("0.00000001001"),
+            Some(1_001)
+        );
+        assert_eq!(
+            super::parse_btc_to_msats_exact("1.00000000000"),
+            Some(100_000_000_000)
+        );
+        assert_eq!(super::parse_btc_to_msats_exact("0.000000000001"), None);
+        assert_eq!(super::parse_btc_to_msats_exact("not-an-amount"), None);
+        assert_eq!(super::msats_to_btc(1_000), "0.00000001");
+        assert_eq!(super::format_msats_as_sats(0), "0 sats");
+        assert_eq!(super::format_msats_as_sats(1_000), "1 sat");
+        assert_eq!(super::format_msats_as_sats(1_001), "1.001 sats");
+        assert_eq!(super::format_msats_as_sats(4_000), "4 sats");
+    }
 
     #[test]
     fn decodes_bolt11_as_json() {

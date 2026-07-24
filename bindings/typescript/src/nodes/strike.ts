@@ -1,5 +1,11 @@
 import { decode as decodeBolt11, decodeBolt11ToJson, decodeOfferToJson } from '../decode.js';
-import { LniError, NwcError, type NwcErrorCode, type NwcErrorOperation } from '../errors.js';
+import {
+  FeeError,
+  LniError,
+  NwcError,
+  type NwcErrorCode,
+  type NwcErrorOperation,
+} from '../errors.js';
 import {
   findStringProperty,
   providerInfoFromJsonErrorBody,
@@ -13,8 +19,10 @@ import {
   btcToMsats,
   emptyNodeInfo,
   emptyTransaction,
+  formatMsatsAsSats,
   matchesSearch,
   msatsToBtc,
+  parseBtcToMsatsExact,
   parseOptionalNumber,
   toUnixSeconds,
 } from '../internal/transform.js';
@@ -71,6 +79,10 @@ interface StrikeCreateReceiveResponse {
 
 interface StrikePaymentQuoteResponse {
   paymentQuoteId: string;
+  lightningNetworkFee?: StrikeAmount;
+  amount?: StrikeAmount;
+  totalFee?: StrikeAmount;
+  totalAmount?: StrikeAmount;
 }
 
 interface StrikeLightningPaymentDetails {
@@ -206,6 +218,133 @@ function onchainAmountToSats(amount?: StrikeAmount): number | undefined {
 
   const btc = Number.parseFloat(amount.amount);
   return Number.isFinite(btc) ? Math.round(btc * 100_000_000) : undefined;
+}
+
+function strikeBtcAmountToMsats(amount: unknown): bigint | undefined {
+  if (!isRecord(amount) || amount.currency !== 'BTC' || typeof amount.amount !== 'string') {
+    return undefined;
+  }
+
+  return parseBtcToMsatsExact(amount.amount);
+}
+
+function strikeQuoteFeeMsats(quote: StrikePaymentQuoteResponse): bigint | undefined {
+  let hasQuotedFee = false;
+  for (const fee of [quote.lightningNetworkFee, quote.totalFee]) {
+    if (fee !== undefined && fee !== null) {
+      hasQuotedFee = true;
+      const feeMsats = strikeBtcAmountToMsats(fee);
+      if (feeMsats !== undefined) {
+        return feeMsats;
+      }
+    }
+  }
+
+  if (hasQuotedFee) {
+    return undefined;
+  }
+
+  // Strike-to-Strike/direct quotes can omit fee properties. The quote is provably
+  // fee-free when the sender's total and the recipient amount are identical.
+  const amountMsats = strikeBtcAmountToMsats(quote.amount);
+  const totalAmountMsats = strikeBtcAmountToMsats(quote.totalAmount);
+  if (amountMsats !== undefined && totalAmountMsats === amountMsats) {
+    return 0n;
+  }
+
+  return undefined;
+}
+
+function decimalNumberToFraction(value: number): { numerator: bigint; denominator: bigint } {
+  const match = /^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/.exec(value.toString().toLowerCase());
+  if (!match) {
+    throw new LniError('InvalidInput', 'feeLimitPercentage is not a valid decimal number.');
+  }
+
+  const fraction = match[2] ?? '';
+  const exponent = Number(match[3] ?? 0);
+  let numerator = BigInt(`${match[1]}${fraction}`);
+  const scale = fraction.length - exponent;
+  if (scale <= 0) {
+    numerator *= 10n ** BigInt(-scale);
+    return { numerator, denominator: 1n };
+  }
+
+  return { numerator, denominator: 10n ** BigInt(scale) };
+}
+
+function assertValidLightningFeeLimits(params: PayInvoiceParams): void {
+  if (params.feeLimitMsat !== undefined && params.feeLimitPercentage !== undefined) {
+    throw new LniError('InvalidInput', 'Cannot set both feeLimitMsat and feeLimitPercentage.');
+  }
+
+  if (
+    params.feeLimitMsat !== undefined &&
+    (!Number.isSafeInteger(params.feeLimitMsat) || params.feeLimitMsat < 0)
+  ) {
+    throw new LniError('InvalidInput', 'feeLimitMsat must be a non-negative safe integer.');
+  }
+
+  if (
+    params.feeLimitPercentage !== undefined &&
+    (!Number.isFinite(params.feeLimitPercentage) ||
+      params.feeLimitPercentage < 0 ||
+      params.feeLimitPercentage > Number.MAX_SAFE_INTEGER)
+  ) {
+    throw new LniError(
+      'InvalidInput',
+      'feeLimitPercentage must be a non-negative finite safe number.'
+    );
+  }
+}
+
+function assertStrikeLightningFeeLimit(
+  quote: StrikePaymentQuoteResponse,
+  params: PayInvoiceParams
+): void {
+  if (params.feeLimitMsat === undefined && params.feeLimitPercentage === undefined) {
+    return;
+  }
+
+  const feeMsats = strikeQuoteFeeMsats(quote);
+  if (feeMsats === undefined) {
+    const configuredLimit =
+      params.feeLimitMsat !== undefined
+        ? `feeLimitMsat ${params.feeLimitMsat} msats`
+        : `feeLimitPercentage ${params.feeLimitPercentage}%`;
+    throw new LniError(
+      'InvalidInput',
+      `Cannot enforce ${configuredLimit} because the Strike quote fee could not be determined safely.`
+    );
+  }
+
+  if (params.feeLimitMsat !== undefined) {
+    if (feeMsats > BigInt(params.feeLimitMsat)) {
+      const quotedFeeSats = formatMsatsAsSats(feeMsats);
+      const limitSats = formatMsatsAsSats(BigInt(params.feeLimitMsat));
+      throw new FeeError(
+        `Payment not sent: Strike quoted a Lightning fee of ${quotedFeeSats}, which is higher than your configured fee limit of ${limitSats}. Set feeLimitMsat to at least ${feeMsats} (${quotedFeeSats}) to allow this payment.`
+      );
+    }
+    return;
+  }
+
+  const amountMsats = strikeBtcAmountToMsats(quote.amount);
+  if (amountMsats === undefined) {
+    throw new LniError(
+      'InvalidInput',
+      `Cannot enforce feeLimitPercentage ${params.feeLimitPercentage}% because the Strike quote payment amount could not be determined safely.`
+    );
+  }
+
+  const percentage = decimalNumberToFraction(params.feeLimitPercentage!);
+  if (feeMsats * 100n * percentage.denominator > amountMsats * percentage.numerator) {
+    const quotedFeeSats = formatMsatsAsSats(feeMsats);
+    const paymentAmountSats = formatMsatsAsSats(amountMsats);
+    throw new FeeError(
+      `Payment not sent: Strike quoted a Lightning fee of ${quotedFeeSats} for a payment amount of ${paymentAmountSats}, which is higher than your feeLimitPercentage of ${params.feeLimitPercentage}%. Increase feeLimitPercentage or set feeLimitMsat to at least ${feeMsats} (${quotedFeeSats}) to allow this payment.`
+    );
+  }
 }
 
 function defaultOnchainFee(): OnchainFeePreference {
@@ -599,6 +738,8 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   }
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
+    assertValidLightningFeeLimits(params);
+
     const quote = await this.postJson<StrikePaymentQuoteResponse>(
       '/payment-quotes/lightning',
       {
@@ -615,6 +756,8 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       undefined,
       'pay_invoice'
     );
+
+    assertStrikeLightningFeeLimit(quote, params);
 
     const execution = await this.patchJson<StrikePaymentExecutionResponse>(
       `/payment-quotes/${quote.paymentQuoteId}/execute`,
