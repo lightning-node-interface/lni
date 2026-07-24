@@ -62,6 +62,8 @@ const txs = await node.listTransactions({ from: 0, limit: 10 });
 accept a maximum fee in the payment request, so LNI enforces the configured limit by
 validating the returned Lightning quote before executing it. Percentage limits use the
 payment amount before fees, and no fee limit is applied when neither field is provided.
+When Strike returns both `totalFee` and `lightningNetworkFee`, LNI enforces `totalFee`
+because it represents the complete quoted fee.
 When a valid quote exceeds the configured limit, `payInvoice` throws a `FeeError` before
 execution. Its friendly message displays exact sat amounts and explains which
 `feeLimitMsat` or `feeLimitPercentage` setting can be increased to allow the payment.

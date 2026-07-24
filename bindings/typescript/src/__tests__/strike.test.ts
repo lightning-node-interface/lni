@@ -208,6 +208,21 @@ describe('StrikeNode Lightning payments', () => {
     }
   });
 
+  it('enforces totalFee when both quoted fee fields differ', async () => {
+    const { fetchMock, node } = makeQuoteNode({
+      lightningNetworkFee: { amount: '0.00000001', currency: 'BTC' },
+      totalFee: { amount: '0.00000100', currency: 'BTC' },
+    });
+
+    await expect(node.payInvoice({ invoice: BOLT11, feeLimitMsat: 2_000 })).rejects.toMatchObject({
+      name: 'FeeError',
+      code: 'FeeError',
+      message:
+        'Payment not sent: Strike quoted a Lightning fee of 100 sats, which is higher than your configured fee limit of 2 sats. Set feeLimitMsat to at least 100000 (100 sats) to allow this payment.',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { relation: 'below', limit: 1.01, executes: true },
     { relation: 'equal to', limit: 1, executes: true },
@@ -291,6 +306,13 @@ describe('StrikeNode Lightning payments', () => {
       'malformed',
       {
         lightningNetworkFee: { amount: '0.000000010005', currency: 'BTC' },
+      },
+    ],
+    [
+      'malformed total with a valid network component',
+      {
+        lightningNetworkFee: { amount: '0.00000001', currency: 'BTC' },
+        totalFee: { amount: 'malformed', currency: 'BTC' },
       },
     ],
     [

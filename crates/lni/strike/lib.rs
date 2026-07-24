@@ -384,8 +384,8 @@ mod tests {
                 "validUntil": "2030-01-01T00:00:00Z",
                 "amount": { "amount": "0.00001000", "currency": "BTC" },
                 "lightningNetworkFee": { "amount": "0.00000001", "currency": "BTC" },
-                "totalFee": { "amount": "0.00000001", "currency": "BTC" },
-                "totalAmount": { "amount": "0.00001001", "currency": "BTC" }
+                "totalFee": { "amount": "0.00000100", "currency": "BTC" },
+                "totalAmount": { "amount": "0.00001100", "currency": "BTC" }
             }"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
@@ -425,13 +425,13 @@ mod tests {
         let result = node
             .pay_invoice(PayInvoiceParams {
                 invoice: "lnbc1testinvoice".to_string(),
-                fee_limit_msat: Some(0),
+                fee_limit_msat: Some(2_000),
                 ..Default::default()
             })
             .await;
         let execute_attempted = server.await.expect("test HTTP server should finish");
 
-        let error = result.expect_err("positive quoted fee should exceed the zero-msat limit");
+        let error = result.expect_err("total quoted fee should exceed the two-sat limit");
         dbg!(&error);
         assert!(
             matches!(&error, ApiError::FeeError(_)),
@@ -440,7 +440,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("Set fee_limit_msat to at least 1000 (1 sat)"),
+                .contains("Set fee_limit_msat to at least 100000 (100 sats)"),
             "unexpected fee-limit error: {error}"
         );
         assert!(

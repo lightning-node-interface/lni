@@ -229,19 +229,14 @@ function strikeBtcAmountToMsats(amount: unknown): bigint | undefined {
 }
 
 function strikeQuoteFeeMsats(quote: StrikePaymentQuoteResponse): bigint | undefined {
-  let hasQuotedFee = false;
-  for (const fee of [quote.lightningNetworkFee, quote.totalFee]) {
-    if (fee !== undefined && fee !== null) {
-      hasQuotedFee = true;
-      const feeMsats = strikeBtcAmountToMsats(fee);
-      if (feeMsats !== undefined) {
-        return feeMsats;
-      }
-    }
+  // totalFee is the complete fee charged for the quote. Prefer it over the
+  // Lightning network component so provider fees cannot bypass the guardrail.
+  if (quote.totalFee !== undefined && quote.totalFee !== null) {
+    return strikeBtcAmountToMsats(quote.totalFee);
   }
 
-  if (hasQuotedFee) {
-    return undefined;
+  if (quote.lightningNetworkFee !== undefined && quote.lightningNetworkFee !== null) {
+    return strikeBtcAmountToMsats(quote.lightningNetworkFee);
   }
 
   // Strike-to-Strike/direct quotes can omit fee properties. The quote is provably

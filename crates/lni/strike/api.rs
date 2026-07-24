@@ -164,19 +164,14 @@ fn strike_btc_amount_to_msats(amount: Option<&Amount>) -> Option<i64> {
 }
 
 fn strike_quote_fee_msats(quote: &PaymentQuoteResponse) -> Option<i64> {
-    let quoted_fees = [
-        quote.lightning_network_fee.as_ref(),
-        quote.total_fee.as_ref(),
-    ];
-    let has_quoted_fee = quoted_fees.iter().any(Option::is_some);
-    for fee in quoted_fees.into_iter().flatten() {
-        if let Some(fee_msats) = strike_btc_amount_to_msats(Some(fee)) {
-            return Some(fee_msats);
-        }
+    // total_fee is the complete fee charged for the quote. Prefer it over the
+    // Lightning network component so provider fees cannot bypass the guardrail.
+    if quote.total_fee.is_some() {
+        return strike_btc_amount_to_msats(quote.total_fee.as_ref());
     }
 
-    if has_quoted_fee {
-        return None;
+    if quote.lightning_network_fee.is_some() {
+        return strike_btc_amount_to_msats(quote.lightning_network_fee.as_ref());
     }
 
     let amount_msats = strike_btc_amount_to_msats(quote.amount.as_ref());
@@ -1550,6 +1545,19 @@ mod tests {
         assert!(error
             .to_string()
             .contains("Set fee_limit_msat to at least 1001 (1.001 sats)"));
+
+        let total_fee_error = assert_strike_lightning_fee_limit(
+            &lightning_quote(None, Some("0.00000001"), Some("0.00000100"), None),
+            &PayInvoiceParams {
+                fee_limit_msat: Some(2_000),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(&total_fee_error, ApiError::FeeError(_)));
+        assert!(total_fee_error
+            .to_string()
+            .contains("Set fee_limit_msat to at least 100000 (100 sats)"));
     }
 
     #[test]
@@ -1589,7 +1597,7 @@ mod tests {
             fee_limit_msat: Some(1_000),
             ..Default::default()
         };
-        let quote = lightning_quote(None, Some("0.000000010005"), None, None);
+        let quote = lightning_quote(None, Some("0.00000001"), Some("0.000000010005"), None);
 
         let error = assert_strike_lightning_fee_limit(&quote, &params).unwrap_err();
         assert!(error

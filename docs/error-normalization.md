@@ -56,7 +56,9 @@ Current Strike Lightning behavior:
 
 Strike creates the quote before enforcing the limit because its API does not accept a
 maximum fee parameter. LNI checks the returned quote before calling `/execute`; a
-`FeeError` therefore means the quote was not executed.
+`FeeError` therefore means the quote was not executed. When Strike supplies both its
+total fee and Lightning network fee fields, LNI enforces the total fee; it uses the
+network fee only when the total fee is absent.
 
 ## Fallback Rules
 
