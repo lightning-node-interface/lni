@@ -26,6 +26,8 @@ use reqwest::header;
 // Docs
 // https://docs.strike.me/api/
 
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+
 fn async_client(config: &StrikeConfig) -> reqwest::Client {
     let mut headers = reqwest::header::HeaderMap::new();
     let auth_header = format!("Bearer {}", config.api_key);
@@ -150,6 +152,157 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
         .parse::<f64>()
         .ok()
         .map(|btc| (btc * 100_000_000.0).round() as i64)
+}
+
+fn strike_btc_amount_to_msats(amount: Option<&Amount>) -> Option<i64> {
+    let amount = amount?;
+    if amount.currency != "BTC" {
+        return None;
+    }
+
+    crate::utils::parse_btc_to_msats_exact(&amount.amount)
+}
+
+fn strike_quote_fee_msats(quote: &PaymentQuoteResponse) -> Option<i64> {
+    // total_fee is the complete fee charged for the quote. Prefer it over the
+    // Lightning network component so provider fees cannot bypass the guardrail.
+    if quote.total_fee.is_some() {
+        return strike_btc_amount_to_msats(quote.total_fee.as_ref());
+    }
+
+    if quote.lightning_network_fee.is_some() {
+        return strike_btc_amount_to_msats(quote.lightning_network_fee.as_ref());
+    }
+
+    let amount_msats = strike_btc_amount_to_msats(quote.amount.as_ref());
+    let total_amount_msats = strike_btc_amount_to_msats(quote.total_amount.as_ref());
+    if amount_msats.is_some() && total_amount_msats == amount_msats {
+        return Some(0);
+    }
+
+    None
+}
+
+fn decimal_to_fraction(value: f64) -> Option<(i128, i128)> {
+    let value = value.to_string().to_ascii_lowercase();
+    let (mantissa, exponent) = match value.split_once('e') {
+        Some((mantissa, exponent)) => (mantissa, exponent.parse::<i32>().ok()?),
+        None => (value.as_str(), 0),
+    };
+    let (whole, fraction) = match mantissa.split_once('.') {
+        Some((whole, fraction)) => (whole, fraction),
+        None => (mantissa, ""),
+    };
+    if whole.is_empty()
+        || !whole.bytes().all(|byte| byte.is_ascii_digit())
+        || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+
+    let numerator = format!("{}{}", whole, fraction).parse::<i128>().ok()?;
+    let scale = i32::try_from(fraction.len()).ok()?.checked_sub(exponent)?;
+    if scale <= 0 {
+        return Some((
+            numerator.checked_mul(10_i128.checked_pow(scale.unsigned_abs())?)?,
+            1,
+        ));
+    }
+
+    Some((numerator, 10_i128.checked_pow(scale as u32)?))
+}
+
+fn assert_valid_lightning_fee_limits(params: &PayInvoiceParams) -> Result<(), ApiError> {
+    if params.fee_limit_msat.is_some() && params.fee_limit_percentage.is_some() {
+        return Err(ApiError::InvalidInput(
+            "Cannot set both fee_limit_msat and fee_limit_percentage.".to_string(),
+        ));
+    }
+
+    if params
+        .fee_limit_msat
+        .is_some_and(|fee_limit_msat| fee_limit_msat < 0)
+    {
+        return Err(ApiError::InvalidInput(
+            "fee_limit_msat must be a non-negative integer.".to_string(),
+        ));
+    }
+
+    if params.fee_limit_percentage.is_some_and(|percentage| {
+        !percentage.is_finite() || percentage < 0.0 || percentage > MAX_SAFE_INTEGER
+    }) {
+        return Err(ApiError::InvalidInput(
+            "fee_limit_percentage must be a non-negative finite safe number.".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn assert_strike_lightning_fee_limit(
+    quote: &PaymentQuoteResponse,
+    params: &PayInvoiceParams,
+) -> Result<(), ApiError> {
+    if params.fee_limit_msat.is_none() && params.fee_limit_percentage.is_none() {
+        return Ok(());
+    }
+
+    let fee_msats = strike_quote_fee_msats(quote).ok_or_else(|| {
+        let configured_limit = match params.fee_limit_msat {
+            Some(limit) => format!("fee_limit_msat {} msats", limit),
+            None => format!(
+                "fee_limit_percentage {}%",
+                params.fee_limit_percentage.unwrap_or_default()
+            ),
+        };
+        ApiError::InvalidInput(format!(
+            "Cannot enforce {} because the Strike quote fee could not be determined safely.",
+            configured_limit
+        ))
+    })?;
+
+    if let Some(limit) = params.fee_limit_msat {
+        if fee_msats > limit {
+            let quoted_fee_sats = crate::utils::format_msats_as_sats(fee_msats);
+            let limit_sats = crate::utils::format_msats_as_sats(limit);
+            return Err(ApiError::FeeError(format!(
+                "Payment not sent: Strike quoted a Lightning fee of {}, which is higher than your configured fee limit of {}. Set fee_limit_msat to at least {} ({}) to allow this payment.",
+                quoted_fee_sats, limit_sats, fee_msats, quoted_fee_sats
+            )));
+        }
+        return Ok(());
+    }
+
+    let percentage = params.fee_limit_percentage.unwrap_or_default();
+    let amount_msats = strike_btc_amount_to_msats(quote.amount.as_ref()).ok_or_else(|| {
+        ApiError::InvalidInput(format!(
+            "Cannot enforce fee_limit_percentage {}% because the Strike quote payment amount could not be determined safely.",
+            percentage
+        ))
+    })?;
+    let (percentage_numerator, percentage_denominator) = decimal_to_fraction(percentage)
+        .ok_or_else(|| {
+            ApiError::InvalidInput(
+                "fee_limit_percentage must be a non-negative finite safe number.".to_string(),
+            )
+        })?;
+    let quoted_fee_ratio = i128::from(fee_msats)
+        .checked_mul(100)
+        .and_then(|value| value.checked_mul(percentage_denominator));
+    let configured_fee_ratio = i128::from(amount_msats).checked_mul(percentage_numerator);
+    if quoted_fee_ratio.is_none()
+        || configured_fee_ratio.is_none()
+        || quoted_fee_ratio > configured_fee_ratio
+    {
+        let quoted_fee_sats = crate::utils::format_msats_as_sats(fee_msats);
+        let payment_amount_sats = crate::utils::format_msats_as_sats(amount_msats);
+        return Err(ApiError::FeeError(format!(
+            "Payment not sent: Strike quoted a Lightning fee of {} for a payment amount of {}, which is higher than your fee_limit_percentage of {}%. Increase fee_limit_percentage or set fee_limit_msat to at least {} ({}) to allow this payment.",
+            quoted_fee_sats, payment_amount_sats, percentage, fee_msats, quoted_fee_sats
+        )));
+    }
+
+    Ok(())
 }
 
 fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
@@ -312,10 +465,7 @@ pub async fn get_info(config: StrikeConfig) -> Result<NodeInfo, ApiError> {
     let send_balance_msat = balances
         .iter()
         .find(|balance| balance.currency == "BTC")
-        .map(|balance| {
-            let btc_amount = balance.current.parse::<f64>().unwrap_or(0.0);
-            (btc_amount * 100_000_000_000.0) as i64
-        })
+        .and_then(|balance| crate::utils::parse_btc_to_msats_exact(&balance.current))
         .unwrap_or(0);
 
     Ok(NodeInfo {
@@ -348,9 +498,8 @@ pub async fn create_invoice(
 
             let amount = invoice_params.amount_msats.map(|amt| {
                 // Convert msats to BTC (Strike expects BTC amounts)
-                let btc_amount = amt as f64 / 100_000_000_000.0;
                 Amount {
-                    amount: format!("{:.8}", btc_amount),
+                    amount: crate::utils::msats_to_btc(amt),
                     currency: "BTC".to_string(),
                     fee_policy: None,
                 }
@@ -431,6 +580,8 @@ pub async fn pay_invoice(
     config: StrikeConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
+    assert_valid_lightning_fee_limits(&invoice_params)?;
+
     let client = async_client(&config);
 
     // Create payment quote first
@@ -441,7 +592,7 @@ pub async fn pay_invoice(
         amount: invoice_params
             .amount_msats
             .map(|amt| super::types::PaymentQuoteAmount {
-                amount: format!("{:.8}", amt as f64 / 100_000_000_000.0),
+                amount: crate::utils::msats_to_btc(amt),
                 currency: "BTC".to_string(),
             }),
     };
@@ -466,6 +617,7 @@ pub async fn pay_invoice(
 
     let quote_text = quote_response.text().await.unwrap();
     let quote_resp: PaymentQuoteResponse = serde_json::from_str(&quote_text)?;
+    assert_strike_lightning_fee_limit(&quote_resp, &invoice_params)?;
 
     // Execute the payment quote
     let execute_url = format!(
@@ -544,9 +696,7 @@ pub async fn pay_invoice(
                 .as_ref()
                 .and_then(|payment| payment.lightning_network_fee.as_ref())
         })
-        .filter(|fee| fee.currency == "BTC")
-        .and_then(|fee| fee.amount.parse::<f64>().ok())
-        .map(|fee| (fee * 100_000_000_000.0) as i64)
+        .and_then(|fee| strike_btc_amount_to_msats(Some(fee)))
         .unwrap_or(0);
 
     // Extract payment hash from the original BOLT11 invoice
@@ -985,13 +1135,7 @@ pub async fn lookup_invoice(
         reason: "No lightning information in receive".to_string(),
     })?;
 
-    // Convert amount to millisatoshis
-    let amount_msats = if receive.amount_received.currency == "BTC" {
-        let btc_amount = receive.amount_received.amount.parse::<f64>().unwrap_or(0.0);
-        (btc_amount * 100_000_000_000.0) as i64
-    } else {
-        0
-    };
+    let amount_msats = strike_btc_amount_to_msats(Some(&receive.amount_received)).unwrap_or(0);
 
     Ok(Transaction {
         type_: "incoming".to_string(),
@@ -1059,13 +1203,8 @@ pub async fn list_transactions(
 
         for receive in receives_resp.items {
             if let Some(lightning_info) = receive.lightning {
-                // Convert amount to millisatoshis
-                let amount_msats = if receive.amount_received.currency == "BTC" {
-                    let btc_amount = receive.amount_received.amount.parse::<f64>().unwrap_or(0.0);
-                    (btc_amount * 100_000_000_000.0) as i64
-                } else {
-                    0
-                };
+                let amount_msats =
+                    strike_btc_amount_to_msats(Some(&receive.amount_received)).unwrap_or(0);
 
                 transactions.push(Transaction {
                     type_: "incoming".to_string(),
@@ -1127,27 +1266,13 @@ pub async fn list_transactions(
         let payments_resp: PaymentsResponse = serde_json::from_str(&payments_text)?;
 
         for payment in payments_resp.data {
-            let amount_msats = if payment.amount.currency == "BTC" {
-                let btc_amount = payment.amount.amount.parse::<f64>().unwrap_or(0.0);
-                (btc_amount * 100_000_000_000.0) as i64
-            } else {
-                0
-            };
-
-            let fee_msats = if let Some(lightning) = &payment.lightning {
-                if let Some(network_fee) = &lightning.network_fee {
-                    let fee_amount = network_fee.amount.parse::<f64>().unwrap_or(0.0);
-                    if network_fee.currency == "BTC" {
-                        (fee_amount * 100_000_000_000.0) as i64
-                    } else {
-                        0
-                    }
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
+            let amount_msats = strike_btc_amount_to_msats(Some(&payment.amount)).unwrap_or(0);
+            let fee_msats = payment
+                .lightning
+                .as_ref()
+                .and_then(|lightning| lightning.network_fee.as_ref())
+                .and_then(|fee| strike_btc_amount_to_msats(Some(fee)))
+                .unwrap_or(0);
 
             transactions.push(Transaction {
                 type_: "outgoing".to_string(),
@@ -1278,6 +1403,31 @@ pub async fn on_invoice_events(
 mod tests {
     use super::*;
 
+    fn btc_amount(amount: &str) -> Amount {
+        Amount {
+            amount: amount.to_string(),
+            currency: "BTC".to_string(),
+            fee_policy: None,
+        }
+    }
+
+    fn lightning_quote(
+        amount: Option<&str>,
+        lightning_fee: Option<&str>,
+        total_fee: Option<&str>,
+        total_amount: Option<&str>,
+    ) -> PaymentQuoteResponse {
+        PaymentQuoteResponse {
+            lightning_network_fee: lightning_fee.map(btc_amount),
+            payment_quote_id: "quote-1".to_string(),
+            valid_until: "2030-01-01T00:00:00Z".to_string(),
+            conversion_rate: None,
+            amount: amount.map(btc_amount),
+            total_fee: total_fee.map(btc_amount),
+            total_amount: total_amount.map(btc_amount),
+        }
+    }
+
     fn test_onchain_transaction(fee_sats: Option<i64>) -> OnchainTransaction {
         OnchainTransaction {
             id: Some("quote-1".to_string()),
@@ -1367,6 +1517,103 @@ mod tests {
         assert!(!is_retryable_payment_read_status(
             reqwest::StatusCode::UNAUTHORIZED
         ));
+    }
+
+    #[test]
+    fn enforces_absolute_strike_lightning_fee_limit() {
+        let params = PayInvoiceParams {
+            fee_limit_msat: Some(1_000),
+            ..Default::default()
+        };
+
+        assert!(assert_strike_lightning_fee_limit(
+            &lightning_quote(None, Some("0.00000000999"), None, None),
+            &params,
+        )
+        .is_ok());
+        assert!(assert_strike_lightning_fee_limit(
+            &lightning_quote(None, None, Some("0.00000001000"), None),
+            &params,
+        )
+        .is_ok());
+        let error = assert_strike_lightning_fee_limit(
+            &lightning_quote(None, Some("0.00000001001"), None, None),
+            &params,
+        )
+        .unwrap_err();
+        assert!(matches!(&error, ApiError::FeeError(_)));
+        assert!(error
+            .to_string()
+            .contains("Set fee_limit_msat to at least 1001 (1.001 sats)"));
+
+        let total_fee_error = assert_strike_lightning_fee_limit(
+            &lightning_quote(None, Some("0.00000001"), Some("0.00000100"), None),
+            &PayInvoiceParams {
+                fee_limit_msat: Some(2_000),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(&total_fee_error, ApiError::FeeError(_)));
+        assert!(total_fee_error
+            .to_string()
+            .contains("Set fee_limit_msat to at least 100000 (100 sats)"));
+    }
+
+    #[test]
+    fn enforces_percentage_strike_lightning_fee_limit() {
+        let quote = lightning_quote(Some("0.00001000"), Some("0.00000010"), None, None);
+        let equal_limit = PayInvoiceParams {
+            fee_limit_percentage: Some(1.0),
+            ..Default::default()
+        };
+        let below_limit = PayInvoiceParams {
+            fee_limit_percentage: Some(0.99),
+            ..Default::default()
+        };
+
+        assert!(assert_strike_lightning_fee_limit(&quote, &equal_limit).is_ok());
+        let error = assert_strike_lightning_fee_limit(&quote, &below_limit).unwrap_err();
+        assert!(matches!(&error, ApiError::FeeError(_)));
+        assert!(error
+            .to_string()
+            .contains("higher than your fee_limit_percentage of 0.99%"));
+    }
+
+    #[test]
+    fn allows_provably_fee_free_direct_strike_quote() {
+        let params = PayInvoiceParams {
+            fee_limit_msat: Some(0),
+            ..Default::default()
+        };
+        let quote = lightning_quote(Some("0.00001000"), None, None, Some("0.00001000"));
+
+        assert!(assert_strike_lightning_fee_limit(&quote, &params).is_ok());
+    }
+
+    #[test]
+    fn strike_lightning_fee_limit_fails_closed_for_imprecise_fee() {
+        let params = PayInvoiceParams {
+            fee_limit_msat: Some(1_000),
+            ..Default::default()
+        };
+        let quote = lightning_quote(None, Some("0.00000001"), Some("0.000000010005"), None);
+
+        let error = assert_strike_lightning_fee_limit(&quote, &params).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("quote fee could not be determined safely"));
+    }
+
+    #[test]
+    fn rejects_conflicting_strike_lightning_fee_limits() {
+        let params = PayInvoiceParams {
+            fee_limit_msat: Some(1_000),
+            fee_limit_percentage: Some(1.0),
+            ..Default::default()
+        };
+
+        assert!(assert_valid_lightning_fee_limits(&params).is_err());
     }
 
     #[test]

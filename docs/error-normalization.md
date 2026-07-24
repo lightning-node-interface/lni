@@ -36,6 +36,30 @@ Sources checked on 2026-07-07:
 
 Local input validation should remain `LniError('InvalidInput', ...)` unless the provider accepted the request and returned a categorized business error.
 
+## Local Fee Errors
+
+Rust exposes `ApiError::FeeError(String)` and TypeScript exposes `FeeError` (with
+`LniError.code === 'FeeError'`) for a valid quoted or provider fee that exceeds a
+caller-configured fee limit. This is a local LNI guardrail error, not a standard NWC
+error code and not a provider payment failure.
+
+Current Strike Lightning behavior:
+
+| Condition | Error |
+| --- | --- |
+| Quoted fee exceeds the absolute limit | Rust `ApiError::FeeError` / TypeScript `FeeError`, with quoted and limit amounts displayed in sats plus the exact msat value needed to allow the payment |
+| Quoted fee exceeds the percentage limit | Rust `ApiError::FeeError` / TypeScript `FeeError`, with quoted fee and payment amount displayed in sats, the percentage limit, and guidance to increase the percentage or use a sufficient absolute limit |
+| Quoted fee equals either limit | Payment is allowed |
+| Both fee-limit forms are supplied | `InvalidInput` |
+| A fee limit is negative, non-finite, or unsafe | `InvalidInput` |
+| A limit is supplied but the quote fee cannot be determined safely | `InvalidInput` |
+
+Strike creates the quote before enforcing the limit because its API does not accept a
+maximum fee parameter. LNI checks the returned quote before calling `/execute`; a
+`FeeError` therefore means the quote was not executed. When Strike supplies both its
+total fee and Lightning network fee fields, LNI enforces the total fee; it uses the
+network fee only when the total fee is absent.
+
 ## Fallback Rules
 
 Apply exact provider-code mappings first. If no exact mapping exists, use these fallbacks:

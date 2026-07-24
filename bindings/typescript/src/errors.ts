@@ -4,6 +4,7 @@ export type LniErrorCode =
   | 'Json'
   | 'NetworkError'
   | 'InvalidInput'
+  | 'FeeError'
   | 'LnurlError'
   | 'NwcError';
 
@@ -45,6 +46,20 @@ export class LniError extends Error {
     this.code = code;
     this.status = options?.status;
     this.body = options?.body;
+  }
+}
+
+/**
+ * A valid quoted or provider fee exceeded a caller-configured fee limit.
+ *
+ * This is a local LNI guardrail error: the payment was not executed. Invalid
+ * fee-limit configuration and quotes whose fee cannot be determined safely
+ * continue to use `LniError` with the `InvalidInput` code.
+ */
+export class FeeError extends LniError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super('FeeError', message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = 'FeeError';
   }
 }
 

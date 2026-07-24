@@ -17,6 +17,14 @@ This file defines stable, repository-level guidance for future coding agents.
   - Reuse helpers from `bindings/typescript/src/internal/*`.
   - Export from `bindings/typescript/src/index.ts`.
 
+## Shared Helper Guidance
+- Reuse or add shared Rust calculation, conversion, and validation helpers in:
+  - `crates/lni/utils.rs`
+- Reuse or add the corresponding TypeScript helpers in:
+  - `bindings/typescript/src/internal/transform.ts`
+- Keep helper semantics consistent across Rust and TypeScript, and avoid duplicating
+  reusable helpers inside individual node adapters.
+
 ## Test/Validation Expectations
 - Prefer real integration-style tests over mocks for node adapters.
 - Add/maintain node-specific integration tests under:

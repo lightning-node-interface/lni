@@ -177,18 +177,18 @@ pub struct PaymentQuoteAmount {
 #[derive(Debug, Deserialize)]
 pub struct PaymentQuoteResponse {
     #[serde(rename = "lightningNetworkFee")]
-    pub lightning_network_fee: Amount,
+    pub lightning_network_fee: Option<Amount>,
     #[serde(rename = "paymentQuoteId")]
     pub payment_quote_id: String,
     #[serde(rename = "validUntil")]
     pub valid_until: String,
     #[serde(rename = "conversionRate")]
     pub conversion_rate: Option<ConversionRate>,
-    pub amount: Amount,
+    pub amount: Option<Amount>,
     #[serde(rename = "totalFee")]
-    pub total_fee: Amount,
+    pub total_fee: Option<Amount>,
     #[serde(rename = "totalAmount")]
-    pub total_amount: Amount,
+    pub total_amount: Option<Amount>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -512,6 +512,26 @@ pub struct ReceiveRequestsResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deserializes_fee_free_quote_without_fee_fields() {
+        let quote: PaymentQuoteResponse = serde_json::from_str(
+            r#"{
+                "paymentQuoteId": "quote-1",
+                "validUntil": "2030-01-01T00:00:00Z",
+                "amount": { "amount": "0.00001000", "currency": "BTC" },
+                "totalAmount": { "amount": "0.00001000", "currency": "BTC" }
+            }"#,
+        )
+        .expect("fee-free quote should deserialize");
+
+        assert!(quote.lightning_network_fee.is_none());
+        assert!(quote.total_fee.is_none());
+        assert_eq!(
+            quote.amount.as_ref().map(|amount| amount.amount.as_str()),
+            Some("0.00001000")
+        );
+    }
 
     #[test]
     fn deserializes_payment_detail_lightning_proof() {
