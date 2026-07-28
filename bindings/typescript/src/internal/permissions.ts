@@ -260,7 +260,7 @@ export function getStrikeOauthPermissions(accessToken: string): Permissions | nu
   return normalizePermissions(permissions);
 }
 
-export function getBlinkTokenPermissions(token: string): Permissions | null {
+export function getGaloyTokenPermissions(token: string): Permissions | null {
   const payload = decodeJwtPayload(token);
   if (!payload) {
     return null;
@@ -277,6 +277,9 @@ export function getBlinkTokenPermissions(token: string): Permissions | null {
 
   return normalizePermissions(permissions);
 }
+
+/** @deprecated Use `getGaloyTokenPermissions`. */
+export const getBlinkTokenPermissions = getGaloyTokenPermissions;
 
 function permissionsFromValues(values: string[]): Permissions {
   const has = (permission: string) => hasPermission(values, permission);

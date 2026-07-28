@@ -110,6 +110,132 @@ const listTxnParams = {
 const txns = await node.listTransactions(listTxnParams);
 ```
 
+#### Galoy GraphQL (Blink, Flash, and compatible deployments)
+
+Galoy is modeled as a protocol rather than a brand. TypeScript applications use `kind: 'galoy'`; Rust applications use `GaloyNode` or `create_galoy_node`. The legacy Blink APIs remain as compatibility wrappers.
+
+TypeScript Flash-style configuration with an explicit JMD wallet and a status-only payment response:
+
+```typescript
+const flash = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    baseUrl: 'https://api.flashapp.me/graphql',
+    provider: { id: 'flash', name: 'Flash' },
+    wallet: {
+      mode: 'explicit',
+      id: process.env.FLASH_WALLET_ID!,
+      currency: 'JMD',
+    },
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+    payment: {
+      response: 'status-only',
+      acceptedStatuses: ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+    },
+    capabilities: {
+      transactionLookup: false,
+      transactionHistory: false,
+      invoiceEvents: false,
+      onchain: false,
+    },
+    permissions: 'configured',
+    httpTimeout: 60,
+  },
+});
+```
+
+The equivalent convenience wrapper supplies those Flash defaults:
+
+```typescript
+const flashNode = createNode({
+  kind: 'flash',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    walletId: process.env.FLASH_WALLET_ID!,
+    walletCurrency: 'JMD',
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+  },
+});
+```
+
+`FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
+
+TypeScript Blink configuration with currency-based BTC wallet selection:
+
+```typescript
+const blink = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.BLINK_API_KEY!,
+    baseUrl: 'https://api.blink.sv/graphql',
+    provider: { id: 'blink', name: 'Blink' },
+    wallet: { mode: 'currency', currency: 'BTC' },
+    payment: {
+      response: 'transaction-with-preimage',
+      acceptedStatuses: ['SUCCESS'],
+    },
+    capabilities: {
+      transactionLookup: true,
+      transactionHistory: true,
+      invoiceEvents: true,
+      onchain: true,
+    },
+    permissions: 'jwt-introspection',
+    httpTimeout: 60,
+  },
+});
+```
+
+The equivalent Rust configuration uses strongly typed modes:
+
+```rust
+use lni::galoy::{
+    GaloyCapabilities, GaloyConfig, GaloyNode, GaloyPaymentConfig,
+    GaloyPaymentResponse, GaloyPermissionsMode, GaloyProvider, GaloyWalletConfig,
+};
+
+let flash = GaloyNode::new(GaloyConfig {
+    api_key,
+    base_url,
+    provider: GaloyProvider {
+        id: "flash".to_string(),
+        name: "Flash".to_string(),
+    },
+    wallet: GaloyWalletConfig::Explicit {
+        id: wallet_id,
+        currency: "JMD".to_string(),
+    },
+    payment: GaloyPaymentConfig {
+        response: GaloyPaymentResponse::StatusOnly,
+        accepted_statuses: vec![
+            "SUCCESS".to_string(),
+            "PENDING".to_string(),
+            "ALREADY_PAID".to_string(),
+        ],
+    },
+    capabilities: GaloyCapabilities {
+        transaction_lookup: false,
+        transaction_history: false,
+        invoice_events: false,
+        onchain: false,
+    },
+    permissions: GaloyPermissionsMode::Configured,
+    additional_headers: None,
+    http_timeout: Some(60),
+    socks5_proxy: None,
+    accept_invalid_certs: Some(false),
+});
+```
+
+For non-BTC wallets, Galoy’s schema uses the `lnUsdInvoiceCreate` and `lnUsdInvoiceFeeProbe` operation family regardless of the wallet’s actual fiat currency. Non-BTC balances and fee-probe amounts are never interpreted as satoshis. Additional headers cannot override `x-api-key` or `content-type`.
+
+Rust also exports `FlashConfig`, `FlashNode`, and `create_flash_node` with the same Flash defaults.
+
 #### Decode
 
 Decode helpers are pure local functions. They do not require node config.

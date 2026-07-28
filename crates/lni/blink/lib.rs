@@ -49,6 +49,43 @@ impl Default for BlinkConfig {
     }
 }
 
+impl From<&BlinkConfig> for crate::galoy::GaloyConfig {
+    fn from(config: &BlinkConfig) -> Self {
+        Self {
+            api_key: config.api_key.clone(),
+            base_url: config
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.blink.sv/graphql".to_string()),
+            provider: crate::galoy::GaloyProvider {
+                id: "blink".to_string(),
+                name: "Blink".to_string(),
+            },
+            wallet: crate::galoy::GaloyWalletConfig::Currency {
+                currency: "BTC".to_string(),
+            },
+            payment: crate::galoy::GaloyPaymentConfig {
+                response: crate::galoy::GaloyPaymentResponse::TransactionWithPreimage,
+                accepted_statuses: vec!["SUCCESS".to_string()],
+            },
+            capabilities: crate::galoy::GaloyCapabilities {
+                transaction_lookup: true,
+                transaction_history: true,
+                invoice_events: true,
+                onchain: true,
+            },
+            permissions: crate::galoy::GaloyPermissionsMode::JwtIntrospection,
+            additional_headers: None,
+            http_timeout: config.http_timeout,
+            socks5_proxy: config.socks5_proxy.clone(),
+            accept_invalid_certs: config.accept_invalid_certs,
+        }
+    }
+}
+
+/// Backward-compatible Blink wrapper around the generic Galoy implementation.
+///
+/// Deprecated: prefer [`crate::galoy::GaloyNode`].
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, Clone)]
@@ -69,11 +106,9 @@ impl BlinkNode {
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl BlinkNode {
     pub async fn get_permissions(&self) -> Result<crate::Permissions, ApiError> {
-        crate::permissions::parse_blink_token_permissions(&self.config.api_key).ok_or_else(|| {
-            ApiError::InvalidInput(
-                "Blink API keys cannot be introspected. Use a JWT-style token with scopes or manually test permissions against Blink GraphQL operations.".to_string(),
-            )
-        })
+        crate::galoy::GaloyNode::new((&self.config).into())
+            .get_permissions()
+            .await
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
@@ -117,9 +152,11 @@ impl BlinkNode {
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        Err(ApiError::Api {
-            reason: "create_offer not implemented for BlinkNode".to_string(),
-        })
+        crate::galoy::api::not_implemented(
+            &crate::galoy::GaloyConfig::from(&self.config),
+            "Bolt12",
+            "make_invoice",
+        )
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {

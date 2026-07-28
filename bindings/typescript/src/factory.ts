@@ -1,4 +1,6 @@
 import { BlinkNode } from './nodes/blink.js';
+import { FlashNode } from './nodes/flash.js';
+import { createGaloyNode, type GaloyNode } from './nodes/galoy.js';
 import { ClnNode } from './nodes/cln.js';
 import { LndNode } from './nodes/lnd.js';
 import { NwcNode } from './nodes/nwc.js';
@@ -9,6 +11,8 @@ import type {
   BackendNodeConfig,
   BlinkConfig,
   ClnConfig,
+  FlashConfig,
+  GaloyConfig,
   LightningNode,
   LndConfig,
   NodeRequestOptions,
@@ -43,6 +47,17 @@ export function createNode(
   options?: NodeRequestOptions
 ): SpeedNode;
 export function createNode(
+  input: { kind: 'galoy'; config: GaloyConfig },
+  options?: NodeRequestOptions
+): GaloyNode;
+export function createNode(
+  input: { kind: 'flash'; config: FlashConfig },
+  options?: NodeRequestOptions
+): FlashNode;
+/**
+ * @deprecated Use the `galoy` kind with Blink defaults.
+ */
+export function createNode(
   input: { kind: 'blink'; config: BlinkConfig },
   options?: NodeRequestOptions
 ): BlinkNode;
@@ -64,6 +79,10 @@ export function createNode(
       return new StrikeNode(input.config, options);
     case 'speed':
       return new SpeedNode(input.config, options);
+    case 'galoy':
+      return createGaloyNode(input.config, options);
+    case 'flash':
+      return new FlashNode(input.config, options);
     case 'blink':
       return new BlinkNode(input.config, options);
     default:

@@ -250,6 +250,54 @@ export interface BlinkConfig {
   httpTimeout?: number;
 }
 
+export interface FlashConfig {
+  apiKey: string;
+  baseUrl?: string;
+  walletId: string;
+  walletCurrency: string;
+  additionalHeaders?: Record<string, string>;
+  acceptedStatuses?: readonly string[];
+  httpTimeout?: number;
+}
+
+export type GaloyWalletConfig =
+  | {
+      mode: 'explicit';
+      id: string;
+      currency: string;
+    }
+  | {
+      mode: 'currency';
+      currency: string;
+    };
+
+export interface GaloyPaymentConfig {
+  response: 'transaction-with-preimage' | 'status-only';
+  acceptedStatuses: readonly string[];
+}
+
+export interface GaloyCapabilities {
+  transactionLookup: boolean;
+  transactionHistory: boolean;
+  invoiceEvents: boolean;
+  onchain: boolean;
+}
+
+export interface GaloyConfig {
+  apiKey: string;
+  baseUrl: string;
+  provider: {
+    id: string;
+    name: string;
+  };
+  wallet: GaloyWalletConfig;
+  payment: GaloyPaymentConfig;
+  capabilities: GaloyCapabilities;
+  permissions: 'jwt-introspection' | 'configured';
+  additionalHeaders?: Record<string, string>;
+  httpTimeout?: number;
+}
+
 export interface Permissions {
   getInfo: boolean;
   createInvoice: boolean;
@@ -288,7 +336,17 @@ export interface OnchainPayments {
   ): Promise<PayOnchainResponse>;
 }
 
-export type BackendNodeKind = 'phoenixd' | 'cln' | 'lnd' | 'nwc' | 'strike' | 'speed' | 'blink';
+export type BackendNodeKind =
+  | 'phoenixd'
+  | 'cln'
+  | 'lnd'
+  | 'nwc'
+  | 'strike'
+  | 'speed'
+  | 'galoy'
+  | 'flash'
+  /** @deprecated Use `galoy` with Blink defaults instead. */
+  | 'blink';
 
 export type BackendNodeConfig =
   | { kind: 'phoenixd'; config: PhoenixdConfig }
@@ -297,6 +355,9 @@ export type BackendNodeConfig =
   | { kind: 'nwc'; config: NwcConfig }
   | { kind: 'strike'; config: StrikeConfig }
   | { kind: 'speed'; config: SpeedConfig }
+  | { kind: 'galoy'; config: GaloyConfig }
+  | { kind: 'flash'; config: FlashConfig }
+  /** @deprecated Use `galoy` with Blink defaults instead. */
   | { kind: 'blink'; config: BlinkConfig };
 
 export interface PaymentInfo {

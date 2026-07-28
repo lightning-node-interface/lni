@@ -260,6 +260,21 @@ pub mod blink {
     pub use lib::{BlinkConfig, BlinkNode};
 }
 
+pub mod galoy {
+    pub mod api;
+    pub mod lib;
+    pub mod types;
+    pub use lib::{
+        GaloyCapabilities, GaloyConfig, GaloyNode, GaloyPaymentConfig, GaloyPaymentResponse,
+        GaloyPermissionsMode, GaloyProvider, GaloyWalletConfig,
+    };
+}
+
+pub mod flash {
+    pub mod lib;
+    pub use lib::{FlashConfig, FlashNode, DEFAULT_FLASH_GRAPHQL_URL};
+}
+
 pub mod speed {
     pub mod api;
     pub mod lib;
@@ -370,6 +385,18 @@ pub fn create_speed_node(config: speed::SpeedConfig) -> Arc<dyn LightningNode> {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn create_blink_node(config: blink::BlinkConfig) -> Arc<dyn LightningNode> {
     Arc::new(blink::BlinkNode::new(config))
+}
+
+/// Create a configurable Galoy GraphQL node as a polymorphic LightningNode.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn create_galoy_node(config: galoy::GaloyConfig) -> Arc<dyn LightningNode> {
+    Arc::new(galoy::GaloyNode::new(config))
+}
+
+/// Create a Flash node backed by the generic Galoy implementation.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn create_flash_node(config: flash::FlashConfig) -> Arc<dyn LightningNode> {
+    Arc::new(flash::FlashNode::new(config))
 }
 
 /// Create a Phoenixd node as a polymorphic LightningNode
