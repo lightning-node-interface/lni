@@ -1,8 +1,9 @@
 import { createGaloyNode, type GaloyNode } from './galoy.js';
 import type {
-  BlinkConfig,
   CreateInvoiceParams,
   CreateOfferParams,
+  FlashConfig,
+  GaloyPaymentOutcome,
   InvoiceEventCallback,
   LightningNode,
   ListTransactionsParams,
@@ -11,53 +12,74 @@ import type {
   NodeRequestOptions,
   Offer,
   OnInvoiceEventParams,
-  OnchainPayments,
-  OnchainTransaction,
   PayInvoiceParams,
   PayInvoiceResponse,
-  PayOnchainOptions,
-  PayOnchainResponse,
   Permissions,
-  PrepareOnchainTransactionParams,
   Transaction,
 } from '../types.js';
 
+export const DEFAULT_FLASH_GRAPHQL_URL = 'https://api.flashapp.me/graphql';
+
+function flashFeeProbeOperation(walletCurrency: string) {
+  switch (walletCurrency.toUpperCase()) {
+    case 'BTC':
+      return { kind: 'btc', denomination: 'sats' } as const;
+    case 'USD':
+      return { kind: 'usd', denomination: 'usd-cents' } as const;
+    default:
+      return { kind: 'unsupported' } as const;
+  }
+}
+
 /**
- * Backward-compatible Blink adapter.
+ * Flash adapter backed by the generic Galoy GraphQL implementation.
  *
- * @deprecated Use `createGaloyNode` or `createNode({ kind: 'galoy', ... })`.
+ * Use `createGaloyNode` directly when a Flash deployment exposes capabilities
+ * beyond these conservative Flash defaults.
+ *
+ * Accepted proofless statuses can resolve with an empty preimage because
+ * status-only Galoy responses do not include proof data. Use
+ * `payInvoiceWithStatus()` when a resolved `PENDING` payment must remain
+ * distinguishable from settlement.
  */
-export class BlinkNode implements LightningNode, OnchainPayments {
+export class FlashNode implements LightningNode {
   private readonly node: GaloyNode;
 
-  constructor(config: BlinkConfig, options: NodeRequestOptions = {}) {
+  constructor(config: FlashConfig, options: NodeRequestOptions = {}) {
     this.node = createGaloyNode(
       {
         apiKey: config.apiKey,
-        baseUrl: config.baseUrl ?? 'https://api.blink.sv/graphql',
+        baseUrl: config.baseUrl ?? DEFAULT_FLASH_GRAPHQL_URL,
         provider: {
-          id: 'blink',
-          name: 'Blink',
+          id: 'flash',
+          name: 'Flash',
         },
         wallet: {
-          mode: 'currency',
-          currency: 'BTC',
+          mode: 'explicit',
+          id: config.walletId,
+          currency: config.walletCurrency,
         },
         invoiceOperations: {
-          create: { kind: 'btc', denomination: 'sats' },
-          feeProbe: { kind: 'btc', denomination: 'sats' },
+          create: { kind: 'unsupported' },
+          feeProbe: flashFeeProbeOperation(config.walletCurrency),
         },
         payment: {
-          response: 'transaction-with-preimage',
-          acceptedStatuses: ['SUCCESS'],
+          response: 'status-only',
+          acceptedStatuses: config.acceptedStatuses ?? ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+          statusMapping: {
+            settled: ['SUCCESS', 'ALREADY_PAID'],
+            pending: ['PENDING'],
+          },
+          proofUnavailableErrorCodes: ['PROOF_UNAVAILABLE'],
         },
         capabilities: {
-          transactionLookup: true,
-          transactionHistory: true,
-          invoiceEvents: true,
-          onchain: true,
+          transactionLookup: false,
+          transactionHistory: false,
+          invoiceEvents: false,
+          onchain: false,
         },
-        permissions: 'jwt-introspection',
+        permissions: 'configured',
+        additionalHeaders: config.additionalHeaders,
         httpTimeout: config.httpTimeout,
       },
       options
@@ -80,15 +102,8 @@ export class BlinkNode implements LightningNode, OnchainPayments {
     return this.node.payInvoice(params);
   }
 
-  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction> {
-    return this.node.prepareOnchainTransaction(params);
-  }
-
-  payOnchain(
-    transaction: OnchainTransaction,
-    options?: PayOnchainOptions
-  ): Promise<PayOnchainResponse> {
-    return this.node.payOnchain(transaction, options);
+  payInvoiceWithStatus(params: PayInvoiceParams): Promise<GaloyPaymentOutcome> {
+    return this.node.payInvoiceWithStatus(params);
   }
 
   createOffer(params: CreateOfferParams): Promise<Offer> {

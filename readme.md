@@ -110,6 +110,179 @@ const listTxnParams = {
 const txns = await node.listTransactions(listTxnParams);
 ```
 
+Galoy GraphQL (Blink, Flash, and compatible deployments)
+--------------------------------------------------------
+
+Galoy is modeled as a protocol rather than a brand. TypeScript applications use `kind: 'galoy'`; Rust applications use `GaloyNode` or `create_galoy_node`. The legacy Blink APIs remain as compatibility wrappers.
+
+TypeScript Flash-style configuration with an explicit USD wallet and a status-only payment response:
+
+```typescript
+const flash = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    baseUrl: 'https://api.flashapp.me/graphql',
+    provider: { id: 'flash', name: 'Flash' },
+    wallet: {
+      mode: 'explicit',
+      id: process.env.FLASH_WALLET_ID!,
+      currency: 'USD',
+    },
+    invoiceOperations: {
+      create: { kind: 'unsupported' },
+      feeProbe: {
+        kind: 'usd',
+        denomination: 'usd-cents',
+      },
+    },
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+    payment: {
+      response: 'status-only',
+      acceptedStatuses: ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+      statusMapping: {
+        settled: ['SUCCESS', 'ALREADY_PAID'],
+        pending: ['PENDING'],
+      },
+    },
+    capabilities: {
+      transactionLookup: false,
+      transactionHistory: false,
+      invoiceEvents: false,
+      onchain: false,
+    },
+    permissions: 'configured',
+    httpTimeout: 60,
+  },
+});
+```
+
+The equivalent convenience wrapper supplies those Flash defaults:
+
+```typescript
+const flashNode = createNode({
+  kind: 'flash',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    walletId: process.env.FLASH_WALLET_ID!,
+    walletCurrency: 'USD',
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+  },
+});
+```
+
+`FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
+Flash invoice creation is intentionally disabled: LNI's invoice API supplies
+millisatoshis, while Flash's USD invoice mutation requires USD cents. USD fee
+probe values are also cent-denominated and therefore remain `feeMsats: 0`.
+
+Because Flash uses status-only payments, accepted proofless payments can resolve
+with an empty preimage. TypeScript keeps the shared `PayInvoiceResponse`
+unchanged; call `FlashNode.payInvoiceWithStatus()` or
+`GaloyNode.payInvoiceWithStatus()` for a `GaloyPaymentOutcome` containing
+`state` and `providerStatus`. `SUCCESS` and `ALREADY_PAID` are settled, while
+`PENDING` remains pending.
+
+TypeScript Blink configuration with currency-based BTC wallet selection:
+
+```typescript
+const blink = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.BLINK_API_KEY!,
+    baseUrl: 'https://api.blink.sv/graphql',
+    provider: { id: 'blink', name: 'Blink' },
+    wallet: { mode: 'currency', currency: 'BTC' },
+    invoiceOperations: {
+      create: { kind: 'btc', denomination: 'sats' },
+      feeProbe: { kind: 'btc', denomination: 'sats' },
+    },
+    payment: {
+      response: 'transaction-with-preimage',
+      acceptedStatuses: ['SUCCESS'],
+    },
+    capabilities: {
+      transactionLookup: true,
+      transactionHistory: true,
+      invoiceEvents: true,
+      onchain: true,
+    },
+    permissions: 'jwt-introspection',
+    httpTimeout: 60,
+  },
+});
+```
+
+The equivalent Rust configuration uses strongly typed modes:
+
+```rust
+use lni::galoy::{
+    GaloyCapabilities, GaloyConfig, GaloyInvoiceOperation,
+    GaloyInvoiceOperationsConfig, GaloyNode, GaloyPaymentConfig,
+    GaloyPaymentResponse, GaloyPaymentStatusMapping, GaloyPermissionsMode,
+    GaloyProvider, GaloyWalletConfig,
+};
+
+let flash = GaloyNode::new(GaloyConfig {
+    api_key,
+    base_url,
+    provider: GaloyProvider {
+        id: "flash".to_string(),
+        name: "Flash".to_string(),
+    },
+    wallet: GaloyWalletConfig::Explicit {
+        id: wallet_id,
+        currency: "USD".to_string(),
+    },
+    invoice_operations: GaloyInvoiceOperationsConfig {
+        create: GaloyInvoiceOperation::Unsupported,
+        fee_probe: GaloyInvoiceOperation::UsdCents,
+    },
+    payment: GaloyPaymentConfig {
+        response: GaloyPaymentResponse::StatusOnly,
+        accepted_statuses: vec![
+            "SUCCESS".to_string(),
+            "PENDING".to_string(),
+            "ALREADY_PAID".to_string(),
+        ],
+        status_mapping: Some(GaloyPaymentStatusMapping {
+            settled: vec!["SUCCESS".to_string(), "ALREADY_PAID".to_string()],
+            pending: vec!["PENDING".to_string()],
+        }),
+        proof_unavailable_error_codes: vec!["PROOF_UNAVAILABLE".to_string()],
+    },
+    capabilities: GaloyCapabilities {
+        transaction_lookup: false,
+        transaction_history: false,
+        invoice_events: false,
+        onchain: false,
+    },
+    permissions: GaloyPermissionsMode::Configured,
+    additional_headers: None,
+    http_timeout: Some(60),
+    socks5_proxy: None,
+    accept_invalid_certs: Some(false),
+});
+```
+
+Invoice operations are selected explicitly rather than inferred from “not
+BTC.” `BtcSats`, `UsdCents`, and `Unsupported` prevent arbitrary regional
+wallets from being routed to USD-specific GraphQL mutations. Non-BTC balances
+and fee-probe amounts are never interpreted as satoshis. Additional headers
+cannot override `x-api-key` or `content-type`.
+
+Rust also exports `FlashConfig`, `FlashNode`, and `create_flash_node` with the
+same conservative Flash defaults and unchanged `FlashConfig` shape.
+The shared Rust `PayInvoiceResponse` is also unchanged for source compatibility.
+Call `FlashNode::pay_invoice_with_status` or
+`GaloyNode::pay_invoice_with_status` to receive a `GaloyPaymentOutcome` with
+typed `state` and the original `provider_status`; the ordinary
+`LightningNode::pay_invoice` method continues to return the legacy response.
+
 #### Decode
 
 Decode helpers are pure local functions. They do not require node config.

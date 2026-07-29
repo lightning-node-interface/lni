@@ -4,7 +4,7 @@ Remote connect to major Lightning node implementations with one TypeScript inter
 
 - Supports major nodes: CLN, LND, Phoenixd
 - Supports protocols: BOLT11, BOLT12, NWC
-- Includes custodial / hosted APIs: Strike, Speed, Blink
+- Includes custodial / hosted APIs: Strike, Speed, and Galoy deployments such as Blink or Flash
 - Experimental Arkade Boltz support lives in the optional `@sunnyln/lni-arkade` package
 - Experimental Spark support lives in the optional `@sunnyln/lni-spark` package
 - LNURL + Lightning Address support (`user@domain.com`, `lnurl1...`)
@@ -58,9 +58,138 @@ const status = await node.lookupInvoice({ paymentHash: invoice.paymentHash });
 const txs = await node.listTransactions({ from: 0, limit: 10 });
 ```
 
+### Galoy GraphQL Nodes
+
+Use the generic `galoy` kind for Blink, Flash, or another Galoy deployment. Configuration is semantic: applications choose a wallet, payment response shape, accepted statuses, and supported capabilities without supplying arbitrary GraphQL.
+
+Flash-style deployments can use an explicit wallet and a proofless/status-only payment response:
+
+```ts
+import { createNode } from '@sunnyln/lni';
+
+const flash = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    baseUrl: 'https://api.flashapp.me/graphql',
+    provider: {
+      id: 'flash',
+      name: 'Flash',
+    },
+    wallet: {
+      mode: 'explicit',
+      id: process.env.FLASH_WALLET_ID!,
+      currency: 'USD',
+    },
+    invoiceOperations: {
+      create: {
+        kind: 'unsupported',
+      },
+      feeProbe: {
+        kind: 'usd',
+        denomination: 'usd-cents',
+      },
+    },
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+    payment: {
+      response: 'status-only',
+      acceptedStatuses: ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+      statusMapping: {
+        settled: ['SUCCESS', 'ALREADY_PAID'],
+        pending: ['PENDING'],
+      },
+    },
+    capabilities: {
+      transactionLookup: false,
+      transactionHistory: false,
+      invoiceEvents: false,
+      onchain: false,
+    },
+    permissions: 'configured',
+    httpTimeout: 60,
+  },
+});
+```
+
+For those defaults, `FlashNode` and `kind: 'flash'` provide a smaller convenience configuration:
+
+```ts
+const flashNode = createNode({
+  kind: 'flash',
+  config: {
+    apiKey: process.env.FLASH_API_KEY!,
+    walletId: process.env.FLASH_WALLET_ID!,
+    walletCurrency: 'USD',
+    additionalHeaders: {
+      'x-flash-client-capabilities': 'status-only-payments',
+    },
+  },
+});
+```
+
+`FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
+`FlashNode.createInvoice()` is intentionally unavailable because LNI supplies
+`amountMsats`, while Flash's USD invoice mutation requires USD cents. Flash
+payments remain available for documented BTC and USD wallets. USD fee probes
+are cent-denominated, so their value is not exposed as `feeMsats`; it remains
+zero until LNI has a denomination-aware fee result.
+
+Because Flash uses status-only payments, accepted proofless statuses can
+resolve with an empty preimage. The shared `payInvoice()` response remains
+unchanged. Call `FlashNode.payInvoiceWithStatus()` or
+`GaloyNode.payInvoiceWithStatus()` for a `GaloyPaymentOutcome` containing the
+legacy response under `payment`, plus `state` and `providerStatus`. `SUCCESS`
+and `ALREADY_PAID` map to `settled`, while `PENDING` maps to `pending`.
+
+Traditional Blink behavior selects the first BTC wallet and requests the payment preimage:
+
+```ts
+const blink = createNode({
+  kind: 'galoy',
+  config: {
+    apiKey: process.env.BLINK_API_KEY!,
+    baseUrl: 'https://api.blink.sv/graphql',
+    provider: {
+      id: 'blink',
+      name: 'Blink',
+    },
+    wallet: {
+      mode: 'currency',
+      currency: 'BTC',
+    },
+    invoiceOperations: {
+      create: {
+        kind: 'btc',
+        denomination: 'sats',
+      },
+      feeProbe: {
+        kind: 'btc',
+        denomination: 'sats',
+      },
+    },
+    payment: {
+      response: 'transaction-with-preimage',
+      acceptedStatuses: ['SUCCESS'],
+    },
+    capabilities: {
+      transactionLookup: true,
+      transactionHistory: true,
+      invoiceEvents: true,
+      onchain: true,
+    },
+    permissions: 'jwt-introspection',
+    httpTimeout: 60,
+  },
+});
+```
+
+`BlinkNode` and `kind: 'blink'` remain available as deprecated compatibility wrappers around these Blink defaults. Additional headers cannot replace `x-api-key` or `content-type`.
+
 ### On-chain Bitcoin Payments
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and `BlinkNode`.
+On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and BTC-configured Galoy nodes (including the `BlinkNode` compatibility wrapper).
 
 ```ts
 import { StrikeNode } from '@sunnyln/lni';
@@ -269,7 +398,9 @@ const invoice = await arkadeNode.createInvoice({
 - `NwcNode`
 - `StrikeNode`
 - `SpeedNode`
-- `BlinkNode`
+- `createGaloyNode` / `kind: 'galoy'`
+- `FlashNode` / `kind: 'flash'`
+- `BlinkNode` / `kind: 'blink'` (deprecated compatibility wrapper)
 - LNURL helpers (`detectPaymentType`, `needsResolution`, `resolveToBolt11`, `getPaymentInfo`)
 - Decode helpers (`decode` for BOLT11, `decodeOffer` for BOLT12 offers)
 

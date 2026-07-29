@@ -225,7 +225,7 @@ pub fn parse_strike_oauth_permissions(access_token: &str) -> Option<Permissions>
     Some(normalize_permissions(permissions))
 }
 
-pub fn parse_blink_token_permissions(token: &str) -> Option<Permissions> {
+pub fn parse_galoy_token_permissions(token: &str) -> Option<Permissions> {
     let payload = decode_jwt_payload(token)?;
     let scopes: Vec<String> = read_scope_values(&payload)
         .into_iter()
@@ -243,6 +243,10 @@ pub fn parse_blink_token_permissions(token: &str) -> Option<Permissions> {
     }
 
     Some(normalize_permissions(permissions))
+}
+
+pub fn parse_blink_token_permissions(token: &str) -> Option<Permissions> {
+    parse_galoy_token_permissions(token)
 }
 
 fn permissions_from_values(values: &[String]) -> Permissions {

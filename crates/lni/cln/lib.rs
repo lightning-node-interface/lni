@@ -487,10 +487,6 @@ mod tests {
         match NODE.list_transactions(params).await {
             Ok(txns) => {
                 dbg!(&txns);
-                assert!(
-                    txns.len() >= 0,
-                    "Should contain at least zero or one transaction"
-                );
             }
             Err(e) => {
                 panic!("Failed to lookup transactions: {:?}", e);

@@ -10,4 +10,6 @@ export { LndNode } from './nodes/lnd.js';
 export { NwcNode } from './nodes/nwc.js';
 export { StrikeNode } from './nodes/strike.js';
 export { SpeedNode } from './nodes/speed.js';
+export { createGaloyNode, type GaloyNode } from './nodes/galoy.js';
+export { DEFAULT_FLASH_GRAPHQL_URL, FlashNode } from './nodes/flash.js';
 export { BlinkNode } from './nodes/blink.js';
