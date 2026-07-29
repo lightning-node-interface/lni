@@ -1,13 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
+import { decode } from '../decode.js';
 import { createNode } from '../factory.js';
 import { createGaloyNode } from '../nodes/galoy.js';
 import { NwcError } from '../errors.js';
 import type { FetchLike, GaloyConfig } from '../types.js';
 
+const ONE_SAT_BOLT11S = [
+  [
+    'mainnet',
+    'lnbc10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpj85c7x06rkw8s97xtjaarx4y4sgumglauw96fkcdr3yatkshg23gj57pj350za5ppku4d4hl8p6xj9ty7t84z2594q9hl7vf4em9en8cp3rvsy3',
+  ],
+  [
+    'testnet',
+    'lntb10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpjglkgmmeh8nlna32uhyqvpmrxk52er02glraz7jywwxg0tz0ahuxrtzanfvxjrugv2zuv8dxvakvk5p3fuxeexym8ff96m25s7ks750sqknxxzt',
+  ],
+  [
+    'regtest',
+    'lnbcrt10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpj7n3tcnerf357qjapjupmduwrryy3vdfk63jh45ssw86v34cxtdc9kk2n8hlhgs9f6uprj3eaxz54fwp3w2rkafhphh05llhtjdqp4sqptf062s',
+  ],
+] as const;
 const BOLT11 =
   'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
 const AMOUNTLESS_BOLT11 =
-  'lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql';
+  'lnbc1pj48ugqdplf38yjgz8v9kx77fqv9kk7atww3kx2umnypex2emjv4ehx6t0dcsxv6tcw36hyegpp5pyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyyssp5pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q9qrsgqcqpjvcwldrltwv8ce6n00l8gl20vz5q3vu56hhmla07u39tmdy0ll6cs9crysytmdvugwrv2e6nwhfvlhd0mnjvskaefd43j9vdzjaggtygqe8yu0t';
 const PAYMENT_HASH = '0001020304050607080900010203040506070809000102030405060708090102';
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -307,17 +322,88 @@ describe('createGaloyNode transport and payment modes', () => {
     expect(paymentQuery).toContain('SettlementViaIntraLedger');
   });
 
-  it('rejects amountless invoices before sending a payment request', async () => {
-    const fetchMock = vi.fn<FetchLike>();
+  it.each(ONE_SAT_BOLT11S)(
+    'accepts a valid 1-sat %s invoice whose encoded amount begins with 1',
+    async (_network, invoice) => {
+      const queries: string[] = [];
+      const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+        const query = bodyOf(init).query;
+        queries.push(query);
+        return query.includes('lnInvoiceFeeProbe')
+          ? jsonResponse({ data: { lnInvoiceFeeProbe: { amount: 1, errors: [] } } })
+          : jsonResponse({
+              data: { lnInvoicePaymentSend: { status: 'SUCCESS', errors: [] } },
+            });
+      });
+      const node = createGaloyNode(
+        config({
+          wallet: { mode: 'explicit', id: 'btc', currency: 'BTC' },
+          invoiceOperations: {
+            create: { kind: 'btc', denomination: 'sats' },
+            feeProbe: { kind: 'btc', denomination: 'sats' },
+          },
+          payment: { response: 'status-only', acceptedStatuses: ['SUCCESS'] },
+        }),
+        { fetch: fetchMock }
+      );
+
+      expect(decode(invoice).amountMsats).toBe(1_000);
+      await expect(node.payInvoice({ invoice })).resolves.toMatchObject({
+        paymentHash: '07'.repeat(32),
+        preimage: '',
+        feeMsats: 1_000,
+      });
+      expect(queries).toHaveLength(2);
+      expect(queries[0]).toContain('lnInvoiceFeeProbe');
+      expect(queries[1]).toContain('lnInvoicePaymentSend');
+    }
+  );
+
+  it.each([undefined, 1_000])(
+    'rejects a genuinely amountless invoice before any request (amountMsats: %s)',
+    async (amountMsats) => {
+      const fetchMock = vi.fn<FetchLike>();
+      const node = createGaloyNode(config(), { fetch: fetchMock });
+
+      await expect(
+        node.payInvoice({ invoice: AMOUNTLESS_BOLT11, amountMsats })
+      ).rejects.toMatchObject({
+        code: 'InvalidInput',
+        message: expect.stringContaining(
+          "Flash cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field."
+        ),
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it('lets the provider handle malformed invoices instead of calling them amountless', async () => {
+    const queries: string[] = [];
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const query = bodyOf(init).query;
+      queries.push(query);
+      return query.includes('lnUsdInvoiceFeeProbe')
+        ? jsonResponse({ data: { lnUsdInvoiceFeeProbe: { amount: 0, errors: [] } } })
+        : jsonResponse({
+            data: {
+              lnInvoicePaymentSend: {
+                status: 'FAILURE',
+                errors: [{ code: 'INVALID_INVOICE', message: 'Invalid invoice' }],
+              },
+            },
+          });
+    });
     const node = createGaloyNode(config(), { fetch: fetchMock });
 
-    await expect(
-      node.payInvoice({ invoice: AMOUNTLESS_BOLT11, amountMsats: 1_000 })
-    ).rejects.toMatchObject({
-      code: 'InvalidInput',
-      message: expect.stringContaining('amountless'),
+    await expect(node.payInvoice({ invoice: 'not-a-bolt11-invoice' })).rejects.toMatchObject({
+      nwcCode: 'PAYMENT_FAILED',
+      provider: 'flash',
+      providerCode: 'FAILURE',
+      providerMessage: 'Invalid invoice',
     });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toContain('lnUsdInvoiceFeeProbe');
+    expect(queries[1]).toContain('lnInvoicePaymentSend');
   });
 
   it('normalizes missing payment and on-chain mutation payloads', async () => {

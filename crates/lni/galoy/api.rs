@@ -677,14 +677,10 @@ pub async fn pay_invoice_with_status(
     config: &GaloyConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<GaloyPaymentOutcome, ApiError> {
-    let normalized_invoice = invoice_params.invoice.to_ascii_lowercase();
-    let has_amountless_prefix = ["lnbc1", "lntb1", "lnbcrt1"]
-        .iter()
-        .any(|prefix| normalized_invoice.starts_with(prefix));
     let parses_without_amount = Bolt11Invoice::from_str(&invoice_params.invoice)
         .map(|invoice| invoice.amount_milli_satoshis().is_none())
         .unwrap_or(false);
-    if has_amountless_prefix || parses_without_amount {
+    if parses_without_amount {
         return Err(ApiError::InvalidInput(format!(
             "{} cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field",
             config.provider.name
@@ -1430,7 +1426,21 @@ mod tests {
     };
 
     const BOLT11: &str = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
-    const AMOUNTLESS_BOLT11: &str = "lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql";
+    const ONE_SAT_BOLT11S: [(&str, &str); 3] = [
+        (
+            "mainnet",
+            "lnbc10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpj85c7x06rkw8s97xtjaarx4y4sgumglauw96fkcdr3yatkshg23gj57pj350za5ppku4d4hl8p6xj9ty7t84z2594q9hl7vf4em9en8cp3rvsy3",
+        ),
+        (
+            "testnet",
+            "lntb10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpjglkgmmeh8nlna32uhyqvpmrxk52er02glraz7jywwxg0tz0ahuxrtzanfvxjrugv2zuv8dxvakvk5p3fuxeexym8ff96m25s7ks750sqknxxzt",
+        ),
+        (
+            "regtest",
+            "lnbcrt10n1pj48ugqdphf38yjgz8v9kx77fqxys8xct5ypex2emjv4ehx6t0dcsxv6tcw36hyegpp5qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurssp5pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyq9qrsgqcqpj7n3tcnerf357qjapjupmduwrryy3vdfk63jh45ssw86v34cxtdc9kk2n8hlhgs9f6uprj3eaxz54fwp3w2rkafhphh05llhtjdqp4sqptf062s",
+        ),
+    ];
+    const AMOUNTLESS_BOLT11: &str = "lnbc1pj48ugqdplf38yjgz8v9kx77fqv9kk7atww3kx2umnypex2emjv4ehx6t0dcsxv6tcw36hyegpp5pyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyyssp5pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q9qrsgqcqpjvcwldrltwv8ce6n00l8gl20vz5q3vu56hhmla07u39tmdy0ll6cs9crysytmdvugwrv2e6nwhfvlhd0mnjvskaefd43j9vdzjaggtygqe8yu0t";
 
     fn explicit_config(base_url: String, currency: &str) -> GaloyConfig {
         GaloyConfig {
@@ -1565,23 +1575,144 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn one_sat_invoices_reach_fee_probe_and_payment() {
+        for (network, invoice) in ONE_SAT_BOLT11S {
+            let decoded = Bolt11Invoice::from_str(invoice)
+                .unwrap_or_else(|error| panic!("{network} fixture should decode: {error}"));
+            assert_eq!(decoded.amount_milli_satoshis(), Some(1_000));
+
+            let (base_url, mut requests) = test_server(vec![
+                serde_json::json!({
+                    "data": {
+                        "lnInvoiceFeeProbe": {"amount": 1, "errors": []}
+                    }
+                }),
+                serde_json::json!({
+                    "data": {
+                        "lnInvoicePaymentSend": {
+                            "status": "SUCCESS",
+                            "errors": []
+                        }
+                    }
+                }),
+            ])
+            .await;
+            let config = explicit_config(base_url, "BTC");
+
+            let payment = pay_invoice(
+                &config,
+                PayInvoiceParams {
+                    invoice: invoice.to_string(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap_or_else(|error| panic!("{network} 1-sat payment should proceed: {error:?}"));
+
+            assert_eq!(payment.payment_hash, "07".repeat(32));
+            assert!(payment.preimage.is_empty());
+            assert_eq!(payment.fee_msats, 1_000);
+
+            let fee_request = graphql_body(
+                &requests
+                    .recv()
+                    .await
+                    .unwrap_or_else(|| panic!("{network} fee request should be captured")),
+            );
+            assert!(fee_request["query"]
+                .as_str()
+                .expect("fee query")
+                .contains("lnInvoiceFeeProbe"));
+            let payment_request = graphql_body(
+                &requests
+                    .recv()
+                    .await
+                    .unwrap_or_else(|| panic!("{network} payment request should be captured")),
+            );
+            assert!(payment_request["query"]
+                .as_str()
+                .expect("payment query")
+                .contains("lnInvoicePaymentSend"));
+        }
+    }
+
+    #[tokio::test]
     async fn amountless_invoice_is_rejected_before_graphql() {
-        let config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "BTC");
+        let decoded =
+            Bolt11Invoice::from_str(AMOUNTLESS_BOLT11).expect("amountless fixture should decode");
+        assert_eq!(decoded.amount_milli_satoshis(), None);
+
+        for amount_msats in [None, Some(1_000)] {
+            let config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "BTC");
+            let error = pay_invoice(
+                &config,
+                PayInvoiceParams {
+                    invoice: AMOUNTLESS_BOLT11.to_string(),
+                    amount_msats,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect_err("amountless Galoy payment should be rejected");
+
+            assert!(matches!(
+                error,
+                ApiError::InvalidInput(ref message)
+                    if message.contains("Flash cannot pay amountless BOLT11 invoices")
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn malformed_invoices_are_left_for_the_provider_to_reject() {
+        let (base_url, mut requests) = test_server(vec![
+            serde_json::json!({
+                "data": {
+                    "lnInvoiceFeeProbe": {"amount": 0, "errors": []}
+                }
+            }),
+            serde_json::json!({
+                "data": {
+                    "lnInvoicePaymentSend": {
+                        "status": "FAILURE",
+                        "errors": [{
+                            "code": "INVALID_INVOICE",
+                            "message": "Invalid invoice"
+                        }]
+                    }
+                }
+            }),
+        ])
+        .await;
+        let config = explicit_config(base_url, "BTC");
+
         let error = pay_invoice(
             &config,
             PayInvoiceParams {
-                invoice: AMOUNTLESS_BOLT11.to_string(),
-                amount_msats: Some(1_000),
+                invoice: "not-a-bolt11-invoice".to_string(),
                 ..Default::default()
             },
         )
         .await
-        .expect_err("amountless Galoy payment should be rejected");
+        .expect_err("provider should reject malformed invoice");
 
         assert!(matches!(
             error,
-            ApiError::InvalidInput(ref message) if message.contains("amountless")
+            ApiError::Nwc { ref code, ref message }
+                if code == "PAYMENT_FAILED"
+                    && message.contains("[flash]")
+                    && message.contains("Invalid invoice")
         ));
+        let fee_request = graphql_body(&requests.recv().await.expect("fee request"));
+        assert!(fee_request["query"]
+            .as_str()
+            .expect("fee query")
+            .contains("lnInvoiceFeeProbe"));
+        let payment_request = graphql_body(&requests.recv().await.expect("payment request"));
+        assert!(payment_request["query"]
+            .as_str()
+            .expect("payment query")
+            .contains("lnInvoicePaymentSend"));
     }
 
     #[tokio::test]

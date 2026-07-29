@@ -785,13 +785,6 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   }
 
   async payInvoiceWithStatus(params: PayInvoiceParams): Promise<GaloyPaymentOutcome> {
-    if (/^ln(?:bcrt|bc|tb)1/i.test(params.invoice)) {
-      throw new LniError(
-        'InvalidInput',
-        `${this.config.provider.name} cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field.`
-      );
-    }
-
     try {
       if (decodeBolt11(params.invoice).amountMsats === undefined) {
         throw new LniError(
