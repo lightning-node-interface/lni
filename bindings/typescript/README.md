@@ -117,6 +117,7 @@ const flashNode = createNode({
 ```
 
 `FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
+Because Flash uses status-only payments, accepted proofless statuses such as `PENDING` resolve with an empty preimage.
 
 Traditional Blink behavior selects the first BTC wallet and requests the payment preimage:
 

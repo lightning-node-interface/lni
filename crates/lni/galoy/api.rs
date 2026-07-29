@@ -21,8 +21,10 @@ use crate::{
 use reqwest::header;
 
 static SENSITIVE_TEXT: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(?:lnbc|lntb|lnbcrt|lno|lnr|lni)[a-z0-9]+\b|\b[0-9a-f]{64}\b")
-        .expect("sensitive-value regex must compile")
+    Regex::new(
+        r"(?i)\b(?:(?:lnbc|lntb|lnbcrt)[a-z0-9]+|(?:lno|lnr|lni)1[a-z0-9]+)\b|\b[0-9a-f]{64}\b",
+    )
+    .expect("sensitive-value regex must compile")
 });
 
 fn map_galoy_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
@@ -85,11 +87,16 @@ fn redact_json_value(value: &mut serde_json::Value) {
 }
 
 fn sanitize_text(config: &GaloyConfig, text: impl AsRef<str>) -> String {
-    let text = if config.api_key.is_empty() {
+    let mut text = if config.api_key.is_empty() {
         text.as_ref().to_string()
     } else {
         text.as_ref().replace(&config.api_key, "<redacted>")
     };
+    if let Some(proxy_url) = config.socks5_proxy.as_deref() {
+        if !proxy_url.is_empty() {
+            text = text.replace(proxy_url, "<redacted>");
+        }
+    }
     if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&text) {
         redact_json_value(&mut value);
         return value.to_string();
@@ -174,40 +181,39 @@ fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
         header::HeaderValue::from_static("application/json"),
     );
 
-    // Create HTTP client with optional SOCKS5 proxy following Strike pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            // Accept invalid certificates when using SOCKS5 proxy
-            let client_builder = reqwest::Client::builder()
-                .default_headers(headers.clone())
-                .danger_accept_invalid_certs(true);
-
-            if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
-                let mut builder = client_builder.proxy(proxy);
-                if config.http_timeout.is_some() {
-                    builder = builder.timeout(std::time::Duration::from_secs(
-                        config.http_timeout.unwrap_or_default() as u64,
-                    ));
-                }
-                if let Ok(client) = builder.build() {
-                    return Ok(client);
-                }
-            }
-        }
-    }
-
-    // Default client creation
     let mut client_builder = reqwest::Client::builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
-    if config.http_timeout.is_some() {
-        client_builder = client_builder.timeout(std::time::Duration::from_secs(
-            config.http_timeout.unwrap_or_default() as u64,
-        ));
+    if let Some(http_timeout) = config.http_timeout {
+        client_builder =
+            client_builder.timeout(std::time::Duration::from_secs(http_timeout.max(0) as u64));
     }
+    if let Some(proxy_url) = config
+        .socks5_proxy
+        .as_deref()
+        .filter(|proxy_url| !proxy_url.is_empty())
+    {
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|error| ApiError::Http {
+            reason: sanitize_text(
+                config,
+                format!(
+                    "Failed to configure {} SOCKS5 proxy: {}",
+                    config.provider.name, error
+                ),
+            ),
+        })?;
+        client_builder = client_builder.proxy(proxy);
+    }
+
     client_builder.build().map_err(|error| ApiError::Http {
-        reason: format!("Failed to build Galoy HTTP client: {}", error),
+        reason: sanitize_text(
+            config,
+            format!(
+                "Failed to build {} HTTP client: {}",
+                config.provider.name, error
+            ),
+        ),
     })
 }
 
@@ -636,6 +642,20 @@ pub async fn pay_invoice(
     config: &GaloyConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
+    let normalized_invoice = invoice_params.invoice.to_ascii_lowercase();
+    let has_amountless_prefix = ["lnbc1", "lntb1", "lnbcrt1"]
+        .iter()
+        .any(|prefix| normalized_invoice.starts_with(prefix));
+    let parses_without_amount = Bolt11Invoice::from_str(&invoice_params.invoice)
+        .map(|invoice| invoice.amount_milli_satoshis().is_none())
+        .unwrap_or(false);
+    if has_amountless_prefix || parses_without_amount {
+        return Err(ApiError::InvalidInput(format!(
+            "{} cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field",
+            config.provider.name
+        )));
+    }
+
     let wallet = resolve_wallet(config).await?;
     let is_btc = wallet.wallet_currency.eq_ignore_ascii_case("BTC");
     let (fee_field, fee_input_type) = if is_btc {
@@ -834,8 +854,13 @@ pub async fn prepare_onchain_transaction(
         "speed": speed,
     });
 
-    let response: OnChainTxFeeResponse =
-        execute_graphql_query(config, query, Some(variables), "pay_invoice").await?;
+    let response: OnChainTxFeeResponse = execute_graphql_query(
+        config,
+        query,
+        Some(variables),
+        "prepare_onchain_transaction",
+    )
+    .await?;
     let fee_sats = response.on_chain_tx_fee.amount;
 
     Ok(OnchainTransaction {
@@ -913,7 +938,7 @@ pub async fn pay_onchain_with_options(
     });
 
     let response: OnChainPaymentSendResponse =
-        execute_graphql_query(config, query, Some(variables), "pay_invoice").await?;
+        execute_graphql_query(config, query, Some(variables), "pay_onchain").await?;
     let payment = response.on_chain_payment_send;
 
     if let Some(errors) = &payment.errors {
@@ -953,7 +978,7 @@ pub async fn pay_onchain_with_options(
         amount_sats,
         fee_sats,
         total_amount_sats: fee_sats
-            .map(|fee_sats| transaction.amount_sats + fee_sats)
+            .map(|fee_sats| amount_sats + fee_sats)
             .or(transaction.total_amount_sats),
         recipient_amount_sats: transaction
             .recipient_amount_sats
@@ -1126,8 +1151,13 @@ async fn list_transactions_impl(
 
     // Simple approach: map limit directly to $first, handle from with client-side skip
     // This is cleaner than trying to convert integer offsets to opaque cursors
+    let normalized_from = from.max(0);
+    let normalized_limit = limit.clamp(1, 1000);
+    let fetch_count = normalized_from
+        .saturating_add(normalized_limit)
+        .clamp(1, 1000) as i32;
     let variables = serde_json::json!({
-        "first": (from + limit) as i32,  // Fetch enough to skip 'from' records
+        "first": fetch_count,  // Fetch enough to skip 'from' records, within Galoy's safe cap
         "last": serde_json::Value::Null,
         "after": serde_json::Value::Null,
         "before": serde_json::Value::Null
@@ -1217,8 +1247,8 @@ async fn list_transactions_impl(
     }
 
     // Apply client-side pagination: skip 'from' records and take 'limit' records
-    let skip_count = from as usize;
-    let take_count = limit as usize;
+    let skip_count = normalized_from as usize;
+    let take_count = normalized_limit as usize;
 
     if skip_count < all_transactions.len() {
         let end_index = std::cmp::min(skip_count + take_count, all_transactions.len());
@@ -1243,8 +1273,10 @@ pub async fn poll_invoice_events<F>(
         return;
     }
     let start_time = std::time::Instant::now();
+    let max_polling_sec = params.max_polling_sec.max(0) as u64;
+    let polling_delay_sec = params.polling_delay_sec.clamp(1, 3600) as u64;
     loop {
-        if start_time.elapsed() > Duration::from_secs(params.max_polling_sec as u64) {
+        if start_time.elapsed() > Duration::from_secs(max_polling_sec) {
             // timeout
             callback("failure".to_string(), None);
             break;
@@ -1275,7 +1307,7 @@ pub async fn poll_invoice_events<F>(
             break;
         }
 
-        tokio::time::sleep(Duration::from_secs(params.polling_delay_sec as u64)).await;
+        tokio::time::sleep(Duration::from_secs(polling_delay_sec)).await;
     }
 }
 
@@ -1299,6 +1331,7 @@ pub async fn on_invoice_events(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -1310,6 +1343,7 @@ mod tests {
     };
 
     const BOLT11: &str = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
+    const AMOUNTLESS_BOLT11: &str = "lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql";
 
     fn explicit_config(base_url: String, currency: &str) -> GaloyConfig {
         GaloyConfig {
@@ -1414,6 +1448,38 @@ mod tests {
             .split_once("\r\n\r\n")
             .expect("HTTP request should have a body");
         serde_json::from_str(body).expect("GraphQL body should be JSON")
+    }
+
+    #[test]
+    fn configured_proxy_fails_closed_without_leaking_credentials() {
+        let mut config = explicit_config("https://galoy.test/graphql".to_string(), "BTC");
+        config.socks5_proxy = Some("socks5://user:password@[".to_string());
+
+        let error = client(&config).expect_err("invalid proxy should fail client creation");
+        let message = format!("{error:?}");
+        assert!(message.contains("SOCKS5 proxy"));
+        assert!(!message.contains("user"));
+        assert!(!message.contains("password"));
+    }
+
+    #[tokio::test]
+    async fn amountless_invoice_is_rejected_before_graphql() {
+        let config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "BTC");
+        let error = pay_invoice(
+            &config,
+            PayInvoiceParams {
+                invoice: AMOUNTLESS_BOLT11.to_string(),
+                amount_msats: Some(1_000),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("amountless Galoy payment should be rejected");
+
+        assert!(matches!(
+            error,
+            ApiError::InvalidInput(ref message) if message.contains("amountless")
+        ));
     }
 
     #[tokio::test]
@@ -1616,6 +1682,115 @@ mod tests {
             .as_str()
             .expect("payment query")
             .contains("transaction {"));
+    }
+
+    #[tokio::test]
+    async fn onchain_total_uses_provider_settled_amount() {
+        let (base_url, mut requests) = test_server(vec![serde_json::json!({
+            "data": {
+                "onChainPaymentSend": {
+                    "status": "SUCCESS",
+                    "transaction": {
+                        "id": "tx-1",
+                        "settlementAmount": 9000,
+                        "settlementCurrency": "BTC",
+                        "settlementFee": 500,
+                        "settlementVia": {
+                            "__typename": "SettlementViaOnChain",
+                            "transactionHash": "txid-1"
+                        }
+                    },
+                    "errors": []
+                }
+            }
+        })])
+        .await;
+        let mut config = explicit_config(base_url, "BTC");
+        config.capabilities.onchain = true;
+        let payment = pay_onchain(
+            &config,
+            OnchainTransaction {
+                id: None,
+                address: "bc1qexample".to_string(),
+                amount_sats: 10_000,
+                fee_sats: Some(500),
+                total_amount_sats: Some(10_500),
+                recipient_amount_sats: Some(10_000),
+                fee_payer: OnchainFeePayer::Sender,
+                fee: default_onchain_fee(),
+                expires_at: None,
+                estimated_delivery_seconds: None,
+                raw: None,
+            },
+        )
+        .await
+        .expect("on-chain payment should succeed");
+
+        assert_eq!(payment.amount_sats, 9_000);
+        assert_eq!(payment.fee_sats, Some(500));
+        assert_eq!(payment.total_amount_sats, Some(9_500));
+        let request = requests.recv().await.expect("payment request");
+        assert!(graphql_body(&request)["query"]
+            .as_str()
+            .expect("query")
+            .contains("onChainPaymentSend"));
+    }
+
+    #[tokio::test]
+    async fn transaction_fetch_count_is_saturating_and_bounded() {
+        let (base_url, mut requests) = test_server(vec![serde_json::json!({
+            "data": {
+                "me": {
+                    "defaultAccount": {
+                        "transactions": {
+                            "edges": [],
+                            "pageInfo": {
+                                "hasNextPage": false,
+                                "hasPreviousPage": false,
+                                "startCursor": null,
+                                "endCursor": null
+                            }
+                        }
+                    }
+                }
+            }
+        })])
+        .await;
+        let mut config = explicit_config(base_url, "BTC");
+        config.capabilities.transaction_history = true;
+
+        let transactions = list_transactions(&config, i64::MAX, i64::MAX, None)
+            .await
+            .expect("bounded transaction query should succeed");
+        assert!(transactions.is_empty());
+
+        let request = requests.recv().await.expect("transaction request");
+        assert_eq!(graphql_body(&request)["variables"]["first"], 1000);
+    }
+
+    #[tokio::test]
+    async fn negative_polling_values_timeout_without_wrapping_or_hot_looping() {
+        let mut config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "BTC");
+        config.capabilities.invoice_events = true;
+        config.capabilities.transaction_lookup = true;
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured_events = events.clone();
+
+        poll_invoice_events(
+            &config,
+            OnInvoiceEventParams {
+                payment_hash: Some("hash".to_string()),
+                search: None,
+                polling_delay_sec: -1,
+                max_polling_sec: -1,
+            },
+            move |status, _| {
+                captured_events.lock().expect("events lock").push(status);
+            },
+        )
+        .await;
+
+        assert_eq!(events.lock().expect("events lock").as_slice(), ["failure"]);
     }
 
     #[tokio::test]

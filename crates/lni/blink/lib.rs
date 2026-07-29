@@ -152,11 +152,7 @@ impl BlinkNode {
     }
 
     pub async fn create_offer(&self, _params: CreateOfferParams) -> Result<Offer, ApiError> {
-        crate::galoy::api::not_implemented(
-            &crate::galoy::GaloyConfig::from(&self.config),
-            "Bolt12",
-            "make_invoice",
-        )
+        crate::blink::api::bolt12_not_implemented()
     }
 
     pub async fn get_offer(&self, search: Option<String>) -> Result<Offer, ApiError> {

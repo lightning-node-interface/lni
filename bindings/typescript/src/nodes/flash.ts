@@ -24,6 +24,9 @@ export const DEFAULT_FLASH_GRAPHQL_URL = 'https://api.flashapp.me/graphql';
  *
  * Use `createGaloyNode` directly when a Flash deployment exposes capabilities
  * beyond these conservative Flash defaults.
+ *
+ * Accepted proofless statuses such as `PENDING` resolve successfully with an
+ * empty preimage because status-only Galoy responses do not include proof data.
  */
 export class FlashNode implements LightningNode {
   private readonly node: GaloyNode;

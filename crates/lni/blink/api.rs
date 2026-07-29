@@ -9,6 +9,13 @@ fn galoy(config: &BlinkConfig) -> crate::galoy::GaloyConfig {
     config.into()
 }
 
+pub(crate) fn bolt12_not_implemented<T>() -> Result<T, ApiError> {
+    Err(crate::error_normalization::nwc_error(
+        "NOT_IMPLEMENTED",
+        "Bolt12 not implemented for Blink",
+    ))
+}
+
 pub async fn get_info(config: &BlinkConfig) -> Result<crate::NodeInfo, ApiError> {
     crate::galoy::api::get_info(&galoy(config)).await
 }
@@ -57,43 +64,42 @@ pub async fn decode_offer(offer: String) -> Result<String, ApiError> {
     crate::galoy::api::decode_offer(offer).await
 }
 
-pub async fn get_offer(config: &BlinkConfig, search: Option<String>) -> Result<Offer, ApiError> {
-    crate::galoy::api::get_offer(&galoy(config), search).await
+pub async fn get_offer(_config: &BlinkConfig, _search: Option<String>) -> Result<Offer, ApiError> {
+    bolt12_not_implemented()
 }
 
 pub async fn list_offers(
-    config: &BlinkConfig,
-    search: Option<String>,
+    _config: &BlinkConfig,
+    _search: Option<String>,
 ) -> Result<Vec<Offer>, ApiError> {
-    crate::galoy::api::list_offers(&galoy(config), search).await
+    bolt12_not_implemented()
 }
 
 pub async fn create_offer(
-    config: &BlinkConfig,
-    amount_msats: Option<i64>,
-    description: Option<String>,
-    expiry: Option<i64>,
+    _config: &BlinkConfig,
+    _amount_msats: Option<i64>,
+    _description: Option<String>,
+    _expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    crate::galoy::api::create_offer(&galoy(config), amount_msats, description, expiry).await
+    bolt12_not_implemented()
 }
 
 pub async fn fetch_invoice_from_offer(
-    config: &BlinkConfig,
-    offer: String,
-    amount_msats: i64,
-    payer_note: Option<String>,
+    _config: &BlinkConfig,
+    _offer: String,
+    _amount_msats: i64,
+    _payer_note: Option<String>,
 ) -> Result<crate::cln::types::FetchInvoiceResponse, ApiError> {
-    crate::galoy::api::fetch_invoice_from_offer(&galoy(config), offer, amount_msats, payer_note)
-        .await
+    bolt12_not_implemented()
 }
 
 pub async fn pay_offer(
-    config: &BlinkConfig,
-    offer: String,
-    amount_msats: i64,
-    payer_note: Option<String>,
+    _config: &BlinkConfig,
+    _offer: String,
+    _amount_msats: i64,
+    _payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    crate::galoy::api::pay_offer(&galoy(config), offer, amount_msats, payer_note).await
+    bolt12_not_implemented()
 }
 
 pub async fn lookup_invoice(
@@ -128,4 +134,22 @@ pub async fn on_invoice_events(
     callback: std::sync::Arc<dyn OnInvoiceEventCallback>,
 ) {
     crate::galoy::api::on_invoice_events(galoy(&config), params, callback).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bolt12_errors_keep_the_legacy_blink_shape() {
+        let error = get_offer(&BlinkConfig::default(), None)
+            .await
+            .expect_err("Blink Bolt12 should remain unsupported");
+
+        assert!(matches!(
+            error,
+            ApiError::Nwc { ref code, ref message }
+                if code == "NOT_IMPLEMENTED" && message == "Bolt12 not implemented for Blink"
+        ));
+    }
 }

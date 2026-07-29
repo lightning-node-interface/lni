@@ -92,7 +92,7 @@ interface GaloyFeeProbeResponse {
 }
 
 interface GaloyPaymentSendResponse {
-  lnInvoicePaymentSend: {
+  lnInvoicePaymentSend?: {
     status: string;
     transaction?: {
       settlementVia?: {
@@ -104,13 +104,13 @@ interface GaloyPaymentSendResponse {
 }
 
 interface GaloyOnchainTxFeeResponse {
-  onChainTxFee: {
+  onChainTxFee?: {
     amount?: number;
   };
 }
 
 interface GaloyOnchainPaymentSendResponse {
-  onChainPaymentSend: {
+  onChainPaymentSend?: {
     status: string;
     transaction?: {
       id?: string;
@@ -193,6 +193,7 @@ type GaloyTransactionNode =
 interface GaloyTransactionsPage {
   transactions: Transaction[];
   nextCursor: string | null;
+  scannedCount: number;
 }
 
 function defaultOnchainFee(): OnchainFeePreference {
@@ -403,7 +404,7 @@ function redactSensitiveText(value: string): string {
       /("(?:apiKey|api_key|x-api-key|authorization|token|paymentRequest|payment_request|paymentHash|payment_hash|paymentSecret|payment_secret|preImage|preimage)"\s*:\s*")[^"]*(")/gi,
       '$1<redacted>$2'
     )
-    .replace(/\b(?:lnbc|lntb|lnbcrt|lno|lnr|lni)[a-z0-9]+\b/gi, '<redacted>')
+    .replace(/\b(?:(?:lnbc|lntb|lnbcrt)[a-z0-9]+|(?:lno|lnr|lni)1[a-z0-9]+)\b/gi, '<redacted>')
     .replace(/\b[0-9a-f]{64}\b/gi, '<redacted>');
 }
 
@@ -570,8 +571,8 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     return payload.data;
   }
 
-  private async resolveWallet(): Promise<GaloyWallet> {
-    if (this.cachedWallet) {
+  private async resolveWallet(refresh = false): Promise<GaloyWallet> {
+    if (!refresh && this.cachedWallet) {
       return this.cachedWallet;
     }
 
@@ -609,22 +610,22 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     return this.nwcError('NOT_IMPLEMENTED', message, operation);
   }
 
-  private assertOnchainEnabled(): void {
+  private assertOnchainEnabled(operation: NwcErrorOperation): void {
     if (!this.config.capabilities.onchain) {
       throw this.notImplemented(
         `On-chain payments are disabled for ${this.config.provider.name}.`,
-        'pay_invoice'
+        operation
       );
     }
   }
 
-  private async resolveBtcOnchainWallet(): Promise<GaloyWallet> {
-    this.assertOnchainEnabled();
+  private async resolveBtcOnchainWallet(operation: NwcErrorOperation): Promise<GaloyWallet> {
+    this.assertOnchainEnabled(operation);
     const wallet = await this.resolveWallet();
     if (wallet.walletCurrency.toUpperCase() !== 'BTC') {
       throw this.notImplemented(
         `On-chain payments require a BTC wallet for ${this.config.provider.name}.`,
-        'pay_invoice'
+        operation
       );
     }
     return wallet;
@@ -664,7 +665,9 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   }
 
   async getInfo(): Promise<NodeInfo> {
-    const wallet = await this.resolveWallet();
+    // Wallet identity is stable, but account discovery also returns the mutable
+    // balance used by getInfo. Refresh currency-selected wallets on every call.
+    const wallet = await this.resolveWallet(this.config.wallet.mode === 'currency');
     const sats =
       wallet.walletCurrency.toUpperCase() === 'BTC' && wallet.balance !== undefined
         ? wallet.balance
@@ -753,6 +756,27 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   }
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
+    if (/^ln(?:bcrt|bc|tb)1/i.test(params.invoice)) {
+      throw new LniError(
+        'InvalidInput',
+        `${this.config.provider.name} cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field.`
+      );
+    }
+
+    try {
+      if (decodeBolt11(params.invoice).amountMsats === undefined) {
+        throw new LniError(
+          'InvalidInput',
+          `${this.config.provider.name} cannot pay amountless BOLT11 invoices because Galoy's payment mutation has no amount field.`
+        );
+      }
+    } catch (error) {
+      if (error instanceof LniError) {
+        throw error;
+      }
+      // Let the provider return its normal invalid-invoice error when decoding fails.
+    }
+
     const wallet = await this.resolveWallet();
     const family = invoiceOperationFamily(wallet.walletCurrency);
 
@@ -828,10 +852,19 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       'pay_invoice'
     );
 
-    const status = payment.lnInvoicePaymentSend.status;
+    const paymentResult = payment.lnInvoicePaymentSend;
+    if (!paymentResult) {
+      throw this.nwcError(
+        'INTERNAL',
+        `No lnInvoicePaymentSend result returned from ${this.config.provider.name}.`,
+        'pay_invoice'
+      );
+    }
+
+    const status = paymentResult.status;
     if (!this.config.payment.acceptedStatuses.includes(status)) {
-      const providerInfo = payment.lnInvoicePaymentSend.errors?.length
-        ? galoyProviderInfoFromErrors(payment.lnInvoicePaymentSend.errors)
+      const providerInfo = paymentResult.errors?.length
+        ? galoyProviderInfoFromErrors(paymentResult.errors)
         : undefined;
       throw this.nwcError(
         providerInfo
@@ -850,7 +883,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       );
     }
 
-    const preimage = payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage ?? '';
+    const preimage = paymentResult.transaction?.settlementVia?.preImage ?? '';
     let paymentHash = '';
     try {
       paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
@@ -868,14 +901,14 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   async prepareOnchainTransaction(
     params: PrepareOnchainTransactionParams
   ): Promise<OnchainTransaction> {
-    this.assertOnchainEnabled();
+    this.assertOnchainEnabled('prepare_onchain_transaction');
     const amountSats = params.amountSats;
     assertValidOnchainAmount(amountSats);
 
     const fee = params.fee ?? defaultOnchainFee();
     const feePayer = resolveGaloyFeePayer(params.feePayer);
     const speed = resolveGaloyFeeSpeed(fee);
-    const walletId = (await this.resolveBtcOnchainWallet()).id;
+    const walletId = (await this.resolveBtcOnchainWallet('prepare_onchain_transaction')).id;
 
     const response = await this.gql<GaloyOnchainTxFeeResponse>(
       `
@@ -891,10 +924,18 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
         amount: amountSats,
         speed,
       },
-      'pay_invoice'
+      'prepare_onchain_transaction'
     );
 
-    const feeSats = response.onChainTxFee.amount;
+    const feeResult = response.onChainTxFee;
+    if (!feeResult) {
+      throw this.nwcError(
+        'INTERNAL',
+        `No onChainTxFee result returned from ${this.config.provider.name}.`,
+        'prepare_onchain_transaction'
+      );
+    }
+    const feeSats = feeResult.amount;
 
     return {
       address: params.address,
@@ -908,7 +949,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
         walletId,
         speed,
         memo: params.description,
-        fee: response.onChainTxFee,
+        fee: feeResult,
       },
     };
   }
@@ -917,13 +958,13 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     transaction: OnchainTransaction,
     options?: PayOnchainOptions
   ): Promise<PayOnchainResponse> {
-    this.assertOnchainEnabled();
+    this.assertOnchainEnabled('pay_onchain');
     assertValidOnchainAmount(transaction.amountSats);
     resolveGaloyFeePayer(transaction.feePayer);
     const speed = resolveGaloyFeeSpeed(transaction.fee);
     assertOnchainFeeGuardrail(transaction, options);
 
-    const walletId = (await this.resolveBtcOnchainWallet()).id;
+    const walletId = (await this.resolveBtcOnchainWallet('pay_onchain')).id;
     const memo = galoyTransactionMemo(transaction);
     const payment = await this.gql<GaloyOnchainPaymentSendResponse>(
       `
@@ -959,18 +1000,23 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
           speed,
         },
       },
-      'pay_invoice'
+      'pay_onchain'
     );
 
-    if (payment.onChainPaymentSend.errors?.length) {
-      throw this.errorsToNwcError(
-        payment.onChainPaymentSend.errors,
-        'pay_invoice',
-        'PAYMENT_FAILED'
+    const paymentResult = payment.onChainPaymentSend;
+    if (!paymentResult) {
+      throw this.nwcError(
+        'INTERNAL',
+        `No onChainPaymentSend result returned from ${this.config.provider.name}.`,
+        'pay_onchain'
       );
     }
 
-    const paymentTransaction = payment.onChainPaymentSend.transaction;
+    if (paymentResult.errors?.length) {
+      throw this.errorsToNwcError(paymentResult.errors, 'pay_onchain', 'PAYMENT_FAILED');
+    }
+
+    const paymentTransaction = paymentResult.transaction;
     const feeSats =
       galoyTransactionAmountToSats(
         paymentTransaction?.settlementFee,
@@ -985,13 +1031,13 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     return {
       paymentId: paymentTransaction?.id,
       txid: paymentTransaction?.settlementVia?.transactionHash,
-      state: normalizeOnchainState(payment.onChainPaymentSend.status),
+      state: normalizeOnchainState(paymentResult.status),
       address: transaction.address,
       amountSats,
       feeSats,
       totalAmountSats: feeSats === undefined ? transaction.totalAmountSats : amountSats + feeSats,
       recipientAmountSats: transaction.recipientAmountSats ?? transaction.amountSats,
-      raw: payment.onChainPaymentSend,
+      raw: paymentResult,
     };
   }
 
@@ -1088,6 +1134,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       return {
         transactions,
         nextCursor: null,
+        scannedCount: edges.length,
       };
     }
 
@@ -1096,6 +1143,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     return {
       transactions,
       nextCursor: nextCursor && nextCursor !== args.after ? nextCursor : null,
+      scannedCount: edges.length,
     };
   }
 
@@ -1111,10 +1159,14 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     }
 
     let after: string | null = null;
+    let scanned = 0;
 
-    while (true) {
+    while (scanned < GaloyNodeImplementation.MAX_TRANSACTION_FETCH) {
       const page = await this.listTransactionsPage({
-        first: 100,
+        first: Math.min(
+          GaloyNodeImplementation.DEFAULT_PAGE_SIZE,
+          GaloyNodeImplementation.MAX_TRANSACTION_FETCH - scanned
+        ),
         after,
         paymentHash: params.paymentHash,
         search: params.search,
@@ -1124,8 +1176,9 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       if (match) {
         return match;
       }
+      scanned += page.scannedCount;
 
-      if (!page.nextCursor) {
+      if (!page.nextCursor || page.scannedCount === 0) {
         break;
       }
 
@@ -1146,23 +1199,25 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
         'list_transactions'
       );
     }
-    const limit =
+    const requestedLimit =
       params.limit > 0
         ? params.limit
         : Math.min(
             GaloyNodeImplementation.MAX_TRANSACTION_FETCH,
             GaloyNodeImplementation.DEFAULT_PAGE_SIZE * 10
           );
+    const limit = Math.min(requestedLimit, GaloyNodeImplementation.MAX_TRANSACTION_FETCH);
     const from = Math.max(params.from, 0);
     const pageSize = Math.max(Math.min(limit, GaloyNodeImplementation.DEFAULT_PAGE_SIZE), 1);
 
     let after: string | null = null;
     let skipped = 0;
+    let scanned = 0;
     const transactions: Transaction[] = [];
 
-    while (transactions.length < limit) {
+    while (transactions.length < limit && scanned < GaloyNodeImplementation.MAX_TRANSACTION_FETCH) {
       const page = await this.listTransactionsPage({
-        first: pageSize,
+        first: Math.min(pageSize, GaloyNodeImplementation.MAX_TRANSACTION_FETCH - scanned),
         after,
         paymentHash: params.paymentHash,
         search: params.search,
@@ -1170,6 +1225,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       if (!page.transactions.length && !page.nextCursor) {
         break;
       }
+      scanned += page.scannedCount;
 
       for (const tx of page.transactions) {
         if (skipped < from) {
@@ -1183,7 +1239,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
         }
       }
 
-      if (!page.nextCursor) {
+      if (!page.nextCursor || page.scannedCount === 0) {
         break;
       }
 

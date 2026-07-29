@@ -6,6 +6,8 @@ import type { FetchLike, GaloyConfig } from '../types.js';
 
 const BOLT11 =
   'lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh';
+const AMOUNTLESS_BOLT11 =
+  'lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgq357wnc5r2ueh7ck6q93dj32dlqnls087fxdwk8qakdyafkq3yap9us6v52vjjsrvywa6rt52cm9r9zqt8r2t7mlcwspyetp5h2tztugp9lfyql';
 const PAYMENT_HASH = '0001020304050607080900010203040506070809000102030405060708090102';
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -107,6 +109,28 @@ describe('createGaloyNode wallet and invoice behavior', () => {
       provider: 'flash',
       message: expect.stringContaining('USD'),
     });
+  });
+
+  it('refreshes currency-wallet balances on each getInfo call', async () => {
+    let balance = 1;
+    const fetchMock = vi.fn<FetchLike>(async () =>
+      jsonResponse({
+        data: {
+          me: {
+            defaultAccount: {
+              wallets: [{ id: 'btc', walletCurrency: 'BTC', balance: balance++ }],
+            },
+          },
+        },
+      })
+    );
+    const node = createGaloyNode(config({ wallet: { mode: 'currency', currency: 'BTC' } }), {
+      fetch: fetchMock,
+    });
+
+    await expect(node.getInfo()).resolves.toMatchObject({ sendBalanceMsat: 1_000 });
+    await expect(node.getInfo()).resolves.toMatchObject({ sendBalanceMsat: 2_000 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('uses BTC create and fee-probe operations and converts BTC fees to msats', async () => {
@@ -233,6 +257,68 @@ describe('createGaloyNode transport and payment modes', () => {
     });
     expect(paymentQuery).toContain('transaction {');
     expect(paymentQuery).toContain('SettlementViaIntraLedger');
+  });
+
+  it('rejects amountless invoices before sending a payment request', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = createGaloyNode(config(), { fetch: fetchMock });
+
+    await expect(
+      node.payInvoice({ invoice: AMOUNTLESS_BOLT11, amountMsats: 1_000 })
+    ).rejects.toMatchObject({
+      code: 'InvalidInput',
+      message: expect.stringContaining('amountless'),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('normalizes missing payment and on-chain mutation payloads', async () => {
+    const paymentFetch = vi.fn<FetchLike>(async (_input, init) => {
+      const query = bodyOf(init).query;
+      return query.includes('FeeProbe')
+        ? jsonResponse({ data: { lnInvoiceFeeProbe: { amount: 1, errors: [] } } })
+        : jsonResponse({ data: {} });
+    });
+    const btcConfig = config({
+      wallet: { mode: 'explicit', id: 'btc', currency: 'BTC' },
+      payment: { response: 'status-only', acceptedStatuses: ['SUCCESS'] },
+      capabilities: { ...config().capabilities, onchain: true },
+    });
+    const node = createGaloyNode(btcConfig, { fetch: paymentFetch });
+
+    await expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+      nwcCode: 'INTERNAL',
+      provider: 'flash',
+      message: expect.stringContaining('lnInvoicePaymentSend'),
+    });
+
+    const onchainFetch = vi.fn<FetchLike>(async () => jsonResponse({ data: {} }));
+    const onchainNode = createGaloyNode(btcConfig, { fetch: onchainFetch });
+    await expect(
+      onchainNode.prepareOnchainTransaction({
+        address: 'bc1qexample',
+        amountSats: 10_000,
+      })
+    ).rejects.toMatchObject({
+      nwcCode: 'INTERNAL',
+      operation: 'prepare_onchain_transaction',
+      provider: 'flash',
+      message: expect.stringContaining('onChainTxFee'),
+    });
+    await expect(
+      onchainNode.payOnchain({
+        address: 'bc1qexample',
+        amountSats: 10_000,
+        feeSats: 1_000,
+        feePayer: 'sender',
+        fee: { type: 'default' },
+      })
+    ).rejects.toMatchObject({
+      nwcCode: 'INTERNAL',
+      operation: 'pay_onchain',
+      provider: 'flash',
+      message: expect.stringContaining('onChainPaymentSend'),
+    });
   });
 
   it.each(['SUCCESS', 'PENDING', 'ALREADY_PAID'])(
@@ -430,5 +516,55 @@ describe('createGaloyNode capabilities and compatibility', () => {
       alias: 'Blink Node',
       sendBalanceMsat: 2_000,
     });
+  });
+
+  it('bounds transaction lookup to 1,000 scanned provider records', async () => {
+    let pageNumber = 0;
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const body = bodyOf(init);
+      const first = Number(body.variables?.first);
+      const currentPage = pageNumber++;
+      expect(first).toBe(100);
+      return jsonResponse({
+        data: {
+          me: {
+            defaultAccount: {
+              transactions: {
+                edges: Array.from({ length: first }, (_, index) => ({
+                  cursor: `cursor-${currentPage}-${index}`,
+                  node: {
+                    id: `transaction-${currentPage}-${index}`,
+                    createdAt: 1,
+                    direction: 'RECEIVE',
+                    status: 'SUCCESS',
+                    settlementAmount: 1,
+                    settlementCurrency: 'BTC',
+                    initiationVia: {
+                      __typename: 'InitiationViaLn',
+                      paymentHash: `not-${PAYMENT_HASH}`,
+                    },
+                  },
+                })),
+                pageInfo: {
+                  hasNextPage: true,
+                  endCursor: `page-${currentPage + 1}`,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+    const node = createGaloyNode(
+      config({
+        capabilities: { ...config().capabilities, transactionLookup: true },
+      }),
+      { fetch: fetchMock }
+    );
+
+    await expect(node.lookupInvoice({ paymentHash: PAYMENT_HASH })).rejects.toMatchObject({
+      nwcCode: 'NOT_FOUND',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(10);
   });
 });

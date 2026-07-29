@@ -110,7 +110,8 @@ const listTxnParams = {
 const txns = await node.listTransactions(listTxnParams);
 ```
 
-#### Galoy GraphQL (Blink, Flash, and compatible deployments)
+Galoy GraphQL (Blink, Flash, and compatible deployments)
+--------------------------------------------------------
 
 Galoy is modeled as a protocol rather than a brand. TypeScript applications use `kind: 'galoy'`; Rust applications use `GaloyNode` or `create_galoy_node`. The legacy Blink APIs remain as compatibility wrappers.
 
@@ -164,6 +165,7 @@ const flashNode = createNode({
 ```
 
 `FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
+Because Flash uses status-only payments, accepted proofless statuses such as `PENDING` resolve with an empty preimage.
 
 TypeScript Blink configuration with currency-based BTC wallet selection:
 

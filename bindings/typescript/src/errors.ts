@@ -27,6 +27,8 @@ export type NwcErrorOperation =
   | 'get_balance'
   | 'make_invoice'
   | 'pay_invoice'
+  | 'prepare_onchain_transaction'
+  | 'pay_onchain'
   | 'lookup_invoice'
   | 'list_transactions';
 
