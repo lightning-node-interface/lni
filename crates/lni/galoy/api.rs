@@ -6,7 +6,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::types::*;
-use super::{GaloyConfig, GaloyPaymentResponse, GaloyWalletConfig};
+use super::{
+    GaloyConfig, GaloyInvoiceOperation, GaloyPaymentOutcome, GaloyPaymentResponse,
+    GaloyPaymentState, GaloyWalletConfig,
+};
 use crate::error_normalization::{
     map_provider_message, nwc_error, provider_error_from_response, transport_error,
     ProviderErrorInfo,
@@ -25,6 +28,13 @@ static SENSITIVE_TEXT: Lazy<Regex> = Lazy::new(|| {
         r"(?i)\b(?:(?:lnbc|lntb|lnbcrt)[a-z0-9]+|(?:lno|lnr|lni)1[a-z0-9]+)\b|\b[0-9a-f]{64}\b",
     )
     .expect("sensitive-value regex must compile")
+});
+
+static SENSITIVE_LABEL_VALUE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(api[_-]?key|x-api-key|authorization|access[_-]?token|token|payment[_-]?request|payment[_-]?hash|payment[_-]?secret|preimage)\s*[:=]\s*[^\s,;]+",
+    )
+    .expect("sensitive-label regex must compile")
 });
 
 fn map_galoy_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
@@ -62,6 +72,7 @@ fn redact_json_value(value: &mut serde_json::Value) {
                     "apikey"
                         | "xapikey"
                         | "authorization"
+                        | "accesstoken"
                         | "token"
                         | "paymentrequest"
                         | "paymenthash"
@@ -101,7 +112,10 @@ fn sanitize_text(config: &GaloyConfig, text: impl AsRef<str>) -> String {
         redact_json_value(&mut value);
         return value.to_string();
     }
-    SENSITIVE_TEXT.replace_all(&text, "<redacted>").to_string()
+    let text = SENSITIVE_TEXT.replace_all(&text, "<redacted>");
+    SENSITIVE_LABEL_VALUE
+        .replace_all(&text, "$1=<redacted>")
+        .to_string()
 }
 
 fn provider_nwc_error(config: &GaloyConfig, code: &str, message: impl AsRef<str>) -> ApiError {
@@ -543,13 +557,30 @@ pub async fn create_invoice(
 ) -> Result<Transaction, ApiError> {
     match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
+            match config.invoice_operations.create {
+                GaloyInvoiceOperation::Unsupported => {
+                    return Err(provider_nwc_error(
+                        config,
+                        "NOT_IMPLEMENTED",
+                        format!("Invoice creation is disabled for {}", config.provider.name),
+                    ));
+                }
+                GaloyInvoiceOperation::UsdCents => {
+                    return Err(provider_nwc_error(
+                        config,
+                        "NOT_IMPLEMENTED",
+                        format!(
+                            "{} USD invoice creation requires a USD-cent amount, which cannot be represented safely by LNI's amount_msats input",
+                            config.provider.name
+                        ),
+                    ));
+                }
+                GaloyInvoiceOperation::BtcSats => {}
+            }
+
             let wallet = resolve_wallet(config).await?;
-            let is_btc = wallet.wallet_currency.eq_ignore_ascii_case("BTC");
-            let (field, input_type) = if is_btc {
-                ("lnInvoiceCreate", "LnInvoiceCreateInput")
-            } else {
-                ("lnUsdInvoiceCreate", "LnUsdInvoiceCreateInput")
-            };
+            let field = "lnInvoiceCreate";
+            let input_type = "LnInvoiceCreateInput";
 
             let amount_sats = invoice_params.amount_msats.unwrap_or(0) / 1000;
 
@@ -582,12 +613,7 @@ pub async fn create_invoice(
 
             let response: LnInvoiceCreateResponse =
                 execute_graphql_query(config, &query, Some(variables), "make_invoice").await?;
-            let result = if is_btc {
-                response.ln_invoice_create
-            } else {
-                response.ln_usd_invoice_create
-            }
-            .ok_or_else(|| {
+            let result = response.ln_invoice_create.ok_or_else(|| {
                 provider_nwc_error(
                     config,
                     "INTERNAL",
@@ -642,6 +668,15 @@ pub async fn pay_invoice(
     config: &GaloyConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
+    Ok(pay_invoice_with_status(config, invoice_params)
+        .await?
+        .payment)
+}
+
+pub async fn pay_invoice_with_status(
+    config: &GaloyConfig,
+    invoice_params: PayInvoiceParams,
+) -> Result<GaloyPaymentOutcome, ApiError> {
     let normalized_invoice = invoice_params.invoice.to_ascii_lowercase();
     let has_amountless_prefix = ["lnbc1", "lntb1", "lnbcrt1"]
         .iter()
@@ -657,11 +692,20 @@ pub async fn pay_invoice(
     }
 
     let wallet = resolve_wallet(config).await?;
-    let is_btc = wallet.wallet_currency.eq_ignore_ascii_case("BTC");
-    let (fee_field, fee_input_type) = if is_btc {
-        ("lnInvoiceFeeProbe", "LnInvoiceFeeProbeInput")
-    } else {
-        ("lnUsdInvoiceFeeProbe", "LnUsdInvoiceFeeProbeInput")
+    let fee_operation = config.invoice_operations.fee_probe;
+    let (fee_field, fee_input_type) = match fee_operation {
+        GaloyInvoiceOperation::BtcSats => ("lnInvoiceFeeProbe", "LnInvoiceFeeProbeInput"),
+        GaloyInvoiceOperation::UsdCents => ("lnUsdInvoiceFeeProbe", "LnUsdInvoiceFeeProbeInput"),
+        GaloyInvoiceOperation::Unsupported => {
+            return Err(provider_nwc_error(
+                config,
+                "NOT_IMPLEMENTED",
+                format!(
+                    "Lightning fee probing is not configured for {} wallet currency {}",
+                    config.provider.name, wallet.wallet_currency
+                ),
+            ));
+        }
     };
 
     let fee_probe_query = r#"
@@ -693,10 +737,10 @@ pub async fn pay_invoice(
         "pay_invoice",
     )
     .await?;
-    let fee_result = if is_btc {
-        fee_response.ln_invoice_fee_probe
-    } else {
-        fee_response.ln_usd_invoice_fee_probe
+    let fee_result = match fee_operation {
+        GaloyInvoiceOperation::BtcSats => fee_response.ln_invoice_fee_probe,
+        GaloyInvoiceOperation::UsdCents => fee_response.ln_usd_invoice_fee_probe,
+        GaloyInvoiceOperation::Unsupported => unreachable!("unsupported fee probes return above"),
     }
     .ok_or_else(|| {
         provider_nwc_error(
@@ -711,7 +755,7 @@ pub async fn pay_invoice(
             return Err(galoy_graphql_error(config, errors, "PAYMENT_FAILED"));
         }
     }
-    let fee_msats = if is_btc {
+    let fee_msats = if fee_operation == GaloyInvoiceOperation::BtcSats {
         fee_result.amount.unwrap_or(0) * 1000
     } else {
         0
@@ -803,27 +847,69 @@ pub async fn pay_invoice(
         ));
     }
 
+    let preimage = match payment_response
+        .ln_invoice_payment_send
+        .transaction
+        .as_ref()
+        .and_then(|transaction| transaction.settlement_via.as_ref())
+    {
+        Some(SettlementVia::SettlementViaLn { pre_image })
+        | Some(SettlementVia::SettlementViaIntraLedger { pre_image }) => {
+            pre_image.clone().unwrap_or_default()
+        }
+        _ => "".to_string(),
+    };
+
+    if let Some(errors) = &payment_response.ln_invoice_payment_send.errors {
+        let unexpected_errors = errors
+            .iter()
+            .filter(|error| {
+                let proof_unavailable = preimage.is_empty()
+                    && error.code.as_deref().is_some_and(|code| {
+                        config
+                            .payment
+                            .proof_unavailable_error_codes
+                            .iter()
+                            .any(|accepted| accepted.eq_ignore_ascii_case(code))
+                    });
+                !proof_unavailable
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !unexpected_errors.is_empty() {
+            return Err(galoy_graphql_error(
+                config,
+                &unexpected_errors,
+                "PAYMENT_FAILED",
+            ));
+        }
+    }
+
     // Extract payment hash from the BOLT11 invoice
     let payment_hash = match Bolt11Invoice::from_str(&invoice_params.invoice) {
         Ok(invoice) => format!("{:x}", invoice.payment_hash()),
         Err(_) => "".to_string(),
     };
-    let preimage = match payment_response
-        .ln_invoice_payment_send
-        .transaction
-        .and_then(|transaction| transaction.settlement_via)
-    {
-        Some(SettlementVia::SettlementViaLn { pre_image })
-        | Some(SettlementVia::SettlementViaIntraLedger { pre_image }) => {
-            pre_image.unwrap_or_default()
+    let state = if let Some(mapping) = &config.payment.status_mapping {
+        if mapping.settled.contains(&status) {
+            GaloyPaymentState::Settled
+        } else if mapping.pending.contains(&status) {
+            GaloyPaymentState::Pending
+        } else {
+            GaloyPaymentState::Accepted
         }
-        _ => "".to_string(),
+    } else {
+        GaloyPaymentState::Accepted
     };
 
-    Ok(PayInvoiceResponse {
-        payment_hash,
-        preimage,
-        fee_msats,
+    Ok(GaloyPaymentOutcome {
+        payment: PayInvoiceResponse {
+            payment_hash,
+            preimage,
+            fee_msats,
+        },
+        state,
+        provider_status: status,
     })
 }
 
@@ -1339,7 +1425,8 @@ mod tests {
 
     use super::*;
     use crate::galoy::{
-        GaloyCapabilities, GaloyPaymentConfig, GaloyPermissionsMode, GaloyProvider,
+        GaloyCapabilities, GaloyInvoiceOperation, GaloyInvoiceOperationsConfig, GaloyPaymentConfig,
+        GaloyPaymentStatusMapping, GaloyPermissionsMode, GaloyProvider,
     };
 
     const BOLT11: &str = "lnbc2500u1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgpfna3rh";
@@ -1357,6 +1444,16 @@ mod tests {
                 id: "wallet-explicit".to_string(),
                 currency: currency.to_string(),
             },
+            invoice_operations: GaloyInvoiceOperationsConfig {
+                create: GaloyInvoiceOperation::Unsupported,
+                fee_probe: if currency.eq_ignore_ascii_case("BTC") {
+                    GaloyInvoiceOperation::BtcSats
+                } else if currency.eq_ignore_ascii_case("USD") {
+                    GaloyInvoiceOperation::UsdCents
+                } else {
+                    GaloyInvoiceOperation::Unsupported
+                },
+            },
             payment: GaloyPaymentConfig {
                 response: GaloyPaymentResponse::StatusOnly,
                 accepted_statuses: vec![
@@ -1364,6 +1461,11 @@ mod tests {
                     "PENDING".to_string(),
                     "ALREADY_PAID".to_string(),
                 ],
+                status_mapping: Some(GaloyPaymentStatusMapping {
+                    settled: vec!["SUCCESS".to_string(), "ALREADY_PAID".to_string()],
+                    pending: vec!["PENDING".to_string()],
+                }),
+                proof_unavailable_error_codes: vec!["PROOF_UNAVAILABLE".to_string()],
             },
             capabilities: GaloyCapabilities {
                 transaction_lookup: false,
@@ -1483,10 +1585,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn explicit_non_btc_wallet_uses_ln_usd_without_discovery_and_protects_headers() {
+    async fn explicit_operations_are_not_inferred_from_wallet_currency_and_protect_headers() {
         let (base_url, mut requests) = test_server(vec![serde_json::json!({
             "data": {
-                "lnUsdInvoiceCreate": {
+                "lnInvoiceCreate": {
                     "invoice": {
                         "paymentRequest": BOLT11,
                         "paymentHash": "hash",
@@ -1498,6 +1600,7 @@ mod tests {
         })])
         .await;
         let mut config = explicit_config(base_url, "JMD");
+        config.invoice_operations.create = GaloyInvoiceOperation::BtcSats;
         config.additional_headers = Some(HashMap::from([
             (
                 "x-flash-client-capabilities".to_string(),
@@ -1526,9 +1629,32 @@ mod tests {
         assert!(request_lower.contains("x-flash-client-capabilities: proofless"));
         let body = graphql_body(&request);
         let query = body["query"].as_str().expect("query");
-        assert!(query.contains("lnUsdInvoiceCreate"));
+        assert!(query.contains("lnInvoiceCreate"));
+        assert!(!query.contains("lnUsdInvoiceCreate"));
         assert!(!query.contains("query Me"));
         assert_eq!(body["variables"]["input"]["walletId"], "wallet-explicit");
+    }
+
+    #[tokio::test]
+    async fn usd_cent_invoice_creation_is_rejected_before_graphql() {
+        let mut config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "USD");
+        config.invoice_operations.create = GaloyInvoiceOperation::UsdCents;
+
+        let error = create_invoice(
+            &config,
+            CreateInvoiceParams {
+                amount_msats: Some(21_000),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("USD-cent invoice creation must not reinterpret amount_msats");
+
+        assert!(matches!(
+            error,
+            ApiError::Nwc { ref code, ref message }
+                if code == "NOT_IMPLEMENTED" && message.contains("USD-cent")
+        ));
     }
 
     #[tokio::test]
@@ -1610,9 +1736,9 @@ mod tests {
             }),
         ])
         .await;
-        let config = explicit_config(base_url, "JMD");
+        let config = explicit_config(base_url, "USD");
 
-        let response = pay_invoice(
+        let outcome = pay_invoice_with_status(
             &config,
             PayInvoiceParams {
                 invoice: BOLT11.to_string(),
@@ -1621,9 +1747,11 @@ mod tests {
         )
         .await
         .expect("PENDING should be accepted");
-        assert_eq!(response.fee_msats, 0);
-        assert!(response.preimage.is_empty());
-        assert!(!response.payment_hash.is_empty());
+        assert_eq!(outcome.payment.fee_msats, 0);
+        assert!(outcome.payment.preimage.is_empty());
+        assert!(!outcome.payment.payment_hash.is_empty());
+        assert_eq!(outcome.state, GaloyPaymentState::Pending);
+        assert_eq!(outcome.provider_status, "PENDING");
 
         let fee_query = graphql_body(&requests.recv().await.expect("fee request"));
         assert!(fee_query["query"]
@@ -1635,6 +1763,131 @@ mod tests {
             .as_str()
             .expect("payment query")
             .contains("transaction {"));
+    }
+
+    #[tokio::test]
+    async fn configured_payment_statuses_preserve_settlement_state() {
+        for (status, expected_state) in [
+            ("SUCCESS", GaloyPaymentState::Settled),
+            ("ALREADY_PAID", GaloyPaymentState::Settled),
+            ("PENDING", GaloyPaymentState::Pending),
+        ] {
+            let (base_url, _requests) = test_server(vec![
+                serde_json::json!({
+                    "data": {
+                        "lnUsdInvoiceFeeProbe": {"amount": 75, "errors": []}
+                    }
+                }),
+                serde_json::json!({
+                    "data": {
+                        "lnInvoicePaymentSend": {
+                            "status": status,
+                            "errors": []
+                        }
+                    }
+                }),
+            ])
+            .await;
+            let config = explicit_config(base_url, "USD");
+
+            let outcome = pay_invoice_with_status(
+                &config,
+                PayInvoiceParams {
+                    invoice: BOLT11.to_string(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("configured payment status should be accepted");
+
+            assert_eq!(outcome.state, expected_state);
+            assert_eq!(outcome.provider_status, status);
+            assert_eq!(outcome.payment.fee_msats, 0);
+            assert!(outcome.payment.preimage.is_empty());
+            assert!(!outcome.payment.payment_hash.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn unexpected_errors_on_accepted_payments_are_surfaced_and_sanitized() {
+        let sensitive_hash = "a".repeat(64);
+        let provider_message = format!(
+            "unexpected paymentRequest={} paymentHash={} paymentSecret=payment-secret preimage=provider-preimage access_token=access-token api-key=server-api-key",
+            BOLT11, sensitive_hash
+        );
+        let (base_url, _requests) = test_server(vec![
+            serde_json::json!({
+                "data": {
+                    "lnUsdInvoiceFeeProbe": {"amount": 25, "errors": []}
+                }
+            }),
+            serde_json::json!({
+                "data": {
+                    "lnInvoicePaymentSend": {
+                        "status": "SUCCESS",
+                        "errors": [{
+                            "code": "UNEXPECTED_PROVIDER_ERROR",
+                            "message": provider_message
+                        }]
+                    }
+                }
+            }),
+        ])
+        .await;
+        let config = explicit_config(base_url, "USD");
+
+        let error = pay_invoice(
+            &config,
+            PayInvoiceParams {
+                invoice: BOLT11.to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("unexpected payload errors must fail accepted payments");
+
+        match error {
+            ApiError::Nwc { code, message } => {
+                assert_eq!(code, "PAYMENT_FAILED");
+                assert!(message.contains("[flash]"));
+                for sensitive in [
+                    BOLT11,
+                    sensitive_hash.as_str(),
+                    "payment-secret",
+                    "provider-preimage",
+                    "access-token",
+                    "server-api-key",
+                ] {
+                    assert!(
+                        !message.contains(sensitive),
+                        "sensitive value leaked: {sensitive}"
+                    );
+                }
+            }
+            other => panic!("expected sanitized NWC error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn unsupported_wallet_fee_operation_fails_before_graphql() {
+        let config = explicit_config("http://127.0.0.1:1/graphql".to_string(), "JMD");
+        let error = pay_invoice(
+            &config,
+            PayInvoiceParams {
+                invoice: BOLT11.to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("JMD must not be inferred to use USD fee operations");
+
+        assert!(matches!(
+            error,
+            ApiError::Nwc { ref code, ref message }
+                if code == "NOT_IMPLEMENTED"
+                    && message.contains("[flash]")
+                    && message.contains("JMD")
+        ));
     }
 
     #[tokio::test]
@@ -1663,6 +1916,8 @@ mod tests {
         config.payment = GaloyPaymentConfig {
             response: GaloyPaymentResponse::TransactionWithPreimage,
             accepted_statuses: vec!["SUCCESS".to_string()],
+            status_mapping: None,
+            proof_unavailable_error_codes: vec![],
         };
 
         let response = pay_invoice(
@@ -1857,6 +2112,7 @@ mod tests {
             &config,
             serde_json::json!({
                 "apiKey": "server-api-key",
+                "access_token": "access-token",
                 "paymentRequest": BOLT11,
                 "paymentHash": "a".repeat(64),
                 "paymentSecret": "secret",
@@ -1865,6 +2121,7 @@ mod tests {
             .to_string(),
         );
         assert!(!diagnostic.contains("server-api-key"));
+        assert!(!diagnostic.contains("access-token"));
         assert!(!diagnostic.contains(BOLT11));
         assert!(!diagnostic.contains(&"a".repeat(64)));
         assert!(!diagnostic.contains("preimage"));

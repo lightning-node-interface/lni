@@ -26,7 +26,7 @@ describe('FlashNode', () => {
       expect(String(input)).toBe('https://api.flashapp.me/graphql');
       const body = requestBody(init);
       queries.push(body.query);
-      expect(body.variables.input.walletId).toBe('wallet-jmd');
+      expect(body.variables.input.walletId).toBe('wallet-usd');
 
       const headers = new Headers(init?.headers);
       expect(headers.get('x-api-key')).toBe('flash-key');
@@ -48,8 +48,8 @@ describe('FlashNode', () => {
         kind: 'flash',
         config: {
           apiKey: 'flash-key',
-          walletId: 'wallet-jmd',
-          walletCurrency: 'JMD',
+          walletId: 'wallet-usd',
+          walletCurrency: 'USD',
           additionalHeaders: {
             'x-flash-client-capabilities': 'proofless',
             'x-api-key': 'cannot-override',
@@ -76,13 +76,13 @@ describe('FlashNode', () => {
     const node = new FlashNode({
       apiKey: 'flash-key',
       baseUrl: 'https://flash.test/graphql',
-      walletId: 'wallet-jmd',
-      walletCurrency: 'JMD',
+      walletId: 'wallet-usd',
+      walletCurrency: 'USD',
     });
 
     await expect(node.getPermissions()).resolves.toMatchObject({
       getInfo: true,
-      createInvoice: true,
+      createInvoice: false,
       payInvoice: true,
       lookupInvoice: false,
       listTransactions: false,
@@ -90,32 +90,76 @@ describe('FlashNode', () => {
     });
   });
 
-  it('allows the default Flash GraphQL endpoint to be overridden', async () => {
-    const fetchMock = vi.fn<FetchLike>(async (input) => {
-      expect(String(input)).toBe('https://flash.test/custom-graphql');
-      return response({
-        data: {
-          lnUsdInvoiceCreate: {
-            invoice: {
-              paymentRequest: BOLT11,
-              paymentHash: PAYMENT_HASH,
-              satoshis: 1,
-            },
-            errors: [],
-          },
-        },
-      });
+  it.each([
+    ['SUCCESS', 'settled'],
+    ['ALREADY_PAID', 'settled'],
+    ['PENDING', 'pending'],
+  ] as const)('preserves accepted provider status %s as %s', async (providerStatus, state) => {
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const query = requestBody(init).query;
+      return query.includes('lnUsdInvoiceFeeProbe')
+        ? response({ data: { lnUsdInvoiceFeeProbe: { amount: 500, errors: [] } } })
+        : response({
+            data: { lnInvoicePaymentSend: { status: providerStatus, errors: [] } },
+          });
     });
     const node = new FlashNode(
       {
         apiKey: 'flash-key',
+        walletId: 'wallet-usd',
+        walletCurrency: 'USD',
+      },
+      { fetch: fetchMock }
+    );
+
+    await expect(node.payInvoiceWithStatus({ invoice: BOLT11 })).resolves.toEqual({
+      payment: {
+        paymentHash: PAYMENT_HASH,
+        feeMsats: 0,
+        preimage: '',
+      },
+      state,
+      providerStatus,
+    });
+  });
+
+  it('rejects invoice creation without converting amountMsats or making a request', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new FlashNode(
+      {
+        apiKey: 'flash-key',
         baseUrl: 'https://flash.test/custom-graphql',
-        walletId: 'wallet-jmd',
+        walletId: 'wallet-usd',
+        walletCurrency: 'USD',
+      },
+      { fetch: fetchMock }
+    );
+
+    await expect(node.createInvoice({ amountMsats: 123_000 })).rejects.toMatchObject({
+      nwcCode: 'NOT_IMPLEMENTED',
+      operation: 'make_invoice',
+      provider: 'flash',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not assume an arbitrary non-BTC wallet supports USD fee probes', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = new FlashNode(
+      {
+        apiKey: 'flash-key',
+        walletId: 'wallet-unknown',
         walletCurrency: 'JMD',
       },
       { fetch: fetchMock }
     );
 
-    await node.createInvoice({ amountMsats: 1_000 });
+    await expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+      nwcCode: 'NOT_IMPLEMENTED',
+      operation: 'pay_invoice',
+      provider: 'flash',
+      message: expect.stringContaining('JMD'),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

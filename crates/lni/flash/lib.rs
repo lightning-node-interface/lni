@@ -9,6 +9,16 @@ use crate::{
 
 pub const DEFAULT_FLASH_GRAPHQL_URL: &str = "https://api.flashapp.me/graphql";
 
+fn flash_fee_probe_operation(wallet_currency: &str) -> crate::galoy::GaloyInvoiceOperation {
+    if wallet_currency.eq_ignore_ascii_case("BTC") {
+        crate::galoy::GaloyInvoiceOperation::BtcSats
+    } else if wallet_currency.eq_ignore_ascii_case("USD") {
+        crate::galoy::GaloyInvoiceOperation::UsdCents
+    } else {
+        crate::galoy::GaloyInvoiceOperation::Unsupported
+    }
+}
+
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Clone)]
 pub struct FlashConfig {
@@ -59,6 +69,10 @@ impl From<&FlashConfig> for crate::galoy::GaloyConfig {
                 id: config.wallet_id.clone(),
                 currency: config.wallet_currency.clone(),
             },
+            invoice_operations: crate::galoy::GaloyInvoiceOperationsConfig {
+                create: crate::galoy::GaloyInvoiceOperation::Unsupported,
+                fee_probe: flash_fee_probe_operation(&config.wallet_currency),
+            },
             payment: crate::galoy::GaloyPaymentConfig {
                 response: crate::galoy::GaloyPaymentResponse::StatusOnly,
                 accepted_statuses: config.accepted_statuses.clone().unwrap_or_else(|| {
@@ -68,6 +82,11 @@ impl From<&FlashConfig> for crate::galoy::GaloyConfig {
                         "ALREADY_PAID".to_string(),
                     ]
                 }),
+                status_mapping: Some(crate::galoy::GaloyPaymentStatusMapping {
+                    settled: vec!["SUCCESS".to_string(), "ALREADY_PAID".to_string()],
+                    pending: vec!["PENDING".to_string()],
+                }),
+                proof_unavailable_error_codes: vec!["PROOF_UNAVAILABLE".to_string()],
             },
             capabilities: crate::galoy::GaloyCapabilities {
                 transaction_lookup: false,
@@ -85,6 +104,10 @@ impl From<&FlashConfig> for crate::galoy::GaloyConfig {
 }
 
 /// Flash adapter backed by the generic Galoy GraphQL implementation.
+///
+/// Status-only payments may return an empty preimage. Use
+/// [`FlashNode::pay_invoice_with_status`] when the caller must distinguish a
+/// resolved `PENDING` payment from settlement.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug, Clone)]
 pub struct FlashNode {
@@ -125,6 +148,14 @@ impl FlashNode {
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
         self.galoy().pay_invoice(params).await
+    }
+
+    /// Pay an invoice while retaining Flash's accepted provider status.
+    pub async fn pay_invoice_with_status(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<crate::galoy::GaloyPaymentOutcome, ApiError> {
+        self.galoy().pay_invoice_with_status(params).await
     }
 
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
@@ -186,14 +217,16 @@ crate::impl_lightning_node!(FlashNode);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::galoy::{GaloyPaymentResponse, GaloyPermissionsMode, GaloyWalletConfig};
+    use crate::galoy::{
+        GaloyInvoiceOperation, GaloyPaymentResponse, GaloyPermissionsMode, GaloyWalletConfig,
+    };
 
     fn config() -> FlashConfig {
         FlashConfig {
             api_key: "top-secret-api-key".to_string(),
             base_url: None,
-            wallet_id: "wallet-jmd".to_string(),
-            wallet_currency: "JMD".to_string(),
+            wallet_id: "wallet-usd".to_string(),
+            wallet_currency: "USD".to_string(),
             additional_headers: None,
             accepted_statuses: None,
             http_timeout: Some(60),
@@ -211,9 +244,17 @@ mod tests {
         assert_eq!(
             galoy.wallet,
             GaloyWalletConfig::Explicit {
-                id: "wallet-jmd".to_string(),
-                currency: "JMD".to_string(),
+                id: "wallet-usd".to_string(),
+                currency: "USD".to_string(),
             }
+        );
+        assert_eq!(
+            galoy.invoice_operations.create,
+            GaloyInvoiceOperation::Unsupported
+        );
+        assert_eq!(
+            galoy.invoice_operations.fee_probe,
+            GaloyInvoiceOperation::UsdCents
         );
         assert_eq!(galoy.payment.response, GaloyPaymentResponse::StatusOnly);
         assert_eq!(
@@ -225,6 +266,40 @@ mod tests {
         assert!(!galoy.capabilities.transaction_history);
         assert!(!galoy.capabilities.invoice_events);
         assert!(!galoy.capabilities.onchain);
+    }
+
+    #[tokio::test]
+    async fn reports_invoice_creation_as_unsupported() {
+        let node = FlashNode::new(config());
+        let permissions = node
+            .get_permissions()
+            .await
+            .expect("configured permissions should resolve");
+        assert!(!permissions.create_invoice);
+
+        let error = node
+            .create_invoice(CreateInvoiceParams {
+                amount_msats: Some(123_000),
+                ..Default::default()
+            })
+            .await
+            .expect_err("Flash invoice creation must be disabled");
+        assert!(matches!(
+            error,
+            ApiError::Nwc { ref code, ref message }
+                if code == "NOT_IMPLEMENTED" && message.contains("[flash]")
+        ));
+    }
+
+    #[test]
+    fn arbitrary_non_btc_wallet_does_not_select_usd_operations() {
+        let mut config = config();
+        config.wallet_currency = "JMD".to_string();
+        let galoy = crate::galoy::GaloyConfig::from(&config);
+        assert_eq!(
+            galoy.invoice_operations.fee_probe,
+            GaloyInvoiceOperation::Unsupported
+        );
     }
 
     #[test]

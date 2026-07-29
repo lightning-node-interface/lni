@@ -64,9 +64,15 @@ impl From<&BlinkConfig> for crate::galoy::GaloyConfig {
             wallet: crate::galoy::GaloyWalletConfig::Currency {
                 currency: "BTC".to_string(),
             },
+            invoice_operations: crate::galoy::GaloyInvoiceOperationsConfig {
+                create: crate::galoy::GaloyInvoiceOperation::BtcSats,
+                fee_probe: crate::galoy::GaloyInvoiceOperation::BtcSats,
+            },
             payment: crate::galoy::GaloyPaymentConfig {
                 response: crate::galoy::GaloyPaymentResponse::TransactionWithPreimage,
                 accepted_statuses: vec!["SUCCESS".to_string()],
+                status_mapping: None,
+                proof_unavailable_error_codes: vec![],
             },
             capabilities: crate::galoy::GaloyCapabilities {
                 transaction_lookup: true,
@@ -218,6 +224,9 @@ crate::impl_lightning_node!(BlinkNode);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::galoy::{
+        GaloyInvoiceOperation, GaloyPaymentResponse, GaloyPermissionsMode, GaloyWalletConfig,
+    };
     use crate::{
         InvoiceType, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
         OnchainFeeSpeed, PrepareOnchainTransactionParams,
@@ -228,6 +237,37 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
+
+    #[test]
+    fn supplies_legacy_blink_galoy_defaults() {
+        let galoy = crate::galoy::GaloyConfig::from(&BlinkConfig::default());
+        assert_eq!(galoy.provider.id, "blink");
+        assert_eq!(galoy.provider.name, "Blink");
+        assert_eq!(
+            galoy.wallet,
+            GaloyWalletConfig::Currency {
+                currency: "BTC".to_string()
+            }
+        );
+        assert_eq!(
+            galoy.invoice_operations.create,
+            GaloyInvoiceOperation::BtcSats
+        );
+        assert_eq!(
+            galoy.invoice_operations.fee_probe,
+            GaloyInvoiceOperation::BtcSats
+        );
+        assert_eq!(
+            galoy.payment.response,
+            GaloyPaymentResponse::TransactionWithPreimage
+        );
+        assert_eq!(galoy.payment.accepted_statuses, ["SUCCESS"]);
+        assert_eq!(galoy.permissions, GaloyPermissionsMode::JwtIntrospection);
+        assert!(galoy.capabilities.transaction_lookup);
+        assert!(galoy.capabilities.transaction_history);
+        assert!(galoy.capabilities.invoice_events);
+        assert!(galoy.capabilities.onchain);
+    }
 
     lazy_static! {
         static ref BASE_URL: String = {

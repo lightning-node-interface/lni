@@ -43,6 +43,10 @@ export class BlinkNode implements LightningNode, OnchainPayments {
           mode: 'currency',
           currency: 'BTC',
         },
+        invoiceOperations: {
+          create: { kind: 'btc', denomination: 'sats' },
+          feeProbe: { kind: 'btc', denomination: 'sats' },
+        },
         payment: {
           response: 'transaction-with-preimage',
           acceptedStatuses: ['SUCCESS'],

@@ -265,8 +265,10 @@ pub mod galoy {
     pub mod lib;
     pub mod types;
     pub use lib::{
-        GaloyCapabilities, GaloyConfig, GaloyNode, GaloyPaymentConfig, GaloyPaymentResponse,
-        GaloyPermissionsMode, GaloyProvider, GaloyWalletConfig,
+        GaloyCapabilities, GaloyConfig, GaloyInvoiceOperation, GaloyInvoiceOperationsConfig,
+        GaloyNode, GaloyPaymentConfig, GaloyPaymentOutcome, GaloyPaymentResponse,
+        GaloyPaymentState, GaloyPaymentStatusMapping, GaloyPermissionsMode, GaloyProvider,
+        GaloyWalletConfig,
     };
 }
 

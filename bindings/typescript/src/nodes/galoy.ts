@@ -18,6 +18,8 @@ import {
   DEFAULT_ONCHAIN_FEE_GUARDRAIL,
   InvoiceType,
   type GaloyConfig,
+  type GaloyInvoiceOperation,
+  type GaloyPaymentOutcome,
   type CreateInvoiceParams,
   type CreateOfferParams,
   type InvoiceEventCallback,
@@ -126,10 +128,6 @@ interface GaloyOnchainPaymentSendResponse {
   };
 }
 
-/*
- * Galoy's non-BTC invoice operations retain the historical `lnUsd` names even
- * for wallets whose actual currency is neither USD nor BTC.
- */
 type GaloyInvoiceOperationFamily = {
   createField: 'lnInvoiceCreate' | 'lnUsdInvoiceCreate';
   createInput: 'LnInvoiceCreateInput' | 'LnUsdInvoiceCreateInput';
@@ -137,20 +135,24 @@ type GaloyInvoiceOperationFamily = {
   feeInput: 'LnInvoiceFeeProbeInput' | 'LnUsdInvoiceFeeProbeInput';
 };
 
-function invoiceOperationFamily(currency: string): GaloyInvoiceOperationFamily {
-  return currency.toUpperCase() === 'BTC'
-    ? {
-        createField: 'lnInvoiceCreate',
-        createInput: 'LnInvoiceCreateInput',
-        feeField: 'lnInvoiceFeeProbe',
-        feeInput: 'LnInvoiceFeeProbeInput',
-      }
-    : {
-        createField: 'lnUsdInvoiceCreate',
-        createInput: 'LnUsdInvoiceCreateInput',
-        feeField: 'lnUsdInvoiceFeeProbe',
-        feeInput: 'LnUsdInvoiceFeeProbeInput',
-      };
+function invoiceOperationFamily(
+  operation: Exclude<GaloyInvoiceOperation, { kind: 'unsupported' }>
+): GaloyInvoiceOperationFamily {
+  if (operation.kind === 'btc') {
+    return {
+      createField: 'lnInvoiceCreate',
+      createInput: 'LnInvoiceCreateInput',
+      feeField: 'lnInvoiceFeeProbe',
+      feeInput: 'LnInvoiceFeeProbeInput',
+    };
+  }
+
+  return {
+    createField: 'lnUsdInvoiceCreate',
+    createInput: 'LnUsdInvoiceCreateInput',
+    feeField: 'lnUsdInvoiceFeeProbe',
+    feeInput: 'LnUsdInvoiceFeeProbeInput',
+  };
 }
 
 interface GaloyTransactionsQuery {
@@ -404,6 +406,10 @@ function redactSensitiveText(value: string): string {
       /("(?:apiKey|api_key|x-api-key|authorization|token|paymentRequest|payment_request|paymentHash|payment_hash|paymentSecret|payment_secret|preImage|preimage)"\s*:\s*")[^"]*(")/gi,
       '$1<redacted>$2'
     )
+    .replace(
+      /\b(api[_-]?key|x-api-key|authorization|access[_-]?token|token|payment[_-]?request|payment[_-]?hash|payment[_-]?secret|preimage)\s*[:=]\s*[^\s,;]+/gi,
+      '$1=<redacted>'
+    )
     .replace(/\b(?:(?:lnbc|lntb|lnbcrt)[a-z0-9]+|(?:lno|lnr|lni)1[a-z0-9]+)\b/gi, '<redacted>')
     .replace(/\b[0-9a-f]{64}\b/gi, '<redacted>');
 }
@@ -610,6 +616,10 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     return this.nwcError('NOT_IMPLEMENTED', message, operation);
   }
 
+  private canCreateInvoice(): boolean {
+    return this.config.invoiceOperations.create.kind === 'btc';
+  }
+
   private assertOnchainEnabled(operation: NwcErrorOperation): void {
     if (!this.config.capabilities.onchain) {
       throw this.notImplemented(
@@ -635,7 +645,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     if (this.config.permissions === 'configured') {
       return {
         getInfo: true,
-        createInvoice: true,
+        createInvoice: this.canCreateInvoice(),
         payInvoice: true,
         createOffer: false,
         getOffer: false,
@@ -658,6 +668,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
 
     return {
       ...permissions,
+      createInvoice: permissions.createInvoice && this.canCreateInvoice(),
       lookupInvoice: permissions.lookupInvoice && this.config.capabilities.transactionLookup,
       listTransactions: permissions.listTransactions && this.config.capabilities.transactionHistory,
       onInvoiceEvents: permissions.onInvoiceEvents && this.config.capabilities.invoiceEvents,
@@ -689,8 +700,22 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
       );
     }
 
+    const operation = this.config.invoiceOperations.create;
+    if (operation.kind === 'unsupported') {
+      throw this.notImplemented(
+        `Invoice creation is disabled for ${this.config.provider.name}.`,
+        'make_invoice'
+      );
+    }
+    if (operation.kind === 'usd') {
+      throw this.notImplemented(
+        `${this.config.provider.name} USD invoice creation requires a USD-cent amount, which cannot be represented safely by LNI's amountMsats input.`,
+        'make_invoice'
+      );
+    }
+
     const wallet = await this.resolveWallet();
-    const family = invoiceOperationFamily(wallet.walletCurrency);
+    const family = invoiceOperationFamily(operation);
 
     const query = `
       mutation ${family.createField}($input: ${family.createInput}!) {
@@ -756,6 +781,10 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   }
 
   async payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
+    return (await this.payInvoiceWithStatus(params)).payment;
+  }
+
+  async payInvoiceWithStatus(params: PayInvoiceParams): Promise<GaloyPaymentOutcome> {
     if (/^ln(?:bcrt|bc|tb)1/i.test(params.invoice)) {
       throw new LniError(
         'InvalidInput',
@@ -778,7 +807,14 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     }
 
     const wallet = await this.resolveWallet();
-    const family = invoiceOperationFamily(wallet.walletCurrency);
+    const feeProbeOperation = this.config.invoiceOperations.feeProbe;
+    if (feeProbeOperation.kind === 'unsupported') {
+      throw this.notImplemented(
+        `Lightning fee probing is not configured for ${this.config.provider.name} wallet currency ${wallet.walletCurrency}.`,
+        'pay_invoice'
+      );
+    }
+    const family = invoiceOperationFamily(feeProbeOperation);
 
     const feeProbe = await this.gql<GaloyFeeProbeResponse>(
       `
@@ -884,17 +920,40 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     }
 
     const preimage = paymentResult.transaction?.settlementVia?.preImage ?? '';
+    const proofUnavailableCodes = new Set(
+      (this.config.payment.proofUnavailableErrorCodes ?? []).map((code) => code.toUpperCase())
+    );
+    const unexpectedErrors = (paymentResult.errors ?? []).filter((error) => {
+      const code = error.code?.toUpperCase();
+      return !(!preimage && code !== undefined && proofUnavailableCodes.has(code));
+    });
+    if (unexpectedErrors.length) {
+      throw this.errorsToNwcError(unexpectedErrors, 'pay_invoice', 'PAYMENT_FAILED');
+    }
+
     let paymentHash = '';
     try {
       paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
     } catch {
       // The payment succeeded, so preserve the provider result even if the invoice cannot decode.
     }
+    const statusMapping = this.config.payment.statusMapping;
+    const state = statusMapping
+      ? statusMapping.settled.includes(status)
+        ? ('settled' as const)
+        : statusMapping.pending.includes(status)
+          ? ('pending' as const)
+          : ('accepted' as const)
+      : ('accepted' as const);
+
     return {
-      paymentHash,
-      preimage,
-      feeMsats:
-        wallet.walletCurrency.toUpperCase() === 'BTC' ? satsToMsats(feeResult.amount ?? 0) : 0,
+      payment: {
+        paymentHash,
+        preimage,
+        feeMsats: feeProbeOperation.kind === 'btc' ? satsToMsats(feeResult.amount ?? 0) : 0,
+      },
+      state,
+      providerStatus: status,
     };
   }
 
@@ -1281,7 +1340,16 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
   }
 }
 
-export type GaloyNode = LightningNode & OnchainPayments;
+export type GaloyNode = LightningNode &
+  OnchainPayments & {
+    /**
+     * Pay an invoice while preserving Galoy's accepted provider status.
+     *
+     * The shared `payInvoice()` method remains source-compatible and returns
+     * only `PayInvoiceResponse`.
+     */
+    payInvoiceWithStatus(params: PayInvoiceParams): Promise<GaloyPaymentOutcome>;
+  };
 
 export function createGaloyNode(config: GaloyConfig, options: NodeRequestOptions = {}): GaloyNode {
   return new GaloyNodeImplementation(config, options);

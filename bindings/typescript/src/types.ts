@@ -254,6 +254,11 @@ export interface FlashConfig {
   apiKey: string;
   baseUrl?: string;
   walletId: string;
+  /**
+   * Flash payment fee probing is currently documented for BTC and USD.
+   * Other currencies remain unsupported until their operation family and fee
+   * denomination are confirmed.
+   */
   walletCurrency: string;
   additionalHeaders?: Record<string, string>;
   acceptedStatuses?: readonly string[];
@@ -274,6 +279,53 @@ export type GaloyWalletConfig =
 export interface GaloyPaymentConfig {
   response: 'transaction-with-preimage' | 'status-only';
   acceptedStatuses: readonly string[];
+  /**
+   * Optional semantic mapping used to distinguish accepted-but-pending
+   * payments from settled payments.
+   */
+  statusMapping?: {
+    settled: readonly string[];
+    pending: readonly string[];
+  };
+  /**
+   * Provider error codes that specifically mean payment proof is unavailable.
+   * These are nonfatal only when the payment status is otherwise accepted and
+   * no preimage was returned.
+   */
+  proofUnavailableErrorCodes?: readonly string[];
+}
+
+export type GaloyPaymentState = 'settled' | 'pending' | 'accepted';
+
+/**
+ * Galoy-specific payment details available without changing the shared
+ * LightningNode PayInvoiceResponse contract.
+ */
+export interface GaloyPaymentOutcome {
+  payment: PayInvoiceResponse;
+  state: GaloyPaymentState;
+  providerStatus: string;
+}
+
+export type GaloyInvoiceOperation =
+  /** Galoy's BTC operation family with satoshi-denominated amounts. */
+  | {
+      kind: 'btc';
+      denomination: 'sats';
+    }
+  /** Galoy's USD operation family with USD-cent-denominated amounts. */
+  | {
+      kind: 'usd';
+      denomination: 'usd-cents';
+    }
+  /** No safe GraphQL operation is known for this action. */
+  | {
+      kind: 'unsupported';
+    };
+
+export interface GaloyInvoiceOperationsConfig {
+  create: GaloyInvoiceOperation;
+  feeProbe: GaloyInvoiceOperation;
 }
 
 export interface GaloyCapabilities {
@@ -291,6 +343,7 @@ export interface GaloyConfig {
     name: string;
   };
   wallet: GaloyWalletConfig;
+  invoiceOperations: GaloyInvoiceOperationsConfig;
   payment: GaloyPaymentConfig;
   capabilities: GaloyCapabilities;
   permissions: 'jwt-introspection' | 'configured';

@@ -79,7 +79,16 @@ const flash = createNode({
     wallet: {
       mode: 'explicit',
       id: process.env.FLASH_WALLET_ID!,
-      currency: 'JMD',
+      currency: 'USD',
+    },
+    invoiceOperations: {
+      create: {
+        kind: 'unsupported',
+      },
+      feeProbe: {
+        kind: 'usd',
+        denomination: 'usd-cents',
+      },
     },
     additionalHeaders: {
       'x-flash-client-capabilities': 'status-only-payments',
@@ -87,6 +96,10 @@ const flash = createNode({
     payment: {
       response: 'status-only',
       acceptedStatuses: ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+      statusMapping: {
+        settled: ['SUCCESS', 'ALREADY_PAID'],
+        pending: ['PENDING'],
+      },
     },
     capabilities: {
       transactionLookup: false,
@@ -108,7 +121,7 @@ const flashNode = createNode({
   config: {
     apiKey: process.env.FLASH_API_KEY!,
     walletId: process.env.FLASH_WALLET_ID!,
-    walletCurrency: 'JMD',
+    walletCurrency: 'USD',
     additionalHeaders: {
       'x-flash-client-capabilities': 'status-only-payments',
     },
@@ -117,7 +130,18 @@ const flashNode = createNode({
 ```
 
 `FlashNode` defaults to `https://api.flashapp.me/graphql`; set `baseUrl` only to target another Flash-compatible deployment.
-Because Flash uses status-only payments, accepted proofless statuses such as `PENDING` resolve with an empty preimage.
+`FlashNode.createInvoice()` is intentionally unavailable because LNI supplies
+`amountMsats`, while Flash's USD invoice mutation requires USD cents. Flash
+payments remain available for documented BTC and USD wallets. USD fee probes
+are cent-denominated, so their value is not exposed as `feeMsats`; it remains
+zero until LNI has a denomination-aware fee result.
+
+Because Flash uses status-only payments, accepted proofless statuses can
+resolve with an empty preimage. The shared `payInvoice()` response remains
+unchanged. Call `FlashNode.payInvoiceWithStatus()` or
+`GaloyNode.payInvoiceWithStatus()` for a `GaloyPaymentOutcome` containing the
+legacy response under `payment`, plus `state` and `providerStatus`. `SUCCESS`
+and `ALREADY_PAID` map to `settled`, while `PENDING` maps to `pending`.
 
 Traditional Blink behavior selects the first BTC wallet and requests the payment preimage:
 
@@ -134,6 +158,16 @@ const blink = createNode({
     wallet: {
       mode: 'currency',
       currency: 'BTC',
+    },
+    invoiceOperations: {
+      create: {
+        kind: 'btc',
+        denomination: 'sats',
+      },
+      feeProbe: {
+        kind: 'btc',
+        denomination: 'sats',
+      },
     },
     payment: {
       response: 'transaction-with-preimage',

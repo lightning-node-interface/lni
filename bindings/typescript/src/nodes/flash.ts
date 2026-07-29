@@ -3,6 +3,7 @@ import type {
   CreateInvoiceParams,
   CreateOfferParams,
   FlashConfig,
+  GaloyPaymentOutcome,
   InvoiceEventCallback,
   LightningNode,
   ListTransactionsParams,
@@ -19,14 +20,27 @@ import type {
 
 export const DEFAULT_FLASH_GRAPHQL_URL = 'https://api.flashapp.me/graphql';
 
+function flashFeeProbeOperation(walletCurrency: string) {
+  switch (walletCurrency.toUpperCase()) {
+    case 'BTC':
+      return { kind: 'btc', denomination: 'sats' } as const;
+    case 'USD':
+      return { kind: 'usd', denomination: 'usd-cents' } as const;
+    default:
+      return { kind: 'unsupported' } as const;
+  }
+}
+
 /**
  * Flash adapter backed by the generic Galoy GraphQL implementation.
  *
  * Use `createGaloyNode` directly when a Flash deployment exposes capabilities
  * beyond these conservative Flash defaults.
  *
- * Accepted proofless statuses such as `PENDING` resolve successfully with an
- * empty preimage because status-only Galoy responses do not include proof data.
+ * Accepted proofless statuses can resolve with an empty preimage because
+ * status-only Galoy responses do not include proof data. Use
+ * `payInvoiceWithStatus()` when a resolved `PENDING` payment must remain
+ * distinguishable from settlement.
  */
 export class FlashNode implements LightningNode {
   private readonly node: GaloyNode;
@@ -45,9 +59,18 @@ export class FlashNode implements LightningNode {
           id: config.walletId,
           currency: config.walletCurrency,
         },
+        invoiceOperations: {
+          create: { kind: 'unsupported' },
+          feeProbe: flashFeeProbeOperation(config.walletCurrency),
+        },
         payment: {
           response: 'status-only',
           acceptedStatuses: config.acceptedStatuses ?? ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+          statusMapping: {
+            settled: ['SUCCESS', 'ALREADY_PAID'],
+            pending: ['PENDING'],
+          },
+          proofUnavailableErrorCodes: ['PROOF_UNAVAILABLE'],
         },
         capabilities: {
           transactionLookup: false,
@@ -77,6 +100,10 @@ export class FlashNode implements LightningNode {
 
   payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse> {
     return this.node.payInvoice(params);
+  }
+
+  payInvoiceWithStatus(params: PayInvoiceParams): Promise<GaloyPaymentOutcome> {
+    return this.node.payInvoiceWithStatus(params);
   }
 
   createOffer(params: CreateOfferParams): Promise<Offer> {

@@ -36,6 +36,46 @@ pub enum GaloyPaymentResponse {
 pub struct GaloyPaymentConfig {
     pub response: GaloyPaymentResponse,
     pub accepted_statuses: Vec<String>,
+    pub status_mapping: Option<GaloyPaymentStatusMapping>,
+    pub proof_unavailable_error_codes: Vec<String>,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GaloyPaymentStatusMapping {
+    pub settled: Vec<String>,
+    pub pending: Vec<String>,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GaloyPaymentState {
+    Settled,
+    Pending,
+    Accepted,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug)]
+pub struct GaloyPaymentOutcome {
+    pub payment: PayInvoiceResponse,
+    pub state: GaloyPaymentState,
+    pub provider_status: String,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GaloyInvoiceOperation {
+    BtcSats,
+    UsdCents,
+    Unsupported,
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GaloyInvoiceOperationsConfig {
+    pub create: GaloyInvoiceOperation,
+    pub fee_probe: GaloyInvoiceOperation,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -77,6 +117,7 @@ pub struct GaloyConfig {
     pub base_url: String,
     pub provider: GaloyProvider,
     pub wallet: GaloyWalletConfig,
+    pub invoice_operations: GaloyInvoiceOperationsConfig,
     pub payment: GaloyPaymentConfig,
     pub capabilities: GaloyCapabilities,
     pub permissions: GaloyPermissionsMode,
@@ -124,11 +165,15 @@ impl GaloyNode {
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 impl GaloyNode {
+    fn can_create_invoice(&self) -> bool {
+        self.config.invoice_operations.create == GaloyInvoiceOperation::BtcSats
+    }
+
     pub async fn get_permissions(&self) -> Result<Permissions, ApiError> {
         match self.config.permissions {
             GaloyPermissionsMode::Configured => Ok(Permissions {
                 get_info: true,
-                create_invoice: true,
+                create_invoice: self.can_create_invoice(),
                 pay_invoice: true,
                 create_offer: false,
                 get_offer: false,
@@ -151,6 +196,7 @@ impl GaloyNode {
                 permissions.lookup_invoice &= self.config.capabilities.transaction_lookup;
                 permissions.list_transactions &= self.config.capabilities.transaction_history;
                 permissions.on_invoice_events &= self.config.capabilities.invoice_events;
+                permissions.create_invoice &= self.can_create_invoice();
                 Ok(permissions)
             }
         }
@@ -172,6 +218,17 @@ impl GaloyNode {
         params: PayInvoiceParams,
     ) -> Result<PayInvoiceResponse, ApiError> {
         crate::galoy::api::pay_invoice(&self.config, params).await
+    }
+
+    /// Pay an invoice and retain the accepted provider status.
+    ///
+    /// This is additive to the shared [`crate::LightningNode::pay_invoice`] API so
+    /// existing consumers of [`PayInvoiceResponse`] remain source-compatible.
+    pub async fn pay_invoice_with_status(
+        &self,
+        params: PayInvoiceParams,
+    ) -> Result<GaloyPaymentOutcome, ApiError> {
+        crate::galoy::api::pay_invoice_with_status(&self.config, params).await
     }
 
     pub async fn prepare_onchain_transaction(

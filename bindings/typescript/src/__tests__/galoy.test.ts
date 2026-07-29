@@ -23,9 +23,18 @@ function config(overrides: Partial<GaloyConfig> = {}): GaloyConfig {
     baseUrl: 'https://galoy.test/graphql',
     provider: { id: 'flash', name: 'Flash' },
     wallet: { mode: 'explicit', id: 'wallet-jmd', currency: 'JMD' },
+    invoiceOperations: {
+      create: { kind: 'unsupported' },
+      feeProbe: { kind: 'usd', denomination: 'usd-cents' },
+    },
     payment: {
       response: 'status-only',
       acceptedStatuses: ['SUCCESS', 'PENDING', 'ALREADY_PAID'],
+      statusMapping: {
+        settled: ['SUCCESS', 'ALREADY_PAID'],
+        pending: ['PENDING'],
+      },
+      proofUnavailableErrorCodes: ['PROOF_UNAVAILABLE'],
     },
     capabilities: {
       transactionLookup: false,
@@ -47,7 +56,7 @@ function bodyOf(init?: RequestInit): {
 }
 
 describe('createGaloyNode wallet and invoice behavior', () => {
-  it('uses an explicit wallet without account discovery and selects lnUsd operations', async () => {
+  it('uses explicit operation configuration instead of inferring from wallet currency', async () => {
     const queries: string[] = [];
     const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
       const body = bodyOf(init);
@@ -55,7 +64,7 @@ describe('createGaloyNode wallet and invoice behavior', () => {
       expect(body.variables).toMatchObject({ input: { walletId: 'wallet-jmd' } });
       return jsonResponse({
         data: {
-          lnUsdInvoiceCreate: {
+          lnInvoiceCreate: {
             invoice: {
               paymentRequest: BOLT11,
               paymentHash: PAYMENT_HASH,
@@ -67,14 +76,41 @@ describe('createGaloyNode wallet and invoice behavior', () => {
       });
     });
 
-    const transaction = await createGaloyNode(config(), { fetch: fetchMock }).createInvoice({
-      amountMsats: 21_000,
-    });
+    const transaction = await createGaloyNode(
+      config({
+        invoiceOperations: {
+          create: { kind: 'btc', denomination: 'sats' },
+          feeProbe: { kind: 'btc', denomination: 'sats' },
+        },
+      }),
+      { fetch: fetchMock }
+    ).createInvoice({ amountMsats: 21_000 });
 
     expect(transaction.amountMsats).toBe(21_000);
     expect(queries).toHaveLength(1);
-    expect(queries[0]).toContain('lnUsdInvoiceCreate');
+    expect(queries[0]).toContain('lnInvoiceCreate');
+    expect(queries[0]).not.toContain('lnUsdInvoiceCreate');
     expect(queries[0]).not.toContain('query Me');
+  });
+
+  it('does not convert amountMsats into USD cents', async () => {
+    const fetchMock = vi.fn<FetchLike>();
+    const node = createGaloyNode(
+      config({
+        invoiceOperations: {
+          create: { kind: 'usd', denomination: 'usd-cents' },
+          feeProbe: { kind: 'usd', denomination: 'usd-cents' },
+        },
+      }),
+      { fetch: fetchMock }
+    );
+
+    await expect(node.createInvoice({ amountMsats: 21_000 })).rejects.toMatchObject({
+      nwcCode: 'NOT_IMPLEMENTED',
+      operation: 'make_invoice',
+      message: expect.stringContaining('USD-cent'),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('selects the requested wallet currency and reports NOT_FOUND when absent', async () => {
@@ -150,6 +186,10 @@ describe('createGaloyNode wallet and invoice behavior', () => {
     const node = createGaloyNode(
       config({
         wallet: { mode: 'explicit', id: 'wallet-btc', currency: 'BTC' },
+        invoiceOperations: {
+          create: { kind: 'btc', denomination: 'sats' },
+          feeProbe: { kind: 'btc', denomination: 'sats' },
+        },
         payment: { response: 'status-only', acceptedStatuses: ['SUCCESS'] },
       }),
       { fetch: fetchMock }
@@ -195,7 +235,7 @@ describe('createGaloyNode transport and payment modes', () => {
       expect(headers.get('content-type')).toBe('application/json');
       return jsonResponse({
         data: {
-          lnUsdInvoiceCreate: {
+          lnInvoiceCreate: {
             invoice: {
               paymentRequest: BOLT11,
               paymentHash: PAYMENT_HASH,
@@ -209,6 +249,10 @@ describe('createGaloyNode transport and payment modes', () => {
 
     const node = createGaloyNode(
       config({
+        invoiceOperations: {
+          create: { kind: 'btc', denomination: 'sats' },
+          feeProbe: { kind: 'btc', denomination: 'sats' },
+        },
         additionalHeaders: {
           'x-flash-client-capabilities': 'proofless',
           'X-API-Key': 'attacker-key',
@@ -243,6 +287,10 @@ describe('createGaloyNode transport and payment modes', () => {
     const node = createGaloyNode(
       config({
         wallet: { mode: 'explicit', id: 'btc', currency: 'BTC' },
+        invoiceOperations: {
+          create: { kind: 'btc', denomination: 'sats' },
+          feeProbe: { kind: 'btc', denomination: 'sats' },
+        },
         payment: {
           response: 'transaction-with-preimage',
           acceptedStatuses: ['SUCCESS'],
@@ -281,6 +329,10 @@ describe('createGaloyNode transport and payment modes', () => {
     });
     const btcConfig = config({
       wallet: { mode: 'explicit', id: 'btc', currency: 'BTC' },
+      invoiceOperations: {
+        create: { kind: 'btc', denomination: 'sats' },
+        feeProbe: { kind: 'btc', denomination: 'sats' },
+      },
       payment: { response: 'status-only', acceptedStatuses: ['SUCCESS'] },
       capabilities: { ...config().capabilities, onchain: true },
     });
@@ -338,12 +390,15 @@ describe('createGaloyNode transport and payment modes', () => {
         });
       });
 
-      await expect(
-        createGaloyNode(config(), { fetch: fetchMock }).payInvoice({ invoice: BOLT11 })
-      ).resolves.toEqual({
-        paymentHash: PAYMENT_HASH,
-        preimage: '',
-        feeMsats: 0,
+      const node = createGaloyNode(config(), { fetch: fetchMock });
+      await expect(node.payInvoiceWithStatus({ invoice: BOLT11 })).resolves.toEqual({
+        payment: {
+          paymentHash: PAYMENT_HASH,
+          preimage: '',
+          feeMsats: 0,
+        },
+        state: status === 'PENDING' ? 'pending' : 'settled',
+        providerStatus: status,
       });
       expect(paymentQuery).not.toMatch(/\btransaction\s*\{/);
     }
@@ -367,13 +422,65 @@ describe('createGaloyNode transport and payment modes', () => {
       });
     });
 
-    await expect(
-      createGaloyNode(config(), { fetch: fetchMock }).payInvoice({ invoice: BOLT11 })
-    ).resolves.toEqual({
-      paymentHash: PAYMENT_HASH,
-      preimage: '',
-      feeMsats: 0,
+    const node = createGaloyNode(config(), { fetch: fetchMock });
+    await expect(node.payInvoiceWithStatus({ invoice: BOLT11 })).resolves.toEqual({
+      payment: {
+        paymentHash: PAYMENT_HASH,
+        preimage: '',
+        feeMsats: 0,
+      },
+      state: 'pending',
+      providerStatus: 'PENDING',
     });
+  });
+
+  it('surfaces unexpected payload errors even when the status is accepted', async () => {
+    const sensitiveProviderMessage = [
+      `payment_request=${BOLT11}`,
+      `payment_hash=${PAYMENT_HASH}`,
+      'payment_secret=payment-secret',
+      'preimage=provider-preimage',
+      'access_token=access-token',
+      'api_key=secret-api-key',
+    ].join(' ');
+    const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
+      const query = bodyOf(init).query;
+      if (query.includes('FeeProbe')) {
+        return jsonResponse({
+          data: { lnUsdInvoiceFeeProbe: { amount: 20, errors: [] } },
+        });
+      }
+      return jsonResponse({
+        data: {
+          lnInvoicePaymentSend: {
+            status: 'SUCCESS',
+            errors: [{ code: 'UNEXPECTED_PROVIDER_ERROR', message: sensitiveProviderMessage }],
+          },
+        },
+      });
+    });
+
+    try {
+      await createGaloyNode(config(), { fetch: fetchMock }).payInvoice({ invoice: BOLT11 });
+      throw new Error('expected payInvoice to fail');
+    } catch (error) {
+      expect(error).toMatchObject({
+        nwcCode: 'PAYMENT_FAILED',
+        provider: 'flash',
+        providerCode: 'UNEXPECTED_PROVIDER_ERROR',
+      });
+      const serialized = JSON.stringify(error);
+      for (const secret of [
+        BOLT11,
+        PAYMENT_HASH,
+        'payment-secret',
+        'provider-preimage',
+        'access-token',
+        'secret-api-key',
+      ]) {
+        expect(serialized).not.toContain(secret);
+      }
+    }
   });
 
   it('uses configured provider metadata for rejected statuses and redacts secrets', async () => {
@@ -432,7 +539,7 @@ describe('createGaloyNode capabilities and compatibility', () => {
 
     await expect(node.getPermissions()).resolves.toMatchObject({
       getInfo: true,
-      createInvoice: true,
+      createInvoice: false,
       payInvoice: true,
       decode: true,
       lookupInvoice: false,
@@ -478,7 +585,7 @@ describe('createGaloyNode capabilities and compatibility', () => {
     const galoyFetch = vi.fn<FetchLike>(async () =>
       jsonResponse({
         data: {
-          lnUsdInvoiceCreate: {
+          lnInvoiceCreate: {
             invoice: {
               paymentRequest: BOLT11,
               paymentHash: PAYMENT_HASH,
@@ -489,7 +596,18 @@ describe('createGaloyNode capabilities and compatibility', () => {
         },
       })
     );
-    const galoy = createNode({ kind: 'galoy', config: config() }, { fetch: galoyFetch });
+    const galoy = createNode(
+      {
+        kind: 'galoy',
+        config: config({
+          invoiceOperations: {
+            create: { kind: 'btc', denomination: 'sats' },
+            feeProbe: { kind: 'btc', denomination: 'sats' },
+          },
+        }),
+      },
+      { fetch: galoyFetch }
+    );
     await expect(galoy.createInvoice({ amountMsats: 1_000 })).resolves.toMatchObject({
       amountMsats: 1_000,
     });

@@ -16,7 +16,7 @@ pub struct GraphQLResponse<T> {
     pub errors: Option<Vec<GraphQLError>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct GraphQLError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -180,7 +180,7 @@ pub struct LnInvoiceFeeProbeResponse {
 #[derive(Debug, Deserialize)]
 pub struct LnInvoiceFeeProbeResult {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub amount: Option<i64>, // Fee amount in satoshis
+    pub amount: Option<i64>, // Denomination depends on the configured operation family.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<GraphQLError>>,
 }
