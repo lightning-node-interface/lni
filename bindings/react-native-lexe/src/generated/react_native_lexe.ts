@@ -277,6 +277,59 @@ const FfiConverterTypeCreateOfferParams = (() => {
   return new FFIConverter();
 })();
 
+export type HumanBitcoinAddress = {
+  humanBitcoinAddress: string;
+  lightningAddress: string;
+  offer: string;
+  updatable: boolean;
+};
+
+/**
+ * Generated factory for {@link HumanBitcoinAddress} record objects.
+ */
+export const HumanBitcoinAddress = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<HumanBitcoinAddress, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<HumanBitcoinAddress>,
+  });
+})();
+
+const FfiConverterTypeHumanBitcoinAddress = (() => {
+  type TypeName = HumanBitcoinAddress;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        humanBitcoinAddress: FfiConverterString.read(from),
+        lightningAddress: FfiConverterString.read(from),
+        offer: FfiConverterString.read(from),
+        updatable: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.humanBitcoinAddress, into);
+      FfiConverterString.write(value.lightningAddress, into);
+      FfiConverterString.write(value.offer, into);
+      FfiConverterBool.write(value.updatable, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.humanBitcoinAddress) +
+        FfiConverterString.allocationSize(value.lightningAddress) +
+        FfiConverterString.allocationSize(value.offer) +
+        FfiConverterBool.allocationSize(value.updatable)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type LexeConfig = {
   clientCredentials: string;
   dataDir?: string;
@@ -1289,6 +1342,9 @@ export interface LexeNodeLike {
     offer: string,
     asyncOpts_?: { signal: AbortSignal }
   ) /*throws*/ : Promise<string>;
+  getHumanBitcoinAddress(asyncOpts_?: {
+    signal: AbortSignal;
+  }) /*throws*/ : Promise<HumanBitcoinAddress>;
   getInfo(asyncOpts_?: { signal: AbortSignal }) /*throws*/ : Promise<NodeInfo>;
   getOffer(
     search: string | undefined,
@@ -1518,6 +1574,48 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
         /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  async getHumanBitcoinAddress(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<HumanBitcoinAddress> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypeHumanBitcoinAddress.lift.bind(
+          FfiConverterTypeHumanBitcoinAddress
+        ),
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2125,6 +2223,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address() !==
+    60227
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_info() !==
     57682
   ) {
@@ -2229,6 +2335,7 @@ export default Object.freeze({
   converters: {
     FfiConverterTypeCreateInvoiceParams,
     FfiConverterTypeCreateOfferParams,
+    FfiConverterTypeHumanBitcoinAddress,
     FfiConverterTypeInvoiceType,
     FfiConverterTypeLexeConfig,
     FfiConverterTypeLexeError,

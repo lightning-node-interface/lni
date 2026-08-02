@@ -11,6 +11,16 @@ use crate::{
     NodeInfo, Offer, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction,
 };
 
+/// Lexe's human-readable Bitcoin and Lightning receiving addresses.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LexeHumanBitcoinAddress {
+    pub human_bitcoin_address: String,
+    pub lightning_address: String,
+    pub offer: String,
+    pub updatable: bool,
+}
+
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Clone)]
 pub struct LexeConfig {
@@ -113,6 +123,10 @@ impl LexeNode {
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
         crate::lexe::api::get_info(&self.wallet, &self.network).await
+    }
+
+    pub async fn get_human_bitcoin_address(&self) -> Result<LexeHumanBitcoinAddress, ApiError> {
+        crate::lexe::api::get_human_bitcoin_address(&self.wallet).await
     }
 
     pub async fn create_invoice(
@@ -273,6 +287,21 @@ mod tests {
         let info = node.get_info().await.expect("Lexe get_info should succeed");
         assert!(!info.pubkey.is_empty());
         assert_eq!(info.network, "mainnet");
+    }
+
+    #[tokio::test]
+    async fn integration_get_human_bitcoin_address_with_client_credentials() {
+        let Some((_data_dir, node)) = integration_node() else {
+            return;
+        };
+
+        let address = node
+            .get_human_bitcoin_address()
+            .await
+            .expect("Lexe get_human_bitcoin_address should succeed");
+        assert!(!address.human_bitcoin_address.is_empty());
+        assert!(!address.lightning_address.is_empty());
+        assert!(!address.offer.is_empty());
     }
 
     /// Requires a fresh `LEXE_TEST_PAYMENT_REQUEST` and sends a real payment.

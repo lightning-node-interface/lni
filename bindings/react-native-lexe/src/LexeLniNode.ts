@@ -23,6 +23,7 @@ import {
 import type {
   CreateInvoiceParams as NativeCreateInvoiceParams,
   CreateOfferParams as NativeCreateOfferParams,
+  HumanBitcoinAddress as NativeHumanBitcoinAddress,
   LexeNodeLike as NativeLexeNodeLike,
   ListTransactionsParams as NativeListTransactionsParams,
   NodeInfo as NativeNodeInfo,
@@ -40,6 +41,13 @@ export interface LexeLniNodeConfig {
   dataDir?: string;
   network?: string;
 }
+
+export type LexeHumanBitcoinAddress = {
+  humanBitcoinAddress: string;
+  lightningAddress: string;
+  offer: string;
+  updatable: boolean;
+};
 
 type NativeLexeNode = NativeLexeNodeLike & {
   uniffiDestroy(): void;
@@ -185,6 +193,17 @@ function toNodeInfo(info: NativeNodeInfo): NodeInfo {
       info.pendingOpenReceiveBalance,
       'pendingOpenReceiveBalance'
     ),
+  };
+}
+
+function toHumanBitcoinAddress(
+  address: NativeHumanBitcoinAddress
+): LexeHumanBitcoinAddress {
+  return {
+    humanBitcoinAddress: address.humanBitcoinAddress,
+    lightningAddress: address.lightningAddress,
+    offer: address.offer,
+    updatable: address.updatable,
   };
 }
 
@@ -335,6 +354,12 @@ export class LexeLniNode implements LightningNode {
 
   async getInfo(): Promise<NodeInfo> {
     return toNodeInfo(await this.#call(() => this.#nativeNode.getInfo()));
+  }
+
+  async getHumanBitcoinAddress(): Promise<LexeHumanBitcoinAddress> {
+    return toHumanBitcoinAddress(
+      await this.#call(() => this.#nativeNode.getHumanBitcoinAddress())
+    );
   }
 
   async createInvoice(params: CreateInvoiceParams): Promise<Transaction> {

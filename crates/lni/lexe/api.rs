@@ -21,6 +21,8 @@ use crate::{
     PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction,
 };
 
+use super::LexeHumanBitcoinAddress;
+
 const PAYMENT_PAGE_SIZE: usize = 100;
 
 fn api_error(context: &str, error: impl std::fmt::Display) -> ApiError {
@@ -399,6 +401,22 @@ pub async fn get_info(wallet: &LexeWallet, network: &str) -> Result<NodeInfo, Ap
         unsettled_receive_balance_msat: 0,
         pending_open_send_balance: 0,
         pending_open_receive_balance: 0,
+    })
+}
+
+pub async fn get_human_bitcoin_address(
+    wallet: &LexeWallet,
+) -> Result<LexeHumanBitcoinAddress, ApiError> {
+    let response = wallet
+        .get_human_bitcoin_address()
+        .await
+        .map_err(|error| api_error("Failed to get Lexe Human Bitcoin Address", error))?;
+
+    Ok(LexeHumanBitcoinAddress {
+        human_bitcoin_address: response.human_bitcoin_address,
+        lightning_address: response.lightning_address,
+        offer: response.offer.to_string(),
+        updatable: response.updatable,
     })
 }
 

@@ -52,6 +52,10 @@ protected:
   jsi::Value cpp_uniffi_react_native_lexe_fn_method_lexenode_decode_offer(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_fn_method_lexenode_get_info(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -256,6 +260,10 @@ protected:
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_checksum_method_lexenode_decode_offer(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_info(

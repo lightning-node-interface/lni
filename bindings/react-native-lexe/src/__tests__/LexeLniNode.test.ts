@@ -70,6 +70,12 @@ function makeNativeNode(
     decode: vi.fn(async (value: string) => value),
     decodeOffer: vi.fn(async (offer: string) => offer),
     getInfo: vi.fn(async () => nativeInfo),
+    getHumanBitcoinAddress: vi.fn(async () => ({
+      humanBitcoinAddress: '₿test@lexe.app',
+      lightningAddress: 'test@lexe.app',
+      offer: 'lno1test',
+      updatable: true,
+    })),
     getOffer: vi.fn(async () => ({ offerId: 'id', bolt12: 'offer' })),
     getPermissions: vi.fn(async () => nativePermissions),
     listOffers: vi.fn(async () => []),
@@ -148,6 +154,17 @@ describe('LexeLniNode', () => {
         feeMsats: 21,
       }
     );
+  });
+
+  it('returns the wallet Human Bitcoin Address', async () => {
+    const node = makeNode();
+
+    await expect(node.getHumanBitcoinAddress()).resolves.toEqual({
+      humanBitcoinAddress: '₿test@lexe.app',
+      lightningAddress: 'test@lexe.app',
+      offer: 'lno1test',
+      updatable: true,
+    });
   });
 
   it('rejects bigint responses outside the safe-integer range', async () => {
