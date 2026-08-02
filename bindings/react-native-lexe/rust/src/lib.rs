@@ -102,6 +102,25 @@ impl From<lni::NodeInfo> for NodeInfo {
 }
 
 #[derive(Clone, uniffi::Record)]
+pub struct HumanBitcoinAddress {
+    pub human_bitcoin_address: String,
+    pub lightning_address: String,
+    pub offer: String,
+    pub updatable: bool,
+}
+
+impl From<lni::lexe::LexeHumanBitcoinAddress> for HumanBitcoinAddress {
+    fn from(value: lni::lexe::LexeHumanBitcoinAddress) -> Self {
+        Self {
+            human_bitcoin_address: value.human_bitcoin_address,
+            lightning_address: value.lightning_address,
+            offer: value.offer,
+            updatable: value.updatable,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
 pub struct Transaction {
     pub type_: String,
     pub invoice: String,
@@ -379,6 +398,10 @@ impl LexeNode {
 
     pub async fn get_info(&self) -> Result<NodeInfo, LexeError> {
         Ok(self.inner.get_info().await?.into())
+    }
+
+    pub async fn get_human_bitcoin_address(&self) -> Result<HumanBitcoinAddress, LexeError> {
+        Ok(self.inner.get_human_bitcoin_address().await?.into())
     }
 
     pub async fn create_invoice(
