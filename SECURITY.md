@@ -9,7 +9,8 @@ GitHub private vulnerability reporting is not currently enabled for this
 repository. To request a private reporting channel, open a GitHub issue titled
 `Security contact request` containing only:
 
-- Your preferred contact method or GitHub username.
+- Your GitHub username only; do not include an email address or other contact
+  details.
 - The affected LNI component and version, if known.
 - No vulnerability details, credentials, wallet data, invoices, preimages, or
   reproduction steps.
