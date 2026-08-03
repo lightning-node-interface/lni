@@ -11,6 +11,10 @@ Remote connect to all the major lightning node implementations with a standard i
 - Tor support
 - Runs on Android, iOS, Linux, Windows and Mac
 
+> [!WARNING]
+> The Spark and Arkade adapters are experimental and should not be used in
+> production.
+
 <img src="./assets/logo.jpg" alt="logo" style="max-height: 300px;">
 
 ### Interface API Examples
