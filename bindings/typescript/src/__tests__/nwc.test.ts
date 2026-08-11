@@ -269,7 +269,7 @@ describe('NwcNode.payInvoice', () => {
     });
 
     await expect(makeNode().payInvoice({ invoice: BOLT11_INVOICE })).rejects.toThrow(
-      'Web Crypto API or a registered SHA-256 digest fallback is required to hash NWC preimages.'
+      'Web Crypto API or a registered SHA-256 digest fallback is required to hash payment preimages.'
     );
   });
 });

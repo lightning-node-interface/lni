@@ -8,6 +8,7 @@ import {
 } from '../internal/error-normalization.js';
 import { buildUrl, requestJson, requestText, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getStrikeOauthPermissions } from '../internal/permissions.js';
+import { validPaymentPreimageForHash } from '../internal/payment-proof.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import {
   btcToMsats,
@@ -621,9 +622,12 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       ? btcToMsats(payment.lightning.networkFee.amount)
       : 0;
 
+    const paymentHash = paymentHashFromInvoice(params.invoice);
+    const preimage = await validPaymentPreimageForHash(payment?.lightning?.preImage, paymentHash);
+
     return {
-      paymentHash: payment?.lightning?.paymentHash ?? paymentHashFromInvoice(params.invoice),
-      preimage: payment?.lightning?.preImage ?? '',
+      paymentHash,
+      preimage,
       feeMsats,
     };
   }

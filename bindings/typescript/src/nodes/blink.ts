@@ -7,6 +7,7 @@ import {
 } from '../internal/error-normalization.js';
 import { requestJson, resolveFetch, toTimeoutMs } from '../internal/http.js';
 import { getBlinkTokenPermissions } from '../internal/permissions.js';
+import { validPaymentPreimageForHash } from '../internal/payment-proof.js';
 import { pollInvoiceEvents } from '../internal/polling.js';
 import {
   emptyNodeInfo,
@@ -708,14 +709,19 @@ export class BlinkNode implements LightningNode, OnchainPayments {
 
     // The proof of payment: SettlementViaLn and SettlementViaIntraLedger
     // (payer and payee both on Blink) each expose the settled pre-image.
-    const preimage = payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage ?? '';
+    // Treat it as proof only if it hashes to the invoice payment hash.
     let paymentHash = '';
-    if (preimage) {
-      try {
-        paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
-      } catch {
-        paymentHash = '';
-      }
+    try {
+      paymentHash = decodeBolt11(params.invoice).payment_hash ?? '';
+    } catch {
+      paymentHash = '';
+    }
+    const preimage = await validPaymentPreimageForHash(
+      payment.lnInvoicePaymentSend.transaction?.settlementVia?.preImage,
+      paymentHash
+    );
+    if (!preimage) {
+      paymentHash = '';
     }
 
     return {
