@@ -195,7 +195,7 @@ fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
         header::HeaderValue::from_static("application/json"),
     );
 
-    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }

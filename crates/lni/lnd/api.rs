@@ -56,10 +56,10 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following say_after_with_tokio pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
         if !proxy_url.is_empty() {
-            // Accept invalid certificates when using SOCKS5 proxy
-            let client_builder = reqwest::Client::builder()
-                .default_headers(headers.clone())
-                .danger_accept_invalid_certs(true);
+            let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
 
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
@@ -74,7 +74,7 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
     }
 
     // Default client creation
-    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
@@ -83,7 +83,7 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
     }
     client_builder
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|_| crate::default_http_client())
 }
 
 // Core shared logic for processing LND node info and balance responses
@@ -256,6 +256,14 @@ async fn get_lnd_remote_permissions(
             .map_err(|e| ApiError::Http {
                 reason: format!("Failed to list LND macaroon permissions: {}", e),
             })?;
+    if !permissions_response.status().is_success() {
+        return Err(ApiError::Http {
+            reason: format!(
+                "Failed to list LND macaroon permissions: HTTP {}",
+                permissions_response.status()
+            ),
+        });
+    }
     let permissions_text = permissions_response
         .text()
         .await
@@ -279,6 +287,14 @@ async fn get_lnd_remote_permissions(
             .map_err(|e| ApiError::Http {
                 reason: format!("Failed to check LND macaroon permission for {method}: {e}"),
             })?;
+        if !check_response.status().is_success() {
+            return Err(ApiError::Http {
+                reason: format!(
+                    "Failed to check LND macaroon permission for {method}: HTTP {}",
+                    check_response.status()
+                ),
+            });
+        }
         let check_text = check_response.text().await.map_err(|e| ApiError::Http {
             reason: format!("Failed to read LND permission check response for {method}: {e}"),
         })?;
@@ -289,6 +305,22 @@ async fn get_lnd_remote_permissions(
     }
 
     Ok(crate::permissions::normalize_lnd_permissions(granted))
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = LndConfig {
+            macaroon: "fake-macaroon".to_string(),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = async_client(&config);
+    }
 }
 
 // get the one with the offer_id or label or get the first offer in the list or

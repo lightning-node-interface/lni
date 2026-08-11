@@ -29,6 +29,21 @@ fn map_phoenixd_provider_error(info: &ProviderErrorInfo) -> Option<&'static str>
     map_provider_message(info.message.as_deref())
 }
 
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = PhoenixdConfig {
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = client(&config);
+    }
+}
+
 fn phoenixd_error_from_body(status: Option<reqwest::StatusCode>, body: String) -> ApiError {
     let info = provider_info_from_body(status.map(|status| status.as_u16()), &body);
     let code = map_phoenixd_provider_error(&info)
@@ -41,7 +56,7 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
         if !proxy_url.is_empty() {
-            let mut client_builder = reqwest::Client::builder();
+            let mut client_builder = crate::http_client_builder();
             if config.accept_invalid_certs.unwrap_or(false) {
                 client_builder = client_builder.danger_accept_invalid_certs(true);
             }
@@ -63,7 +78,7 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     }
 
     // Default client creation
-    let mut client_builder = reqwest::ClientBuilder::new();
+    let mut client_builder = crate::http_client_builder();
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
@@ -72,7 +87,7 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     }
     client_builder
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|_| crate::default_http_client())
 }
 
 pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {

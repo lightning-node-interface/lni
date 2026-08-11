@@ -32,10 +32,10 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
         Ok(auth_header_value) => headers.insert(header::AUTHORIZATION, auth_header_value),
         Err(_) => {
             eprintln!("Failed to create authorization header");
-            return reqwest::ClientBuilder::new()
+            return crate::http_client_builder()
                 .default_headers(headers)
                 .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
+                .unwrap_or_else(|_| crate::default_http_client());
         }
     };
 
@@ -47,10 +47,10 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following Strike pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
         if !proxy_url.is_empty() {
-            // Accept invalid certificates when using SOCKS5 proxy
-            let client_builder = reqwest::Client::builder()
-                .default_headers(headers.clone())
-                .danger_accept_invalid_certs(true);
+            let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
 
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
@@ -71,7 +71,7 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
     }
 
     // Default client creation
-    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
@@ -82,7 +82,23 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
     }
     client_builder
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|_| crate::default_http_client())
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = SpeedConfig {
+            api_key: "fake-api-key".to_string(),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = client(&config);
+    }
 }
 
 fn get_base_url(config: &SpeedConfig) -> &str {

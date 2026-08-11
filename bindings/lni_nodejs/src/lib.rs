@@ -74,24 +74,28 @@ pub async fn say_after_with_tokio(
   header_key: Option<String>,
   header_value: Option<String>,
 ) -> napi::Result<String> {
+  let default_client = || {
+    reqwest::Client::builder()
+      .redirect(reqwest::redirect::Policy::none())
+      .build()
+      .expect("default HTTP client must build")
+  };
+
   // Create HTTP client with optional SOCKS5 proxy
   let client = if let Some(proxy_url) = socks5_proxy {
-    // Ignore certificate errors when using SOCKS5 proxy
-    let client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
+    let client_builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
 
     match reqwest::Proxy::all(&proxy_url) {
       Ok(proxy) => {
         match client_builder.proxy(proxy).build() {
           Ok(client) => client,
-          Err(_) => reqwest::Client::new(), // Fallback to default client on error
+          Err(_) => default_client(), // Fallback to default client on error
         }
       }
-      Err(_) => reqwest::Client::new(), // Fallback to default client on error
+      Err(_) => default_client(), // Fallback to default client on error
     }
   } else {
-    reqwest::Client::builder()
-      .build()
-      .unwrap_or_else(|_| reqwest::Client::new())
+    default_client()
   };
 
   // Create request with optional header
@@ -102,7 +106,10 @@ pub async fn say_after_with_tokio(
   }
 
   // Make HTTP request
-  let ip_result = request.send().await;
+  let ip_result = request
+    .send()
+    .await
+    .and_then(|response| response.error_for_status());
 
   let page_content = match ip_result {
     Ok(response) => match response.text().await {

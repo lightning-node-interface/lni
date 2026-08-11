@@ -41,10 +41,10 @@ fn async_client(config: &StrikeConfig) -> reqwest::Client {
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
     if let Some(proxy_url) = config.socks5_proxy.clone() {
         if !proxy_url.is_empty() {
-            // Accept invalid certificates when using SOCKS5 proxy
-            let client_builder = reqwest::Client::builder()
-                .default_headers(headers.clone())
-                .danger_accept_invalid_certs(true);
+            let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+            if config.accept_invalid_certs.unwrap_or(false) {
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
 
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => {
@@ -65,7 +65,7 @@ fn async_client(config: &StrikeConfig) -> reqwest::Client {
     }
 
     // Default client creation
-    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
@@ -76,7 +76,7 @@ fn async_client(config: &StrikeConfig) -> reqwest::Client {
     }
     client_builder
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|_| crate::default_http_client())
 }
 
 fn get_base_url(config: &StrikeConfig) -> &str {
@@ -154,6 +154,22 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
 
 fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
+}
+
+fn settle_outcome(state: Option<&str>, preimage: Option<String>) -> Result<String, ApiError> {
+    if matches!(preimage.as_deref(), Some(value) if !value.is_empty()) {
+        return Ok(preimage.unwrap_or_default());
+    }
+
+    if matches!(state, Some(value) if value.eq_ignore_ascii_case("FAILED")) {
+        return Err(ApiError::Api {
+            reason: "Strike payment failed".to_string(),
+        });
+    }
+
+    Err(ApiError::Api {
+        reason: "Strike payment outcome is indeterminate; reconcile it via lookup_invoice or list_transactions before retrying".to_string(),
+    })
 }
 
 fn assert_valid_guardrail_limit(value: f64, name: &str) -> Result<(), ApiError> {
@@ -490,7 +506,9 @@ pub async fn pay_invoice(
         ));
     }
 
-    let execute_text = execute_response.text().await.unwrap();
+    let execute_text = execute_response.text().await.map_err(|e| ApiError::Http {
+        reason: format!("Failed to read payment execution response: {}", e),
+    })?;
     let execute_resp: PaymentExecutionResponse = serde_json::from_str(&execute_text)?;
 
     // Get the outgoing payment record. The Lightning proof can appear shortly after execution.
@@ -559,8 +577,9 @@ pub async fn pay_invoice(
     let preimage = payment
         .as_ref()
         .and_then(|payment| payment.lightning.as_ref())
-        .and_then(|lightning| lightning.pre_image.clone())
-        .unwrap_or_default();
+        .and_then(|lightning| lightning.pre_image.clone());
+    let state = payment.as_ref().map(|payment| payment.state.as_str());
+    let preimage = settle_outcome(state, preimage)?;
 
     Ok(PayInvoiceResponse {
         payment_hash: invoice_payment_hash,
@@ -1278,6 +1297,17 @@ pub async fn on_invoice_events(
 mod tests {
     use super::*;
 
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = StrikeConfig {
+            api_key: "fake-api-key".to_string(),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = async_client(&config);
+    }
+
     fn test_onchain_transaction(fee_sats: Option<i64>) -> OnchainTransaction {
         OnchainTransaction {
             id: Some("quote-1".to_string()),
@@ -1367,6 +1397,26 @@ mod tests {
         assert!(!is_retryable_payment_read_status(
             reqwest::StatusCode::UNAUTHORIZED
         ));
+    }
+
+    #[test]
+    fn settles_payment_when_preimage_is_present() {
+        assert_eq!(
+            settle_outcome(Some("PENDING"), Some("fake-preimage".to_string())).unwrap(),
+            "fake-preimage"
+        );
+    }
+
+    #[test]
+    fn rejects_failed_payment_without_preimage() {
+        let error = settle_outcome(Some("failed"), None).unwrap_err();
+        assert!(matches!(error, ApiError::Api { reason } if reason.contains("failed")));
+    }
+
+    #[test]
+    fn rejects_indeterminate_payment_without_preimage() {
+        let error = settle_outcome(Some("PENDING"), Some(String::new())).unwrap_err();
+        assert!(matches!(error, ApiError::Api { reason } if reason.contains("indeterminate")));
     }
 
     #[test]

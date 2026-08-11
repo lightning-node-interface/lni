@@ -189,20 +189,41 @@ fn is_private_or_local_hostname(hostname: &str) -> bool {
     }
 }
 
+fn lnurl_http_client() -> Result<reqwest::Client, ApiError> {
+    reqwest::Client::builder()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| ApiError::NetworkError(e.to_string()))
+}
+
+fn require_successful_lnurl_response(
+    response: reqwest::Response,
+) -> Result<reqwest::Response, ApiError> {
+    if response.status().is_success() {
+        Ok(response)
+    } else {
+        Err(ApiError::NetworkError(format!(
+            "LNURL request returned HTTP status {}",
+            response.status()
+        )))
+    }
+}
+
 /// Fetch LNURL-pay metadata from a URL
 pub async fn fetch_lnurl_pay(url: &str) -> Result<LnurlPayResponse, ApiError> {
     let url = validate_public_https_url(url)?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+    let client = lnurl_http_client()?;
 
-    let response = client
-        .get(url)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?;
+    let response = require_successful_lnurl_response(
+        client
+            .get(url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?,
+    )?;
 
     let text = response
         .text()
@@ -227,19 +248,18 @@ pub async fn fetch_lnurl_pay(url: &str) -> Result<LnurlPayResponse, ApiError> {
 
 /// Request an invoice from LNURL-pay callback
 pub async fn request_invoice(callback_url: &str, amount_msats: i64) -> Result<String, ApiError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+    let client = lnurl_http_client()?;
 
     let url = callback_url_with_amount(callback_url, amount_msats)?;
 
-    let response = client
-        .get(url)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| ApiError::NetworkError(format!("Failed to request invoice: {}", e)))?;
+    let response = require_successful_lnurl_response(
+        client
+            .get(url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(format!("Failed to request invoice: {}", e)))?,
+    )?;
 
     let text = response
         .text()
@@ -326,17 +346,16 @@ fn callback_url_with_amount(
 
 async fn fetch_lnurl_json_value(url: &str) -> Result<serde_json::Value, ApiError> {
     let url = validate_public_https_url(url)?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+    let client = lnurl_http_client()?;
 
-    let response = client
-        .get(url)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?;
+    let response = require_successful_lnurl_response(
+        client
+            .get(url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?,
+    )?;
 
     let text = response
         .text()
@@ -575,6 +594,11 @@ pub struct PaymentInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_hardened_lnurl_http_client_builds() {
+        lnurl_http_client().expect("hardened LNURL HTTP client should build");
+    }
 
     #[test]
     fn test_parse_bolt11() {

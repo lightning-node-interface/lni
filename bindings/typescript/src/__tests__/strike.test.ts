@@ -281,6 +281,83 @@ describe('StrikeNode Lightning payments', () => {
       vi.useRealTimers();
     }
   });
+
+  it('rejects when a pending payment remains indeterminate after polling', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      const rejection = expect(paymentPromise).rejects.toMatchObject({
+        name: 'NwcError',
+        operation: 'pay_invoice',
+        provider: 'strike',
+        message: expect.stringContaining('indeterminate'),
+      });
+      await vi.runAllTimersAsync();
+
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects when Strike reports a failed payment without a preimage', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1', state: 'FAILED' });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      const rejection = expect(paymentPromise).rejects.toMatchObject({
+        name: 'NwcError',
+        nwcCode: 'PAYMENT_FAILED',
+        operation: 'pay_invoice',
+        provider: 'strike',
+        message: expect.stringContaining('failed'),
+      });
+      await vi.runAllTimersAsync();
+
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('StrikeNode on-chain payments', () => {

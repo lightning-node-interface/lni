@@ -145,6 +145,8 @@ export async function requestText(
       headers,
       body,
       signal: timeout.signal,
+      // React Native/Expo fetch polyfills may ignore this option; compliant fetches fail closed.
+      redirect: 'error',
     });
   } catch (error) {
     throw new LniError(

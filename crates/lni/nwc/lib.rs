@@ -16,7 +16,7 @@ pub struct NwcConfig {
     pub nwc_uri: String, // The full NWC URI string like "nostr+walletconnect://pubkey?relay=...&secret=..."
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
@@ -46,7 +46,7 @@ impl Default for NwcConfig {
         Self {
             nwc_uri: "".to_string(),
             socks5_proxy: Some("".to_string()),
-            accept_invalid_certs: Some(true),
+            accept_invalid_certs: Some(false),
             http_timeout: Some(60),
         }
     }
@@ -165,6 +165,11 @@ mod tests {
     use lazy_static::lazy_static;
     use std::env;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn default_verifies_tls_certificates() {
+        assert_eq!(NwcConfig::default().accept_invalid_certs, Some(false));
+    }
 
     lazy_static! {
         static ref NWC_URI: String = {
