@@ -7,7 +7,7 @@
 use crate::ApiError;
 use lightning_invoice::Bolt11Invoice;
 use serde::Deserialize;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
 
 /// LNURL-pay response from the service
@@ -166,34 +166,92 @@ fn is_private_or_local_hostname(hostname: &str) -> bool {
     }
 
     match host.parse::<IpAddr>() {
-        Ok(IpAddr::V4(ip)) => {
-            let octets = ip.octets();
-            let first = octets[0];
-            let second = octets[1];
-            first == 0
-                || first == 10
-                || first == 127
-                || (first == 100 && (64..=127).contains(&second))
-                || (first == 169 && second == 254)
-                || (first == 172 && (16..=31).contains(&second))
-                || (first == 192 && second == 168)
-                || (first == 198 && (18..=19).contains(&second))
-        }
-        Ok(IpAddr::V6(ip)) => {
-            ip.is_loopback()
-                || ip.is_unspecified()
-                || ip.segments()[0] & 0xfe00 == 0xfc00
-                || ip.segments()[0] & 0xffc0 == 0xfe80
-        }
+        Ok(ip) => !is_public_ip(ip),
         Err(_) => false,
     }
 }
 
-fn lnurl_http_client() -> Result<reqwest::Client, ApiError> {
-    reqwest::Client::builder()
+fn is_public_ipv4(ip: Ipv4Addr) -> bool {
+    let [first, second, third, _] = ip.octets();
+    !(first == 0
+        || first == 10
+        || first == 127
+        || (first == 100 && (64..=127).contains(&second))
+        || (first == 169 && second == 254)
+        || (first == 172 && (16..=31).contains(&second))
+        || (first == 192 && second == 0 && third == 0)
+        || (first == 192 && second == 0 && third == 2)
+        || (first == 192 && second == 88 && third == 99)
+        || (first == 192 && second == 168)
+        || (first == 198 && (18..=19).contains(&second))
+        || (first == 198 && second == 51 && third == 100)
+        || (first == 203 && second == 0 && third == 113)
+        || first >= 224)
+}
+
+fn is_public_ipv6(ip: Ipv6Addr) -> bool {
+    if let Some(ipv4) = ip.to_ipv4_mapped() {
+        return is_public_ipv4(ipv4);
+    }
+
+    let segments = ip.segments();
+    !(ip.is_loopback()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || segments[0] & 0xfe00 == 0xfc00
+        || segments[0] & 0xffc0 == 0xfe80
+        || segments[0] & 0xffc0 == 0xfec0
+        || (segments[0] == 0x0064 && segments[1] == 0xff9b)
+        || (segments[0] == 0x0100 && segments[1] == 0 && segments[2] == 0 && segments[3] == 0)
+        || (segments[0] == 0x2001 && segments[1] == 0)
+        || (segments[0] == 0x2001 && segments[1] == 2)
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || segments[0] == 0x2002)
+}
+
+fn is_public_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => is_public_ipv4(ip),
+        IpAddr::V6(ip) => is_public_ipv6(ip),
+    }
+}
+
+fn validate_resolved_lnurl_addresses(addresses: &[SocketAddr]) -> Result<(), ApiError> {
+    if addresses.is_empty() || addresses.iter().any(|address| !is_public_ip(address.ip())) {
+        return Err(ApiError::InvalidInput(
+            "LNURL endpoints must resolve only to public addresses".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+async fn lnurl_http_client(url: &reqwest::Url) -> Result<reqwest::Client, ApiError> {
+    let hostname = url
+        .host_str()
+        .ok_or_else(|| ApiError::InvalidInput("Invalid LNURL URL: missing hostname".to_string()))?;
+    let port = url.port_or_known_default().unwrap_or(443);
+    let literal_ip = hostname
+        .trim_matches(|character| character == '[' || character == ']')
+        .parse::<IpAddr>()
+        .ok();
+    let addresses = if let Some(ip) = literal_ip {
+        vec![SocketAddr::new(ip, port)]
+    } else {
+        tokio::net::lookup_host((hostname, port))
+            .await
+            .map_err(|_| ApiError::NetworkError("Failed to resolve LNURL hostname".to_string()))?
+            .collect::<Vec<_>>()
+    };
+    validate_resolved_lnurl_addresses(&addresses)?;
+
+    let mut builder = reqwest::Client::builder()
         .https_only(true)
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(30));
+    if literal_ip.is_none() {
+        builder = builder.resolve_to_addrs(hostname, &addresses);
+    }
+    builder
         .build()
         .map_err(|e| ApiError::NetworkError(e.to_string()))
 }
@@ -214,7 +272,7 @@ fn require_successful_lnurl_response(
 /// Fetch LNURL-pay metadata from a URL
 pub async fn fetch_lnurl_pay(url: &str) -> Result<LnurlPayResponse, ApiError> {
     let url = validate_public_https_url(url)?;
-    let client = lnurl_http_client()?;
+    let client = lnurl_http_client(&url).await?;
 
     let response = require_successful_lnurl_response(
         client
@@ -248,9 +306,8 @@ pub async fn fetch_lnurl_pay(url: &str) -> Result<LnurlPayResponse, ApiError> {
 
 /// Request an invoice from LNURL-pay callback
 pub async fn request_invoice(callback_url: &str, amount_msats: i64) -> Result<String, ApiError> {
-    let client = lnurl_http_client()?;
-
     let url = callback_url_with_amount(callback_url, amount_msats)?;
+    let client = lnurl_http_client(&url).await?;
 
     let response = require_successful_lnurl_response(
         client
@@ -346,7 +403,7 @@ fn callback_url_with_amount(
 
 async fn fetch_lnurl_json_value(url: &str) -> Result<serde_json::Value, ApiError> {
     let url = validate_public_https_url(url)?;
-    let client = lnurl_http_client()?;
+    let client = lnurl_http_client(&url).await?;
 
     let response = require_successful_lnurl_response(
         client
@@ -595,9 +652,23 @@ pub struct PaymentInfo {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn test_hardened_lnurl_http_client_builds() {
+        let url = validate_public_https_url("https://93.184.216.34/lnurl")
+            .expect("public HTTPS URL should be accepted");
+        lnurl_http_client(&url)
+            .await
+            .expect("hardened LNURL HTTP client should build");
+    }
+
     #[test]
-    fn test_hardened_lnurl_http_client_builds() {
-        lnurl_http_client().expect("hardened LNURL HTTP client should build");
+    fn test_resolved_lnurl_addresses_must_all_be_public() {
+        let public = SocketAddr::from(([93, 184, 216, 34], 443));
+        let private = SocketAddr::from(([169, 254, 169, 254], 443));
+
+        assert!(validate_resolved_lnurl_addresses(&[public]).is_ok());
+        assert!(validate_resolved_lnurl_addresses(&[public, private]).is_err());
+        assert!(validate_resolved_lnurl_addresses(&[]).is_err());
     }
 
     #[test]

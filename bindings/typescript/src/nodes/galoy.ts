@@ -480,7 +480,7 @@ class GaloyNodeImplementation implements LightningNode, OnchainPayments {
     private readonly config: GaloyConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch);
+    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl;
   }

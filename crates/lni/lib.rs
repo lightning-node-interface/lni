@@ -322,6 +322,22 @@ pub(crate) fn default_http_client() -> reqwest::Client {
         .expect("default HTTP client must build")
 }
 
+fn demo_http_client(socks5_proxy: Option<&str>) -> Result<reqwest::Client, ApiError> {
+    let Some(proxy_url) = socks5_proxy.filter(|url| !url.is_empty()) else {
+        return Ok(default_http_client());
+    };
+
+    let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+        reason: "Invalid SOCKS5 proxy configuration".to_string(),
+    })?;
+    http_client_builder()
+        .proxy(proxy)
+        .build()
+        .map_err(|_| ApiError::Http {
+            reason: "Failed to build SOCKS5 proxy client".to_string(),
+        })
+}
+
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn say_after_with_tokio(
@@ -332,21 +348,9 @@ pub async fn say_after_with_tokio(
     header_key: Option<String>,
     header_value: Option<String>,
 ) -> String {
-    // Create HTTP client with optional SOCKS5 proxy
-    let client = if let Some(proxy_url) = socks5_proxy {
-        let client_builder = http_client_builder();
-
-        match reqwest::Proxy::all(&proxy_url) {
-            Ok(proxy) => {
-                match client_builder.proxy(proxy).build() {
-                    Ok(client) => client,
-                    Err(_) => default_http_client(), // Fallback to default client on error
-                }
-            }
-            Err(_) => default_http_client(), // Fallback to default client on error
-        }
-    } else {
-        default_http_client()
+    let client = match demo_http_client(socks5_proxy.as_deref()) {
+        Ok(client) => client,
+        Err(_) => return "Failed to configure HTTP client".to_string(),
     };
 
     // Create request with optional header
@@ -457,6 +461,11 @@ uniffi::setup_scaffolding!();
 
 #[cfg(test)]
 mod debug_redaction_tests {
+    #[test]
+    fn demo_client_does_not_bypass_invalid_proxy() {
+        assert!(super::demo_http_client(Some("://invalid")).is_err());
+    }
+
     fn assert_redacted(label: &str, output: &str, secrets: &[&str]) {
         assert!(
             output.contains("<redacted>"),

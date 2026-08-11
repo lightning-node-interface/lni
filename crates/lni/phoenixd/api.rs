@@ -40,7 +40,17 @@ mod client_tests {
             ..Default::default()
         };
 
-        let _client = client(&config);
+        let _client = client(&config).expect("proxy client should build");
+    }
+
+    #[test]
+    fn invalid_proxy_configuration_fails_closed() {
+        let config = PhoenixdConfig {
+            socks5_proxy: Some("://invalid".to_string()),
+            ..Default::default()
+        };
+
+        assert!(client(&config).is_err());
     }
 }
 
@@ -52,29 +62,26 @@ fn phoenixd_error_from_body(status: Option<reqwest::StatusCode>, body: String) -
     nwc_error(code, info.message.unwrap_or(body))
 }
 
-fn client(config: &PhoenixdConfig) -> reqwest::Client {
+fn client(config: &PhoenixdConfig) -> Result<reqwest::Client, ApiError> {
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            let mut client_builder = crate::http_client_builder();
-            if config.accept_invalid_certs.unwrap_or(false) {
-                client_builder = client_builder.danger_accept_invalid_certs(true);
-            }
-            if let Some(timeout) = config.http_timeout {
-                client_builder =
-                    client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
-            }
-
-            match reqwest::Proxy::all(&proxy_url) {
-                Ok(proxy) => {
-                    match client_builder.proxy(proxy).build() {
-                        Ok(client) => return client,
-                        Err(_) => {} // Fall through to default client creation
-                    }
-                }
-                Err(_) => {} // Fall through to default client creation
-            }
+    if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
+        let mut client_builder = crate::http_client_builder();
+        if config.accept_invalid_certs.unwrap_or(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
+        if let Some(timeout) = config.http_timeout {
+            client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+        }
+
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+            reason: "Invalid Phoenixd SOCKS5 proxy configuration".to_string(),
+        })?;
+        return client_builder
+            .proxy(proxy)
+            .build()
+            .map_err(|_| ApiError::Http {
+                reason: "Failed to build Phoenixd SOCKS5 proxy client".to_string(),
+            });
     }
 
     // Default client creation
@@ -85,14 +92,14 @@ fn client(config: &PhoenixdConfig) -> reqwest::Client {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder
+    Ok(client_builder
         .build()
-        .unwrap_or_else(|_| crate::default_http_client())
+        .unwrap_or_else(|_| crate::default_http_client()))
 }
 
 pub async fn get_info(config: PhoenixdConfig) -> Result<NodeInfo, ApiError> {
     let info_url = format!("{}/getinfo", config.url);
-    let client = client(&config);
+    let client = client(&config)?;
 
     let response = client
         .get(&info_url)
@@ -169,7 +176,7 @@ pub async fn create_invoice(
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = client(&config);
+    let client = client(&config)?;
     match invoice_type {
         InvoiceType::Bolt11 => {
             let req_url = format!("{}/createinvoice", config.url);
@@ -290,7 +297,7 @@ pub async fn pay_invoice(
     config: PhoenixdConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = client(&config);
+    let client = client(&config)?;
     let req_url = format!("{}/payinvoice", config.url);
     let mut params = vec![];
     if invoice_params.amount_msats.is_some() {
@@ -348,7 +355,7 @@ pub async fn create_offer(
     params: CreateOfferParams,
 ) -> Result<Offer, ApiError> {
     let req_url = format!("{}/createoffer", config.url);
-    let client = client(&config);
+    let client = client(&config)?;
 
     // Always use form data with optional fields
     let bolt12_req = Bolt12Req {
@@ -394,7 +401,7 @@ pub async fn create_offer(
 // Get latest BOLT12 offer
 pub async fn get_offer(config: PhoenixdConfig) -> Result<Offer, ApiError> {
     let req_url = format!("{}/getoffer", config.url);
-    let client = client(&config);
+    let client = client(&config)?;
     let response = client
         .get(&req_url)
         .basic_auth("", Some(config.password.clone()))
@@ -433,7 +440,7 @@ pub async fn pay_offer(
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
     let req_url = format!("{}/payoffer", config.url);
-    let client = client(&config);
+    let client = client(&config)?;
     let response = client
         .post(&req_url)
         .basic_auth("", Some(config.password.clone()))
@@ -486,7 +493,7 @@ pub async fn lookup_invoice(
     _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
     let url = format!("{}/payments/incoming/{}", config.url, payment_hash.unwrap());
-    let client = client(&config);
+    let client = client(&config)?;
     let response = client
         .get(&url)
         .basic_auth("", Some(config.password.clone()))
@@ -555,7 +562,7 @@ pub async fn list_transactions(
     config: PhoenixdConfig,
     params: ListTransactionsParams,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = client(&config);
+    let client = client(&config)?;
 
     // 1) Build query for incoming transactions
     let mut incoming_params = vec![];

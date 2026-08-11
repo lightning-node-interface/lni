@@ -14,7 +14,17 @@ export interface RequestArgs {
   signal?: AbortSignal;
 }
 
-export function resolveFetch(customFetch?: FetchLike): FetchLike {
+export function resolveFetch(
+  customFetch?: FetchLike,
+  fetchSupportsRedirectError = false
+): FetchLike {
+  if (globalThis.navigator?.product === 'ReactNative' && !fetchSupportsRedirectError) {
+    throw new LniError(
+      'InvalidInput',
+      "React Native's legacy fetch cannot reject redirects. Supply a redirect-capable fetch such as expo/fetch and set fetchSupportsRedirectError: true."
+    );
+  }
+
   if (customFetch) {
     return customFetch;
   }

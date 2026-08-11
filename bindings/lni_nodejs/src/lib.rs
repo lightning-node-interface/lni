@@ -74,29 +74,7 @@ pub async fn say_after_with_tokio(
   header_key: Option<String>,
   header_value: Option<String>,
 ) -> napi::Result<String> {
-  let default_client = || {
-    reqwest::Client::builder()
-      .redirect(reqwest::redirect::Policy::none())
-      .build()
-      .expect("default HTTP client must build")
-  };
-
-  // Create HTTP client with optional SOCKS5 proxy
-  let client = if let Some(proxy_url) = socks5_proxy {
-    let client_builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
-
-    match reqwest::Proxy::all(&proxy_url) {
-      Ok(proxy) => {
-        match client_builder.proxy(proxy).build() {
-          Ok(client) => client,
-          Err(_) => default_client(), // Fallback to default client on error
-        }
-      }
-      Err(_) => default_client(), // Fallback to default client on error
-    }
-  } else {
-    default_client()
-  };
+  let client = demo_http_client(socks5_proxy.as_deref())?;
 
   // Create request with optional header
   let mut request = client.get(&url);
@@ -127,8 +105,29 @@ pub async fn say_after_with_tokio(
   ))
 }
 
+fn demo_http_client(socks5_proxy: Option<&str>) -> napi::Result<reqwest::Client> {
+  let client_builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
+  if let Some(proxy_url) = socks5_proxy.filter(|url| !url.is_empty()) {
+    let proxy = reqwest::Proxy::all(proxy_url)
+      .map_err(|_| napi::Error::from_reason("Invalid SOCKS5 proxy configuration"))?;
+    return client_builder
+      .proxy(proxy)
+      .build()
+      .map_err(|_| napi::Error::from_reason("Failed to build SOCKS5 proxy client"));
+  }
+
+  client_builder
+    .build()
+    .map_err(|_| napi::Error::from_reason("Failed to build HTTP client"))
+}
+
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn demo_client_does_not_bypass_invalid_proxy() {
+    assert!(super::demo_http_client(Some("://invalid")).is_err());
+  }
+
   fn assert_redacted(label: &str, value: &str, secret: &str) {
     assert_eq!(
       value, "<redacted>",

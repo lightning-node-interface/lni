@@ -19,7 +19,7 @@ use crate::{
 
 // Docs: https://apidocs.tryspeed.com/
 
-fn client(config: &SpeedConfig) -> reqwest::Client {
+fn client(config: &SpeedConfig) -> Result<reqwest::Client, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
 
     // Speed uses HTTP Basic Auth with API key as username, no password (hence the colon)
@@ -31,11 +31,9 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
     match header::HeaderValue::from_str(&auth_header) {
         Ok(auth_header_value) => headers.insert(header::AUTHORIZATION, auth_header_value),
         Err(_) => {
-            eprintln!("Failed to create authorization header");
-            return crate::http_client_builder()
-                .default_headers(headers)
-                .build()
-                .unwrap_or_else(|_| crate::default_http_client());
+            return Err(ApiError::InvalidInput(
+                "Invalid Speed API key header value".to_string(),
+            ));
         }
     };
 
@@ -45,29 +43,25 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
     );
 
     // Create HTTP client with optional SOCKS5 proxy following Strike pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
-            if config.accept_invalid_certs.unwrap_or(false) {
-                client_builder = client_builder.danger_accept_invalid_certs(true);
-            }
-
-            match reqwest::Proxy::all(&proxy_url) {
-                Ok(proxy) => {
-                    let mut builder = client_builder.proxy(proxy);
-                    if config.http_timeout.is_some() {
-                        builder = builder.timeout(std::time::Duration::from_secs(
-                            config.http_timeout.unwrap_or_default() as u64,
-                        ));
-                    }
-                    match builder.build() {
-                        Ok(client) => return client,
-                        Err(_) => {} // Fall through to default client creation
-                    }
-                }
-                Err(_) => {} // Fall through to default client creation
-            }
+    if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
+        let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+        if config.accept_invalid_certs.unwrap_or(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
+        if let Some(http_timeout) = config.http_timeout {
+            client_builder =
+                client_builder.timeout(std::time::Duration::from_secs(http_timeout as u64));
+        }
+
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+            reason: "Invalid Speed SOCKS5 proxy configuration".to_string(),
+        })?;
+        return client_builder
+            .proxy(proxy)
+            .build()
+            .map_err(|_| ApiError::Http {
+                reason: "Failed to build Speed SOCKS5 proxy client".to_string(),
+            });
     }
 
     // Default client creation
@@ -80,9 +74,9 @@ fn client(config: &SpeedConfig) -> reqwest::Client {
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client_builder
+    Ok(client_builder
         .build()
-        .unwrap_or_else(|_| crate::default_http_client())
+        .unwrap_or_else(|_| crate::default_http_client()))
 }
 
 #[cfg(test)]
@@ -97,7 +91,18 @@ mod client_tests {
             ..Default::default()
         };
 
-        let _client = client(&config);
+        let _client = client(&config).expect("proxy client should build");
+    }
+
+    #[test]
+    fn invalid_proxy_configuration_fails_closed() {
+        let config = SpeedConfig {
+            api_key: "fake-api-key".to_string(),
+            socks5_proxy: Some("://invalid".to_string()),
+            ..Default::default()
+        };
+
+        assert!(client(&config).is_err());
     }
 }
 
@@ -113,7 +118,7 @@ fn map_speed_provider_error(info: &ProviderErrorInfo) -> Option<&'static str> {
 }
 
 pub async fn get_info(config: &SpeedConfig) -> Result<NodeInfo, ApiError> {
-    let client = client(config);
+    let client = client(config)?;
 
     // Get balance from Speed API
     let response = client
@@ -170,7 +175,7 @@ pub async fn create_invoice(
 ) -> Result<Transaction, ApiError> {
     match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
-            let client = client(config);
+            let client = client(config)?;
 
             let request = SpeedCreatePaymentRequest {
                 amount: (invoice_params.amount_msats.unwrap_or(0) as f64) / 1000.0, // Convert msats to sats
@@ -264,7 +269,7 @@ pub async fn pay_invoice(
     config: &SpeedConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = client(config);
+    let client = client(config)?;
 
     // Extract amount from invoice or use provided amount
     let amount = if let Some(amount_msats) = invoice_params.amount_msats {
@@ -418,7 +423,7 @@ async fn fetch_send_transactions(
     status_filter: Option<Vec<String>>,
     withdraw_request_filter: Option<String>,
 ) -> Result<Vec<SpeedSendResponse>, ApiError> {
-    let client = client(config);
+    let client = client(config)?;
 
     let request = SpeedSendFilterRequest {
         status: status_filter,

@@ -449,7 +449,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     private readonly config: StrikeConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch);
+    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
   }

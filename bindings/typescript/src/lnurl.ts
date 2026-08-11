@@ -8,6 +8,8 @@ export type PaymentDestinationType = 'bolt11' | 'bolt12' | 'lnurl' | 'lightning_
 
 export interface LnurlResolverOptions {
   fetch?: FetchLike;
+  /** Required in React Native when the supplied fetch honors `redirect: 'error'`. */
+  fetchSupportsRedirectError?: boolean;
   /**
    * Allows non-HTTPS or private/internal LNURL endpoints. Intended only for
    * local development or caller-provided URL allowlisting.
@@ -397,7 +399,7 @@ export async function verifyLightningAddressPayRequest(
   lightningAddress: string,
   options: LnurlResolverOptions = {}
 ): Promise<{ wellKnown: LnurlPayResponse; verifyEndpoint: string }> {
-  const fetchFn = resolveFetch(options?.fetch);
+  const fetchFn = resolveFetch(options?.fetch, options?.fetchSupportsRedirectError);
   const { user, domain } = parseLightningAddress(lightningAddress.trim());
   const wellKnown = await fetchLnurlPay(lightningAddressToUrl(user, domain), fetchFn, options);
   const amountMsats = Math.min(Math.max(100_000, wellKnown.minSendable), wellKnown.maxSendable);
@@ -461,7 +463,7 @@ export async function resolveToBolt11(
   amountMsats?: number,
   options: LnurlResolverOptions = {}
 ): Promise<string> {
-  const fetchFn = resolveFetch(options?.fetch);
+  const fetchFn = resolveFetch(options?.fetch, options?.fetchSupportsRedirectError);
   const destinationType = detectPaymentType(destination);
 
   if (destinationType === 'bolt11') {
@@ -493,7 +495,7 @@ export async function getPaymentInfo(
   amountMsats?: number,
   options: LnurlResolverOptions = {}
 ): Promise<PaymentInfo> {
-  const fetchFn = resolveFetch(options?.fetch);
+  const fetchFn = resolveFetch(options?.fetch, options?.fetchSupportsRedirectError);
   const destinationType = detectPaymentType(destination);
 
   if (destinationType === 'bolt11' || destinationType === 'bolt12') {

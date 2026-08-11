@@ -26,7 +26,7 @@ use reqwest::header;
 // Docs
 // https://docs.strike.me/api/
 
-fn async_client(config: &StrikeConfig) -> reqwest::Client {
+fn async_client(config: &StrikeConfig) -> Result<reqwest::Client, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
     let auth_header = format!("Bearer {}", config.api_key);
     headers.insert(
@@ -39,29 +39,25 @@ fn async_client(config: &StrikeConfig) -> reqwest::Client {
     );
 
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
-            if config.accept_invalid_certs.unwrap_or(false) {
-                client_builder = client_builder.danger_accept_invalid_certs(true);
-            }
-
-            match reqwest::Proxy::all(&proxy_url) {
-                Ok(proxy) => {
-                    let mut builder = client_builder.proxy(proxy);
-                    if config.http_timeout.is_some() {
-                        builder = builder.timeout(std::time::Duration::from_secs(
-                            config.http_timeout.unwrap_or_default() as u64,
-                        ));
-                    }
-                    match builder.build() {
-                        Ok(client) => return client,
-                        Err(_) => {} // Fall through to default client creation
-                    }
-                }
-                Err(_) => {} // Fall through to default client creation
-            }
+    if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
+        let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+        if config.accept_invalid_certs.unwrap_or(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
+        if let Some(http_timeout) = config.http_timeout {
+            client_builder =
+                client_builder.timeout(std::time::Duration::from_secs(http_timeout as u64));
+        }
+
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+            reason: "Invalid Strike SOCKS5 proxy configuration".to_string(),
+        })?;
+        return client_builder
+            .proxy(proxy)
+            .build()
+            .map_err(|_| ApiError::Http {
+                reason: "Failed to build Strike SOCKS5 proxy client".to_string(),
+            });
     }
 
     // Default client creation
@@ -74,9 +70,9 @@ fn async_client(config: &StrikeConfig) -> reqwest::Client {
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    client_builder
+    Ok(client_builder
         .build()
-        .unwrap_or_else(|_| crate::default_http_client())
+        .unwrap_or_else(|_| crate::default_http_client()))
 }
 
 fn get_base_url(config: &StrikeConfig) -> &str {
@@ -162,8 +158,9 @@ fn settle_outcome(state: Option<&str>, preimage: Option<String>) -> Result<Strin
     }
 
     if matches!(state, Some(value) if value.eq_ignore_ascii_case("FAILED")) {
-        return Err(ApiError::Api {
-            reason: "Strike payment failed".to_string(),
+        return Err(ApiError::Nwc {
+            code: "PAYMENT_FAILED".to_string(),
+            message: "Strike payment failed".to_string(),
         });
     }
 
@@ -299,7 +296,7 @@ fn normalize_onchain_state(state: Option<&String>) -> String {
 }
 
 pub async fn get_info(config: StrikeConfig) -> Result<NodeInfo, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     // Get balance from Strike API
     let response = client
@@ -355,7 +352,7 @@ pub async fn create_invoice(
     config: StrikeConfig,
     invoice_params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     match invoice_params.get_invoice_type() {
         InvoiceType::Bolt11 => {
@@ -447,7 +444,7 @@ pub async fn pay_invoice(
     config: StrikeConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     // Create payment quote first
     let quote_url = format!("{}/payment-quotes/lightning", get_base_url(&config));
@@ -592,7 +589,7 @@ pub async fn prepare_onchain_transaction(
     config: StrikeConfig,
     params: PrepareOnchainTransactionParams,
 ) -> Result<OnchainTransaction, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
     let fee = params.fee.clone().unwrap_or_else(default_onchain_fee);
     let fee_payer = resolve_onchain_fee_payer(params.fee_payer.clone());
     let amount = sats_to_btc_amount(params.amount_sats)?;
@@ -667,7 +664,7 @@ pub async fn pay_onchain_with_options(
 
     assert_onchain_fee_guardrail(&transaction, options)?;
 
-    let client = async_client(&config);
+    let client = async_client(&config)?;
     let execute_url = format!(
         "{}/payment-quotes/{}/execute",
         get_base_url(&config),
@@ -946,7 +943,7 @@ pub async fn lookup_invoice(
     _limit: Option<i64>,
     _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     let target_payment_hash = payment_hash.unwrap_or_default();
 
@@ -1049,7 +1046,7 @@ pub async fn list_transactions(
     limit: i64,
     _search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     // Get receives (incoming) using the receives endpoint similar to lookup_invoice
     let receives_url = format!(
@@ -1305,7 +1302,18 @@ mod tests {
             ..Default::default()
         };
 
-        let _client = async_client(&config);
+        let _client = async_client(&config).expect("proxy client should build");
+    }
+
+    #[test]
+    fn invalid_proxy_configuration_fails_closed() {
+        let config = StrikeConfig {
+            api_key: "fake-api-key".to_string(),
+            socks5_proxy: Some("://invalid".to_string()),
+            ..Default::default()
+        };
+
+        assert!(async_client(&config).is_err());
     }
 
     fn test_onchain_transaction(fee_sats: Option<i64>) -> OnchainTransaction {
@@ -1410,7 +1418,11 @@ mod tests {
     #[test]
     fn rejects_failed_payment_without_preimage() {
         let error = settle_outcome(Some("failed"), None).unwrap_err();
-        assert!(matches!(error, ApiError::Api { reason } if reason.contains("failed")));
+        assert!(matches!(
+            error,
+            ApiError::Nwc { code, message }
+                if code == "PAYMENT_FAILED" && message.contains("failed")
+        ));
     }
 
     #[test]
