@@ -42,7 +42,9 @@ fn cln_error_from_body(status: Option<reqwest::StatusCode>, body: String) -> Api
 
 fn clnrest_client(config: &ClnConfig) -> Result<reqwest::Client, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
+    let rune = header::HeaderValue::from_str(&config.rune)
+        .map_err(|_| ApiError::InvalidInput("Invalid CLN Rune header value".to_string()))?;
+    headers.insert("Rune", rune);
 
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
     if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
@@ -202,6 +204,19 @@ mod client_tests {
         };
 
         assert!(clnrest_client(&config).is_err());
+    }
+
+    #[test]
+    fn invalid_rune_header_returns_error() {
+        let config = ClnConfig {
+            rune: "fake-rune\ninvalid".to_string(),
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            clnrest_client(&config),
+            Err(ApiError::InvalidInput(reason)) if reason == "Invalid CLN Rune header value"
+        ));
     }
 }
 

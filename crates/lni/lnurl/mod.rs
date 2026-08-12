@@ -190,7 +190,7 @@ fn is_public_ipv4(ip: Ipv4Addr) -> bool {
 }
 
 fn is_public_ipv6(ip: Ipv6Addr) -> bool {
-    if let Some(ipv4) = ip.to_ipv4_mapped() {
+    if let Some(ipv4) = ip.to_ipv4() {
         return is_public_ipv4(ipv4);
     }
 
@@ -665,9 +665,19 @@ mod tests {
     fn test_resolved_lnurl_addresses_must_all_be_public() {
         let public = SocketAddr::from(([93, 184, 216, 34], 443));
         let private = SocketAddr::from(([169, 254, 169, 254], 443));
+        let compatible_loopback = SocketAddr::new(
+            IpAddr::V6("::127.0.0.1".parse().expect("valid IPv6 address")),
+            443,
+        );
+        let compatible_private = SocketAddr::new(
+            IpAddr::V6("::192.168.1.1".parse().expect("valid IPv6 address")),
+            443,
+        );
 
         assert!(validate_resolved_lnurl_addresses(&[public]).is_ok());
         assert!(validate_resolved_lnurl_addresses(&[public, private]).is_err());
+        assert!(validate_resolved_lnurl_addresses(&[compatible_loopback]).is_err());
+        assert!(validate_resolved_lnurl_addresses(&[compatible_private]).is_err());
         assert!(validate_resolved_lnurl_addresses(&[]).is_err());
     }
 
