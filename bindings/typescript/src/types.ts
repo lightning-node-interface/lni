@@ -188,6 +188,8 @@ export interface OnInvoiceEventParams {
 
 export interface NodeRequestOptions {
   fetch?: FetchLike;
+  /** Required in React Native when the supplied fetch honors `redirect: 'error'` (for example, `expo/fetch`). */
+  fetchSupportsRedirectError?: boolean;
 }
 
 export interface PhoenixdConfig {

@@ -14,7 +14,17 @@ export interface RequestArgs {
   signal?: AbortSignal;
 }
 
-export function resolveFetch(customFetch?: FetchLike): FetchLike {
+export function resolveFetch(
+  customFetch?: FetchLike,
+  fetchSupportsRedirectError = false
+): FetchLike {
+  if (globalThis.navigator?.product === 'ReactNative' && !fetchSupportsRedirectError) {
+    throw new LniError(
+      'InvalidInput',
+      "React Native's legacy fetch cannot reject redirects. Supply a redirect-capable fetch such as expo/fetch and set fetchSupportsRedirectError: true."
+    );
+  }
+
   if (customFetch) {
     return customFetch;
   }
@@ -145,6 +155,8 @@ export async function requestText(
       headers,
       body,
       signal: timeout.signal,
+      // React Native/Expo fetch polyfills may ignore this option; compliant fetches fail closed.
+      redirect: 'error',
     });
   } catch (error) {
     throw new LniError(

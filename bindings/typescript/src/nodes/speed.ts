@@ -105,7 +105,7 @@ export class SpeedNode implements LightningNode {
     private readonly config: SpeedConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch);
+    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.tryspeed.com';
   }

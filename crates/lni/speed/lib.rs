@@ -21,7 +21,7 @@ pub struct SpeedConfig {
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
@@ -45,7 +45,7 @@ impl Default for SpeedConfig {
             base_url: Some("https://api.tryspeed.com".to_string()),
             api_key: "".to_string(),
             socks5_proxy: Some("".to_string()),
-            accept_invalid_certs: Some(true),
+            accept_invalid_certs: Some(false),
             http_timeout: Some(60),
         }
     }
@@ -169,6 +169,11 @@ mod tests {
     use std::env;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn default_verifies_tls_certificates() {
+        assert_eq!(SpeedConfig::default().accept_invalid_certs, Some(false));
+    }
 
     lazy_static! {
         static ref BASE_URL: String = {

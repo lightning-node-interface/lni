@@ -19,7 +19,7 @@ pub struct StrikeConfig {
     pub api_key: String,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some("")))]
     pub socks5_proxy: Option<String>, // Some("socks5h://127.0.0.1:9150") or Some("".to_string())
-    #[cfg_attr(feature = "uniffi", uniffi(default = Some(true)))]
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(false)))]
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
@@ -198,6 +198,11 @@ mod tests {
     use lazy_static::lazy_static;
     use std::sync::{Arc, Mutex};
     use std::{dbg, env};
+
+    #[test]
+    fn default_verifies_tls_certificates() {
+        assert_eq!(StrikeConfig::default().accept_invalid_certs, Some(false));
+    }
 
     const ONCHAIN_SEND_CONFIRMATION: &str = "I_UNDERSTAND_THIS_BROADCASTS_BITCOIN";
 

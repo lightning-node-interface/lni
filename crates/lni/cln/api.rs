@@ -40,50 +40,47 @@ fn cln_error_from_body(status: Option<reqwest::StatusCode>, body: String) -> Api
     nwc_error(code, info.message.unwrap_or(body))
 }
 
-fn clnrest_client(config: &ClnConfig) -> reqwest::Client {
+fn clnrest_client(config: &ClnConfig) -> Result<reqwest::Client, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("Rune", header::HeaderValue::from_str(&config.rune).unwrap());
+    let rune = header::HeaderValue::from_str(&config.rune)
+        .map_err(|_| ApiError::InvalidInput("Invalid CLN Rune header value".to_string()))?;
+    headers.insert("Rune", rune);
 
     // Create HTTP client with optional SOCKS5 proxy following LND pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            let mut client_builder = reqwest::Client::builder().default_headers(headers.clone());
-            if config.accept_invalid_certs.unwrap_or(false) {
-                client_builder = client_builder.danger_accept_invalid_certs(true);
-            }
-            if let Some(timeout) = config.http_timeout {
-                client_builder =
-                    client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
-            }
-
-            match reqwest::Proxy::all(&proxy_url) {
-                Ok(proxy) => {
-                    match client_builder.proxy(proxy).build() {
-                        Ok(client) => return client,
-                        Err(_) => {} // Fall through to default client creation
-                    }
-                }
-                Err(_) => {} // Fall through to default client creation
-            }
+    if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
+        let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+        if config.accept_invalid_certs.unwrap_or(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
+        if let Some(timeout) = config.http_timeout {
+            client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
+        }
+
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+            reason: "Invalid CLN SOCKS5 proxy configuration".to_string(),
+        })?;
+        return client_builder
+            .proxy(proxy)
+            .build()
+            .map_err(|_| ApiError::Http {
+                reason: "Failed to build CLN SOCKS5 proxy client".to_string(),
+            });
     }
 
     // Default client creation
-    let mut client_builder = reqwest::ClientBuilder::new().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+    crate::build_http_client(client_builder, "Failed to build CLN HTTP client")
 }
 
 pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
     let req_url = format!("{}/v1/getinfo", config.url);
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let response = client
         .post(&req_url)
         .header("Content-Type", "application/json")
@@ -92,6 +89,17 @@ pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
         .map_err(|e| ApiError::Http {
             reason: format!("Failed to get node info: {}", e),
         })?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "cln",
+            "get_info",
+            status,
+            error_text,
+            map_cln_provider_error,
+        ));
+    }
     let response_text = response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read node info response: {}", e),
     })?;
@@ -107,6 +115,17 @@ pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
         .map_err(|e| ApiError::Http {
             reason: format!("Failed to get funds info: {}", e),
         })?;
+    if !funds_response.status().is_success() {
+        let status = funds_response.status();
+        let error_text = funds_response.text().await.unwrap_or_default();
+        return Err(provider_error_from_response(
+            "cln",
+            "get_info",
+            status,
+            error_text,
+            map_cln_provider_error,
+        ));
+    }
     let funds_response_text = funds_response.text().await.map_err(|e| ApiError::Http {
         reason: format!("Failed to read funds response: {}", e),
     })?;
@@ -159,6 +178,46 @@ pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
     Ok(node_info)
 }
 
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = ClnConfig {
+            rune: "fake-rune".to_string(),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = clnrest_client(&config).expect("proxy client should build");
+    }
+
+    #[test]
+    fn invalid_proxy_configuration_fails_closed() {
+        let config = ClnConfig {
+            rune: "fake-rune".to_string(),
+            socks5_proxy: Some("://invalid".to_string()),
+            ..Default::default()
+        };
+
+        assert!(clnrest_client(&config).is_err());
+    }
+
+    #[test]
+    fn invalid_rune_header_returns_error() {
+        let config = ClnConfig {
+            rune: "fake-rune\ninvalid".to_string(),
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            clnrest_client(&config),
+            Err(ApiError::InvalidInput(reason)) if reason == "Invalid CLN Rune header value"
+        ));
+    }
+}
+
 // invoice - amount_msat label description expiry fallbacks preimage exposeprivatechannels cltv
 pub async fn create_invoice(
     config: ClnConfig,
@@ -169,7 +228,7 @@ pub async fn create_invoice(
     description_hash: Option<String>,
     expiry: Option<i64>,
 ) -> Result<Transaction, ApiError> {
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let amount_msat_str: String = amount_msats.map_or("any".to_string(), |amt| amt.to_string());
     let mut params: Vec<(&str, Option<String>)> = vec![];
     params.push((
@@ -267,7 +326,7 @@ pub async fn pay_invoice(
     config: ClnConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let pay_url = format!("{}/v1/pay", config.url);
 
     let mut params: Vec<(&str, Option<serde_json::Value>)> = vec![];
@@ -373,7 +432,7 @@ pub async fn list_offers(
     config: ClnConfig,
     search: Option<String>,
 ) -> Result<Vec<Offer>, ApiError> {
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let req_url = format!("{}/v1/listoffers", config.url);
     let mut params = vec![];
     if let Some(search) = search {
@@ -414,7 +473,7 @@ pub async fn list_offers(
 // Create a BOLT12 offer and return Offer
 // https://docs.corelightning.org/reference/offer
 pub async fn create_offer(config: ClnConfig, params: CreateOfferParams) -> Result<Offer, ApiError> {
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let req_url = format!("{}/v1/offer", config.url);
 
     let mut json_params = serde_json::Map::new();
@@ -480,7 +539,7 @@ async fn fetch_invoice_from_offer(
     payer_note: Option<String>,
 ) -> Result<FetchInvoiceResponse, ApiError> {
     let fetch_invoice_url = format!("{}/v1/fetchinvoice", config.url);
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let response = client
         .post(&fetch_invoice_url)
         .header("Content-Type", "application/json")
@@ -520,7 +579,7 @@ pub async fn pay_offer(
     amount_msats: i64,
     payer_note: Option<String>,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = clnrest_client(&config);
+    let client = clnrest_client(&config)?;
     let fetch_invoice_resp =
         fetch_invoice_from_offer(&config, offer.clone(), amount_msats, payer_note.clone()).await?;
     if fetch_invoice_resp.invoice.is_empty() {
@@ -593,7 +652,7 @@ async fn lookup_invoices(
     limit: Option<i64>,
     search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = clnrest_client(config);
+    let client = clnrest_client(config)?;
 
     if search.is_some() {
         let list_invoices_url = format!("{}/v1/sql", config.url);

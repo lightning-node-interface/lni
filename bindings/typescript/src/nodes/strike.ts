@@ -449,7 +449,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     private readonly config: StrikeConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch);
+    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
   }
@@ -631,7 +631,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       try {
         payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
       } catch (error) {
-        // payment.read is optional for payInvoice; without it we still know execution succeeded.
+        // Keep the last-known execution state when the outgoing record is not readable yet.
         if (!isRetryablePaymentReadError(error)) {
           break;
         }
@@ -641,10 +641,23 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const feeMsats = payment?.lightning?.networkFee
       ? btcToMsats(payment.lightning.networkFee.amount)
       : 0;
+    const preimage = payment?.lightning?.preImage;
+
+    if (!preimage) {
+      const state = payment?.state ?? execution.state;
+      if (state?.toUpperCase() === 'FAILED') {
+        throw strikeNwcError('PAYMENT_FAILED', 'Strike payment failed', 'pay_invoice');
+      }
+      throw strikeNwcError(
+        'OTHER',
+        'Strike payment outcome is indeterminate; reconcile it via lookupInvoice or listTransactions before retrying',
+        'pay_invoice'
+      );
+    }
 
     return {
       paymentHash: payment?.lightning?.paymentHash ?? paymentHashFromInvoice(params.invoice),
-      preimage: payment?.lightning?.preImage ?? '',
+      preimage,
       feeMsats,
     };
   }

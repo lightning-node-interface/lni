@@ -312,6 +312,58 @@ pub use utils::*;
 pub mod database;
 pub use database::{Db, DbError, Payment};
 
+pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder().redirect(reqwest::redirect::Policy::none())
+}
+
+pub(crate) fn build_http_client(
+    builder: reqwest::ClientBuilder,
+    failure_reason: &str,
+) -> Result<reqwest::Client, ApiError> {
+    builder.build().map_err(|_| ApiError::Http {
+        reason: failure_reason.to_string(),
+    })
+}
+
+pub(crate) fn default_http_client() -> reqwest::Client {
+    http_client_builder()
+        .build()
+        .expect("default HTTP client must build")
+}
+
+#[cfg(test)]
+mod http_client_tests {
+    #[test]
+    fn client_build_errors_are_propagated() {
+        let result = super::build_http_client(
+            super::http_client_builder().user_agent("invalid\nuser-agent"),
+            "Failed to build test HTTP client",
+        );
+
+        assert!(matches!(
+            result,
+            Err(super::ApiError::Http { reason })
+                if reason == "Failed to build test HTTP client"
+        ));
+    }
+}
+
+fn demo_http_client(socks5_proxy: Option<&str>) -> Result<reqwest::Client, ApiError> {
+    let Some(proxy_url) = socks5_proxy.filter(|url| !url.is_empty()) else {
+        return Ok(default_http_client());
+    };
+
+    let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+        reason: "Invalid SOCKS5 proxy configuration".to_string(),
+    })?;
+    http_client_builder()
+        .proxy(proxy)
+        .build()
+        .map_err(|_| ApiError::Http {
+            reason: "Failed to build SOCKS5 proxy client".to_string(),
+        })
+}
+
 // Make an HTTP request to get IP address and simulate latency with optional SOCKS5 proxy
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn say_after_with_tokio(
@@ -322,24 +374,9 @@ pub async fn say_after_with_tokio(
     header_key: Option<String>,
     header_value: Option<String>,
 ) -> String {
-    // Create HTTP client with optional SOCKS5 proxy
-    let client = if let Some(proxy_url) = socks5_proxy {
-        // Ignore certificate errors when using SOCKS5 proxy
-        let client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
-
-        match reqwest::Proxy::all(&proxy_url) {
-            Ok(proxy) => {
-                match client_builder.proxy(proxy).build() {
-                    Ok(client) => client,
-                    Err(_) => reqwest::Client::new(), // Fallback to default client on error
-                }
-            }
-            Err(_) => reqwest::Client::new(), // Fallback to default client on error
-        }
-    } else {
-        reqwest::Client::builder()
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new())
+    let client = match demo_http_client(socks5_proxy.as_deref()) {
+        Ok(client) => client,
+        Err(_) => return "Failed to configure HTTP client".to_string(),
     };
 
     // Create request with optional header
@@ -350,7 +387,10 @@ pub async fn say_after_with_tokio(
     }
 
     // Make HTTP request
-    let ip_result = request.send().await;
+    let ip_result = request
+        .send()
+        .await
+        .and_then(|response| response.error_for_status());
 
     let page_content = match ip_result {
         Ok(response) => match response.text().await {
@@ -447,6 +487,11 @@ uniffi::setup_scaffolding!();
 
 #[cfg(test)]
 mod debug_redaction_tests {
+    #[test]
+    fn demo_client_does_not_bypass_invalid_proxy() {
+        assert!(super::demo_http_client(Some("://invalid")).is_err());
+    }
+
     fn assert_redacted(label: &str, output: &str, secrets: &[&str]) {
         assert!(
             output.contains("<redacted>"),

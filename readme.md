@@ -1106,6 +1106,8 @@ Tor
 ===
 Use the Tor Socks5 proxy settings if you are connecting to a `.onion` hidden service. Make sure to include the `"h"` in `"socks5h://"` to resolve onion addresses properly. You can start up a Tor Socks5 proxy easily using Arti https://tpo.pages.torproject.net/core/arti/
 
+TLS certificate verification is enabled by default, including when a SOCKS5 proxy is configured. Set `accept_invalid_certs: Some(true)` only when an explicitly trusted development or self-signed endpoint requires it.
+
 example
 ```rust
 LndNode::new(LndConfig {

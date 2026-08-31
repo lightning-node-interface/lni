@@ -46,7 +46,7 @@ fn map_lnd_failure_reason(reason: &str) -> &'static str {
     }
 }
 
-fn async_client(config: &LndConfig) -> reqwest::Client {
+fn async_client(config: &LndConfig) -> Result<reqwest::Client, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
         "Grpc-Metadata-macaroon",
@@ -54,36 +54,32 @@ fn async_client(config: &LndConfig) -> reqwest::Client {
     );
 
     // Create HTTP client with optional SOCKS5 proxy following say_after_with_tokio pattern
-    if let Some(proxy_url) = config.socks5_proxy.clone() {
-        if !proxy_url.is_empty() {
-            // Accept invalid certificates when using SOCKS5 proxy
-            let client_builder = reqwest::Client::builder()
-                .default_headers(headers.clone())
-                .danger_accept_invalid_certs(true);
-
-            match reqwest::Proxy::all(&proxy_url) {
-                Ok(proxy) => {
-                    match client_builder.proxy(proxy).build() {
-                        Ok(client) => return client,
-                        Err(_) => {} // Fall through to default client creation
-                    }
-                }
-                Err(_) => {} // Fall through to default client creation
-            }
+    if let Some(proxy_url) = config.socks5_proxy.as_deref().filter(|url| !url.is_empty()) {
+        let mut client_builder = crate::http_client_builder().default_headers(headers.clone());
+        if config.accept_invalid_certs.unwrap_or(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
         }
+
+        let proxy = reqwest::Proxy::all(proxy_url).map_err(|_| ApiError::Http {
+            reason: "Invalid LND SOCKS5 proxy configuration".to_string(),
+        })?;
+        return client_builder
+            .proxy(proxy)
+            .build()
+            .map_err(|_| ApiError::Http {
+                reason: "Failed to build LND SOCKS5 proxy client".to_string(),
+            });
     }
 
     // Default client creation
-    let mut client_builder = reqwest::Client::builder().default_headers(headers);
+    let mut client_builder = crate::http_client_builder().default_headers(headers);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    client_builder
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+    crate::build_http_client(client_builder, "Failed to build LND HTTP client")
 }
 
 // Core shared logic for processing LND node info and balance responses
@@ -139,7 +135,7 @@ fn process_node_info_responses(info: GetInfoResponse, balance: BalancesResponse)
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
 pub async fn get_info(config: LndConfig) -> Result<NodeInfo, ApiError> {
     // Create HTTP client using the helper function
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     // Get node info
     let req_url = format!("{}/v1/getinfo", config.url);
@@ -246,7 +242,7 @@ async fn get_lnd_remote_permissions(
     config: &LndConfig,
     macaroon_bytes: &[u8],
 ) -> Result<crate::Permissions, ApiError> {
-    let client = async_client(config);
+    let client = async_client(config)?;
     let permissions_url = format!("{}/v1/macaroon/permissions", config.url);
     let permissions_response =
         client
@@ -256,6 +252,14 @@ async fn get_lnd_remote_permissions(
             .map_err(|e| ApiError::Http {
                 reason: format!("Failed to list LND macaroon permissions: {}", e),
             })?;
+    if !permissions_response.status().is_success() {
+        return Err(ApiError::Http {
+            reason: format!(
+                "Failed to list LND macaroon permissions: HTTP {}",
+                permissions_response.status()
+            ),
+        });
+    }
     let permissions_text = permissions_response
         .text()
         .await
@@ -279,6 +283,14 @@ async fn get_lnd_remote_permissions(
             .map_err(|e| ApiError::Http {
                 reason: format!("Failed to check LND macaroon permission for {method}: {e}"),
             })?;
+        if !check_response.status().is_success() {
+            return Err(ApiError::Http {
+                reason: format!(
+                    "Failed to check LND macaroon permission for {method}: HTTP {}",
+                    check_response.status()
+                ),
+            });
+        }
         let check_text = check_response.text().await.map_err(|e| ApiError::Http {
             reason: format!("Failed to read LND permission check response for {method}: {e}"),
         })?;
@@ -289,6 +301,33 @@ async fn get_lnd_remote_permissions(
     }
 
     Ok(crate::permissions::normalize_lnd_permissions(granted))
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_client_builds_with_certificate_verification_enabled() {
+        let config = LndConfig {
+            macaroon: "fake-macaroon".to_string(),
+            socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()),
+            ..Default::default()
+        };
+
+        let _client = async_client(&config).expect("proxy client should build");
+    }
+
+    #[test]
+    fn invalid_proxy_configuration_fails_closed() {
+        let config = LndConfig {
+            macaroon: "fake-macaroon".to_string(),
+            socks5_proxy: Some("://invalid".to_string()),
+            ..Default::default()
+        };
+
+        assert!(async_client(&config).is_err());
+    }
 }
 
 // get the one with the offer_id or label or get the first offer in the list or
@@ -344,7 +383,7 @@ pub async fn lookup_invoice(
     println!("list_invoices_url {}", &list_invoices_url);
 
     // Create HTTP client using the helper function
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     // Fetch incoming transactions
     let mut request = client.get(&list_invoices_url);
@@ -507,7 +546,7 @@ pub async fn create_invoice(
     config: LndConfig,
     params: CreateInvoiceParams,
 ) -> Result<Transaction, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     let mut body = json!({
         "value_msat": params.amount_msats.unwrap_or(0),
@@ -575,7 +614,7 @@ pub async fn pay_invoice(
     config: LndConfig,
     params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     let mut body = json!({
         "payment_request": params.invoice,
@@ -689,7 +728,7 @@ pub async fn list_transactions(
     _limit: Option<i64>,
     _search: Option<String>,
 ) -> Result<Vec<Transaction>, ApiError> {
-    let client = async_client(&config);
+    let client = async_client(&config)?;
 
     let list_txns_url = format!("{}/v1/invoices", config.url);
     let response = client

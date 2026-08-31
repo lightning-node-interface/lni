@@ -159,7 +159,7 @@ export class ClnNode implements LightningNode {
     private readonly config: ClnConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch);
+    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
   }
 

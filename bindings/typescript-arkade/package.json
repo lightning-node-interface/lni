@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-arkade",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "private": false,
   "description": "Optional Arkade Boltz adapter for @sunnyln/lni.",
   "type": "module",
@@ -52,7 +52,7 @@
     "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/arkade-boltz.real.test.ts"
   },
   "peerDependencies": {
-    "@sunnyln/lni": "^0.2.20"
+    "@sunnyln/lni": "^0.2.21"
   },
   "dependencies": {
     "@arkade-os/boltz-swap": "^0.3.3",
