@@ -79,9 +79,7 @@ fn async_client(config: &LndConfig) -> Result<reqwest::Client, ApiError> {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    Ok(client_builder
-        .build()
-        .unwrap_or_else(|_| crate::default_http_client()))
+    crate::build_http_client(client_builder, "Failed to build LND HTTP client")
 }
 
 // Core shared logic for processing LND node info and balance responses

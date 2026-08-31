@@ -316,10 +316,36 @@ pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder().redirect(reqwest::redirect::Policy::none())
 }
 
+pub(crate) fn build_http_client(
+    builder: reqwest::ClientBuilder,
+    failure_reason: &str,
+) -> Result<reqwest::Client, ApiError> {
+    builder.build().map_err(|_| ApiError::Http {
+        reason: failure_reason.to_string(),
+    })
+}
+
 pub(crate) fn default_http_client() -> reqwest::Client {
     http_client_builder()
         .build()
         .expect("default HTTP client must build")
+}
+
+#[cfg(test)]
+mod http_client_tests {
+    #[test]
+    fn client_build_errors_are_propagated() {
+        let result = super::build_http_client(
+            super::http_client_builder().user_agent("invalid\nuser-agent"),
+            "Failed to build test HTTP client",
+        );
+
+        assert!(matches!(
+            result,
+            Err(super::ApiError::Http { reason })
+                if reason == "Failed to build test HTTP client"
+        ));
+    }
 }
 
 fn demo_http_client(socks5_proxy: Option<&str>) -> Result<reqwest::Client, ApiError> {

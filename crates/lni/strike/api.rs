@@ -70,9 +70,7 @@ fn async_client(config: &StrikeConfig) -> Result<reqwest::Client, ApiError> {
             config.http_timeout.unwrap_or_default() as u64,
         ));
     }
-    Ok(client_builder
-        .build()
-        .unwrap_or_else(|_| crate::default_http_client()))
+    crate::build_http_client(client_builder, "Failed to build Strike HTTP client")
 }
 
 fn get_base_url(config: &StrikeConfig) -> &str {

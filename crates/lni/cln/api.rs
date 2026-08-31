@@ -75,9 +75,7 @@ fn clnrest_client(config: &ClnConfig) -> Result<reqwest::Client, ApiError> {
     if let Some(timeout) = config.http_timeout {
         client_builder = client_builder.timeout(std::time::Duration::from_secs(timeout as u64));
     }
-    Ok(client_builder
-        .build()
-        .unwrap_or_else(|_| crate::default_http_client()))
+    crate::build_http_client(client_builder, "Failed to build CLN HTTP client")
 }
 
 pub async fn get_info(config: ClnConfig) -> Result<NodeInfo, ApiError> {
