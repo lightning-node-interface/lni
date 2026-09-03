@@ -190,6 +190,66 @@ fn normalized_payment_id(payment: &Payment) -> Option<&str> {
     payment.payment_id.as_deref().or(payment.id.as_deref())
 }
 
+fn merge_payment_snapshots(mut listed: Payment, direct: Payment) -> Payment {
+    let direct_has_lifecycle = direct.state.is_some() || direct.result.is_some();
+
+    macro_rules! replace_if_some {
+        ($field:ident) => {
+            if direct.$field.is_some() {
+                listed.$field = direct.$field;
+            }
+        };
+    }
+
+    replace_if_some!(id);
+    replace_if_some!(payment_id);
+    replace_if_some!(type_);
+    replace_if_some!(amount);
+    replace_if_some!(total_fee);
+    replace_if_some!(total_amount);
+    replace_if_some!(created);
+    replace_if_some!(completed);
+    replace_if_some!(correlation_id);
+    replace_if_some!(description);
+    replace_if_some!(p2p);
+
+    if direct_has_lifecycle {
+        listed.state = direct.state;
+        listed.result = direct.result;
+    }
+
+    if let Some(direct_lightning) = direct.lightning {
+        if let Some(listed_lightning) = listed.lightning.as_mut() {
+            if direct_lightning.network_fee.is_some() {
+                listed_lightning.network_fee = direct_lightning.network_fee;
+            }
+            if direct_lightning.payment_hash.is_some() {
+                listed_lightning.payment_hash = direct_lightning.payment_hash;
+            }
+            if direct_lightning.payment_request.is_some() {
+                listed_lightning.payment_request = direct_lightning.payment_request;
+            }
+            if direct_lightning.pre_image.is_some() {
+                listed_lightning.pre_image = direct_lightning.pre_image;
+            }
+        } else {
+            listed.lightning = Some(direct_lightning);
+        }
+    }
+
+    if let Some(direct_onchain) = direct.onchain {
+        if let Some(listed_onchain) = listed.onchain.as_mut() {
+            if direct_onchain.txn_id.is_some() {
+                listed_onchain.txn_id = direct_onchain.txn_id;
+            }
+        } else {
+            listed.onchain = Some(direct_onchain);
+        }
+    }
+
+    listed
+}
+
 fn parse_strike_payment_id(value: &str) -> Option<uuid::Uuid> {
     let id = uuid::Uuid::parse_str(value).ok()?;
     id.hyphenated()
@@ -1219,6 +1279,7 @@ pub async fn list_transactions(
         .map_err(|e| strike_nwc_error_from_transport(e, "list_transactions"))?;
 
     let mut transactions: HashMap<String, Transaction> = HashMap::new();
+    let mut payments: HashMap<String, Payment> = HashMap::new();
 
     if receives_response.status().is_success() {
         let receives_text = receives_response.text().await.unwrap();
@@ -1276,7 +1337,7 @@ pub async fn list_transactions(
                     .map(str::to_string)
                     .unwrap_or_else(|| format!("payment-{index}"))
             );
-            transactions.insert(key, payment_to_transaction(&payment));
+            payments.insert(key, payment);
         }
     } else if payments_response.status() != reqwest::StatusCode::NOT_FOUND {
         let status = payments_response.status();
@@ -1299,11 +1360,19 @@ pub async fn list_transactions(
                             "outgoing:{}",
                             normalized_payment_id(&payment).unwrap_or(search)
                         );
-                        transactions.insert(key, payment_to_transaction(&payment));
+                        let payment = match payments.remove(&key) {
+                            Some(listed) => merge_payment_snapshots(listed, payment),
+                            None => payment,
+                        };
+                        payments.insert(key, payment);
                     }
                 }
             }
         }
+    }
+
+    for (key, payment) in payments {
+        transactions.insert(key, payment_to_transaction(&payment));
     }
 
     let mut transactions: Vec<Transaction> = transactions
@@ -1330,7 +1399,25 @@ pub async fn list_transactions(
         })
         .collect();
 
-    transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    transactions.sort_by(|a, b| {
+        b.created_at
+            .cmp(&a.created_at)
+            .then_with(|| a.type_.cmp(&b.type_))
+            .then_with(|| {
+                a.external_id
+                    .as_deref()
+                    .unwrap_or_default()
+                    .cmp(b.external_id.as_deref().unwrap_or_default())
+            })
+            .then_with(|| a.payment_hash.cmp(&b.payment_hash))
+            .then_with(|| {
+                a.txid
+                    .as_deref()
+                    .unwrap_or_default()
+                    .cmp(b.txid.as_deref().unwrap_or_default())
+            })
+            .then_with(|| a.invoice.cmp(&b.invoice))
+    });
     if limit > 0 {
         transactions.truncate(limit as usize);
     }
@@ -1847,12 +1934,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_snapshot_replaces_listed_copy_by_normalized_payment_id() {
+    async fn direct_snapshot_preserves_omitted_fields_from_listed_copy() {
         let listed = serde_json::json!({
             "id": PAYMENT_ID,
+            "type": "ONCHAIN",
             "state": "PENDING",
             "created": "2026-01-01T00:00:00Z",
-            "amount": { "amount": "0.00000001", "currency": "BTC" }
+            "description": "listed description",
+            "amount": { "amount": "0.00000001", "currency": "BTC" },
+            "onchain": { "txnId": "listed-txid" }
         });
         let (base_url, _requests) = test_server(vec![
             (200, serde_json::json!({ "items": [], "count": 0 })),
@@ -1862,7 +1952,7 @@ mod tests {
                 serde_json::json!({
                     "paymentId": PAYMENT_ID,
                     "state": "COMPLETED",
-                    "amount": { "amount": "0.00000001", "currency": "BTC" }
+                    "completed": "2026-01-01T00:01:00Z"
                 }),
             ),
         ])
@@ -1872,10 +1962,51 @@ mod tests {
             .await
             .expect("list transactions should succeed");
         assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions[0].amount_msats, 1_000);
+        assert_eq!(transactions[0].created_at, 1_767_225_600);
+        assert_eq!(transactions[0].settled_at, 1_767_225_660);
+        assert_eq!(transactions[0].description, "listed description");
+        assert_eq!(transactions[0].txid.as_deref(), Some("listed-txid"));
+        assert_eq!(
+            transactions[0].settlement_type,
+            Some(SettlementType::Onchain)
+        );
         assert_eq!(
             transactions[0].settlement_state,
             Some(SettlementState::Completed)
         );
+    }
+
+    #[tokio::test]
+    async fn transaction_limit_uses_deterministic_identifier_tie_breaker() {
+        let payments = serde_json::json!([
+            {
+                "id": "payment-z",
+                "state": "PENDING",
+                "created": "2026-01-01T00:00:00Z",
+                "amount": { "amount": "0.00000001", "currency": "BTC" }
+            },
+            {
+                "id": "payment-a",
+                "state": "PENDING",
+                "created": "2026-01-01T00:00:00Z",
+                "amount": { "amount": "0.00000001", "currency": "BTC" }
+            }
+        ]);
+        let (base_url, _requests) = test_server(vec![
+            (200, serde_json::json!({ "items": [], "count": 0 })),
+            (200, serde_json::json!({ "data": payments, "count": 2 })),
+        ])
+        .await;
+        let mut params = list_params(None);
+        params.limit = 1;
+
+        let transactions = list_transactions(test_config(base_url), params)
+            .await
+            .expect("list transactions should succeed");
+
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions[0].external_id.as_deref(), Some("payment-a"));
     }
 
     #[tokio::test]

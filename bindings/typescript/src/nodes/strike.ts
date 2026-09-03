@@ -207,6 +207,50 @@ function normalizedPaymentId(payment: StrikePaymentResponse): string | undefined
   return payment.paymentId ?? payment.id;
 }
 
+function definedProperties<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, property]) => property !== undefined)
+  ) as Partial<T>;
+}
+
+function mergePaymentSnapshots(
+  listed: StrikePaymentResponse,
+  direct: StrikePaymentResponse
+): StrikePaymentResponse {
+  const merged: StrikePaymentResponse = {
+    ...listed,
+    ...definedProperties(direct),
+  };
+
+  // `state` and `result` are alternate lifecycle fields. If the direct
+  // snapshot supplies either one, do not let the listed alias take precedence.
+  if (direct.state !== undefined || direct.result !== undefined) {
+    merged.state = direct.state;
+    merged.result = direct.result;
+  }
+
+  if (direct.lightning !== undefined) {
+    merged.lightning = {
+      ...listed.lightning,
+      ...definedProperties(direct.lightning),
+    };
+  }
+  if (direct.onchain !== undefined) {
+    merged.onchain = {
+      ...listed.onchain,
+      ...definedProperties(direct.onchain),
+    };
+  }
+  if (direct.p2p !== undefined) {
+    merged.p2p = {
+      ...listed.p2p,
+      ...definedProperties(direct.p2p),
+    };
+  }
+
+  return merged;
+}
+
 function strikeAmountToMsats(amount?: StrikeAmount): number {
   return amount?.currency === 'BTC' ? btcToMsats(amount.amount) : 0;
 }
@@ -1067,16 +1111,26 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       const tx = strikeReceiveToTransaction(receive);
       transactions.set(`incoming:${tx.externalId ?? index}`, tx);
     });
+
+    const payments = new Map<string, StrikePaymentResponse>();
     outgoing.data.forEach((payment, index) => {
-      const tx = strikePaymentToTransaction(payment);
-      transactions.set(`outgoing:${normalizedPaymentId(payment) ?? index}`, tx);
+      payments.set(`outgoing:${normalizedPaymentId(payment) ?? index}`, payment);
     });
 
-    // The single-payment endpoint is the freshest snapshot and replaces a listed copy.
+    // The single-payment endpoint is the freshest snapshot. Preserve fields it
+    // omits when the collection contained a more complete copy.
     if (directPayment) {
-      const tx = strikePaymentToTransaction(directPayment);
-      transactions.set(`outgoing:${normalizedPaymentId(directPayment) ?? search ?? 'direct'}`, tx);
+      const key = `outgoing:${normalizedPaymentId(directPayment) ?? search ?? 'direct'}`;
+      const listedPayment = payments.get(key);
+      payments.set(
+        key,
+        listedPayment ? mergePaymentSnapshots(listedPayment, directPayment) : directPayment
+      );
     }
+
+    payments.forEach((payment, key) => {
+      transactions.set(key, strikePaymentToTransaction(payment));
+    });
 
     const txs = [...transactions.values()];
 
@@ -1093,7 +1147,18 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       return matchesSearch(tx, params.search);
     });
 
-    const sorted = filtered.sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = filtered.sort((a, b) => {
+      const createdAtOrder = b.createdAt - a.createdAt;
+      if (createdAtOrder !== 0) return createdAtOrder;
+
+      const aKey = [a.type, a.externalId ?? '', a.paymentHash, a.txid ?? '', a.invoice];
+      const bKey = [b.type, b.externalId ?? '', b.paymentHash, b.txid ?? '', b.invoice];
+      for (let index = 0; index < aKey.length; index += 1) {
+        if (aKey[index] === bKey[index]) continue;
+        return (aKey[index] ?? '') < (bKey[index] ?? '') ? -1 : 1;
+      }
+      return 0;
+    });
     return sorted.slice(0, params.limit > 0 ? params.limit : undefined);
   }
 

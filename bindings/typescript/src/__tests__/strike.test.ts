@@ -717,21 +717,23 @@ describe('StrikeNode transaction reconciliation', () => {
     }
   });
 
-  it('directly retrieves a UUID payment outside the page and replaces a listed copy', async () => {
+  it('directly retrieves a UUID payment and preserves fields omitted by its latest snapshot', async () => {
     const fetchMock = transactionFetch({
       payments: [
         {
           id: paymentId,
+          type: 'ONCHAIN',
           state: 'PENDING',
           created: '2026-01-01T00:00:00Z',
+          description: 'listed description',
           amount: { amount: '0.00000001', currency: 'BTC' },
+          onchain: { txnId: 'listed-txid' },
         },
       ],
       direct: {
         paymentId,
         state: 'COMPLETED',
         completed: '2026-01-01T00:01:00Z',
-        amount: { amount: '0.00000001', currency: 'BTC' },
       },
     });
 
@@ -744,11 +746,31 @@ describe('StrikeNode transaction reconciliation', () => {
     expect(transactions).toHaveLength(1);
     expect(transactions[0]).toMatchObject({
       externalId: paymentId,
-      settlementType: 'intraledger',
+      amountMsats: 1_000,
+      createdAt: 1_767_225_600,
+      settledAt: 1_767_225_660,
+      description: 'listed description',
+      settlementType: 'onchain',
       settlementState: 'completed',
+      txid: 'listed-txid',
     });
-    expect(transactions[0]?.txid).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses a deterministic identifier tie-breaker before applying the limit', async () => {
+    const payments = ['payment-z', 'payment-a'].map((id) => ({
+      id,
+      state: 'PENDING',
+      created: '2026-01-01T00:00:00Z',
+      amount: { amount: '0.00000001', currency: 'BTC' },
+    }));
+
+    const transactions = await node(transactionFetch({ payments })).listTransactions({
+      from: 0,
+      limit: 1,
+    });
+
+    expect(transactions.map((transaction) => transaction.externalId)).toEqual(['payment-a']);
   });
 
   it('falls back after a direct 404 and never directly retrieves non-UUID searches', async () => {
