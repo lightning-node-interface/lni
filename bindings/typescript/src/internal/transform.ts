@@ -109,6 +109,8 @@ export function matchesSearch(tx: Transaction, search?: string): boolean {
     tx.paymentHash.toLowerCase().includes(normalized) ||
     tx.description.toLowerCase().includes(normalized) ||
     (tx.payerNote ?? '').toLowerCase().includes(normalized) ||
-    tx.invoice.toLowerCase().includes(normalized)
+    tx.invoice.toLowerCase().includes(normalized) ||
+    (tx.externalId ?? '').toLowerCase().includes(normalized) ||
+    (tx.txid ?? '').toLowerCase().includes(normalized)
   );
 }

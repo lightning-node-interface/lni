@@ -173,7 +173,7 @@ export class PhoenixdNode implements LightningNode {
     private readonly config: PhoenixdConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
+    this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
   }
 

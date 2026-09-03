@@ -260,7 +260,6 @@ export class NwcNode implements LightningNode {
     try {
       await verifyLightningAddressPayRequest(lightningAddress, {
         fetch: this.options.fetch,
-        fetchSupportsRedirectError: this.options.fetchSupportsRedirectError,
       });
       lnurlVerifySupported = true;
     } catch (error) {

@@ -254,6 +254,9 @@ pub async fn create_invoice(
                 description_hash: invoice_params.description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some(payment.payment.id),
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
         InvoiceType::Bolt12 => Err(nwc_error(
@@ -499,6 +502,9 @@ fn convert_send_to_transaction(send_tx: SpeedSendResponse) -> Transaction {
         description_hash: "".to_string(),
         payer_note: send_tx.note,
         external_id: Some(send_tx.id),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     }
 }
 

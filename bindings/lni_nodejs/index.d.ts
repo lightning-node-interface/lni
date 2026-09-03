@@ -132,6 +132,18 @@ export interface NodeInfo {
   pendingOpenSendBalance: number
   pendingOpenReceiveBalance: number
 }
+export const enum SettlementType {
+  Lightning = 'Lightning',
+  Onchain = 'Onchain',
+  Intraledger = 'Intraledger',
+  Unknown = 'Unknown'
+}
+export const enum SettlementState {
+  Pending = 'Pending',
+  Completed = 'Completed',
+  Failed = 'Failed',
+  Unknown = 'Unknown'
+}
 export interface Transaction {
   type: string
   invoice: string
@@ -146,6 +158,9 @@ export interface Transaction {
   settledAt: number
   payerNote?: string
   externalId?: string
+  settlementType?: SettlementType
+  settlementState?: SettlementState
+  txid?: string
 }
 export interface NodeConnectionInfo {
   pubkey: string
