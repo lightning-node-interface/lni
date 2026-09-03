@@ -197,6 +197,9 @@ fn payment_to_transaction(payment: &Payment) -> Result<Transaction, ApiError> {
             .clone()
             .or_else(|| payment.personal_note.clone()),
         external_id: Some(payment.index.to_string()),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 
@@ -464,6 +467,9 @@ pub async fn create_invoice(
         settled_at: 0,
         payer_note: None,
         external_id: Some(response.index.to_string()),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 

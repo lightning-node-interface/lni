@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NwcError } from '../errors.js';
+import { emptyTransaction, matchesSearch } from '../internal/transform.js';
 import { StrikeNode } from '../nodes/strike.js';
 import type { FetchLike } from '../types.js';
 
@@ -664,5 +665,297 @@ describe('StrikeNode on-chain payments', () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('StrikeNode transaction reconciliation', () => {
+  const paymentId = '11111111-1111-4111-8111-111111111111';
+
+  function transactionFetch({
+    receives = [],
+    payments = [],
+    direct,
+  }: {
+    receives?: unknown[];
+    payments?: unknown[];
+    direct?: unknown | '404';
+  }): ReturnType<typeof vi.fn<FetchLike>> {
+    return vi.fn<FetchLike>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith(`/payments/${paymentId}`)) {
+        return direct === '404' ? new Response('not found', { status: 404 }) : jsonResponse(direct);
+      }
+      if (url.pathname.endsWith('/receive-requests/receives')) {
+        return jsonResponse({ items: receives, count: receives.length });
+      }
+      if (url.pathname.endsWith('/payments')) {
+        return jsonResponse({ data: payments, count: payments.length });
+      }
+      return new Response('not found', { status: 404 });
+    });
+  }
+
+  function node(fetch: FetchLike): StrikeNode {
+    return new StrikeNode(
+      { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+      { fetch }
+    );
+  }
+
+  it('searches every shared transaction text identifier case-insensitively', () => {
+    const transaction = emptyTransaction({
+      invoice: 'LN-INVOICE',
+      paymentHash: 'HASH-ABC',
+      description: 'Coffee Beans',
+      payerNote: 'Table Seven',
+      externalId: 'EXTERNAL-ID',
+      txid: 'BITCOIN-TXID',
+    });
+
+    for (const search of ['invoice', 'hash-a', 'COFFEE', 'seven', 'external', 'bitcoin-tx']) {
+      expect(matchesSearch(transaction, search)).toBe(true);
+    }
+  });
+
+  it('directly retrieves a UUID payment outside the page and replaces a listed copy', async () => {
+    const fetchMock = transactionFetch({
+      payments: [
+        {
+          id: paymentId,
+          state: 'PENDING',
+          created: '2026-01-01T00:00:00Z',
+          amount: { amount: '0.00000001', currency: 'BTC' },
+        },
+      ],
+      direct: {
+        paymentId,
+        state: 'COMPLETED',
+        completed: '2026-01-01T00:01:00Z',
+        amount: { amount: '0.00000001', currency: 'BTC' },
+      },
+    });
+
+    const transactions = await node(fetchMock).listTransactions({
+      from: 0,
+      limit: 1,
+      search: paymentId,
+    });
+
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({
+      externalId: paymentId,
+      settlementType: 'intraledger',
+      settlementState: 'completed',
+    });
+    expect(transactions[0]?.txid).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('falls back after a direct 404 and never directly retrieves non-UUID searches', async () => {
+    const listed = {
+      id: paymentId,
+      state: 'PENDING',
+      created: '2026-01-01T00:00:00Z',
+      description: 'reconciliation target',
+      amount: { amount: '0.00000001', currency: 'BTC' },
+    };
+    const uuidFetch = transactionFetch({ payments: [listed], direct: '404' });
+    await expect(
+      node(uuidFetch).listTransactions({ from: 0, limit: 10, search: paymentId })
+    ).resolves.toHaveLength(1);
+
+    const textFetch = transactionFetch({ payments: [listed] });
+    await expect(
+      node(textFetch).listTransactions({ from: 0, limit: 10, search: 'TARGET' })
+    ).resolves.toHaveLength(1);
+    expect(textFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps outgoing lifecycle and route evidence independently', async () => {
+    const payments = [
+      { id: 'methodless-pending', state: 'PENDING' },
+      { id: 'methodless-completed', state: 'SUCCESS' },
+      { id: 'p2p-pending', type: 'P2P', state: 'PENDING', p2p: { recipient: 'x' } },
+      { id: 'onchain-completed-direct', type: 'ONCHAIN', state: 'COMPLETED' },
+      { id: 'onchain-pending', type: 'ONCHAIN', state: 'PENDING', onchain: {} },
+      {
+        id: 'onchain-pending-txid',
+        type: 'ONCHAIN',
+        state: 'PENDING',
+        onchain: { txnId: 'pending-txid' },
+      },
+      {
+        id: 'onchain-completed-txid',
+        state: 'COMPLETED',
+        onchain: { txnId: 'completed-txid' },
+      },
+      { id: 'failed', type: 'ONCHAIN', state: 'FAILURE' },
+      { id: 'unknown', state: 'SOMETHING_NEW' },
+      { id: 'lightning', state: 'COMPLETED', lightning: { paymentHash: 'hash' } },
+    ].map((payment, index) => ({
+      created: `2026-01-01T00:00:${String(index).padStart(2, '0')}Z`,
+      amount: { amount: '0.00000001', currency: 'BTC' },
+      ...payment,
+    }));
+    const transactions = await node(transactionFetch({ payments })).listTransactions({
+      from: 0,
+      limit: 50,
+    });
+    const byId = new Map(transactions.map((transaction) => [transaction.externalId, transaction]));
+
+    expect(byId.get('methodless-pending')).toMatchObject({
+      settlementType: 'unknown',
+      settlementState: 'pending',
+    });
+    expect(byId.get('methodless-completed')).toMatchObject({
+      settlementType: 'intraledger',
+      settlementState: 'completed',
+    });
+    expect(byId.get('p2p-pending')).toMatchObject({
+      settlementType: 'intraledger',
+      settlementState: 'pending',
+    });
+    expect(byId.get('onchain-completed-direct')).toMatchObject({
+      settlementType: 'intraledger',
+      settlementState: 'completed',
+    });
+    expect(byId.get('onchain-pending')).toMatchObject({
+      settlementType: 'onchain',
+      settlementState: 'pending',
+    });
+    expect(byId.get('onchain-pending')?.txid).toBeUndefined();
+    expect(byId.get('onchain-pending-txid')).toMatchObject({
+      settlementType: 'onchain',
+      settlementState: 'pending',
+      txid: 'pending-txid',
+    });
+    expect(byId.get('onchain-completed-txid')).toMatchObject({
+      settlementType: 'onchain',
+      settlementState: 'completed',
+      txid: 'completed-txid',
+    });
+    expect(byId.get('failed')).toMatchObject({
+      settlementType: 'onchain',
+      settlementState: 'failed',
+    });
+    expect(byId.get('unknown')).toMatchObject({
+      settlementType: 'unknown',
+      settlementState: 'unknown',
+    });
+    expect(byId.get('lightning')).toMatchObject({
+      settlementType: 'lightning',
+      settlementState: 'completed',
+    });
+    expect(byId.get('lightning')?.txid).toBeUndefined();
+  });
+
+  it('keeps a P2P provider ID and route stable as lifecycle advances', async () => {
+    let state = 'PENDING';
+    const fetchMock = vi.fn<FetchLike>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/receive-requests/receives')) {
+        return jsonResponse({ items: [], count: 0 });
+      }
+      if (url.pathname.endsWith('/payments')) {
+        return jsonResponse({
+          data: [
+            {
+              id: 'p2p-stable',
+              type: 'P2P',
+              state,
+              created: '2026-01-01T00:00:00Z',
+              amount: { amount: '0.00000001', currency: 'BTC' },
+              p2p: {},
+            },
+          ],
+        });
+      }
+      return new Response('not found', { status: 404 });
+    });
+    const strike = node(fetchMock);
+    const [pending] = await strike.listTransactions({ from: 0, limit: 10 });
+    state = 'COMPLETED';
+    const [completed] = await strike.listTransactions({ from: 0, limit: 10 });
+
+    expect(pending).toMatchObject({
+      externalId: 'p2p-stable',
+      settlementType: 'intraledger',
+      settlementState: 'pending',
+    });
+    expect(completed).toMatchObject({
+      externalId: 'p2p-stable',
+      settlementType: 'intraledger',
+      settlementState: 'completed',
+    });
+  });
+
+  it('retains incoming P2P and onchain receives with provider IDs and txids', async () => {
+    const receives = [
+      {
+        receiveId: 'receive-p2p',
+        receiveRequestId: 'request-p2p',
+        type: 'P2P',
+        state: 'PENDING',
+        created: '2026-01-01T00:00:00Z',
+        amountReceived: { amount: '0.00000001', currency: 'BTC' },
+        p2p: {},
+      },
+      {
+        receiveId: 'receive-direct',
+        receiveRequestId: 'request-direct',
+        type: 'ONCHAIN',
+        state: 'COMPLETED',
+        created: '2026-01-01T00:00:01Z',
+        amountReceived: { amount: '0.00000001', currency: 'BTC' },
+        onchain: { address: 'bc1q' },
+      },
+      {
+        receiveId: 'receive-chain',
+        receiveRequestId: 'request-chain',
+        type: 'ONCHAIN',
+        state: 'COMPLETED',
+        created: '2026-01-01T00:00:02Z',
+        amountReceived: { amount: '0.00000001', currency: 'BTC' },
+        onchain: { address: 'bc1q', transactionId: 'receive-txid' },
+      },
+    ];
+    const transactions = await node(transactionFetch({ receives })).listTransactions({
+      from: 0,
+      limit: 10,
+    });
+    const byId = new Map(transactions.map((transaction) => [transaction.externalId, transaction]));
+
+    expect(byId.get('receive-p2p')).toMatchObject({
+      settlementType: 'intraledger',
+      settlementState: 'pending',
+    });
+    expect(byId.get('receive-direct')).toMatchObject({
+      settlementType: 'intraledger',
+      settlementState: 'completed',
+    });
+    expect(byId.get('receive-chain')).toMatchObject({
+      settlementType: 'onchain',
+      settlementState: 'completed',
+      txid: 'receive-txid',
+    });
+  });
+
+  it('matches outgoing txids during list filtering', async () => {
+    const transactions = await node(
+      transactionFetch({
+        payments: [
+          {
+            id: 'payment-with-txid',
+            state: 'PENDING',
+            created: '2026-01-01T00:00:00Z',
+            amount: { amount: '0.00000001', currency: 'BTC' },
+            onchain: { txnId: 'ABCDEF012345' },
+          },
+        ],
+      })
+    ).listTransactions({ from: 0, limit: 10, search: 'cdef01' });
+
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]?.externalId).toBe('payment-with-txid');
   });
 });

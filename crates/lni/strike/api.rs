@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -6,9 +7,9 @@ use lightning_invoice::Bolt11Invoice;
 use super::types::{
     Amount, CreateReceiveRequestRequest, OnchainPaymentExecutionResponse,
     OnchainPaymentQuoteRequest, OnchainPaymentQuoteResponse, OnchainTierResponse,
-    OnchainTiersRequest, PaymentExecutionResponse, PaymentQuoteRequest, PaymentQuoteResponse,
-    PaymentsResponse, ReceiveRequestBolt11, StrikePaymentByIdResponse,
-    StrikeReceiveRequestResponse, StrikeReceivesWithCountResponse,
+    OnchainTiersRequest, Payment, PaymentExecutionResponse, PaymentQuoteRequest,
+    PaymentQuoteResponse, PaymentsResponse, ReceiveRequestBolt11, StrikePaymentByIdResponse,
+    StrikeReceive, StrikeReceiveRequestResponse, StrikeReceivesWithCountResponse,
 };
 use super::StrikeConfig;
 use crate::error_normalization::{
@@ -19,7 +20,8 @@ use crate::{
     ApiError, CreateInvoiceParams, InvoiceType, Offer, OnInvoiceEventCallback,
     OnInvoiceEventParams, OnchainFeePayer, OnchainFeePreference, OnchainFeePreferenceType,
     OnchainFeeSpeed, OnchainTransaction, PayInvoiceParams, PayInvoiceResponse, PayOnchainOptions,
-    PayOnchainResponse, PrepareOnchainTransactionParams, Transaction,
+    PayOnchainResponse, PrepareOnchainTransactionParams, SettlementState, SettlementType,
+    Transaction,
 };
 use reqwest::header;
 
@@ -144,6 +146,196 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
         .parse::<f64>()
         .ok()
         .map(|btc| (btc * 100_000_000.0).round() as i64)
+}
+
+fn amount_to_msats(amount: Option<&Amount>) -> i64 {
+    amount_to_sats(amount).unwrap_or_default() * 1000
+}
+
+fn normalize_settlement_state(state: Option<&str>) -> SettlementState {
+    match state.map(str::to_ascii_uppercase).as_deref() {
+        Some("PENDING") => SettlementState::Pending,
+        Some("COMPLETED" | "SUCCESS") => SettlementState::Completed,
+        Some("FAILED" | "FAILURE") => SettlementState::Failed,
+        _ => SettlementState::Unknown,
+    }
+}
+
+fn normalize_settlement_type(
+    type_: Option<&str>,
+    state: Option<&str>,
+    has_lightning: bool,
+    has_onchain: bool,
+    has_p2p: bool,
+    txid: Option<&str>,
+) -> SettlementType {
+    let type_ = type_.map(str::to_ascii_uppercase);
+
+    if txid.is_some_and(|value| !value.is_empty()) {
+        SettlementType::Onchain
+    } else if matches!(type_.as_deref(), Some("P2P")) || has_p2p {
+        SettlementType::Intraledger
+    } else if matches!(type_.as_deref(), Some("LIGHTNING")) || has_lightning {
+        SettlementType::Lightning
+    } else if normalize_settlement_state(state) == SettlementState::Completed {
+        SettlementType::Intraledger
+    } else if matches!(type_.as_deref(), Some("ONCHAIN")) || has_onchain {
+        SettlementType::Onchain
+    } else {
+        SettlementType::Unknown
+    }
+}
+
+fn normalized_payment_id(payment: &Payment) -> Option<&str> {
+    payment.payment_id.as_deref().or(payment.id.as_deref())
+}
+
+fn parse_strike_payment_id(value: &str) -> Option<uuid::Uuid> {
+    let id = uuid::Uuid::parse_str(value).ok()?;
+    id.hyphenated()
+        .to_string()
+        .eq_ignore_ascii_case(value)
+        .then_some(id)
+}
+
+fn payment_to_transaction(payment: &Payment) -> Transaction {
+    let state = payment.state.as_deref().or(payment.result.as_deref());
+    let txid = payment
+        .onchain
+        .as_ref()
+        .and_then(|onchain| onchain.txn_id.clone())
+        .filter(|value| !value.trim().is_empty());
+
+    Transaction {
+        type_: "outgoing".to_string(),
+        invoice: payment
+            .lightning
+            .as_ref()
+            .and_then(|lightning| lightning.payment_request.clone())
+            .unwrap_or_default(),
+        description: payment.description.clone().unwrap_or_default(),
+        description_hash: String::new(),
+        preimage: payment
+            .lightning
+            .as_ref()
+            .and_then(|lightning| lightning.pre_image.clone())
+            .unwrap_or_default(),
+        payment_hash: payment
+            .lightning
+            .as_ref()
+            .and_then(|lightning| lightning.payment_hash.clone())
+            .unwrap_or_default(),
+        amount_msats: amount_to_msats(payment.amount.as_ref()),
+        fees_paid: payment
+            .lightning
+            .as_ref()
+            .and_then(|lightning| lightning.network_fee.as_ref())
+            .map(|fee| amount_to_msats(Some(fee)))
+            .unwrap_or_default(),
+        created_at: payment
+            .created
+            .as_deref()
+            .and_then(|created| chrono::DateTime::parse_from_rfc3339(created).ok())
+            .map(|created| created.timestamp())
+            .unwrap_or_default(),
+        expires_at: 0,
+        settled_at: if normalize_settlement_state(state) == SettlementState::Completed {
+            payment
+                .completed
+                .as_deref()
+                .and_then(|completed| chrono::DateTime::parse_from_rfc3339(completed).ok())
+                .map(|completed| completed.timestamp())
+                .unwrap_or_default()
+        } else {
+            0
+        },
+        payer_note: Some(String::new()),
+        external_id: normalized_payment_id(payment).map(str::to_string),
+        settlement_type: Some(normalize_settlement_type(
+            payment.type_.as_deref(),
+            state,
+            payment.lightning.is_some(),
+            payment.onchain.is_some(),
+            payment.p2p.is_some(),
+            txid.as_deref(),
+        )),
+        settlement_state: Some(normalize_settlement_state(state)),
+        txid,
+    }
+}
+
+fn receive_to_transaction(receive: &StrikeReceive) -> Transaction {
+    let txid = receive
+        .onchain
+        .as_ref()
+        .and_then(|onchain| {
+            onchain
+                .transaction_id
+                .clone()
+                .or_else(|| onchain.transaction_hash.clone())
+        })
+        .filter(|value| !value.trim().is_empty());
+    let lightning = receive.lightning.as_ref();
+
+    Transaction {
+        type_: "incoming".to_string(),
+        invoice: lightning
+            .map(|lightning| lightning.invoice.clone())
+            .unwrap_or_default(),
+        description: lightning
+            .and_then(|lightning| {
+                lightning
+                    .description
+                    .clone()
+                    .or_else(|| lightning.description_hash.clone())
+            })
+            .unwrap_or_default(),
+        description_hash: lightning
+            .and_then(|lightning| lightning.description_hash.clone())
+            .unwrap_or_default(),
+        preimage: lightning
+            .and_then(|lightning| lightning.preimage.clone())
+            .unwrap_or_default(),
+        payment_hash: lightning
+            .map(|lightning| lightning.payment_hash.clone())
+            .unwrap_or_default(),
+        amount_msats: amount_to_msats(Some(&receive.amount_received)),
+        fees_paid: 0,
+        created_at: receive
+            .created
+            .as_deref()
+            .and_then(|created| chrono::DateTime::parse_from_rfc3339(created).ok())
+            .map(|created| created.timestamp())
+            .unwrap_or_default(),
+        expires_at: 0,
+        settled_at: if normalize_settlement_state(receive.state.as_deref())
+            == SettlementState::Completed
+        {
+            receive
+                .completed
+                .as_deref()
+                .and_then(|completed| chrono::DateTime::parse_from_rfc3339(completed).ok())
+                .map(|completed| completed.timestamp())
+                .unwrap_or_default()
+        } else {
+            0
+        },
+        payer_note: Some(String::new()),
+        external_id: receive
+            .receive_id
+            .clone()
+            .or_else(|| receive.receive_request_id.clone()),
+        settlement_type: Some(normalize_settlement_type(
+            receive.type_.as_deref(),
+            receive.state.as_deref(),
+            receive.lightning.is_some(),
+            receive.onchain.is_some(),
+            receive.p2p.is_some(),
+            txid.as_deref(),
+        )),
+        settlement_state: Some(normalize_settlement_state(receive.state.as_deref())),
+        txid,
+    }
 }
 
 fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
@@ -430,6 +622,9 @@ pub async fn create_invoice(
                 description_hash: invoice_params.description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some(receive_request_resp.receive_request_id),
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
         InvoiceType::Bolt12 => Err(ApiError::Json {
@@ -995,56 +1190,20 @@ pub async fn lookup_invoice(
             reason: format!("No receive found for payment hash: {}", target_payment_hash),
         })?;
 
-    let lightning_info = receive.lightning.ok_or_else(|| ApiError::Json {
+    receive.lightning.as_ref().ok_or_else(|| ApiError::Json {
         reason: "No lightning information in receive".to_string(),
     })?;
 
-    // Convert amount to millisatoshis
-    let amount_msats = if receive.amount_received.currency == "BTC" {
-        let btc_amount = receive.amount_received.amount.parse::<f64>().unwrap_or(0.0);
-        (btc_amount * 100_000_000_000.0) as i64
-    } else {
-        0
-    };
-
-    Ok(Transaction {
-        type_: "incoming".to_string(),
-        invoice: lightning_info.invoice,
-        preimage: lightning_info.preimage,
-        payment_hash: lightning_info.payment_hash,
-        amount_msats,
-        fees_paid: 0,
-        created_at: chrono::DateTime::parse_from_rfc3339(&receive.created)
-            .map(|dt| dt.timestamp())
-            .unwrap_or(0),
-        expires_at: 0, // Not available in receives response
-        settled_at: if receive.state == "COMPLETED" {
-            receive
-                .completed
-                .as_ref()
-                .and_then(|dt| chrono::DateTime::parse_from_rfc3339(dt).ok())
-                .map(|dt| dt.timestamp())
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        description: lightning_info.description.unwrap_or_else(|| {
-            // If no description, use description_hash if available
-            lightning_info.description_hash.clone().unwrap_or_default()
-        }),
-        description_hash: lightning_info.description_hash.clone().unwrap_or_default(),
-        payer_note: Some("".to_string()),
-        external_id: Some(receive.receive_request_id),
-    })
+    Ok(receive_to_transaction(&receive))
 }
 
 pub async fn list_transactions(
     config: StrikeConfig,
-    from: i64,
-    limit: i64,
-    _search: Option<String>,
+    params: crate::ListTransactionsParams,
 ) -> Result<Vec<Transaction>, ApiError> {
     let client = async_client(&config)?;
+    let from = params.from;
+    let limit = params.limit;
 
     // Get receives (incoming) using the receives endpoint similar to lookup_invoice
     let receives_url = format!(
@@ -1059,7 +1218,7 @@ pub async fn list_transactions(
         .await
         .map_err(|e| strike_nwc_error_from_transport(e, "list_transactions"))?;
 
-    let mut transactions: Vec<Transaction> = Vec::new();
+    let mut transactions: HashMap<String, Transaction> = HashMap::new();
 
     if receives_response.status().is_success() {
         let receives_text = receives_response.text().await.unwrap();
@@ -1071,46 +1230,16 @@ pub async fn list_transactions(
             ),
         })?;
 
-        for receive in receives_resp.items {
-            if let Some(lightning_info) = receive.lightning {
-                // Convert amount to millisatoshis
-                let amount_msats = if receive.amount_received.currency == "BTC" {
-                    let btc_amount = receive.amount_received.amount.parse::<f64>().unwrap_or(0.0);
-                    (btc_amount * 100_000_000_000.0) as i64
-                } else {
-                    0
-                };
-
-                transactions.push(Transaction {
-                    type_: "incoming".to_string(),
-                    invoice: lightning_info.invoice,
-                    preimage: lightning_info.preimage,
-                    payment_hash: lightning_info.payment_hash,
-                    amount_msats,
-                    fees_paid: 0,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&receive.created)
-                        .map(|dt| dt.timestamp())
-                        .unwrap_or(0),
-                    expires_at: 0, // Not available in receives response
-                    settled_at: if receive.state == "COMPLETED" {
-                        receive
-                            .completed
-                            .as_ref()
-                            .and_then(|dt| chrono::DateTime::parse_from_rfc3339(dt).ok())
-                            .map(|dt| dt.timestamp())
-                            .unwrap_or(0)
-                    } else {
-                        0
-                    },
-                    description: lightning_info.description.unwrap_or_else(|| {
-                        // If no description, use description_hash if available
-                        lightning_info.description_hash.clone().unwrap_or_default()
-                    }),
-                    description_hash: lightning_info.description_hash.clone().unwrap_or_default(),
-                    payer_note: Some("".to_string()),
-                    external_id: Some(receive.receive_request_id),
-                });
-            }
+        for (index, receive) in receives_resp.items.into_iter().enumerate() {
+            let transaction = receive_to_transaction(&receive);
+            let key = format!(
+                "incoming:{}",
+                transaction
+                    .external_id
+                    .clone()
+                    .unwrap_or_else(|| format!("receive-{index}"))
+            );
+            transactions.insert(key, transaction);
         }
     } else {
         let status = receives_response.status();
@@ -1125,7 +1254,7 @@ pub async fn list_transactions(
 
     // Get payments (outgoing)
     let payments_url = format!(
-        "{}/payments?skip={}&top={}",
+        "{}/payments?$skip={}&$top={}",
         get_base_url(&config),
         from,
         limit
@@ -1140,67 +1269,14 @@ pub async fn list_transactions(
         let payments_text = payments_response.text().await.unwrap();
         let payments_resp: PaymentsResponse = serde_json::from_str(&payments_text)?;
 
-        for payment in payments_resp.data {
-            let amount_msats = if payment.amount.currency == "BTC" {
-                let btc_amount = payment.amount.amount.parse::<f64>().unwrap_or(0.0);
-                (btc_amount * 100_000_000_000.0) as i64
-            } else {
-                0
-            };
-
-            let fee_msats = if let Some(lightning) = &payment.lightning {
-                if let Some(network_fee) = &lightning.network_fee {
-                    let fee_amount = network_fee.amount.parse::<f64>().unwrap_or(0.0);
-                    if network_fee.currency == "BTC" {
-                        (fee_amount * 100_000_000_000.0) as i64
-                    } else {
-                        0
-                    }
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
-
-            transactions.push(Transaction {
-                type_: "outgoing".to_string(),
-                invoice: payment
-                    .lightning
-                    .as_ref()
-                    .and_then(|l| l.payment_request.clone())
-                    .unwrap_or_default(),
-                preimage: payment
-                    .lightning
-                    .as_ref()
-                    .and_then(|lightning| lightning.pre_image.clone())
-                    .unwrap_or_default(),
-                payment_hash: payment
-                    .lightning
-                    .as_ref()
-                    .and_then(|l| l.payment_hash.clone())
-                    .unwrap_or_default(),
-                amount_msats,
-                fees_paid: fee_msats,
-                created_at: chrono::DateTime::parse_from_rfc3339(&payment.created)
-                    .map(|dt| dt.timestamp())
-                    .unwrap_or(0),
-                expires_at: 0,
-                settled_at: if payment.state == "COMPLETED" {
-                    payment
-                        .completed
-                        .as_ref()
-                        .and_then(|dt| chrono::DateTime::parse_from_rfc3339(dt).ok())
-                        .map(|dt| dt.timestamp())
-                        .unwrap_or(0)
-                } else {
-                    0
-                },
-                description: payment.description.unwrap_or_default(),
-                description_hash: "".to_string(),
-                payer_note: Some("".to_string()),
-                external_id: Some(payment.id),
-            });
+        for (index, payment) in payments_resp.data.into_iter().enumerate() {
+            let key = format!(
+                "outgoing:{}",
+                normalized_payment_id(&payment)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("payment-{index}"))
+            );
+            transactions.insert(key, payment_to_transaction(&payment));
         }
     } else if payments_response.status() != reqwest::StatusCode::NOT_FOUND {
         let status = payments_response.status();
@@ -1213,8 +1289,51 @@ pub async fn list_transactions(
         ));
     }
 
-    // Sort by created date descending
+    if let Some(search) = params.search.as_deref().filter(|s| !s.is_empty()) {
+        if let Some(payment_id) = parse_strike_payment_id(search) {
+            let payment_url = format!("{}/payments/{}", get_base_url(&config), payment_id);
+            if let Ok(response) = client.get(&payment_url).send().await {
+                if response.status().is_success() {
+                    if let Ok(payment) = response.json::<Payment>().await {
+                        let key = format!(
+                            "outgoing:{}",
+                            normalized_payment_id(&payment).unwrap_or(search)
+                        );
+                        transactions.insert(key, payment_to_transaction(&payment));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut transactions: Vec<Transaction> = transactions
+        .into_values()
+        .filter(|transaction| {
+            params
+                .payment_hash
+                .as_deref()
+                .map(|payment_hash| transaction.payment_hash == payment_hash)
+                .unwrap_or(true)
+                && params
+                    .search
+                    .as_deref()
+                    .map(|search| crate::transaction_matches_search(transaction, search))
+                    .unwrap_or(true)
+                && params
+                    .created_after
+                    .map(|created_after| transaction.created_at >= created_after)
+                    .unwrap_or(true)
+                && params
+                    .created_before
+                    .map(|created_before| transaction.created_at <= created_before)
+                    .unwrap_or(true)
+        })
+        .collect();
+
     transactions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    if limit > 0 {
+        transactions.truncate(limit as usize);
+    }
 
     Ok(transactions)
 }
@@ -1291,6 +1410,86 @@ pub async fn on_invoice_events(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::sync::mpsc;
+
+    const PAYMENT_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+    fn payment(value: serde_json::Value) -> Payment {
+        serde_json::from_value(value).expect("payment should deserialize")
+    }
+
+    fn receive(value: serde_json::Value) -> StrikeReceive {
+        serde_json::from_value(value).expect("receive should deserialize")
+    }
+
+    async fn test_server(
+        responses: Vec<(u16, serde_json::Value)>,
+    ) -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test server should bind");
+        let address = listener.local_addr().expect("test server address");
+        let (sender, receiver) = mpsc::channel(responses.len());
+
+        tokio::spawn(async move {
+            for (status, response_body) in responses {
+                let (mut stream, _) = listener.accept().await.expect("request should connect");
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 4096];
+                loop {
+                    let read = stream.read(&mut buffer).await.expect("request should read");
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..read]);
+                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&request).into_owned();
+                sender
+                    .send(request)
+                    .await
+                    .expect("request should be recorded");
+
+                let body = response_body.to_string();
+                let reason = if status == 200 { "OK" } else { "Not Found" };
+                let response = format!(
+                    "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .expect("response should write");
+            }
+        });
+
+        (format!("http://{address}"), receiver)
+    }
+
+    fn test_config(base_url: String) -> StrikeConfig {
+        StrikeConfig {
+            base_url: Some(base_url),
+            api_key: "test-token".to_string(),
+            socks5_proxy: None,
+            accept_invalid_certs: Some(false),
+            http_timeout: Some(5),
+        }
+    }
+
+    fn list_params(search: Option<&str>) -> crate::ListTransactionsParams {
+        crate::ListTransactionsParams {
+            from: 0,
+            limit: 10,
+            payment_hash: None,
+            search: search.map(str::to_string),
+            created_after: None,
+            created_before: None,
+        }
+    }
 
     #[test]
     fn proxy_client_builds_with_certificate_verification_enabled() {
@@ -1474,5 +1673,245 @@ mod tests {
         };
 
         assert!(assert_onchain_fee_guardrail(&test_onchain_transaction(None), options).is_ok());
+    }
+
+    #[test]
+    fn maps_outgoing_lifecycle_and_route_evidence_independently() {
+        let cases = [
+            (
+                serde_json::json!({ "id": "methodless-pending", "state": "PENDING" }),
+                SettlementType::Unknown,
+                SettlementState::Pending,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "methodless-completed", "state": "SUCCESS" }),
+                SettlementType::Intraledger,
+                SettlementState::Completed,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "p2p", "type": "P2P", "state": "PENDING", "p2p": {} }),
+                SettlementType::Intraledger,
+                SettlementState::Pending,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "direct", "type": "ONCHAIN", "state": "COMPLETED" }),
+                SettlementType::Intraledger,
+                SettlementState::Completed,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "waiting", "type": "ONCHAIN", "state": "PENDING", "onchain": {} }),
+                SettlementType::Onchain,
+                SettlementState::Pending,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "broadcast", "state": "PENDING", "onchain": { "txnId": "pending-txid" } }),
+                SettlementType::Onchain,
+                SettlementState::Pending,
+                Some("pending-txid"),
+            ),
+            (
+                serde_json::json!({ "id": "confirmed", "state": "COMPLETED", "onchain": { "txnId": "completed-txid" } }),
+                SettlementType::Onchain,
+                SettlementState::Completed,
+                Some("completed-txid"),
+            ),
+            (
+                serde_json::json!({ "id": "failed", "type": "ONCHAIN", "state": "FAILURE" }),
+                SettlementType::Onchain,
+                SettlementState::Failed,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "unknown", "state": "SOMETHING_NEW" }),
+                SettlementType::Unknown,
+                SettlementState::Unknown,
+                None,
+            ),
+            (
+                serde_json::json!({ "id": "lightning", "state": "COMPLETED", "lightning": { "paymentHash": "hash" } }),
+                SettlementType::Lightning,
+                SettlementState::Completed,
+                None,
+            ),
+        ];
+
+        for (value, expected_type, expected_state, expected_txid) in cases {
+            let transaction = payment_to_transaction(&payment(value));
+            assert_eq!(transaction.settlement_type, Some(expected_type));
+            assert_eq!(transaction.settlement_state, Some(expected_state));
+            assert_eq!(transaction.txid.as_deref(), expected_txid);
+        }
+    }
+
+    #[test]
+    fn p2p_lifecycle_updates_preserve_provider_id_and_route() {
+        let pending = payment_to_transaction(&payment(serde_json::json!({
+            "paymentId": PAYMENT_ID, "type": "P2P", "state": "PENDING", "p2p": {}
+        })));
+        let completed = payment_to_transaction(&payment(serde_json::json!({
+            "paymentId": PAYMENT_ID, "type": "P2P", "state": "COMPLETED", "p2p": {}
+        })));
+
+        assert_eq!(pending.external_id, completed.external_id);
+        assert_eq!(pending.settlement_type, Some(SettlementType::Intraledger));
+        assert_eq!(pending.settlement_state, Some(SettlementState::Pending));
+        assert_eq!(completed.settlement_type, Some(SettlementType::Intraledger));
+        assert_eq!(completed.settlement_state, Some(SettlementState::Completed));
+        assert!(pending.txid.is_none() && completed.txid.is_none());
+    }
+
+    #[test]
+    fn retains_incoming_p2p_and_onchain_receives() {
+        let p2p = receive_to_transaction(&receive(serde_json::json!({
+            "receiveId": "receive-p2p",
+            "receiveRequestId": "request-p2p",
+            "type": "P2P",
+            "state": "PENDING",
+            "amountReceived": { "amount": "0.00000001", "currency": "BTC" },
+            "p2p": { "payerAccountId": "payer" }
+        })));
+        let intraledger = receive_to_transaction(&receive(serde_json::json!({
+            "receiveId": "receive-direct",
+            "receiveRequestId": "request-direct",
+            "type": "ONCHAIN",
+            "state": "COMPLETED",
+            "amountReceived": { "amount": "0.00000001", "currency": "BTC" },
+            "onchain": { "address": "bc1q" }
+        })));
+        let onchain = receive_to_transaction(&receive(serde_json::json!({
+            "receiveId": "receive-chain",
+            "receiveRequestId": "request-chain",
+            "type": "ONCHAIN",
+            "state": "COMPLETED",
+            "amountReceived": { "amount": "0.00000001", "currency": "BTC" },
+            "onchain": { "address": "bc1q", "transactionId": "receive-txid" }
+        })));
+
+        assert_eq!(p2p.external_id.as_deref(), Some("receive-p2p"));
+        assert_eq!(p2p.settlement_type, Some(SettlementType::Intraledger));
+        assert_eq!(p2p.settlement_state, Some(SettlementState::Pending));
+        assert_eq!(
+            intraledger.settlement_type,
+            Some(SettlementType::Intraledger)
+        );
+        assert_eq!(
+            intraledger.settlement_state,
+            Some(SettlementState::Completed)
+        );
+        assert!(intraledger.txid.is_none());
+        assert_eq!(onchain.settlement_type, Some(SettlementType::Onchain));
+        assert_eq!(onchain.txid.as_deref(), Some("receive-txid"));
+    }
+
+    #[tokio::test]
+    async fn uuid_search_returns_direct_payment_outside_collection_page() {
+        let (base_url, mut requests) = test_server(vec![
+            (200, serde_json::json!({ "items": [], "count": 0 })),
+            (200, serde_json::json!({ "data": [], "count": 0 })),
+            (
+                200,
+                serde_json::json!({
+                    "paymentId": PAYMENT_ID,
+                    "state": "COMPLETED",
+                    "amount": { "amount": "0.00000001", "currency": "BTC" }
+                }),
+            ),
+        ])
+        .await;
+
+        let transactions = list_transactions(test_config(base_url), list_params(Some(PAYMENT_ID)))
+            .await
+            .expect("list transactions should succeed");
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions[0].external_id.as_deref(), Some(PAYMENT_ID));
+        assert_eq!(
+            transactions[0].settlement_type,
+            Some(SettlementType::Intraledger)
+        );
+
+        let request_paths: Vec<String> = [
+            requests.recv().await,
+            requests.recv().await,
+            requests.recv().await,
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|request| request.lines().next().map(str::to_string))
+        .collect();
+        assert!(request_paths[2].contains(&format!("/payments/{PAYMENT_ID}")));
+    }
+
+    #[tokio::test]
+    async fn direct_snapshot_replaces_listed_copy_by_normalized_payment_id() {
+        let listed = serde_json::json!({
+            "id": PAYMENT_ID,
+            "state": "PENDING",
+            "created": "2026-01-01T00:00:00Z",
+            "amount": { "amount": "0.00000001", "currency": "BTC" }
+        });
+        let (base_url, _requests) = test_server(vec![
+            (200, serde_json::json!({ "items": [], "count": 0 })),
+            (200, serde_json::json!({ "data": [listed], "count": 1 })),
+            (
+                200,
+                serde_json::json!({
+                    "paymentId": PAYMENT_ID,
+                    "state": "COMPLETED",
+                    "amount": { "amount": "0.00000001", "currency": "BTC" }
+                }),
+            ),
+        ])
+        .await;
+
+        let transactions = list_transactions(test_config(base_url), list_params(Some(PAYMENT_ID)))
+            .await
+            .expect("list transactions should succeed");
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(
+            transactions[0].settlement_state,
+            Some(SettlementState::Completed)
+        );
+    }
+
+    #[tokio::test]
+    async fn direct_404_falls_back_and_non_uuid_search_skips_direct_lookup() {
+        let listed = serde_json::json!({
+            "id": PAYMENT_ID,
+            "state": "PENDING",
+            "created": "2026-01-01T00:00:00Z",
+            "description": "reconciliation target",
+            "amount": { "amount": "0.00000001", "currency": "BTC" }
+        });
+        let (base_url, _requests) = test_server(vec![
+            (200, serde_json::json!({ "items": [], "count": 0 })),
+            (
+                200,
+                serde_json::json!({ "data": [listed.clone()], "count": 1 }),
+            ),
+            (404, serde_json::json!({ "message": "not found" })),
+        ])
+        .await;
+        let fallback = list_transactions(test_config(base_url), list_params(Some(PAYMENT_ID)))
+            .await
+            .expect("404 should fall back");
+        assert_eq!(fallback.len(), 1);
+
+        let (base_url, mut requests) = test_server(vec![
+            (200, serde_json::json!({ "items": [], "count": 0 })),
+            (200, serde_json::json!({ "data": [listed], "count": 1 })),
+        ])
+        .await;
+        let text_search = list_transactions(test_config(base_url), list_params(Some("TARGET")))
+            .await
+            .expect("text search should succeed");
+        assert_eq!(text_search.len(), 1);
+        assert!(requests.recv().await.is_some());
+        assert!(requests.recv().await.is_some());
+        assert!(requests.recv().await.is_none());
     }
 }

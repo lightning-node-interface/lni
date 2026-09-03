@@ -137,6 +137,9 @@ fn payment_to_transaction(payment: &breez_sdk_spark::Payment) -> Option<Transact
         description_hash: "".to_string(),
         payer_note: None,
         external_id: Some(payment.id.clone()),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 
@@ -223,6 +226,9 @@ pub async fn create_invoice(
                 description_hash: invoice_params.description_hash.unwrap_or_default(),
                 payer_note: None,
                 external_id: None,
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
         InvoiceType::Bolt12 => Err(ApiError::Api {

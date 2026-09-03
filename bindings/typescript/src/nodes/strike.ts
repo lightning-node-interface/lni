@@ -42,6 +42,8 @@ import {
   type Permissions,
   type OnchainTransaction,
   type PrepareOnchainTransactionParams,
+  type SettlementState,
+  type SettlementType,
   type StrikeConfig,
   type Transaction,
 } from '../types.js';
@@ -93,19 +95,22 @@ interface StrikePaymentExecutionResponse {
 }
 
 interface StrikePaymentResponse {
-  id: string;
+  id?: string;
   paymentId?: string;
-  state: string;
-  created: string;
+  type?: string;
+  state?: string;
+  result?: string;
+  created?: string;
   completed?: string;
   description?: string;
-  amount: StrikeAmount;
+  amount?: StrikeAmount;
   totalFee?: StrikeAmount;
   totalAmount?: StrikeAmount;
   lightning?: StrikeLightningPaymentDetails;
   onchain?: {
     txnId?: string;
   };
+  p2p?: Record<string, unknown>;
 }
 
 interface StrikeOnchainTierResponse {
@@ -130,25 +135,151 @@ interface DuplicatePaymentQuote {
   raw: unknown;
 }
 
+interface StrikeReceive {
+  receiveId?: string;
+  receiveRequestId?: string;
+  type?: string;
+  state?: string;
+  created?: string;
+  completed?: string;
+  amountReceived: StrikeAmount;
+  lightning?: {
+    invoice?: string;
+    preimage?: string;
+    description?: string;
+    descriptionHash?: string;
+    paymentHash?: string;
+  };
+  onchain?: {
+    address?: string;
+    transactionId?: string;
+    transactionHash?: string;
+    outputIndex?: number;
+    blockHeight?: number;
+    numberOfConfirmations?: number;
+  };
+  p2p?: Record<string, unknown>;
+}
+
 interface StrikeReceivesResponse {
-  items: Array<{
-    receiveRequestId: string;
-    state: string;
-    created: string;
-    completed?: string;
-    amountReceived: StrikeAmount;
-    lightning?: {
-      invoice: string;
-      preimage: string;
-      description?: string;
-      descriptionHash?: string;
-      paymentHash: string;
-    };
-  }>;
+  items: StrikeReceive[];
 }
 
 interface StrikePaymentsResponse {
   data: StrikePaymentResponse[];
+}
+
+function normalizeSettlementState(state?: string): SettlementState {
+  switch (state?.toUpperCase()) {
+    case 'PENDING':
+      return 'pending';
+    case 'COMPLETED':
+    case 'SUCCESS':
+      return 'completed';
+    case 'FAILED':
+    case 'FAILURE':
+      return 'failed';
+    default:
+      return 'unknown';
+  }
+}
+
+function normalizeSettlementType(input: {
+  type?: string;
+  state?: string;
+  lightning?: unknown;
+  onchain?: unknown;
+  p2p?: unknown;
+  txid?: string;
+}): SettlementType {
+  const type = input.type?.toUpperCase();
+  const state = normalizeSettlementState(input.state);
+
+  if (input.txid) return 'onchain';
+  if (type === 'P2P' || input.p2p) return 'intraledger';
+  if (type === 'LIGHTNING' || input.lightning) return 'lightning';
+  if (state === 'completed') return 'intraledger';
+  if (type === 'ONCHAIN' || input.onchain) return 'onchain';
+  return 'unknown';
+}
+
+function normalizedPaymentId(payment: StrikePaymentResponse): string | undefined {
+  return payment.paymentId ?? payment.id;
+}
+
+function strikeAmountToMsats(amount?: StrikeAmount): number {
+  return amount?.currency === 'BTC' ? btcToMsats(amount.amount) : 0;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function strikePaymentToTransaction(payment: StrikePaymentResponse): Transaction {
+  const state = payment.state ?? payment.result;
+  const providerTxid = payment.onchain?.txnId;
+  const txid = providerTxid?.trim() ? providerTxid : undefined;
+
+  return emptyTransaction({
+    type: 'outgoing',
+    invoice: payment.lightning?.paymentRequest ?? '',
+    preimage: payment.lightning?.preImage ?? '',
+    paymentHash: payment.lightning?.paymentHash ?? '',
+    amountMsats: strikeAmountToMsats(payment.amount),
+    feesPaid: payment.lightning?.networkFee ? strikeAmountToMsats(payment.lightning.networkFee) : 0,
+    createdAt: payment.created ? toUnixSeconds(Date.parse(payment.created)) : 0,
+    settledAt:
+      normalizeSettlementState(state) === 'completed' && payment.completed
+        ? toUnixSeconds(Date.parse(payment.completed))
+        : 0,
+    description: payment.description ?? '',
+    externalId: normalizedPaymentId(payment),
+    payerNote: '',
+    settlementType: normalizeSettlementType({
+      type: payment.type,
+      state,
+      lightning: payment.lightning,
+      onchain: payment.onchain,
+      p2p: payment.p2p,
+      txid,
+    }),
+    settlementState: normalizeSettlementState(state),
+    txid,
+  });
+}
+
+function strikeReceiveToTransaction(receive: StrikeReceive): Transaction {
+  const providerTxid = receive.onchain?.transactionId ?? receive.onchain?.transactionHash;
+  const txid = providerTxid?.trim() ? providerTxid : undefined;
+  const lightning = receive.lightning;
+
+  return emptyTransaction({
+    type: 'incoming',
+    invoice: lightning?.invoice ?? '',
+    preimage: lightning?.preimage ?? '',
+    paymentHash: lightning?.paymentHash ?? '',
+    amountMsats: strikeAmountToMsats(receive.amountReceived),
+    feesPaid: 0,
+    createdAt: receive.created ? toUnixSeconds(Date.parse(receive.created)) : 0,
+    settledAt:
+      normalizeSettlementState(receive.state) === 'completed' && receive.completed
+        ? toUnixSeconds(Date.parse(receive.completed))
+        : 0,
+    description: lightning?.description ?? lightning?.descriptionHash ?? '',
+    descriptionHash: lightning?.descriptionHash ?? '',
+    externalId: receive.receiveId ?? receive.receiveRequestId,
+    payerNote: '',
+    settlementType: normalizeSettlementType({
+      type: receive.type,
+      state: receive.state,
+      lightning,
+      onchain: receive.onchain,
+      p2p: receive.p2p,
+      txid,
+    }),
+    settlementState: normalizeSettlementState(receive.state),
+    txid,
+  });
 }
 
 function paymentHashFromInvoice(invoice: string): string {
@@ -449,7 +580,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     private readonly config: StrikeConfig,
     options: NodeRequestOptions = {}
   ) {
-    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
+    this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
   }
@@ -892,105 +1023,71 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       throw new LniError('Api', `No receive found for payment hash: ${params.paymentHash}`);
     }
 
-    return emptyTransaction({
-      type: 'incoming',
-      invoice: item.lightning.invoice,
-      preimage: item.lightning.preimage,
-      paymentHash: item.lightning.paymentHash,
-      amountMsats: btcToMsats(item.amountReceived.amount),
-      feesPaid: 0,
-      createdAt: toUnixSeconds(Date.parse(item.created)),
-      settledAt:
-        item.state === 'COMPLETED' && item.completed
-          ? toUnixSeconds(Date.parse(item.completed))
-          : 0,
-      description: item.lightning.description ?? item.lightning.descriptionHash ?? '',
-      descriptionHash: item.lightning.descriptionHash ?? '',
-      externalId: item.receiveRequestId,
-      payerNote: '',
-    });
+    return strikeReceiveToTransaction(item);
   }
 
   async listTransactions(params: ListTransactionsParams): Promise<Transaction[]> {
-    const receives = await this.getJson<StrikeReceivesResponse>(
-      '/receive-requests/receives',
-      {
-        $skip: params.from,
-        $top: params.limit,
-      },
-      'list_transactions'
-    );
+    const search = params.search;
+    const directPaymentPromise =
+      search && isUuid(search)
+        ? this.getJson<StrikePaymentResponse>(
+            `/payments/${encodeURIComponent(search)}`,
+            undefined,
+            'list_transactions'
+          ).catch(() => undefined)
+        : Promise.resolve(undefined);
 
-    let outgoing: StrikePaymentsResponse = { data: [] };
-    try {
-      outgoing = await this.getJson<StrikePaymentsResponse>(
+    const [receives, outgoing, directPayment] = await Promise.all([
+      this.getJson<StrikeReceivesResponse>(
+        '/receive-requests/receives',
+        {
+          $skip: params.from,
+          $top: params.limit,
+        },
+        'list_transactions'
+      ),
+      this.getJson<StrikePaymentsResponse>(
         '/payments',
         {
           $skip: params.from,
           $top: params.limit,
         },
         'list_transactions'
-      );
-    } catch (error) {
-      if (!this.isNotFoundError(error)) {
+      ).catch((error: unknown) => {
+        if (this.isNotFoundError(error)) {
+          return { data: [] };
+        }
         throw error;
-      }
-      // Strike can return 404 when there are no outgoing payments for the account.
+      }),
+      directPaymentPromise,
+    ]);
+
+    const transactions = new Map<string, Transaction>();
+    receives.items.forEach((receive, index) => {
+      const tx = strikeReceiveToTransaction(receive);
+      transactions.set(`incoming:${tx.externalId ?? index}`, tx);
+    });
+    outgoing.data.forEach((payment, index) => {
+      const tx = strikePaymentToTransaction(payment);
+      transactions.set(`outgoing:${normalizedPaymentId(payment) ?? index}`, tx);
+    });
+
+    // The single-payment endpoint is the freshest snapshot and replaces a listed copy.
+    if (directPayment) {
+      const tx = strikePaymentToTransaction(directPayment);
+      transactions.set(`outgoing:${normalizedPaymentId(directPayment) ?? search ?? 'direct'}`, tx);
     }
 
-    const txs: Transaction[] = [];
-
-    for (const receive of receives.items) {
-      if (!receive.lightning) {
-        continue;
-      }
-
-      const tx = emptyTransaction({
-        type: 'incoming',
-        invoice: receive.lightning.invoice,
-        preimage: receive.lightning.preimage,
-        paymentHash: receive.lightning.paymentHash,
-        amountMsats: btcToMsats(receive.amountReceived.amount),
-        feesPaid: 0,
-        createdAt: toUnixSeconds(Date.parse(receive.created)),
-        settledAt:
-          receive.state === 'COMPLETED' && receive.completed
-            ? toUnixSeconds(Date.parse(receive.completed))
-            : 0,
-        description: receive.lightning.description ?? receive.lightning.descriptionHash ?? '',
-        descriptionHash: receive.lightning.descriptionHash ?? '',
-        externalId: receive.receiveRequestId,
-        payerNote: '',
-      });
-
-      txs.push(tx);
-    }
-
-    for (const payment of outgoing.data) {
-      const tx = emptyTransaction({
-        type: 'outgoing',
-        invoice: payment.lightning?.paymentRequest ?? '',
-        paymentHash: payment.lightning?.paymentHash ?? '',
-        amountMsats: btcToMsats(payment.amount.amount),
-        feesPaid: payment.lightning?.networkFee
-          ? btcToMsats(payment.lightning.networkFee.amount)
-          : 0,
-        createdAt: toUnixSeconds(Date.parse(payment.created)),
-        settledAt:
-          payment.state === 'COMPLETED' && payment.completed
-            ? toUnixSeconds(Date.parse(payment.completed))
-            : 0,
-        description: payment.description ?? '',
-        descriptionHash: '',
-        externalId: payment.id,
-        payerNote: '',
-      });
-
-      txs.push(tx);
-    }
+    const txs = [...transactions.values()];
 
     const filtered = txs.filter((tx) => {
       if (params.paymentHash && tx.paymentHash !== params.paymentHash) {
+        return false;
+      }
+      if (params.createdAfter !== undefined && tx.createdAt < params.createdAfter) {
+        return false;
+      }
+      if (params.createdBefore !== undefined && tx.createdAt > params.createdBefore) {
         return false;
       }
       return matchesSearch(tx, params.search);

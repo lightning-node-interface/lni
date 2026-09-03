@@ -131,14 +131,9 @@ impl StrikeNode {
     &self,
     params: crate::ListTransactionsParams,
   ) -> napi::Result<Vec<lni::Transaction>> {
-    let txns = lni::strike::api::list_transactions(
-      self.inner.clone(),
-      params.from,
-      params.limit,
-      params.search,
-    )
-    .await
-    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let txns = lni::strike::api::list_transactions(self.inner.clone(), params)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(txns)
   }
 
