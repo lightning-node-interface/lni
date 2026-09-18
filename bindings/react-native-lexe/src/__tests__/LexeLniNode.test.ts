@@ -69,6 +69,15 @@ function makeNativeNode(
     createOffer: vi.fn(async () => ({ offerId: 'id', bolt12: 'offer' })),
     decode: vi.fn(async (value: string) => value),
     decodeOffer: vi.fn(async (offer: string) => offer),
+    getClientInfo: vi.fn(async () => ({
+      kind: 'client_credentials',
+      clientPubkey: 'client-public-key',
+      createdAtMs: 1_700_000_000_000n,
+      expiresAtMs: undefined,
+      scopes: ['read_info'],
+      permissions: [],
+      effectivePermissions: ['node_info'],
+    })),
     getInfo: vi.fn(async () => nativeInfo),
     getHumanBitcoinAddress: vi.fn(async () => ({
       humanBitcoinAddress: '₿test@lexe.app',
@@ -289,5 +298,35 @@ describe('LexeLniNode', () => {
   it('conforms to the shared LightningNode interface', () => {
     const node: LightningNode = makeNode();
     expect(node).toBeInstanceOf(LexeLniNode);
+  });
+});
+
+describe('authenticated Lexe grants', () => {
+  it('preserves actual read-only grants independently of adapter capabilities', async () => {
+    const native = makeNativeNode();
+    const node = makeNode(native);
+    expect((await node.getPermissions()).payInvoice).toBe(true);
+    expect(await node.getClientInfo()).toEqual({
+      kind: 'client_credentials',
+      clientPubkey: 'client-public-key',
+      createdAtMs: 1_700_000_000_000,
+      expiresAtMs: undefined,
+      scopes: ['read_info'],
+      permissions: [],
+      effectivePermissions: ['node_info'],
+    });
+    expect(native.getClientInfo).toHaveBeenCalledOnce();
+  });
+  it('propagates inspection failures without inventing a grant', async () => {
+    const node = makeNode(
+      makeNativeNode({
+        getClientInfo: vi.fn(async () => {
+          throw new Error('inspection unavailable');
+        }),
+      })
+    );
+    await expect(node.getClientInfo()).rejects.toThrow(
+      'inspection unavailable'
+    );
   });
 });

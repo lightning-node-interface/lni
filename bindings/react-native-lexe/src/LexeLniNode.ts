@@ -42,6 +42,16 @@ export interface LexeLniNodeConfig {
   network?: string;
 }
 
+export type LexeClientInfo = {
+  kind: string;
+  clientPubkey?: string;
+  createdAtMs?: number;
+  expiresAtMs?: number;
+  scopes: string[];
+  permissions: string[];
+  effectivePermissions: string[];
+};
+
 export type LexeHumanBitcoinAddress = {
   humanBitcoinAddress: string;
   lightningAddress: string;
@@ -350,6 +360,20 @@ export class LexeLniNode implements LightningNode {
     return toPermissions(
       await this.#call(() => this.#nativeNode.getPermissions())
     );
+  }
+
+  /** Inspect the actual grant using this credential's authenticated node API. */
+  async getClientInfo(): Promise<LexeClientInfo> {
+    const info = await this.#call(() => this.#nativeNode.getClientInfo());
+    return {
+      kind: info.kind,
+      clientPubkey: info.clientPubkey,
+      createdAtMs: toOptionalSafeNumber(info.createdAtMs, 'createdAtMs'),
+      expiresAtMs: toOptionalSafeNumber(info.expiresAtMs, 'expiresAtMs'),
+      scopes: [...info.scopes],
+      permissions: [...info.permissions],
+      effectivePermissions: [...info.effectivePermissions],
+    };
   }
 
   async getInfo(): Promise<NodeInfo> {

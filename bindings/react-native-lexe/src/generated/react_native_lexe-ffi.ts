@@ -205,6 +205,9 @@ interface NativeModuleInterface {
     uniffiSelf: bigint,
     offer: Uint8Array
   ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+    uniffiSelf: bigint
+  ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
     uniffiSelf: bigint
   ): bigint;
@@ -266,6 +269,7 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_offer(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_decode(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_decode_offer(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_info(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_offer(): number;

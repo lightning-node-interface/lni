@@ -142,3 +142,20 @@ bump `package.json` before the next release.
 ## License
 
 MIT
+
+### Authenticated credential inspection
+
+`await node.getClientInfo()` calls Lexe's authenticated `client-info` API.
+It returns `kind`, `clientPubkey`, `createdAtMs`, optional `expiresAtMs`,
+`scopes`, `permissions`, and `effectivePermissions`. Timestamps are Unix
+milliseconds; an absent expiry means the credential does not expire.
+
+Use this API to validate an app-to-app credential before saving it: require
+`client_credentials`, match the client public key and the exact requested
+scopes, reject unexpected explicit permissions, and check expiry. Inspection
+errors must fail closed. `getPermissions()` only describes the adapter's
+supported operations; it is not proof of this credential's authorization.
+
+This requires Lexe SDK 0.1.23 and a rebuilt native application. Updating the
+JavaScript package alone does not add the native method. No budget enforcement
+or authenticated budget inspection is exposed by this bridge.

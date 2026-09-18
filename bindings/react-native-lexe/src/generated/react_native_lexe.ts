@@ -55,40 +55,6 @@ const uniffiIsDebug =
 
 // Public interface members begin here.
 
-export enum InvoiceType {
-  Bolt11,
-  Bolt12,
-}
-
-const FfiConverterTypeInvoiceType = (() => {
-  const ordinalConverter = FfiConverterInt32;
-  type TypeName = InvoiceType;
-  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
-        case 1:
-          return InvoiceType.Bolt11;
-        case 2:
-          return InvoiceType.Bolt12;
-        default:
-          throw new UniffiInternalError.UnexpectedEnumCase();
-      }
-    }
-    write(value: TypeName, into: RustBuffer): void {
-      switch (value) {
-        case InvoiceType.Bolt11:
-          return ordinalConverter.write(1, into);
-        case InvoiceType.Bolt12:
-          return ordinalConverter.write(2, into);
-      }
-    }
-    allocationSize(value: TypeName): number {
-      return ordinalConverter.allocationSize(0);
-    }
-  }
-  return new FFIConverter();
-})();
-
 // Hermes (React Native ≥ 0.74) ships TextEncoder and encodeInto, but not
 // TextDecoder. For single-string decode (bytesToString), we polyfill via the
 // C++ string_from_buffer helper using a duck-typed object matching the
@@ -150,6 +116,105 @@ const stringConverter = (() => {
   };
 })();
 const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
+
+export type ClientInfo = {
+  kind: string;
+  clientPubkey?: string;
+  createdAtMs?: bigint;
+  expiresAtMs?: bigint;
+  scopes: Array<string>;
+  permissions: Array<string>;
+  effectivePermissions: Array<string>;
+};
+
+/**
+ * Generated factory for {@link ClientInfo} record objects.
+ */
+export const ClientInfo = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<ClientInfo, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<ClientInfo>,
+  });
+})();
+
+const FfiConverterTypeClientInfo = (() => {
+  type TypeName = ClientInfo;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        kind: FfiConverterString.read(from),
+        clientPubkey: FfiConverterOptionalString.read(from),
+        createdAtMs: FfiConverterOptionalInt64.read(from),
+        expiresAtMs: FfiConverterOptionalInt64.read(from),
+        scopes: FfiConverterSequenceString.read(from),
+        permissions: FfiConverterSequenceString.read(from),
+        effectivePermissions: FfiConverterSequenceString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.kind, into);
+      FfiConverterOptionalString.write(value.clientPubkey, into);
+      FfiConverterOptionalInt64.write(value.createdAtMs, into);
+      FfiConverterOptionalInt64.write(value.expiresAtMs, into);
+      FfiConverterSequenceString.write(value.scopes, into);
+      FfiConverterSequenceString.write(value.permissions, into);
+      FfiConverterSequenceString.write(value.effectivePermissions, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.kind) +
+        FfiConverterOptionalString.allocationSize(value.clientPubkey) +
+        FfiConverterOptionalInt64.allocationSize(value.createdAtMs) +
+        FfiConverterOptionalInt64.allocationSize(value.expiresAtMs) +
+        FfiConverterSequenceString.allocationSize(value.scopes) +
+        FfiConverterSequenceString.allocationSize(value.permissions) +
+        FfiConverterSequenceString.allocationSize(value.effectivePermissions)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export enum InvoiceType {
+  Bolt11,
+  Bolt12,
+}
+
+const FfiConverterTypeInvoiceType = (() => {
+  const ordinalConverter = FfiConverterInt32;
+  type TypeName = InvoiceType;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      switch (ordinalConverter.read(from)) {
+        case 1:
+          return InvoiceType.Bolt11;
+        case 2:
+          return InvoiceType.Bolt12;
+        default:
+          throw new UniffiInternalError.UnexpectedEnumCase();
+      }
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      switch (value) {
+        case InvoiceType.Bolt11:
+          return ordinalConverter.write(1, into);
+        case InvoiceType.Bolt12:
+          return ordinalConverter.write(2, into);
+      }
+    }
+    allocationSize(value: TypeName): number {
+      return ordinalConverter.allocationSize(0);
+    }
+  }
+  return new FFIConverter();
+})();
 
 export type CreateInvoiceParams = {
   invoiceType?: InvoiceType;
@@ -1342,6 +1407,9 @@ export interface LexeNodeLike {
     offer: string,
     asyncOpts_?: { signal: AbortSignal }
   ) /*throws*/ : Promise<string>;
+  getClientInfo(asyncOpts_?: {
+    signal: AbortSignal;
+  }) /*throws*/ : Promise<ClientInfo>;
   getHumanBitcoinAddress(asyncOpts_?: {
     signal: AbortSignal;
   }) /*throws*/ : Promise<HumanBitcoinAddress>;
@@ -1574,6 +1642,48 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
         /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  async getClientInfo(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<ClientInfo> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypeClientInfo.lift.bind(
+          FfiConverterTypeClientInfo
+        ),
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2126,16 +2236,19 @@ const FfiConverterTypeLexeNode = new FfiConverterObject(
   uniffiTypeLexeNodeObjectFactory
 );
 
-// FfiConverter for InvoiceType | undefined
-const FfiConverterOptionalTypeInvoiceType = new FfiConverterOptional(
-  FfiConverterTypeInvoiceType
-);
+// FfiConverter for string | undefined
+const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
 
 // FfiConverter for bigint | undefined
 const FfiConverterOptionalInt64 = new FfiConverterOptional(FfiConverterInt64);
 
-// FfiConverter for string | undefined
-const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
+// FfiConverter for Array<string>
+const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
+
+// FfiConverter for InvoiceType | undefined
+const FfiConverterOptionalTypeInvoiceType = new FfiConverterOptional(
+  FfiConverterTypeInvoiceType
+);
 
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
@@ -2220,6 +2333,14 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_react_native_lexe_checksum_method_lexenode_decode_offer'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info() !==
+    6570
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_get_client_info'
     );
   }
   if (
@@ -2333,6 +2454,7 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeClientInfo,
     FfiConverterTypeCreateInvoiceParams,
     FfiConverterTypeCreateOfferParams,
     FfiConverterTypeHumanBitcoinAddress,
