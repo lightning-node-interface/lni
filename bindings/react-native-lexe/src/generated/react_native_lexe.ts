@@ -120,6 +120,7 @@ const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
 export type ClientInfo = {
   kind: string;
   clientPubkey?: string;
+  label?: string;
   createdAtMs?: bigint;
   expiresAtMs?: bigint;
   scopes: Array<string>;
@@ -151,6 +152,7 @@ const FfiConverterTypeClientInfo = (() => {
       return {
         kind: FfiConverterString.read(from),
         clientPubkey: FfiConverterOptionalString.read(from),
+        label: FfiConverterOptionalString.read(from),
         createdAtMs: FfiConverterOptionalInt64.read(from),
         expiresAtMs: FfiConverterOptionalInt64.read(from),
         scopes: FfiConverterSequenceString.read(from),
@@ -161,6 +163,7 @@ const FfiConverterTypeClientInfo = (() => {
     write(value: TypeName, into: RustBuffer): void {
       FfiConverterString.write(value.kind, into);
       FfiConverterOptionalString.write(value.clientPubkey, into);
+      FfiConverterOptionalString.write(value.label, into);
       FfiConverterOptionalInt64.write(value.createdAtMs, into);
       FfiConverterOptionalInt64.write(value.expiresAtMs, into);
       FfiConverterSequenceString.write(value.scopes, into);
@@ -171,6 +174,7 @@ const FfiConverterTypeClientInfo = (() => {
       return (
         FfiConverterString.allocationSize(value.kind) +
         FfiConverterOptionalString.allocationSize(value.clientPubkey) +
+        FfiConverterOptionalString.allocationSize(value.label) +
         FfiConverterOptionalInt64.allocationSize(value.createdAtMs) +
         FfiConverterOptionalInt64.allocationSize(value.expiresAtMs) +
         FfiConverterSequenceString.allocationSize(value.scopes) +

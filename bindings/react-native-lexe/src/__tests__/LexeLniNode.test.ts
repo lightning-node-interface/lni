@@ -72,6 +72,7 @@ function makeNativeNode(
     getClientInfo: vi.fn(async () => ({
       kind: 'client_credentials',
       clientPubkey: 'client-public-key',
+      label: 'Zaprite spending',
       createdAtMs: 1_700_000_000_000n,
       expiresAtMs: undefined,
       scopes: ['read_info'],
@@ -309,6 +310,7 @@ describe('authenticated Lexe grants', () => {
     expect(await node.getClientInfo()).toEqual({
       kind: 'client_credentials',
       clientPubkey: 'client-public-key',
+      label: 'Zaprite spending',
       createdAtMs: 1_700_000_000_000,
       expiresAtMs: undefined,
       scopes: ['read_info'],

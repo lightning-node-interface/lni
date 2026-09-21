@@ -391,6 +391,7 @@ pub async fn get_client_info(wallet: &LexeWallet) -> Result<LexeClientInfo, ApiE
         }
         .to_owned(),
         client_pubkey: info.client_pk.map(|pk| pk.to_string()),
+        label: info.label,
         created_at_ms: info.created_at.map(|time| time.to_i64()),
         expires_at_ms: info.expires_at.map(|time| time.to_i64()),
         scopes: info.scopes,

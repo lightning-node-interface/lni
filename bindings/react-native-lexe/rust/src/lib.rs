@@ -105,6 +105,7 @@ impl From<lni::NodeInfo> for NodeInfo {
 pub struct ClientInfo {
     pub kind: String,
     pub client_pubkey: Option<String>,
+    pub label: Option<String>,
     pub created_at_ms: Option<i64>,
     pub expires_at_ms: Option<i64>,
     pub scopes: Vec<String>,
@@ -117,6 +118,7 @@ impl From<lni::lexe::LexeClientInfo> for ClientInfo {
         Self {
             kind: value.kind,
             client_pubkey: value.client_pubkey,
+            label: value.label,
             created_at_ms: value.created_at_ms,
             expires_at_ms: value.expires_at_ms,
             scopes: value.scopes,

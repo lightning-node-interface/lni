@@ -45,6 +45,7 @@ export interface LexeLniNodeConfig {
 export type LexeClientInfo = {
   kind: string;
   clientPubkey?: string;
+  label?: string;
   createdAtMs?: number;
   expiresAtMs?: number;
   scopes: string[];
@@ -368,6 +369,7 @@ export class LexeLniNode implements LightningNode {
     return {
       kind: info.kind,
       clientPubkey: info.clientPubkey,
+      label: info.label,
       createdAtMs: toOptionalSafeNumber(info.createdAtMs, 'createdAtMs'),
       expiresAtMs: toOptionalSafeNumber(info.expiresAtMs, 'expiresAtMs'),
       scopes: [...info.scopes],

@@ -18,6 +18,7 @@ use crate::{
 pub struct LexeClientInfo {
     pub kind: String,
     pub client_pubkey: Option<String>,
+    pub label: Option<String>,
     pub created_at_ms: Option<i64>,
     pub expires_at_ms: Option<i64>,
     pub scopes: Vec<String>,
