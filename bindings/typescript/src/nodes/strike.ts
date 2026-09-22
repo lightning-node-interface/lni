@@ -160,6 +160,18 @@ function paymentHashFromInvoice(invoice: string): string {
   }
 }
 
+/**
+ * How long payInvoice keeps polling an outgoing payment record that has neither
+ * settled nor failed. A pending Lightning payment can outlive this; callers then
+ * receive an indeterminate NwcError and must reconcile before retrying.
+ */
+const STRIKE_PAYMENT_SETTLEMENT_TIMEOUT_MS = 60_000;
+const STRIKE_PAYMENT_POLL_INTERVAL_MS = 400;
+
+function isFailedPaymentState(state: string | undefined): boolean {
+  return state?.toUpperCase() === 'FAILED';
+}
+
 function isRetryablePaymentReadError(error: unknown): boolean {
   if (!(error instanceof LniError)) {
     // Response body reads can reject with a native error rather than LniError.
@@ -621,12 +633,17 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       'pay_invoice'
     );
 
-    // Preserve proof returned by execute; otherwise poll the outgoing record until it settles.
+    // Preserve proof returned by execute; otherwise poll the outgoing record until it
+    // settles or fails. Strike returns no preimage while the payment is still
+    // processing, and a Lightning payment can take longer than a few seconds to
+    // route, so the poll is bounded by time rather than by a fixed attempt count.
     let payment: StrikePaymentExecutionResponse | StrikePaymentResponse = execution;
-    for (let attempt = 0; attempt < 5 && !payment?.lightning?.preImage; attempt += 1) {
-      if (attempt > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+    const deadline = Date.now() + STRIKE_PAYMENT_SETTLEMENT_TIMEOUT_MS;
+    while (!payment?.lightning?.preImage && !isFailedPaymentState(payment?.state)) {
+      if (Date.now() >= deadline) {
+        break;
       }
+      await new Promise((resolve) => setTimeout(resolve, STRIKE_PAYMENT_POLL_INTERVAL_MS));
 
       try {
         payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
@@ -644,14 +661,24 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const preimage = payment?.lightning?.preImage;
 
     if (!preimage) {
+      // Surface what Strike actually returned so callers can log and reconcile it.
       const state = payment?.state ?? execution.state;
-      if (state?.toUpperCase() === 'FAILED') {
-        throw strikeNwcError('PAYMENT_FAILED', 'Strike payment failed', 'pay_invoice');
+      const info: ProviderErrorInfo = {
+        code: state,
+        message: JSON.stringify({
+          paymentId: execution.paymentId,
+          state,
+          completed: 'completed' in payment ? payment.completed : undefined,
+        }),
+      };
+      if (isFailedPaymentState(state)) {
+        throw strikeNwcError('PAYMENT_FAILED', 'Strike payment failed', 'pay_invoice', info);
       }
       throw strikeNwcError(
         'OTHER',
         'Strike payment outcome is indeterminate; reconcile it via lookupInvoice or listTransactions before retrying',
-        'pay_invoice'
+        'pay_invoice',
+        info
       );
     }
 

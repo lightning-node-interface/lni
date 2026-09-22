@@ -308,13 +308,121 @@ describe('StrikeNode Lightning payments', () => {
       const paymentPromise = node.payInvoice({ invoice: BOLT11 });
       const rejection = expect(paymentPromise).rejects.toMatchObject({
         name: 'NwcError',
+        nwcCode: 'OTHER',
         operation: 'pay_invoice',
         provider: 'strike',
+        providerCode: 'PENDING',
+        providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'PENDING' }),
         message: expect.stringContaining('indeterminate'),
       });
       await vi.runAllTimersAsync();
 
       await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps polling a pending payment until it settles', async () => {
+    vi.useFakeTimers();
+    let paymentReads = 0;
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payments/payment-1') {
+          paymentReads += 1;
+          // Settles ~8s in: well past the old five-attempt cap.
+          const settled = paymentReads >= 20;
+          return jsonResponse({
+            id: 'payment-1',
+            state: settled ? 'COMPLETED' : 'PENDING',
+            created: '2026-07-16T12:00:00Z',
+            amount: { amount: '0.00002500', currency: 'BTC' },
+            lightning: {
+              paymentHash: 'provider-payment-hash',
+              preImage: settled ? 'settled-preimage' : undefined,
+              networkFee: { amount: '0.00000001', currency: 'BTC' },
+            },
+          });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      await vi.runAllTimersAsync();
+
+      await expect(paymentPromise).resolves.toEqual({
+        paymentHash: 'provider-payment-hash',
+        preimage: 'settled-preimage',
+        feeMsats: 1_000,
+      });
+      expect(paymentReads).toBe(20);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops polling as soon as the outgoing payment record fails', async () => {
+    vi.useFakeTimers();
+    let paymentReads = 0;
+
+    try {
+      const fetchMock = vi.fn<FetchLike>(async (input) => {
+        const url = String(input);
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/lightning') {
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payment-quotes/quote-1/execute') {
+          return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+        }
+
+        if (url === 'https://api.strike.test/v1/payments/payment-1') {
+          paymentReads += 1;
+          return jsonResponse({
+            id: 'payment-1',
+            state: paymentReads >= 3 ? 'FAILED' : 'PENDING',
+            created: '2026-07-16T12:00:00Z',
+            amount: { amount: '0.00002500', currency: 'BTC' },
+          });
+        }
+
+        return new Response('not found', { status: 404 });
+      });
+
+      const node = new StrikeNode(
+        { apiKey: 'test-token', baseUrl: 'https://api.strike.test/v1' },
+        { fetch: fetchMock }
+      );
+
+      const paymentPromise = node.payInvoice({ invoice: BOLT11 });
+      const rejection = expect(paymentPromise).rejects.toMatchObject({
+        name: 'NwcError',
+        nwcCode: 'PAYMENT_FAILED',
+        providerCode: 'FAILED',
+        providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'FAILED' }),
+      });
+      await vi.runAllTimersAsync();
+
+      await rejection;
+      expect(paymentReads).toBe(3);
     } finally {
       vi.useRealTimers();
     }
