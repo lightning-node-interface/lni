@@ -160,12 +160,6 @@ function paymentHashFromInvoice(invoice: string): string {
   }
 }
 
-/**
- * How long payInvoice keeps polling an outgoing payment record that has neither
- * settled nor failed. A pending Lightning payment can outlive this; callers then
- * receive an indeterminate NwcError and must reconcile before retrying.
- */
-const STRIKE_PAYMENT_SETTLEMENT_TIMEOUT_MS = 60_000;
 const STRIKE_PAYMENT_POLL_INTERVAL_MS = 400;
 
 function isFailedPaymentState(state: string | undefined): boolean {
@@ -456,11 +450,24 @@ export class StrikeNode implements LightningNode, OnchainPayments {
   private readonly fetchFn;
   private readonly timeoutMs?: number;
   private readonly baseUrl: string;
+  private readonly settlementTimeoutMs: number;
 
   constructor(
     private readonly config: StrikeConfig,
     options: NodeRequestOptions = {}
   ) {
+    const settlementSeconds = config.paymentSettlementTimeout ?? 60;
+    if (
+      !Number.isFinite(settlementSeconds) ||
+      settlementSeconds < 0 ||
+      settlementSeconds > 2_147_483
+    ) {
+      throw new LniError(
+        'InvalidInput',
+        'paymentSettlementTimeout must be between 0 and 2147483 seconds.'
+      );
+    }
+    this.settlementTimeoutMs = settlementSeconds * 1000;
     this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
@@ -638,15 +645,20 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     // processing, and a Lightning payment can take longer than a few seconds to
     // route, so the poll is bounded by time rather than by a fixed attempt count.
     let payment: StrikePaymentExecutionResponse | StrikePaymentResponse = execution;
-    const deadline = Date.now() + STRIKE_PAYMENT_SETTLEMENT_TIMEOUT_MS;
+    const deadline = performance.now() + this.settlementTimeoutMs;
     while (!payment?.lightning?.preImage && !isFailedPaymentState(payment?.state)) {
-      if (Date.now() >= deadline) {
+      if (performance.now() >= deadline) {
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, STRIKE_PAYMENT_POLL_INTERVAL_MS));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(STRIKE_PAYMENT_POLL_INTERVAL_MS, deadline - performance.now()))
+      );
+      if (performance.now() >= deadline) break;
 
       try {
-        payment = await this.getJson<StrikePaymentResponse>(`/payments/${execution.paymentId}`);
+        const latest = await this.readPaymentBeforeDeadline(execution.paymentId, deadline);
+        if (performance.now() >= deadline) break;
+        payment = latest;
       } catch (error) {
         // Keep the last-known execution state when the outgoing record is not readable yet.
         if (!isRetryablePaymentReadError(error)) {
@@ -687,6 +699,36 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       preimage,
       feeMsats,
     };
+  }
+
+  private async readPaymentBeforeDeadline(
+    paymentId: string,
+    deadline: number
+  ): Promise<StrikePaymentResponse> {
+    const controller = new AbortController();
+    // Race the complete read, including the body, even if a custom fetch ignores abort.
+    // A per-request timeout may shorten a read, but never extend the settlement budget.
+    const remaining = Math.max(0, deadline - performance.now());
+    const budget = this.timeoutMs ? Math.min(this.timeoutMs, remaining) : remaining;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new LniError('NetworkError', 'Strike payment read timed out.'));
+        controller.abort();
+      }, budget);
+    });
+    try {
+      return await Promise.race([
+        requestJson<StrikePaymentResponse>(
+          this.fetchFn,
+          buildUrl(this.baseUrl, `/payments/${paymentId}`),
+          { method: 'GET', headers: this.headers(), signal: controller.signal }
+        ),
+        expired,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async prepareOnchainTransaction(

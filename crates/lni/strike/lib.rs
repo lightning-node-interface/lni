@@ -23,6 +23,9 @@ pub struct StrikeConfig {
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
+    /// Settlement polling budget in seconds after execution. Zero skips polling.
+    #[cfg_attr(feature = "uniffi", uniffi(default = Some(60)))]
+    pub payment_settlement_timeout: Option<i64>,
 }
 
 impl std::fmt::Debug for StrikeConfig {
@@ -33,6 +36,10 @@ impl std::fmt::Debug for StrikeConfig {
             .field("socks5_proxy", &"<redacted>")
             .field("accept_invalid_certs", &self.accept_invalid_certs)
             .field("http_timeout", &self.http_timeout)
+            .field(
+                "payment_settlement_timeout",
+                &self.payment_settlement_timeout,
+            )
             .finish()
     }
 }
@@ -45,6 +52,7 @@ impl Default for StrikeConfig {
             socks5_proxy: Some("".to_string()),
             accept_invalid_certs: Some(false),
             http_timeout: Some(60),
+            payment_settlement_timeout: Some(60),
         }
     }
 }
@@ -229,6 +237,7 @@ mod tests {
                 base_url: Some(BASE_URL.clone()),
                 api_key: API_KEY.clone(),
                 http_timeout: Some(120),
+                payment_settlement_timeout: None,
                 socks5_proxy: Some("".to_string()),
                 accept_invalid_certs: Some(false),
             })
@@ -499,6 +508,7 @@ mod tests {
             base_url: Some(BASE_URL.clone()),
             api_key: API_KEY.clone(),
             http_timeout: Some(120),
+            payment_settlement_timeout: None,
             socks5_proxy: Some("socks5h://127.0.0.1:9150".to_string()), // Tor proxy example
             accept_invalid_certs: Some(true),
         };

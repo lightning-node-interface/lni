@@ -589,6 +589,7 @@ mod debug_redaction_tests {
             socks5_proxy: Some(proxy.to_string()),
             accept_invalid_certs: Some(false),
             http_timeout: Some(30),
+            payment_settlement_timeout: None,
         };
         assert_redacted(
             "StrikeConfig",
