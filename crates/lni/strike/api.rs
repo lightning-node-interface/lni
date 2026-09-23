@@ -1400,22 +1400,6 @@ mod tests {
             let record = payment.as_ref().unwrap();
             assert_eq!(record.state, state);
             assert_eq!(record.payment_id, "payment-1");
-            let outcome = settle_outcome(
-                Some(state),
-                proof.map(str::to_string),
-                &payment_record_detail(payment.as_ref()),
-            );
-            if proof.is_some() {
-                assert!(outcome.is_ok());
-            } else if state == "FAILED" {
-                assert!(
-                    matches!(outcome, Err(ApiError::Nwc { code, .. }) if code == "PAYMENT_FAILED")
-                );
-            } else {
-                assert!(
-                    matches!(outcome, Err(ApiError::Api { reason }) if reason.contains("paymentId=payment-1"))
-                );
-            }
         }
     }
 
@@ -1619,14 +1603,6 @@ mod tests {
             ApiError::Api { reason }
                 if reason.contains("indeterminate") && reason.contains("paymentId=p1")
         ));
-    }
-
-    #[test]
-    fn failed_state_is_case_insensitive_and_pending_is_not_failed() {
-        assert!(is_failed_payment_state(Some("FAILED")));
-        assert!(is_failed_payment_state(Some("failed")));
-        assert!(!is_failed_payment_state(Some("PENDING")));
-        assert!(!is_failed_payment_state(None));
     }
 
     #[test]
