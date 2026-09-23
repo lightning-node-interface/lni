@@ -402,20 +402,120 @@ fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
 }
 
-fn settle_outcome(state: Option<&str>, preimage: Option<String>) -> Result<String, ApiError> {
-    if matches!(preimage.as_deref(), Some(value) if !value.is_empty()) {
+const STRIKE_PAYMENT_POLL_INTERVAL: Duration = Duration::from_millis(400);
+
+fn settlement_timeout(config: &StrikeConfig) -> Result<Duration, ApiError> {
+    let seconds = config.payment_settlement_timeout.unwrap_or(60);
+    if seconds < 0 {
+        return Err(ApiError::InvalidInput(
+            "payment_settlement_timeout must be non-negative".to_string(),
+        ));
+    }
+    let budget = Duration::from_secs(seconds as u64);
+    settlement_deadline(budget)?; // Reject unrepresentable durations before submitting payment.
+    Ok(budget)
+}
+
+fn settlement_deadline(budget: Duration) -> Result<tokio::time::Instant, ApiError> {
+    tokio::time::Instant::now()
+        .checked_add(budget)
+        .ok_or_else(|| {
+            ApiError::InvalidInput(
+                "payment_settlement_timeout exceeds the clock's supported range".to_string(),
+            )
+        })
+}
+
+// Keep the last complete record outside the timed future. Dropping the future on
+// expiry cancels both the HTTP request and its body read without losing diagnostics.
+async fn wait_for_payment<F, Fut>(
+    payment: &mut Option<PaymentExecutionResponse>,
+    budget: Duration,
+    mut read: F,
+) -> Result<(), ApiError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<PaymentExecutionResponse>, ()>>,
+{
+    let deadline = settlement_deadline(budget)?;
+    let payment_id = payment
+        .as_ref()
+        .map(|p| p.payment_id.clone())
+        .unwrap_or_default();
+    let _ = tokio::time::timeout_at(deadline, async {
+        loop {
+            let settled = has_preimage(
+                payment
+                    .as_ref()
+                    .and_then(|p| p.lightning.as_ref())
+                    .and_then(|l| l.pre_image.as_deref()),
+            );
+            let failed = is_failed_payment_state(payment.as_ref().map(|p| p.state.as_str()));
+            if settled || failed || tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(STRIKE_PAYMENT_POLL_INTERVAL).await;
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            match read().await {
+                Ok(Some(mut parsed)) => {
+                    // The read completed before timeout cancelled this future.
+                    // Preserve its record even when both became ready together.
+                    parsed.payment_id = payment_id.clone();
+                    *payment = Some(parsed);
+                }
+                Ok(None) => break,
+                Err(()) => continue,
+            }
+        }
+    })
+    .await;
+    Ok(())
+}
+
+fn is_failed_payment_state(state: Option<&str>) -> bool {
+    matches!(state, Some(value) if value.eq_ignore_ascii_case("FAILED"))
+}
+
+fn has_preimage(preimage: Option<&str>) -> bool {
+    matches!(preimage, Some(value) if !value.is_empty())
+}
+
+/// Describes the last-known outgoing payment record so callers can log what Strike
+/// returned and reconcile by payment id.
+fn payment_record_detail(payment: Option<&PaymentExecutionResponse>) -> String {
+    match payment {
+        Some(payment) => format!(
+            "paymentId={}, state={}, completed={}",
+            payment.payment_id,
+            payment.state,
+            payment.completed.as_deref().unwrap_or("none")
+        ),
+        None => "no payment record".to_string(),
+    }
+}
+
+fn settle_outcome(
+    state: Option<&str>,
+    preimage: Option<String>,
+    record_detail: &str,
+) -> Result<String, ApiError> {
+    if has_preimage(preimage.as_deref()) {
         return Ok(preimage.unwrap_or_default());
     }
 
-    if matches!(state, Some(value) if value.eq_ignore_ascii_case("FAILED")) {
+    if is_failed_payment_state(state) {
         return Err(ApiError::Nwc {
             code: "PAYMENT_FAILED".to_string(),
-            message: "Strike payment failed".to_string(),
+            message: format!("Strike payment failed ({record_detail})"),
         });
     }
 
     Err(ApiError::Api {
-        reason: "Strike payment outcome is indeterminate; reconcile it via lookup_invoice or list_transactions before retrying".to_string(),
+        reason: format!(
+            "Strike payment outcome is indeterminate; reconcile it via lookup_invoice or list_transactions before retrying ({record_detail})"
+        ),
     })
 }
 
@@ -697,6 +797,7 @@ pub async fn pay_invoice(
     config: StrikeConfig,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
+    let budget = settlement_timeout(&config)?;
     let client = async_client(&config)?;
 
     // Create payment quote first
@@ -761,47 +862,28 @@ pub async fn pay_invoice(
     })?;
     let execute_resp: PaymentExecutionResponse = serde_json::from_str(&execute_text)?;
 
-    // Get the outgoing payment record. The Lightning proof can appear shortly after execution.
+    // Poll the outgoing payment record until it settles or fails. Strike returns no
+    // preimage while the payment is still processing, and a Lightning payment can take
+    // longer than a few seconds to route, so the poll is bounded by time rather than
+    // by a fixed attempt count.
     let payment_id = execute_resp.payment_id.clone();
     let payment_url = format!("{}/payments/{}", get_base_url(&config), payment_id);
     let mut payment = Some(execute_resp);
-
-    for attempt in 0..5 {
-        let has_preimage = matches!(
-            payment
-                .as_ref()
-                .and_then(|payment| payment.lightning.as_ref())
-                .and_then(|lightning| lightning.pre_image.as_deref()),
-            Some(preimage) if !preimage.is_empty()
-        );
-        if has_preimage {
-            break;
-        }
-
-        if attempt > 0 {
-            tokio::time::sleep(Duration::from_millis(400)).await;
-        }
-
-        let response = match client.get(&payment_url).send().await {
-            Ok(response) => response,
-            Err(_) => continue,
-        };
+    wait_for_payment(&mut payment, budget, || async {
+        let response = client.get(&payment_url).send().await.map_err(|_| ())?;
         if !response.status().is_success() {
-            if is_retryable_payment_read_status(response.status()) {
-                continue;
-            }
-            break;
+            return if is_retryable_payment_read_status(response.status()) {
+                Err(())
+            } else {
+                Ok(None)
+            };
         }
-        let payment_text = match response.text().await {
-            Ok(payment_text) => payment_text,
-            Err(_) => continue,
-        };
-        let parsed = match serde_json::from_str::<PaymentExecutionResponse>(&payment_text) {
-            Ok(parsed) => parsed,
-            Err(_) => continue,
-        };
-        payment = Some(parsed);
-    }
+        let payment_text = response.text().await.map_err(|_| ())?;
+        serde_json::from_str::<PaymentExecutionResponse>(&payment_text)
+            .map(Some)
+            .map_err(|_| ())
+    })
+    .await?;
 
     let fee_msats = payment
         .as_ref()
@@ -829,7 +911,7 @@ pub async fn pay_invoice(
         .and_then(|payment| payment.lightning.as_ref())
         .and_then(|lightning| lightning.pre_image.clone());
     let state = payment.as_ref().map(|payment| payment.state.as_str());
-    let preimage = settle_outcome(state, preimage)?;
+    let preimage = settle_outcome(state, preimage, &payment_record_detail(payment.as_ref()))?;
 
     Ok(PayInvoiceResponse {
         payment_hash: invoice_payment_hash,
@@ -1564,6 +1646,7 @@ mod tests {
             socks5_proxy: None,
             accept_invalid_certs: Some(false),
             http_timeout: Some(5),
+            payment_settlement_timeout: None,
         }
     }
 
@@ -1575,6 +1658,79 @@ mod tests {
             search: search.map(str::to_string),
             created_after: None,
             created_before: None,
+        }
+    }
+
+    fn payment_record(state: &str, proof: Option<&str>) -> PaymentExecutionResponse {
+        serde_json::from_value(serde_json::json!({
+            "id": "payment-1", "state": state,
+            "amount": { "amount": "0.00001", "currency": "BTC" },
+            "totalAmount": { "amount": "0.00001", "currency": "BTC" },
+            "lightning": { "preImage": proof }
+        }))
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn terminal_execution_and_zero_budget_do_not_read() {
+        for (state, proof, budget) in [
+            ("PENDING", Some("test-proof"), Duration::from_secs(60)),
+            ("FAILED", None, Duration::from_secs(60)),
+            ("PENDING", None, Duration::ZERO),
+        ] {
+            let mut payment = Some(payment_record(state, proof));
+            wait_for_payment(&mut payment, budget, || async {
+                panic!("terminal execution or zero budget must not start a lookup");
+            })
+            .await
+            .unwrap();
+            let record = payment.as_ref().unwrap();
+            assert_eq!(record.state, state);
+            assert_eq!(record.payment_id, "payment-1");
+        }
+    }
+
+    #[test]
+    fn completed_without_proof_is_indeterminate() {
+        let error = settle_outcome(
+            Some("COMPLETED"),
+            None,
+            "paymentId=payment-1, state=COMPLETED, completed=none",
+        )
+        .unwrap_err();
+        assert!(matches!(error, ApiError::Api { reason }
+            if reason.contains("indeterminate") && reason.contains("state=COMPLETED")
+            && reason.contains("paymentId=payment-1")));
+    }
+
+    #[test]
+    fn settlement_configuration_is_separate_from_http_timeout() {
+        let mut config = StrikeConfig {
+            http_timeout: Some(2),
+            ..Default::default()
+        };
+        assert_eq!(
+            settlement_timeout(&config).unwrap(),
+            Duration::from_secs(60)
+        );
+        config.payment_settlement_timeout = None;
+        assert_eq!(
+            settlement_timeout(&config).unwrap(),
+            Duration::from_secs(60)
+        );
+        config.payment_settlement_timeout = Some(0);
+        assert_eq!(settlement_timeout(&config).unwrap(), Duration::ZERO);
+        config.payment_settlement_timeout = Some(3600);
+        assert_eq!(
+            settlement_timeout(&config).unwrap(),
+            Duration::from_secs(3600)
+        );
+        for invalid in [-1, i64::MAX] {
+            config.payment_settlement_timeout = Some(invalid);
+            assert!(matches!(
+                settlement_timeout(&config),
+                Err(ApiError::InvalidInput(_))
+            ));
         }
     }
 
@@ -1694,25 +1850,46 @@ mod tests {
     #[test]
     fn settles_payment_when_preimage_is_present() {
         assert_eq!(
-            settle_outcome(Some("PENDING"), Some("fake-preimage".to_string())).unwrap(),
+            settle_outcome(
+                Some("PENDING"),
+                Some("fake-preimage".to_string()),
+                "paymentId=p1, state=PENDING, completed=none"
+            )
+            .unwrap(),
             "fake-preimage"
         );
     }
 
     #[test]
     fn rejects_failed_payment_without_preimage() {
-        let error = settle_outcome(Some("failed"), None).unwrap_err();
+        let error = settle_outcome(
+            Some("failed"),
+            None,
+            "paymentId=p1, state=failed, completed=none",
+        )
+        .unwrap_err();
         assert!(matches!(
             error,
             ApiError::Nwc { code, message }
-                if code == "PAYMENT_FAILED" && message.contains("failed")
+                if code == "PAYMENT_FAILED"
+                    && message.contains("failed")
+                    && message.contains("paymentId=p1")
         ));
     }
 
     #[test]
     fn rejects_indeterminate_payment_without_preimage() {
-        let error = settle_outcome(Some("PENDING"), Some(String::new())).unwrap_err();
-        assert!(matches!(error, ApiError::Api { reason } if reason.contains("indeterminate")));
+        let error = settle_outcome(
+            Some("PENDING"),
+            Some(String::new()),
+            "paymentId=p1, state=PENDING, completed=none",
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Api { reason }
+                if reason.contains("indeterminate") && reason.contains("paymentId=p1")
+        ));
     }
 
     #[test]

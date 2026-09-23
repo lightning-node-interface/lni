@@ -189,6 +189,38 @@ const blink = createNode({
 
 ### On-chain Bitcoin Payments
 
+### Strike Lightning settlement and caller deadlines
+
+`StrikeConfig.paymentSettlementTimeout` (`payment_settlement_timeout` in Rust) is
+an optional settlement polling budget in **seconds**, defaulting to **60**. It starts
+after the execute response is read. Zero skips polling. Explicit non-negative values override the default without a
+policy maximum; values outside the runtime’s numeric or clock range are invalid. Rust accepts integer seconds; TypeScript also
+accepts fractional seconds. `httpTimeout` / `http_timeout` remains a separate
+per-request HTTP timeout. During settlement, neither a sleep, an HTTP request, nor
+its body read may extend the settlement budget.
+
+A nonempty preimage from execution or a later lookup uses the existing success
+response. Only an explicit `FAILED` state produces `PAYMENT_FAILED`. If proof is
+still missing (including `COMPLETED` without a preimage), the outcome remains
+indeterminate. TypeScript returns `NwcError` with `nwcCode: 'OTHER'`, the last state
+in `providerCode`, and JSON `{ paymentId, state, completed? }` in `providerMessage`.
+Rust retains its indeterminate `ApiError::Api`, with these diagnostics in the
+reason string. Persist the payment ID and reconcile through
+`listTransactions({ search: paymentId })` (Rust: `list_transactions` with `search`),
+or Strike's `GET /payments/{paymentId}`, before offering a retry. LNI stops polling
+when the call returns; durable reconciliation and later UI updates belong to the app.
+
+An app timeout starting before LNI must allow for quote creation, execution, their
+body reads, the settlement budget, and scheduling/response overhead. Two separate
+60-second timers do not share a deadline. For a fixed outer budget, reserve bounded
+setup time and a margin, and set a smaller settlement budget from what remains;
+otherwise let the backend own the payment operation and treat the UI timeout as
+“still confirming”. Keep observing the original call so its payment ID and final
+result are persisted even if the UI stops waiting. Do not turn an outer timeout
+into a payment failure or retry the payment automatically. This configuration is
+not an end-to-end `payInvoice` deadline; apps needing a strict overall deadline
+must coordinate setup, transport, and settlement budgets explicitly.
+
 On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for `StrikeNode` and BTC-configured Galoy nodes (including the `BlinkNode` compatibility wrapper).
 
 ```ts

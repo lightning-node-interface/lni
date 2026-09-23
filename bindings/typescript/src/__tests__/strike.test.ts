@@ -285,6 +285,7 @@ describe('StrikeNode Lightning payments', () => {
 
   it('rejects when a pending payment remains indeterminate after polling', async () => {
     vi.useFakeTimers();
+    const started = performance.now();
 
     try {
       const fetchMock = vi.fn<FetchLike>(async (input) => {
@@ -309,17 +310,252 @@ describe('StrikeNode Lightning payments', () => {
       const paymentPromise = node.payInvoice({ invoice: BOLT11 });
       const rejection = expect(paymentPromise).rejects.toMatchObject({
         name: 'NwcError',
+        nwcCode: 'OTHER',
         operation: 'pay_invoice',
         provider: 'strike',
+        providerCode: 'PENDING',
+        providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'PENDING' }),
         message: expect.stringContaining('indeterminate'),
       });
       await vi.runAllTimersAsync();
 
       await rejection;
+      expect(performance.now() - started).toBe(60_000);
     } finally {
       vi.useRealTimers();
     }
   });
+
+  it.each([null, {}, { state: 123 }, { state: ' ' }])(
+    'retains reconciliation details after a malformed lookup: %j',
+    async (malformed) => {
+      vi.useFakeTimers();
+      let reads = 0;
+      try {
+        const fetchMock = vi.fn<FetchLike>(async (input) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          return jsonResponse(++reads === 1 ? { id: 'payment-1', state: 'COMPLETED' } : malformed);
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: 1 },
+          { fetch: fetchMock }
+        );
+        const assertion = expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+          nwcCode: 'OTHER',
+          providerCode: 'COMPLETED',
+          providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'COMPLETED' }),
+        });
+        await vi.runAllTimersAsync();
+        await assertion;
+        expect(reads).toBe(2);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each([
+    ['just before deadline', 9999, 'success', 24],
+    ['pending', 1000, 'OTHER', 2],
+    ['stalled lookup', 1000, 'OTHER', 2],
+    ['stalled body', 1000, 'OTHER', 2],
+    ['failed', 400, 'PAYMENT_FAILED', 1],
+    ['completed without proof', 1000, 'OTHER', 2],
+  ] as const)('bounds settlement: %s', async (scenario, elapsed, outcome, reads) => {
+    vi.useFakeTimers();
+    let paymentReads = 0;
+    let lookupSignal: AbortSignal | null | undefined;
+    const state =
+      scenario === 'failed' ? 'FAILED' : scenario === 'pending' ? 'PENDING' : 'COMPLETED';
+    try {
+      const started = performance.now();
+      const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+        const url = String(input);
+        if (url.endsWith('/payment-quotes/lightning'))
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        if (url.endsWith('/execute'))
+          return jsonResponse({
+            paymentId: 'payment-1',
+            state: 'PENDING',
+          });
+        paymentReads++;
+        lookupSignal = init?.signal;
+        if (scenario === 'just before deadline' && paymentReads === 24) {
+          // Exceeds the old five-read limit and settles 1 ms before the deadline.
+          await new Promise((resolve) => setTimeout(resolve, 399));
+          return jsonResponse({ id: 'payment-1', state, lightning: { preImage: 'test-proof' } });
+        }
+        if (scenario === 'stalled lookup' && paymentReads === 2) {
+          return new Promise<Response>(() => {}); // Deliberately ignores abort.
+        }
+        if (scenario === 'stalled body' && paymentReads === 2) {
+          const response = jsonResponse({});
+          vi.spyOn(response, 'text').mockImplementation(() => new Promise(() => {}));
+          return response;
+        }
+        return jsonResponse({ id: 'payment-1', state });
+      });
+      const node = new StrikeNode(
+        {
+          apiKey: 'test-token',
+          baseUrl: 'https://api.strike.test/v1',
+          paymentSettlementTimeout: scenario === 'just before deadline' ? 10 : 1,
+          httpTimeout: 30,
+        },
+        { fetch: fetchMock }
+      );
+      const result = node.payInvoice({ invoice: BOLT11 });
+      const assertion =
+        outcome === 'success'
+          ? expect(result).resolves.toMatchObject({ preimage: 'test-proof' })
+          : expect(result).rejects.toMatchObject({
+              nwcCode: outcome,
+              providerCode: state,
+              providerMessage: JSON.stringify({ paymentId: 'payment-1', state }),
+            });
+      await vi.runAllTimersAsync();
+      await assertion;
+      expect(performance.now() - started).toBe(elapsed);
+      expect(paymentReads).toBe(reads);
+      expect(vi.getTimerCount()).toBe(0);
+      if (scenario.startsWith('stalled')) expect(lookupSignal?.aborted).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(paymentReads).toBe(reads);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['proof', 'failed'] as const)(
+    'preserves %s when a complete read wins at the deadline',
+    async (scenario) => {
+      vi.useFakeTimers();
+      const started = performance.now();
+      const state = scenario === 'failed' ? 'FAILED' : 'COMPLETED';
+      try {
+        const fetchMock = vi.fn<FetchLike>(async (input) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          const response = jsonResponse({
+            id: 'payment-1',
+            state,
+            lightning: scenario === 'proof' ? { preImage: 'test-proof' } : undefined,
+          });
+          const text = await response.text();
+          vi.spyOn(response, 'text').mockImplementation(async () => {
+            // The body is ready; the deadline is reached before the caller resumes.
+            // Timer callbacks have not won the race, so this record must survive.
+            vi.spyOn(performance, 'now').mockReturnValue(started + 1000);
+            return text;
+          });
+          return response;
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: 1 },
+          { fetch: fetchMock }
+        );
+        const result = node.payInvoice({ invoice: BOLT11 });
+        const assertion =
+          scenario === 'proof'
+            ? expect(result).resolves.toMatchObject({ preimage: 'test-proof' })
+            : expect(result).rejects.toMatchObject({
+                nwcCode: 'PAYMENT_FAILED',
+                providerCode: state,
+                providerMessage: JSON.stringify({ paymentId: 'payment-1', state }),
+              });
+        await vi.runAllTimersAsync();
+        await assertion;
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each([0, 1])('keeps request and settlement budgets separate (%s seconds)', async (budget) => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    try {
+      const started = performance.now();
+      const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+        if (String(input).endsWith('/lightning'))
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        if (String(input).endsWith('/execute'))
+          return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+        signals.push(init!.signal!);
+        return new Promise<Response>(() => {});
+      });
+      const node = new StrikeNode(
+        { apiKey: 'test-token', httpTimeout: 0.1, paymentSettlementTimeout: budget },
+        { fetch: fetchMock }
+      );
+      const assertion = expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+        nwcCode: 'OTHER',
+        providerCode: 'PENDING',
+        providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'PENDING' }),
+      });
+      await vi.runAllTimersAsync();
+      await assertion;
+      expect(performance.now() - started).toBe(budget * 1000);
+      expect(signals).toHaveLength(budget === 0 ? 0 : 2);
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors a configured budget beyond the JavaScript timer limit', async () => {
+    const seconds = 3_000_000;
+    vi.useFakeTimers();
+    let signal: AbortSignal | null | undefined;
+    try {
+      const started = performance.now();
+      const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+        if (String(input).endsWith('/lightning'))
+          return jsonResponse({ paymentQuoteId: 'quote-1' });
+        if (String(input).endsWith('/execute'))
+          return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+        signal = init?.signal;
+        return new Promise<Response>(() => {});
+      });
+      const node = new StrikeNode(
+        { apiKey: 'test-token', paymentSettlementTimeout: seconds },
+        { fetch: fetchMock }
+      );
+      const assertion = expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+        nwcCode: 'OTHER',
+        providerCode: 'PENDING',
+      });
+      await vi.advanceTimersByTimeAsync(300_000);
+      expect(signal?.aborted).toBe(false);
+      await vi.runAllTimersAsync();
+      await assertion;
+      expect(performance.now() - started).toBe(seconds * 1000);
+      expect(signal?.aborted).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([-1, Infinity, Number.MAX_VALUE])(
+    'rejects invalid settlement budget %s before payment',
+    (value) => {
+      expect(
+        () => new StrikeNode({ apiKey: 'test-token', paymentSettlementTimeout: value })
+      ).toThrow('paymentSettlementTimeout');
+    }
+  );
 
   it('rejects when Strike reports a failed payment without a preimage', async () => {
     vi.useFakeTimers();

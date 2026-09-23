@@ -211,7 +211,7 @@ pub struct LightningDetails {
 
 #[derive(Debug, Deserialize)]
 pub struct PaymentExecutionResponse {
-    #[serde(rename = "paymentId")]
+    #[serde(rename = "paymentId", alias = "id")]
     pub payment_id: String,
     pub state: String,
     pub result: Option<String>,

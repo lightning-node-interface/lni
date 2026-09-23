@@ -238,7 +238,10 @@ export interface StrikeConfig {
   apiKey: string;
   socks5Proxy?: string;
   acceptInvalidCerts?: boolean;
+  /** Per-request HTTP timeout in seconds. */
   httpTimeout?: number;
+  /** Settlement polling budget in seconds after execution; defaults to 60. Zero skips polling. */
+  paymentSettlementTimeout?: number;
 }
 
 export interface SpeedConfig {

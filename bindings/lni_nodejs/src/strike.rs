@@ -33,6 +33,7 @@ impl StrikeNode {
         .map(|_| "<redacted>".to_string()),
       accept_invalid_certs: self.inner.accept_invalid_certs,
       http_timeout: self.inner.http_timeout,
+      payment_settlement_timeout: self.inner.payment_settlement_timeout,
     }
   }
 
