@@ -234,6 +234,9 @@ pub async fn create_invoice(
                 description_hash: description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some("".to_string()),
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
         InvoiceType::Bolt12 => {
@@ -286,6 +289,9 @@ pub async fn create_invoice(
                 description_hash: description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some("".to_string()),
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
     }
@@ -552,6 +558,9 @@ pub async fn lookup_invoice(
         description_hash: "".to_string(), // TODO
         payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
         external_id: Some(inv.external_id.unwrap_or("".to_string())),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     };
     Ok(txn)
 }
@@ -638,6 +647,9 @@ pub async fn list_transactions(
             description_hash: "".to_string(),
             payer_note: Some(inc_payment.payer_note.unwrap_or("".to_string())),
             external_id: Some(inc_payment.external_id.unwrap_or("".to_string())),
+            settlement_type: None,
+            settlement_state: None,
+            txid: None,
         });
     }
 
@@ -718,6 +730,9 @@ pub async fn list_transactions(
             description_hash: "".to_string(),
             payer_note: Some(payment.payer_note.unwrap_or("".to_string())),
             external_id: Some(payment.external_id.unwrap_or("".to_string())),
+            settlement_type: None,
+            settlement_state: None,
+            txid: None,
         });
     }
 

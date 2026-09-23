@@ -654,6 +654,9 @@ pub async fn create_invoice(
                 description_hash: invoice_params.description_hash.unwrap_or_default(),
                 payer_note: Some("".to_string()),
                 external_id: Some("".to_string()),
+                settlement_type: None,
+                settlement_state: None,
+                txid: None,
             })
         }
         InvoiceType::Bolt12 => Err(provider_nwc_error(
@@ -1315,6 +1318,9 @@ async fn list_transactions_impl(
             description_hash: "".to_string(),
             payer_note: Some("".to_string()),
             external_id: Some(node.id),
+            settlement_type: None,
+            settlement_state: None,
+            txid: None,
         });
     }
 
