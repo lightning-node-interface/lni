@@ -834,6 +834,16 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
       try {
         const latest = await this.readPaymentBeforeDeadline(execution.paymentId, deadline);
+        // Malformed responses must not erase the last-known reconciliation details.
+        if (
+          !latest ||
+          typeof latest !== 'object' ||
+          Array.isArray(latest) ||
+          typeof latest.state !== 'string' ||
+          latest.state.trim() === ''
+        ) {
+          continue;
+        }
         // The complete read won the timeout race. Preserve its record even if
         // the clock reached the deadline before this continuation ran.
         payment = latest;

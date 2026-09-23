@@ -326,6 +326,38 @@ describe('StrikeNode Lightning payments', () => {
     }
   });
 
+  it.each([null, {}, { state: 123 }, { state: ' ' }])(
+    'retains reconciliation details after a malformed lookup: %j',
+    async (malformed) => {
+      vi.useFakeTimers();
+      let reads = 0;
+      try {
+        const fetchMock = vi.fn<FetchLike>(async (input) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          return jsonResponse(++reads === 1 ? { id: 'payment-1', state: 'COMPLETED' } : malformed);
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: 1 },
+          { fetch: fetchMock }
+        );
+        const assertion = expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+          nwcCode: 'OTHER',
+          providerCode: 'COMPLETED',
+          providerMessage: JSON.stringify({ paymentId: 'payment-1', state: 'COMPLETED' }),
+        });
+        await vi.runAllTimersAsync();
+        await assertion;
+        expect(reads).toBe(2);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it.each([
     ['just before deadline', 9999, 'success', 24],
     ['pending', 1000, 'OTHER', 2],
