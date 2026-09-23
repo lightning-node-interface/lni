@@ -59,7 +59,7 @@ export interface StrikeConfig {
   apiKey: string
   socks5Proxy?: string
   acceptInvalidCerts?: boolean
-  /** Settlement polling seconds after execution; defaults to 60. Zero skips polling. */
+  /** Settlement polling seconds after execution; defaults to 60, maximum 300. Zero skips polling. */
   paymentSettlementTimeout?: number
   httpTimeout?: number
 }

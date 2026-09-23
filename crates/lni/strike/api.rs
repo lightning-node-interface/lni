@@ -150,13 +150,15 @@ fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
 }
 
+// Longer waits belong in application-side reconciliation.
+const MAX_PAYMENT_SETTLEMENT_SECONDS: i64 = 300;
 const STRIKE_PAYMENT_POLL_INTERVAL: Duration = Duration::from_millis(400);
 
 fn settlement_timeout(config: &StrikeConfig) -> Result<Duration, ApiError> {
     let seconds = config.payment_settlement_timeout.unwrap_or(60);
-    if !(0..=2_147_483).contains(&seconds) {
+    if !(0..=MAX_PAYMENT_SETTLEMENT_SECONDS).contains(&seconds) {
         return Err(ApiError::InvalidInput(
-            "payment_settlement_timeout must be between 0 and 2147483 seconds".to_string(),
+            "payment_settlement_timeout must be between 0 and 300 seconds".to_string(),
         ));
     }
     Ok(Duration::from_secs(seconds as u64))
@@ -1434,7 +1436,12 @@ mod tests {
         );
         config.payment_settlement_timeout = Some(0);
         assert_eq!(settlement_timeout(&config).unwrap(), Duration::ZERO);
-        for invalid in [-1, 2_147_484] {
+        config.payment_settlement_timeout = Some(300);
+        assert_eq!(
+            settlement_timeout(&config).unwrap(),
+            Duration::from_secs(300)
+        );
+        for invalid in [-1, 301] {
             config.payment_settlement_timeout = Some(invalid);
             assert!(matches!(
                 settlement_timeout(&config),

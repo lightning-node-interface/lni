@@ -528,7 +528,13 @@ describe('StrikeNode Lightning payments', () => {
     }
   });
 
-  it.each([-1, Infinity, NaN, 2_147_484])(
+  it('accepts the five-minute maximum settlement budget', () => {
+    expect(
+      () => new StrikeNode({ apiKey: 'test-token', paymentSettlementTimeout: 300 })
+    ).not.toThrow();
+  });
+
+  it.each([-1, Infinity, NaN, 300.001, 301])(
     'rejects invalid settlement budget %s before payment',
     (value) => {
       expect(

@@ -23,7 +23,7 @@ pub struct StrikeConfig {
     pub accept_invalid_certs: Option<bool>,
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(120)))]
     pub http_timeout: Option<i64>,
-    /// Settlement polling budget in seconds after execution. Zero skips polling.
+    /// Settlement polling budget in seconds after execution; default 60, maximum 300. Zero skips polling.
     #[cfg_attr(feature = "uniffi", uniffi(default = Some(60)))]
     pub payment_settlement_timeout: Option<i64>,
 }

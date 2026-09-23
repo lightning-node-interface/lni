@@ -160,6 +160,8 @@ function paymentHashFromInvoice(invoice: string): string {
   }
 }
 
+// Longer waits belong in application-side reconciliation.
+const MAX_PAYMENT_SETTLEMENT_SECONDS = 300;
 const STRIKE_PAYMENT_POLL_INTERVAL_MS = 400;
 
 function isFailedPaymentState(state: string | undefined): boolean {
@@ -460,11 +462,11 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     if (
       !Number.isFinite(settlementSeconds) ||
       settlementSeconds < 0 ||
-      settlementSeconds > 2_147_483
+      settlementSeconds > MAX_PAYMENT_SETTLEMENT_SECONDS
     ) {
       throw new LniError(
         'InvalidInput',
-        'paymentSettlementTimeout must be between 0 and 2147483 seconds.'
+        'paymentSettlementTimeout must be between 0 and 300 seconds.'
       );
     }
     this.settlementTimeoutMs = settlementSeconds * 1000;

@@ -194,7 +194,7 @@ const blink = createNode({
 `StrikeConfig.paymentSettlementTimeout` (`payment_settlement_timeout` in Rust) is
 an optional settlement polling budget in **seconds**, defaulting to **60**. It starts
 after the execute response is read. Zero skips polling; negative, non-finite, or
-values above 2147483 are invalid. Rust accepts integer seconds; TypeScript also
+values above 300 are invalid. Rust accepts integer seconds; TypeScript also
 accepts fractional seconds. `httpTimeout` / `http_timeout` remains a separate
 per-request HTTP timeout. During settlement, neither a sleep, an HTTP request, nor
 its body read may extend the settlement budget.
