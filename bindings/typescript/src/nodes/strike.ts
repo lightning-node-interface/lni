@@ -657,7 +657,8 @@ export class StrikeNode implements LightningNode, OnchainPayments {
 
       try {
         const latest = await this.readPaymentBeforeDeadline(execution.paymentId, deadline);
-        if (performance.now() >= deadline) break;
+        // The complete read won the timeout race. Preserve its record even if
+        // the clock reached the deadline before this continuation ran.
         payment = latest;
       } catch (error) {
         // Keep the last-known execution state when the outgoing record is not readable yet.

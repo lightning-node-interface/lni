@@ -398,6 +398,103 @@ describe('StrikeNode Lightning payments', () => {
     }
   });
 
+  it.each(['proof', 'failed', 'completed without proof'] as const)(
+    'preserves %s when a complete read wins at the deadline',
+    async (scenario) => {
+      vi.useFakeTimers();
+      const started = performance.now();
+      const state = scenario === 'failed' ? 'FAILED' : 'COMPLETED';
+      try {
+        const fetchMock = vi.fn<FetchLike>(async (input) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          const response = jsonResponse({
+            id: 'payment-1',
+            state,
+            lightning: scenario === 'proof' ? { preImage: 'test-proof' } : undefined,
+          });
+          const text = await response.text();
+          vi.spyOn(response, 'text').mockImplementation(async () => {
+            // The body is ready; the deadline is reached before the caller resumes.
+            // Timer callbacks have not won the race, so this record must survive.
+            vi.spyOn(performance, 'now').mockReturnValue(started + 1000);
+            return text;
+          });
+          return response;
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: 1 },
+          { fetch: fetchMock }
+        );
+        const result = node.payInvoice({ invoice: BOLT11 });
+        const assertion =
+          scenario === 'proof'
+            ? expect(result).resolves.toMatchObject({ preimage: 'test-proof' })
+            : expect(result).rejects.toMatchObject({
+                nwcCode: scenario === 'failed' ? 'PAYMENT_FAILED' : 'OTHER',
+                providerCode: state,
+                providerMessage: JSON.stringify({ paymentId: 'payment-1', state }),
+              });
+        await vi.runAllTimersAsync();
+        await assertion;
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each(['COMPLETED', 'FAILED'])(
+    'keeps an unknown outcome when timeout beats a late %s record',
+    async (state) => {
+      vi.useFakeTimers();
+      let finishRead: ((response: Response) => void) | undefined;
+      let signal: AbortSignal | null | undefined;
+      try {
+        const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          signal = init?.signal;
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: 1 },
+          { fetch: fetchMock }
+        );
+        const result = node.payInvoice({ invoice: BOLT11 });
+        const assertion = expect(result).rejects.toMatchObject({
+          nwcCode: 'OTHER',
+          providerCode: 'PENDING',
+        });
+        await vi.advanceTimersByTimeAsync(1000);
+        await assertion;
+        expect(signal?.aborted).toBe(true);
+        expect(finishRead).toBeDefined();
+        finishRead!(
+          jsonResponse({
+            id: 'payment-1',
+            state,
+            lightning: state === 'COMPLETED' ? { preImage: 'test-proof' } : undefined,
+          })
+        );
+        await vi.runAllTimersAsync();
+        await expect(result).rejects.toMatchObject({ nwcCode: 'OTHER', providerCode: 'PENDING' });
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it.each([0, 1])('keeps request and settlement budgets separate (%s seconds)', async (budget) => {
     vi.useFakeTimers();
     const signals: AbortSignal[] = [];

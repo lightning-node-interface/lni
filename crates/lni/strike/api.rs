@@ -195,9 +195,8 @@ async fn wait_for_payment<F, Fut>(
             }
             match read().await {
                 Ok(Some(mut parsed)) => {
-                    if tokio::time::Instant::now() >= deadline {
-                        break;
-                    }
+                    // The read completed before timeout cancelled this future.
+                    // Preserve its record even when both became ready together.
                     parsed.payment_id = payment_id.clone();
                     *payment = Some(parsed);
                 }
