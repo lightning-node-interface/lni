@@ -119,15 +119,25 @@ pub struct InvoiceQuoteResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct Payment {
-    pub id: String,
-    pub amount: Amount,
-    pub state: String, // "PENDING", "COMPLETED", "FAILED"
-    pub created: String,
+    pub id: Option<String>,
+    #[serde(rename = "paymentId")]
+    pub payment_id: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
+    pub state: Option<String>,
+    pub result: Option<String>,
+    pub amount: Option<Amount>,
+    #[serde(rename = "totalFee")]
+    pub total_fee: Option<Amount>,
+    #[serde(rename = "totalAmount")]
+    pub total_amount: Option<Amount>,
+    pub created: Option<String>,
     pub completed: Option<String>,
     pub correlation_id: Option<String>,
     pub description: Option<String>,
     pub lightning: Option<LightningPayment>,
     pub onchain: Option<OnchainPayment>,
+    pub p2p: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -282,20 +292,7 @@ pub struct OnchainPaymentExecutionResponse {
     pub onchain: Option<OnchainDetails>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct StrikePaymentByIdResponse {
-    #[serde(rename = "paymentId")]
-    pub payment_id: Option<String>,
-    pub id: Option<String>,
-    pub state: Option<String>,
-    pub created: Option<String>,
-    pub amount: Option<Amount>,
-    #[serde(rename = "totalFee")]
-    pub total_fee: Option<Amount>,
-    #[serde(rename = "totalAmount")]
-    pub total_amount: Option<Amount>,
-    pub onchain: Option<OnchainDetails>,
-}
+pub type StrikePaymentByIdResponse = Payment;
 
 #[derive(Debug, Deserialize)]
 pub struct PaymentExecution {
@@ -453,30 +450,53 @@ pub struct StrikeReceivesWithCountResponse {
 #[derive(Debug, Deserialize)]
 pub struct StrikeReceive {
     #[serde(rename = "receiveId")]
-    pub receive_id: String,
+    pub receive_id: Option<String>,
     #[serde(rename = "receiveRequestId")]
-    pub receive_request_id: String,
+    pub receive_request_id: Option<String>,
     #[serde(rename = "type")]
-    pub type_: String, // "LIGHTNING", "ONCHAIN"
-    pub state: String, // "COMPLETED", "PENDING", etc.
+    pub type_: Option<String>, // "LIGHTNING", "ONCHAIN", "P2P"
+    pub state: Option<String>, // "COMPLETED", "PENDING", etc.
     #[serde(rename = "amountReceived")]
     pub amount_received: Amount,
     #[serde(rename = "amountCredited")]
-    pub amount_credited: Amount,
-    pub created: String,
+    pub amount_credited: Option<Amount>,
+    pub created: Option<String>,
     pub completed: Option<String>,
     pub lightning: Option<StrikeReceiveLightning>,
+    pub onchain: Option<StrikeReceiveOnchain>,
+    pub p2p: Option<StrikeReceiveP2p>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct StrikeReceiveLightning {
     pub invoice: String,
-    pub preimage: String,
+    pub preimage: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "descriptionHash")]
     pub description_hash: Option<String>,
     #[serde(rename = "paymentHash")]
     pub payment_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StrikeReceiveOnchain {
+    pub address: Option<String>,
+    #[serde(rename = "transactionId")]
+    pub transaction_id: Option<String>,
+    #[serde(rename = "transactionHash")]
+    pub transaction_hash: Option<String>,
+    #[serde(rename = "outputIndex")]
+    pub output_index: Option<i64>,
+    #[serde(rename = "blockHeight")]
+    pub block_height: Option<i64>,
+    #[serde(rename = "numberOfConfirmations")]
+    pub number_of_confirmations: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StrikeReceiveP2p {
+    #[serde(rename = "payerAccountId")]
+    pub payer_account_id: Option<String>,
 }
 
 // Strike API lookup response for receive requests (returns items array)

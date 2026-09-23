@@ -235,6 +235,9 @@ pub async fn create_invoice(
         settled_at: 0, // Not settled yet
         payer_note: None,
         external_id: None,
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 
@@ -430,6 +433,9 @@ fn lookup_response_to_transaction(
             .unwrap_or(0),
         payer_note: None,
         external_id: None,
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     }
 }
 
@@ -523,18 +529,7 @@ fn transaction_matches_params(transaction: &Transaction, params: &ListTransactio
     }
 
     if let Some(search) = params.search.as_deref() {
-        let search = search.to_lowercase();
-        let matches_search = transaction.payment_hash.to_lowercase().contains(&search)
-            || transaction.invoice.to_lowercase().contains(&search)
-            || transaction.description.to_lowercase().contains(&search)
-            || transaction
-                .payer_note
-                .as_deref()
-                .unwrap_or_default()
-                .to_lowercase()
-                .contains(&search);
-
-        if !matches_search {
+        if !crate::transaction_matches_search(transaction, search) {
             return false;
         }
     }
@@ -787,6 +782,9 @@ mod tests {
             settled_at: 0,
             payer_note: None,
             external_id: None,
+            settlement_type: None,
+            settlement_state: None,
+            txid: None,
         };
 
         assert!(transaction_matches_lookup(&transaction, Some("hash"), None));

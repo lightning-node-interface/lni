@@ -417,7 +417,7 @@ const invoice = await arkadeNode.createInvoice({
 - For local `file:` package development with Expo, build the package first (`bindings/typescript`: `npm run build`) and use the Expo example `metro.config.js` pattern for `./dist/*` resolution.
 - You can inject custom fetch via constructor options:
   - `new LndNode(config, { fetch: customFetch })`
-- React Native's legacy fetch follows redirects even when `redirect: 'error'` is requested. Use a redirect-capable transport such as `expo/fetch` and pass `{ fetch: expoFetch, fetchSupportsRedirectError: true }`.
+- Requests use `redirect: 'error'` as a best-effort redirect policy. React Native consumers can install a redirect-capable transport such as `expo/fetch` as the global fetch or pass it with `{ fetch: expoFetch }`.
 - Most backends require secrets (API keys, macaroons, runes, passwords). For production web apps, use a backend proxy/BFF to protect credentials.
 
 ## Security Scanner Notes

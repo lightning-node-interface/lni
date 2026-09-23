@@ -33,6 +33,10 @@ export interface NodeInfo {
 
 export type TransactionType = 'incoming' | 'outgoing';
 
+export type SettlementType = 'lightning' | 'onchain' | 'intraledger' | 'unknown';
+
+export type SettlementState = 'pending' | 'completed' | 'failed' | 'unknown';
+
 export interface Transaction {
   type: TransactionType;
   invoice: string;
@@ -47,6 +51,9 @@ export interface Transaction {
   settledAt: number;
   payerNote?: string;
   externalId?: string;
+  settlementType?: SettlementType;
+  settlementState?: SettlementState;
+  txid?: string;
 }
 
 export interface PayInvoiceResponse {
@@ -188,8 +195,6 @@ export interface OnInvoiceEventParams {
 
 export interface NodeRequestOptions {
   fetch?: FetchLike;
-  /** Required in React Native when the supplied fetch honors `redirect: 'error'` (for example, `expo/fetch`). */
-  fetchSupportsRedirectError?: boolean;
 }
 
 export interface PhoenixdConfig {

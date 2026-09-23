@@ -449,6 +449,9 @@ pub async fn lookup_invoice(
         description_hash: inv.description_hash.unwrap_or_default(), // TODO: what format should hash be in? hex or base64? does anyone care?
         payer_note: Some("".to_string()),
         external_id: Some("".to_string()),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 
@@ -606,6 +609,9 @@ pub async fn create_invoice(
         description_hash: params.description_hash.clone().unwrap_or_default(),
         payer_note: Some("".to_string()),
         external_id: Some("".to_string()),
+        settlement_type: None,
+        settlement_state: None,
+        txid: None,
     })
 }
 
@@ -795,6 +801,9 @@ pub async fn list_transactions(
             description_hash: inv.description_hash.unwrap_or_default(),
             payer_note: Some("".to_string()),
             external_id: Some("".to_string()),
+            settlement_type: None,
+            settlement_state: None,
+            txid: None,
         })
         .collect();
 

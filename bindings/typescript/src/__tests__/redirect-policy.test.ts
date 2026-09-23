@@ -7,6 +7,7 @@ import { SpeedNode } from '../nodes/speed.js';
 import type { FetchLike, LightningNode, NodeRequestOptions } from '../types.js';
 
 const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+const originalFetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
 
 function useReactNativeRuntime(): void {
   Object.defineProperty(globalThis, 'navigator', {
@@ -62,6 +63,12 @@ afterEach(() => {
   } else {
     delete (globalThis as { navigator?: Navigator }).navigator;
   }
+
+  if (originalFetchDescriptor) {
+    Object.defineProperty(globalThis, 'fetch', originalFetchDescriptor);
+  } else {
+    delete (globalThis as { fetch?: typeof fetch }).fetch;
+  }
 });
 
 describe('HTTP redirect policy', () => {
@@ -96,27 +103,28 @@ describe('HTTP redirect policy', () => {
     expect(inits.every((init) => init.redirect === 'error')).toBe(true);
   });
 
-  it('rejects legacy React Native fetch before sending credentials', () => {
+  it('does not reject a React Native runtime at construction', () => {
     useReactNativeRuntime();
     const fetchMock = vi.fn<FetchLike>();
 
     expect(
       () => new ClnNode({ url: 'https://cln.test', rune: 'fake-rune' }, { fetch: fetchMock })
-    ).toThrow(/legacy fetch cannot reject redirects/);
-    expect(fetchMock).not.toHaveBeenCalled();
+    ).not.toThrow();
   });
 
-  it('accepts an explicitly redirect-capable React Native fetch', async () => {
+  it('uses a redirect-capable global fetch in React Native without a capability flag', async () => {
     useReactNativeRuntime();
     const inits: RequestInit[] = [];
     const fetchMock = vi.fn<FetchLike>(async (_input, init) => {
       inits.push(init ?? {});
       return new Response('request failed', { status: 500 });
     });
-    const node = new ClnNode(
-      { url: 'https://cln.test', rune: 'fake-rune' },
-      { fetch: fetchMock, fetchSupportsRedirectError: true }
-    );
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      writable: true,
+      value: fetchMock,
+    });
+    const node = new ClnNode({ url: 'https://cln.test', rune: 'fake-rune' });
 
     await node.getInfo().catch(() => undefined);
 
@@ -125,22 +133,7 @@ describe('HTTP redirect policy', () => {
   });
 
   it.each(additionalNodeFactories)(
-    'rejects legacy React Native fetch for $name before sending credentials',
-    ({ create }) => {
-      useReactNativeRuntime();
-      const fetchMock = vi.fn<FetchLike>();
-
-      for (const fetchSupportsRedirectError of [undefined, false]) {
-        expect(() => create({ fetch: fetchMock, fetchSupportsRedirectError })).toThrow(
-          /legacy fetch cannot reject redirects/
-        );
-      }
-      expect(fetchMock).not.toHaveBeenCalled();
-    }
-  );
-
-  it.each(additionalNodeFactories)(
-    'uses redirect:error for $name with an explicitly capable React Native fetch',
+    'uses redirect:error for $name in React Native without a capability flag',
     async ({ create }) => {
       useReactNativeRuntime();
       const inits: RequestInit[] = [];
@@ -148,7 +141,7 @@ describe('HTTP redirect policy', () => {
         inits.push(init ?? {});
         return new Response('request failed', { status: 500 });
       });
-      const node = create({ fetch: fetchMock, fetchSupportsRedirectError: true });
+      const node = create({ fetch: fetchMock });
 
       await node.getInfo().catch(() => undefined);
 

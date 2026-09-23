@@ -164,6 +164,64 @@ pub struct Transaction {
     pub settled_at: i64, // 0 means not paid yet TODO maybe add status field
     pub payer_note: Option<String>, // used in bolt12 (on phoenixd)
     pub external_id: Option<String>, // used in bolt11 (on phoenixd)
+    #[serde(default)]
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub settlement_type: Option<SettlementType>,
+    #[serde(default)]
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub settlement_state: Option<SettlementState>,
+    #[serde(default)]
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub txid: Option<String>,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[serde(rename_all = "lowercase")]
+pub enum SettlementType {
+    Lightning,
+    Onchain,
+    Intraledger,
+    Unknown,
+}
+
+#[cfg_attr(feature = "napi_rs", napi(string_enum))]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[serde(rename_all = "lowercase")]
+pub enum SettlementState {
+    Pending,
+    Completed,
+    Failed,
+    Unknown,
+}
+
+pub fn transaction_matches_search(transaction: &Transaction, search: &str) -> bool {
+    let search = search.to_lowercase();
+    transaction.payment_hash.to_lowercase().contains(&search)
+        || transaction.invoice.to_lowercase().contains(&search)
+        || transaction.description.to_lowercase().contains(&search)
+        || transaction
+            .payer_note
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase()
+            .contains(&search)
+        || transaction
+            .external_id
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase()
+            .contains(&search)
+        || transaction
+            .txid
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase()
+            .contains(&search)
 }
 
 #[cfg_attr(feature = "napi_rs", napi(object))]
@@ -669,5 +727,75 @@ impl Default for OnInvoiceEventParams {
             polling_delay_sec: 5,
             max_polling_sec: 60,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn transaction() -> Transaction {
+        Transaction {
+            type_: "incoming".to_string(),
+            invoice: "LN-INVOICE".to_string(),
+            description: "Coffee Beans".to_string(),
+            description_hash: String::new(),
+            preimage: String::new(),
+            payment_hash: "HASH-ABC".to_string(),
+            amount_msats: 1_000,
+            fees_paid: 0,
+            created_at: 0,
+            expires_at: 0,
+            settled_at: 0,
+            payer_note: Some("Table Seven".to_string()),
+            external_id: Some("EXTERNAL-ID".to_string()),
+            settlement_type: Some(SettlementType::Intraledger),
+            settlement_state: Some(SettlementState::Completed),
+            txid: Some("BITCOIN-TXID".to_string()),
+        }
+    }
+
+    #[test]
+    fn transaction_search_matches_all_text_identifiers_case_insensitively() {
+        let transaction = transaction();
+        for search in [
+            "invoice",
+            "hash-a",
+            "COFFEE",
+            "seven",
+            "external",
+            "bitcoin-tx",
+        ] {
+            assert!(transaction_matches_search(&transaction, search));
+        }
+    }
+
+    #[test]
+    fn settlement_enums_serde_round_trip_as_lowercase_strings() {
+        let json = serde_json::to_string(&transaction()).expect("transaction should serialize");
+        assert!(json.contains(r#""settlement_type":"intraledger""#));
+        assert!(json.contains(r#""settlement_state":"completed""#));
+
+        let decoded: Transaction =
+            serde_json::from_str(&json).expect("transaction should deserialize");
+        assert_eq!(decoded.settlement_type, Some(SettlementType::Intraledger));
+        assert_eq!(decoded.settlement_state, Some(SettlementState::Completed));
+    }
+
+    #[test]
+    fn settlement_fields_default_when_deserializing_legacy_transactions() {
+        let mut value = serde_json::to_value(transaction()).expect("transaction should serialize");
+        let object = value
+            .as_object_mut()
+            .expect("transaction should be an object");
+        object.remove("settlement_type");
+        object.remove("settlement_state");
+        object.remove("txid");
+
+        let decoded: Transaction =
+            serde_json::from_value(value).expect("legacy transaction should deserialize");
+        assert!(decoded.settlement_type.is_none());
+        assert!(decoded.settlement_state.is_none());
+        assert!(decoded.txid.is_none());
     }
 }

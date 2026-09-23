@@ -141,13 +141,7 @@ impl StrikeNode {
         &self,
         params: ListTransactionsParams,
     ) -> Result<Vec<crate::Transaction>, ApiError> {
-        crate::strike::api::list_transactions(
-            self.config.clone(),
-            params.from,
-            params.limit,
-            params.search,
-        )
-        .await
+        crate::strike::api::list_transactions(self.config.clone(), params).await
     }
 
     pub async fn decode(&self, str: String) -> Result<String, ApiError> {
