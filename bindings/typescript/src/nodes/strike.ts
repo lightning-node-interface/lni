@@ -470,7 +470,7 @@ export class StrikeNode implements LightningNode, OnchainPayments {
       );
     }
     this.settlementTimeoutMs = settlementSeconds * 1000;
-    this.fetchFn = resolveFetch(options.fetch, options.fetchSupportsRedirectError);
+    this.fetchFn = resolveFetch(options.fetch);
     this.timeoutMs = toTimeoutMs(config.httpTimeout);
     this.baseUrl = config.baseUrl ?? 'https://api.strike.me/v1';
   }
