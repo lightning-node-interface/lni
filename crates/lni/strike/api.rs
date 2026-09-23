@@ -150,18 +150,28 @@ fn is_retryable_payment_read_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::NOT_FOUND || status.is_server_error()
 }
 
-// Longer waits belong in application-side reconciliation.
-const MAX_PAYMENT_SETTLEMENT_SECONDS: i64 = 300;
 const STRIKE_PAYMENT_POLL_INTERVAL: Duration = Duration::from_millis(400);
 
 fn settlement_timeout(config: &StrikeConfig) -> Result<Duration, ApiError> {
     let seconds = config.payment_settlement_timeout.unwrap_or(60);
-    if !(0..=MAX_PAYMENT_SETTLEMENT_SECONDS).contains(&seconds) {
+    if seconds < 0 {
         return Err(ApiError::InvalidInput(
-            "payment_settlement_timeout must be between 0 and 300 seconds".to_string(),
+            "payment_settlement_timeout must be non-negative".to_string(),
         ));
     }
-    Ok(Duration::from_secs(seconds as u64))
+    let budget = Duration::from_secs(seconds as u64);
+    settlement_deadline(budget)?; // Reject unrepresentable durations before submitting payment.
+    Ok(budget)
+}
+
+fn settlement_deadline(budget: Duration) -> Result<tokio::time::Instant, ApiError> {
+    tokio::time::Instant::now()
+        .checked_add(budget)
+        .ok_or_else(|| {
+            ApiError::InvalidInput(
+                "payment_settlement_timeout exceeds the clock's supported range".to_string(),
+            )
+        })
 }
 
 // Keep the last complete record outside the timed future. Dropping the future on
@@ -170,11 +180,12 @@ async fn wait_for_payment<F, Fut>(
     payment: &mut Option<PaymentExecutionResponse>,
     budget: Duration,
     mut read: F,
-) where
+) -> Result<(), ApiError>
+where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<Option<PaymentExecutionResponse>, ()>>,
 {
-    let deadline = tokio::time::Instant::now() + budget;
+    let deadline = settlement_deadline(budget)?;
     let payment_id = payment
         .as_ref()
         .map(|p| p.payment_id.clone())
@@ -208,6 +219,7 @@ async fn wait_for_payment<F, Fut>(
         }
     })
     .await;
+    Ok(())
 }
 
 fn is_failed_payment_state(state: Option<&str>) -> bool {
@@ -616,7 +628,7 @@ pub async fn pay_invoice(
             .map(Some)
             .map_err(|_| ())
     })
-    .await;
+    .await?;
 
     let fee_msats = payment
         .as_ref()
@@ -1383,7 +1395,8 @@ mod tests {
             wait_for_payment(&mut payment, budget, || async {
                 panic!("terminal execution or zero budget must not start a lookup");
             })
-            .await;
+            .await
+            .unwrap();
             let record = payment.as_ref().unwrap();
             assert_eq!(record.state, state);
             assert_eq!(record.payment_id, "payment-1");
@@ -1436,12 +1449,12 @@ mod tests {
         );
         config.payment_settlement_timeout = Some(0);
         assert_eq!(settlement_timeout(&config).unwrap(), Duration::ZERO);
-        config.payment_settlement_timeout = Some(300);
+        config.payment_settlement_timeout = Some(3600);
         assert_eq!(
             settlement_timeout(&config).unwrap(),
-            Duration::from_secs(300)
+            Duration::from_secs(3600)
         );
-        for invalid in [-1, 301] {
+        for invalid in [-1, i64::MAX] {
             config.payment_settlement_timeout = Some(invalid);
             assert!(matches!(
                 settlement_timeout(&config),

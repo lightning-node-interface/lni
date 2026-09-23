@@ -235,7 +235,7 @@ export interface StrikeConfig {
   acceptInvalidCerts?: boolean;
   /** Per-request HTTP timeout in seconds. */
   httpTimeout?: number;
-  /** Settlement polling budget in seconds after execution; defaults to 60, maximum 300. Zero skips polling. */
+  /** Settlement polling budget in seconds after execution; defaults to 60. Zero skips polling. */
   paymentSettlementTimeout?: number;
 }
 

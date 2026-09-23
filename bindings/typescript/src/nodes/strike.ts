@@ -160,8 +160,8 @@ function paymentHashFromInvoice(invoice: string): string {
   }
 }
 
-// Longer waits belong in application-side reconciliation.
-const MAX_PAYMENT_SETTLEMENT_SECONDS = 300;
+// JavaScript timers overflow beyond this delay; long configured waits use timer slices.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const STRIKE_PAYMENT_POLL_INTERVAL_MS = 400;
 
 function isFailedPaymentState(state: string | undefined): boolean {
@@ -462,11 +462,11 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     if (
       !Number.isFinite(settlementSeconds) ||
       settlementSeconds < 0 ||
-      settlementSeconds > MAX_PAYMENT_SETTLEMENT_SECONDS
+      !Number.isFinite(settlementSeconds * 1000)
     ) {
       throw new LniError(
         'InvalidInput',
-        'paymentSettlementTimeout must be between 0 and 300 seconds.'
+        'paymentSettlementTimeout must be non-negative and finite in milliseconds.'
       );
     }
     this.settlementTimeoutMs = settlementSeconds * 1000;
@@ -715,10 +715,17 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     const budget = this.timeoutMs ? Math.min(this.timeoutMs, remaining) : remaining;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
+      const readDeadline = performance.now() + budget;
+      const expire = (): void => {
+        const remainingMs = readDeadline - performance.now();
+        if (remainingMs > 0) {
+          timer = setTimeout(expire, Math.min(remainingMs, MAX_TIMER_DELAY_MS));
+          return;
+        }
         reject(new LniError('NetworkError', 'Strike payment read timed out.'));
         controller.abort();
-      }, budget);
+      };
+      timer = setTimeout(expire, Math.min(budget, MAX_TIMER_DELAY_MS));
     });
     try {
       return await Promise.race([

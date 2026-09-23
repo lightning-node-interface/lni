@@ -528,13 +528,50 @@ describe('StrikeNode Lightning payments', () => {
     }
   });
 
-  it('accepts the five-minute maximum settlement budget', () => {
+  it.each([360, 3_000_000])(
+    'honors an explicit %s-second budget without timer overflow',
+    async (seconds) => {
+      vi.useFakeTimers();
+      let signal: AbortSignal | null | undefined;
+      try {
+        const started = performance.now();
+        const fetchMock = vi.fn<FetchLike>(async (input, init) => {
+          if (String(input).endsWith('/lightning'))
+            return jsonResponse({ paymentQuoteId: 'quote-1' });
+          if (String(input).endsWith('/execute'))
+            return jsonResponse({ paymentId: 'payment-1', state: 'PENDING' });
+          signal = init?.signal;
+          return new Promise<Response>(() => {});
+        });
+        const node = new StrikeNode(
+          { apiKey: 'test-token', paymentSettlementTimeout: seconds },
+          { fetch: fetchMock }
+        );
+        const assertion = expect(node.payInvoice({ invoice: BOLT11 })).rejects.toMatchObject({
+          nwcCode: 'OTHER',
+          providerCode: 'PENDING',
+        });
+        await vi.advanceTimersByTimeAsync(300_000);
+        expect(signal?.aborted).toBe(false);
+        await vi.runAllTimersAsync();
+        await assertion;
+        expect(performance.now() - started).toBe(seconds * 1000);
+        expect(signal?.aborted).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each([300.001, 301, 3600, 3_000_000])('accepts explicit settlement budget %s', (value) => {
     expect(
-      () => new StrikeNode({ apiKey: 'test-token', paymentSettlementTimeout: 300 })
+      () => new StrikeNode({ apiKey: 'test-token', paymentSettlementTimeout: value })
     ).not.toThrow();
   });
 
-  it.each([-1, Infinity, NaN, 300.001, 301])(
+  it.each([-1, Infinity, NaN, Number.MAX_VALUE])(
     'rejects invalid settlement budget %s before payment',
     (value) => {
       expect(
