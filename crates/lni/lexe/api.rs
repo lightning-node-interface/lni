@@ -21,7 +21,7 @@ use crate::{
     PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction,
 };
 
-use super::LexeHumanBitcoinAddress;
+use super::{LexeClientInfo, LexeHumanBitcoinAddress};
 
 const PAYMENT_PAGE_SIZE: usize = 100;
 
@@ -379,6 +379,28 @@ async fn reconcile_timed_out_invoice_payment(
     }
 
     completed_payment_response(payment)
+}
+
+pub async fn get_client_info(wallet: &LexeWallet) -> Result<LexeClientInfo, ApiError> {
+    use lexe::types::command::CredentialKind;
+
+    let info = wallet.client_info().await.map_err(|_| ApiError::Api {
+        reason: "Failed to inspect Lexe client authorization".to_owned(),
+    })?;
+    Ok(LexeClientInfo {
+        kind: match info.kind {
+            CredentialKind::RootSeed => "root_seed",
+            CredentialKind::ClientCredentials => "client_credentials",
+        }
+        .to_owned(),
+        client_pubkey: info.client_pk.map(|pk| pk.to_string()),
+        label: info.label,
+        created_at_ms: info.created_at.map(|time| time.to_i64()),
+        expires_at_ms: info.expires_at.map(|time| time.to_i64()),
+        scopes: info.scopes,
+        permissions: info.permissions,
+        effective_permissions: info.effective_permissions,
+    })
 }
 
 pub async fn get_info(wallet: &LexeWallet, network: &str) -> Result<NodeInfo, ApiError> {

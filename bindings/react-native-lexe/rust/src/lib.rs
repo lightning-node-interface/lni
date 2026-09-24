@@ -102,6 +102,33 @@ impl From<lni::NodeInfo> for NodeInfo {
 }
 
 #[derive(Clone, uniffi::Record)]
+pub struct ClientInfo {
+    pub kind: String,
+    pub client_pubkey: Option<String>,
+    pub label: Option<String>,
+    pub created_at_ms: Option<i64>,
+    pub expires_at_ms: Option<i64>,
+    pub scopes: Vec<String>,
+    pub permissions: Vec<String>,
+    pub effective_permissions: Vec<String>,
+}
+
+impl From<lni::lexe::LexeClientInfo> for ClientInfo {
+    fn from(value: lni::lexe::LexeClientInfo) -> Self {
+        Self {
+            kind: value.kind,
+            client_pubkey: value.client_pubkey,
+            label: value.label,
+            created_at_ms: value.created_at_ms,
+            expires_at_ms: value.expires_at_ms,
+            scopes: value.scopes,
+            permissions: value.permissions,
+            effective_permissions: value.effective_permissions,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
 pub struct HumanBitcoinAddress {
     pub human_bitcoin_address: String,
     pub lightning_address: String,
@@ -394,6 +421,10 @@ impl LexeNode {
 impl LexeNode {
     pub async fn get_permissions(&self) -> Result<Permissions, LexeError> {
         Ok(self.inner.get_permissions().await?.into())
+    }
+
+    pub async fn get_client_info(&self) -> Result<ClientInfo, LexeError> {
+        Ok(self.inner.get_client_info().await?.into())
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, LexeError> {
