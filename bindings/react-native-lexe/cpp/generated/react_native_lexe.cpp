@@ -125,6 +125,8 @@ void uniffi_react_native_lexe_fn_free_lexenode(
     /*handle*/ uint64_t ptr, RustBuffer value);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_decode_offer(
     /*handle*/ uint64_t ptr, RustBuffer offer);
+/*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+    /*handle*/ uint64_t ptr);
 /*handle*/ uint64_t
 uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
     /*handle*/ uint64_t ptr);
@@ -288,6 +290,7 @@ uint16_t uniffi_react_native_lexe_checksum_method_lexenode_create_invoice();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_create_offer();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_decode();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_decode_offer();
+uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_client_info();
 uint16_t
 uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_info();
@@ -2444,6 +2447,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_fn_method_lexenode_decode_offer(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_client_info"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_"
+                                        "method_lexenode_get_client_info"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+                    rt, thisVal, args, count);
+          });
   props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_"
         "address"] = jsi::Function::createFromHostFunction(
       rt,
@@ -3222,6 +3237,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_decode_offer(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_client_"
+        "info"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexenode_get_client_info"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_"
         "bitcoin_address"] = jsi::Function::createFromHostFunction(
       rt,
@@ -3721,6 +3748,17 @@ jsi::Value NativeReactNativeLexe::
                                                         args[0]),
       uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
                                                               args[1]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value = uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
                                                          value);
@@ -4581,6 +4619,15 @@ jsi::Value NativeReactNativeLexe::
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
   auto value = uniffi_react_native_lexe_checksum_method_lexenode_decode_offer();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexenode_get_client_info();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

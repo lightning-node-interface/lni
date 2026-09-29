@@ -11,6 +11,21 @@ use crate::{
     NodeInfo, Offer, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction,
 };
 
+/// Authenticated credential grants returned by the Lexe node.
+/// Unlike `get_permissions`, this describes this client's authorization.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LexeClientInfo {
+    pub kind: String,
+    pub client_pubkey: Option<String>,
+    pub label: Option<String>,
+    pub created_at_ms: Option<i64>,
+    pub expires_at_ms: Option<i64>,
+    pub scopes: Vec<String>,
+    pub permissions: Vec<String>,
+    pub effective_permissions: Vec<String>,
+}
+
 /// Lexe's human-readable Bitcoin and Lightning receiving addresses.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,6 +134,10 @@ impl LexeNode {
 impl LexeNode {
     pub async fn get_permissions(&self) -> Result<Permissions, ApiError> {
         Ok(crate::lexe::api::permissions())
+    }
+
+    pub async fn get_client_info(&self) -> Result<LexeClientInfo, ApiError> {
+        crate::lexe::api::get_client_info(&self.wallet).await
     }
 
     pub async fn get_info(&self) -> Result<NodeInfo, ApiError> {
@@ -276,6 +295,21 @@ mod tests {
     fn empty_credentials_are_rejected() {
         let error = LexeNode::new(LexeConfig::default()).unwrap_err();
         assert!(matches!(error, ApiError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn integration_get_client_info_with_client_credentials() {
+        let Some((_data_dir, node)) = integration_node() else {
+            return;
+        };
+        let info = node
+            .get_client_info()
+            .await
+            .expect("client-info should succeed");
+        assert_eq!(info.kind, "client_credentials");
+        assert!(info.client_pubkey.is_some());
+        assert!(info.created_at_ms.is_some());
+        assert!(!info.scopes.is_empty() || !info.permissions.is_empty());
     }
 
     #[tokio::test]

@@ -1038,6 +1038,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chacha20-poly1305"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50844998c477072ba2cb2a63fa1dfca81b1368133f38084916bccd5710a374e1"
+
+[[package]]
 name = "chacha20poly1305"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2637,9 +2643,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lexe"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45d52d3c62d73dad0ebc40e05c57a26d0fe4e03a061370830a947d977d872ab4"
+checksum = "cb3657aa142452c1b350b61588449c0ea8b4b4bc75527e6e206094bf439f08f4"
 dependencies = [
  "anyhow",
  "bip39",
@@ -2656,7 +2662,7 @@ dependencies = [
  "lexe-payment-uri",
  "lexe-std",
  "lexe-tokio",
- "lightning 0.2.2",
+ "lightning 0.3.0-rc1",
  "semver",
  "serde",
  "serde_json",
@@ -2666,9 +2672,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-api"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e494a1fb265e8b300a665d3679cf2bbdaec77cbe2066701a5f49e9adf1f1d7a"
+checksum = "d5b924047fb26f5e54362949a7e1d102da60bcb250e4bb607b06c60ffb06c4ed"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -2686,7 +2692,7 @@ dependencies = [
  "lexe-std",
  "lexe-tls",
  "lexe-tokio",
- "lightning 0.2.2",
+ "lightning 0.3.0-rc1",
  "rand_core 0.6.4",
  "reqwest",
  "rustls",
@@ -2702,9 +2708,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-api-core"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "074f4d5bd167cab0862f8fe68602734053a7a093110b91c04716f2d51773b19b"
+checksum = "282524a6e3ffc8a95f489356d203d5b8a01300566a54ac7320a9a2d627e6019b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2723,8 +2729,8 @@ dependencies = [
  "lexe-serde",
  "lexe-sha256",
  "lexe-std",
- "lightning 0.2.2",
- "lightning-invoice 0.34.0",
+ "lightning 0.3.0-rc1",
+ "lightning-invoice 0.35.0-rc1",
  "ref-cast",
  "reqwest",
  "rust_decimal",
@@ -2740,18 +2746,18 @@ dependencies = [
 
 [[package]]
 name = "lexe-byte-array"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8befecbf125294fa28825cff970aa592a1d3f3e44126d45fa49ac1a057de94e6"
+checksum = "6c0d43a535c6bfa2577e2fc6c81d3f8fb68a0685bed8f2c4cee3e209cb7dc44f"
 dependencies = [
  "lexe-hex",
 ]
 
 [[package]]
 name = "lexe-common"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad8a1254b50631336890e61d4b7c84265edc0fafd56c7c5df3a3366b6e2c28ab"
+checksum = "8a0de8680b6813a6face532e8731d70fd42bd79c94e2f924a3f41cde99d15f1e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2771,9 +2777,9 @@ dependencies = [
  "lexe-serde",
  "lexe-sha256",
  "lexe-std",
- "lightning 0.2.2",
- "lightning-invoice 0.34.0",
- "lightning-types 0.3.1",
+ "lightning 0.3.0-rc1",
+ "lightning-invoice 0.35.0-rc1",
+ "lightning-types 0.4.0-rc1",
  "rand_core 0.6.4",
  "ref-cast",
  "ring",
@@ -2791,9 +2797,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-crypto"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b65c4cf9e3b997fe1d9efc0b7877505a23edb04201dac31dcf97558e1da7fad9"
+checksum = "1f5438ca82fcc04e52e47131156622cb9ad46a89e99c42cc0b2e4e99df4ed476"
 dependencies = [
  "bcs",
  "lexe-byte-array",
@@ -2810,9 +2816,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-enclave"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf2020098e4c7e0541f2c966a3e843204210b3659e88deb7f561ad42bcc9b2"
+checksum = "a7e3d9c3ee3c61f9fcb11e9369fdddbfb3a56754438443a62a1c801b3710bcc3"
 dependencies = [
  "cfg-if",
  "lexe-byte-array",
@@ -2827,15 +2833,15 @@ dependencies = [
 
 [[package]]
 name = "lexe-hex"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acdf65b70dc7524aef1fa3829d208bfc01434dab1fb06835bdbe2af3f3ae43bd"
+checksum = "7603f69e20d49c6eb86483a78179ead7dac25694f8dc54e3424e76548e7cc15f"
 
 [[package]]
 name = "lexe-logger"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a224ea951fa68479d6b912cb264f1b8b2c3e23c3ddc35fd33d208e58ea796acd"
+checksum = "ee74f94dfc4c429d1072f2fecac81a9c1d2f63e65fa5ff7a7106b5848c16da1f"
 dependencies = [
  "anyhow",
  "lexe-api",
@@ -2845,9 +2851,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-node-client"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e8bee2335ad848a9f1b3471d30a46d91826bfb5bc756df4e30b757f8c5bfc0"
+checksum = "304007c1af743feb6fc2ef4710b48efea237b406a6ffcb55a72471bba03ac63d"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2865,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-payment-uri"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5b3add29cd33f1bc9310749f361efe911b85a5975e3b3c5e66e70ad14a3ca30"
+checksum = "60f326fccb64e9297fd77a6f92f29dea3869fc27e1927adc1af8924e4e231bce"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -2889,9 +2895,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-payment-uri-core"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb9a5f9fb52ed99546dd03b2d9e91a782b12fca57bbed84296f19bf4aa77c9a6"
+checksum = "1b73fe31370a667d71e5d1035e04d4f3afef0b813d90842793b06e8bdcbcf410"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2909,9 +2915,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-serde"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ad016a88e3e7a650d3a6885f975cb8ef2f54b0fe00ef5d73dd06551aad928c"
+checksum = "7f27dbe3d8fecf44991c2b2d08b01479022711560a16f03e7cab64e84eb3e8af"
 dependencies = [
  "base64 0.21.7",
  "lexe-hex",
@@ -2920,9 +2926,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-sha256"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fb2bd039f02fa7400ed8e63a28386054c45b60c245746147174c74b404f7fc4"
+checksum = "5a5581341bdcdfeabb02bef8ca9a7b458bf26a069f3d476cebabab29d55cc7d3"
 dependencies = [
  "lexe-byte-array",
  "lexe-std",
@@ -2932,18 +2938,18 @@ dependencies = [
 
 [[package]]
 name = "lexe-std"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2dca82b723d3ca96ce17f62ea75459e940b362d102a36e70db74d1fc1a8553c"
+checksum = "df529accd920b01c63ff5cb2035a27ca61b83302d4c5b52da10ede50b0dafb30"
 dependencies = [
  "ref-cast",
 ]
 
 [[package]]
 name = "lexe-tls"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a097b5df6d4356738c4745a72050a90049eee8c1cc5b48d7d4aa69abf0c73e"
+checksum = "7db1647e4bb09b7e7cb03e8ff66f69bc497a89d2f106a700fe95fa661311512e"
 dependencies = [
  "anyhow",
  "asn1-rs 0.7.2",
@@ -2975,9 +2981,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-tls-core"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21322d67a298ced17c2fe72f19545e3e59a6248b9682b6dcf02ae4d72e25aa21"
+checksum = "f4eefba04f51f0160125afd77964e9f59dedd7608ae3f6a1ce47151ef2d99b9a"
 dependencies = [
  "rustls",
  "rustls-webpki",
@@ -2986,9 +2992,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-tokio"
-version = "0.1.19"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c01831a89a52818ea507f71cc4dd3081813c6a5912040cd7eea742d304318c76"
+checksum = "fefbbf610cb8e9c43a8ae59ea5f1308c877963e88bb16ec4e292bb82ee379508"
 dependencies = [
  "futures",
  "thiserror 2.0.17",
@@ -3132,6 +3138,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.3.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ff5dcb6447b60395a017f74805f8bb80313fb21e8e0ea7211db1bf71b4ef723"
+dependencies = [
+ "bech32",
+ "bitcoin",
+ "chacha20-poly1305",
+ "dnssec-prover",
+ "hashbrown 0.13.2",
+ "libm",
+ "lightning-invoice 0.35.0-rc1",
+ "lightning-macros",
+ "lightning-types 0.4.0-rc1",
+ "possiblyrandom",
+]
+
+[[package]]
 name = "lightning-invoice"
 version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3151,6 +3175,17 @@ dependencies = [
  "bech32",
  "bitcoin",
  "lightning-types 0.3.1",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.35.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91904130b6a2f76655b96d827c817fd6f16e2fed3adfc23a91973f5c37a0f482"
+dependencies = [
+ "bech32",
+ "bitcoin",
+ "lightning-types 0.4.0-rc1",
 ]
 
 [[package]]
@@ -3178,6 +3213,15 @@ name = "lightning-types"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb1aac93f22f2c2eac8a0ee83bb1a1ea58673caa2c82847302710b83364d04e6"
+dependencies = [
+ "bitcoin",
+]
+
+[[package]]
+name = "lightning-types"
+version = "0.4.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c1be11e911ca70c5205e934c9371226a99c37b8c8d29c2be646accbfa70ac09"
 dependencies = [
  "bitcoin",
 ]
@@ -3928,7 +3972,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools",
  "log",
  "multimap",
