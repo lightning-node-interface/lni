@@ -143,6 +143,16 @@ mkdir -p "$OUTPUT_DIR"
 echo "Generating Swift bindings..."
 cargo run --package lni-swift-bindgen -- generate --library "$LIB_FILE" --language swift --out-dir "$OUTPUT_DIR"
 
+# UniFFI emits trailing spaces; normalize them consistently with the drift check.
+awk '{ sub(/[[:blank:]]+$/, ""); print }' "$OUTPUT_DIR/lni.swift" > "$OUTPUT_DIR/lni.swift.tmp"
+mv "$OUTPUT_DIR/lni.swift.tmp" "$OUTPUT_DIR/lni.swift"
+
+# Keep the tracked example binding in sync even when --no-ios is used.
+EXAMPLE_LNIEXAMPLE_DIR="$SCRIPT_DIR/example/LNIExample"
+if [ -d "$EXAMPLE_LNIEXAMPLE_DIR" ]; then
+    cp "$OUTPUT_DIR/lni.swift" "$EXAMPLE_LNIEXAMPLE_DIR/"
+fi
+
 echo ""
 echo "Swift bindings generated successfully in: $OUTPUT_DIR"
 echo ""
@@ -190,9 +200,7 @@ if [ "$BUILD_IOS" = true ]; then
         echo "Copying to example project..."
         rm -rf "$EXAMPLE_LNIEXAMPLE_DIR/LNI.xcframework"
         cp -R "$XCFRAMEWORK_DIR" "$EXAMPLE_LNIEXAMPLE_DIR/"
-        cp "$OUTPUT_DIR/lni.swift" "$EXAMPLE_LNIEXAMPLE_DIR/"
         echo "  Copied LNI.xcframework to $EXAMPLE_LNIEXAMPLE_DIR/"
-        echo "  Copied lni.swift to $EXAMPLE_LNIEXAMPLE_DIR/"
     fi
 
     # Package for release if requested

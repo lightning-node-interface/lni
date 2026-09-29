@@ -44,6 +44,21 @@ To skip iOS builds (only generate Swift bindings):
 ./build.sh --release --no-ios
 ```
 
+After changing Rust UniFFI records or exported methods, regenerate both tracked
+Swift copies with the build script (including `--no-ios`). Verify they match the
+current Rust metadata before committing:
+
+```bash
+./check-bindings.sh
+```
+
+The check builds the host library with the locked dependencies, generates into a
+temporary directory, and compares the package and example bindings. This catches
+record-layout drift that can otherwise break serialization at runtime. When
+`swiftc` is available, it also compiles and runs a native serialization smoke
+test for `feeLimitSupported` values of `nil`, `false`, and `true`. The test
+uses no credentials and rejects the request before any network call.
+
 ## Usage
 
 ### Basic Example
