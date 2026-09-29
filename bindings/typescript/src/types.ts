@@ -83,9 +83,12 @@ export interface PrepareOnchainTransactionParams {
 }
 
 export interface OnchainTransaction {
+  /** Whether the provider supports a maximum fee; omitted means unknown. */
+  feeLimitSupported?: boolean;
   id?: string;
   address: string;
   amountSats: number;
+  /** Absent when no pre-send fee estimate is available. */
   feeSats?: number;
   totalAmountSats?: number;
   recipientAmountSats?: number;
@@ -108,6 +111,11 @@ export const DEFAULT_ONCHAIN_FEE_GUARDRAIL: Required<OnchainFeeGuardrail> = {
   maxFeePercent: DEFAULT_ONCHAIN_MAX_FEE_PERCENT,
 };
 
+/**
+ * Omitting feeGuardrail uses the adapter's provider policy: quoted-fee adapters
+ * check default limits; Lexe uses provider-determined fees. Explicit guardrails
+ * are rejected by adapters that cannot check them.
+ */
 export interface PayOnchainOptions {
   feeGuardrail?: OnchainFeeGuardrail;
   dangerouslyDisableFeeGuardrail?: boolean;

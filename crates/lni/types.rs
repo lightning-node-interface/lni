@@ -452,6 +452,10 @@ pub struct PrepareOnchainTransactionParams {
 pub struct OnchainTransaction {
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub id: Option<String>,
+    /// Whether the provider supports a maximum fee. None means unknown.
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_limit_supported: Option<bool>,
     pub address: String,
     pub amount_sats: i64,
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
@@ -495,6 +499,9 @@ impl Default for OnchainFeeGuardrail {
 #[cfg_attr(feature = "napi_rs", napi(object))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+/// With no explicit guardrail, the adapter applies its provider policy:
+/// quoted-fee adapters check their default limits; Lexe uses provider-set fees.
+/// An explicit guardrail must be rejected when it cannot be checked.
 pub struct PayOnchainOptions {
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub fee_guardrail: Option<OnchainFeeGuardrail>,

@@ -760,6 +760,328 @@ const FfiConverterTypeOnInvoiceEventParams = (() => {
   return new FFIConverter();
 })();
 
+export type OnchainFeeGuardrail = {
+  maxFeeSats?: bigint;
+  maxFeePercent?: number;
+};
+
+/**
+ * Generated factory for {@link OnchainFeeGuardrail} record objects.
+ */
+export const OnchainFeeGuardrail = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<OnchainFeeGuardrail, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<OnchainFeeGuardrail>,
+  });
+})();
+
+const FfiConverterTypeOnchainFeeGuardrail = (() => {
+  type TypeName = OnchainFeeGuardrail;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        maxFeeSats: FfiConverterOptionalInt64.read(from),
+        maxFeePercent: FfiConverterOptionalFloat64.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalInt64.write(value.maxFeeSats, into);
+      FfiConverterOptionalFloat64.write(value.maxFeePercent, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalInt64.allocationSize(value.maxFeeSats) +
+        FfiConverterOptionalFloat64.allocationSize(value.maxFeePercent)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export enum OnchainFeePreferenceType {
+  Default,
+  Speed,
+  TargetConf,
+  SatsPerVbyte,
+  Backend,
+}
+
+const FfiConverterTypeOnchainFeePreferenceType = (() => {
+  const ordinalConverter = FfiConverterInt32;
+  type TypeName = OnchainFeePreferenceType;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      switch (ordinalConverter.read(from)) {
+        case 1:
+          return OnchainFeePreferenceType.Default;
+        case 2:
+          return OnchainFeePreferenceType.Speed;
+        case 3:
+          return OnchainFeePreferenceType.TargetConf;
+        case 4:
+          return OnchainFeePreferenceType.SatsPerVbyte;
+        case 5:
+          return OnchainFeePreferenceType.Backend;
+        default:
+          throw new UniffiInternalError.UnexpectedEnumCase();
+      }
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      switch (value) {
+        case OnchainFeePreferenceType.Default:
+          return ordinalConverter.write(1, into);
+        case OnchainFeePreferenceType.Speed:
+          return ordinalConverter.write(2, into);
+        case OnchainFeePreferenceType.TargetConf:
+          return ordinalConverter.write(3, into);
+        case OnchainFeePreferenceType.SatsPerVbyte:
+          return ordinalConverter.write(4, into);
+        case OnchainFeePreferenceType.Backend:
+          return ordinalConverter.write(5, into);
+      }
+    }
+    allocationSize(value: TypeName): number {
+      return ordinalConverter.allocationSize(0);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export enum OnchainFeeSpeed {
+  Fast,
+  Normal,
+  Slow,
+  Free,
+}
+
+const FfiConverterTypeOnchainFeeSpeed = (() => {
+  const ordinalConverter = FfiConverterInt32;
+  type TypeName = OnchainFeeSpeed;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      switch (ordinalConverter.read(from)) {
+        case 1:
+          return OnchainFeeSpeed.Fast;
+        case 2:
+          return OnchainFeeSpeed.Normal;
+        case 3:
+          return OnchainFeeSpeed.Slow;
+        case 4:
+          return OnchainFeeSpeed.Free;
+        default:
+          throw new UniffiInternalError.UnexpectedEnumCase();
+      }
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      switch (value) {
+        case OnchainFeeSpeed.Fast:
+          return ordinalConverter.write(1, into);
+        case OnchainFeeSpeed.Normal:
+          return ordinalConverter.write(2, into);
+        case OnchainFeeSpeed.Slow:
+          return ordinalConverter.write(3, into);
+        case OnchainFeeSpeed.Free:
+          return ordinalConverter.write(4, into);
+      }
+    }
+    allocationSize(value: TypeName): number {
+      return ordinalConverter.allocationSize(0);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type OnchainFeePreference = {
+  preferenceType: OnchainFeePreferenceType;
+  speed?: OnchainFeeSpeed;
+  targetConf?: bigint;
+  satsPerVbyte?: number;
+  backend?: string;
+};
+
+/**
+ * Generated factory for {@link OnchainFeePreference} record objects.
+ */
+export const OnchainFeePreference = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      OnchainFeePreference,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<OnchainFeePreference>,
+  });
+})();
+
+const FfiConverterTypeOnchainFeePreference = (() => {
+  type TypeName = OnchainFeePreference;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        preferenceType: FfiConverterTypeOnchainFeePreferenceType.read(from),
+        speed: FfiConverterOptionalTypeOnchainFeeSpeed.read(from),
+        targetConf: FfiConverterOptionalInt64.read(from),
+        satsPerVbyte: FfiConverterOptionalFloat64.read(from),
+        backend: FfiConverterOptionalString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterTypeOnchainFeePreferenceType.write(
+        value.preferenceType,
+        into
+      );
+      FfiConverterOptionalTypeOnchainFeeSpeed.write(value.speed, into);
+      FfiConverterOptionalInt64.write(value.targetConf, into);
+      FfiConverterOptionalFloat64.write(value.satsPerVbyte, into);
+      FfiConverterOptionalString.write(value.backend, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterTypeOnchainFeePreferenceType.allocationSize(
+          value.preferenceType
+        ) +
+        FfiConverterOptionalTypeOnchainFeeSpeed.allocationSize(value.speed) +
+        FfiConverterOptionalInt64.allocationSize(value.targetConf) +
+        FfiConverterOptionalFloat64.allocationSize(value.satsPerVbyte) +
+        FfiConverterOptionalString.allocationSize(value.backend)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export enum OnchainFeePayer {
+  Sender,
+  Recipient,
+}
+
+const FfiConverterTypeOnchainFeePayer = (() => {
+  const ordinalConverter = FfiConverterInt32;
+  type TypeName = OnchainFeePayer;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      switch (ordinalConverter.read(from)) {
+        case 1:
+          return OnchainFeePayer.Sender;
+        case 2:
+          return OnchainFeePayer.Recipient;
+        default:
+          throw new UniffiInternalError.UnexpectedEnumCase();
+      }
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      switch (value) {
+        case OnchainFeePayer.Sender:
+          return ordinalConverter.write(1, into);
+        case OnchainFeePayer.Recipient:
+          return ordinalConverter.write(2, into);
+      }
+    }
+    allocationSize(value: TypeName): number {
+      return ordinalConverter.allocationSize(0);
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type OnchainTransaction = {
+  id?: string;
+  feeLimitSupported?: boolean;
+  address: string;
+  amountSats: bigint;
+  feeSats?: bigint;
+  totalAmountSats?: bigint;
+  recipientAmountSats?: bigint;
+  feePayer: OnchainFeePayer;
+  fee: OnchainFeePreference;
+  expiresAt?: bigint;
+  estimatedDeliverySeconds?: bigint;
+  raw?: string;
+};
+
+/**
+ * Generated factory for {@link OnchainTransaction} record objects.
+ */
+export const OnchainTransaction = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<OnchainTransaction, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<OnchainTransaction>,
+  });
+})();
+
+const FfiConverterTypeOnchainTransaction = (() => {
+  type TypeName = OnchainTransaction;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        id: FfiConverterOptionalString.read(from),
+        feeLimitSupported: FfiConverterOptionalBoolean.read(from),
+        address: FfiConverterString.read(from),
+        amountSats: FfiConverterInt64.read(from),
+        feeSats: FfiConverterOptionalInt64.read(from),
+        totalAmountSats: FfiConverterOptionalInt64.read(from),
+        recipientAmountSats: FfiConverterOptionalInt64.read(from),
+        feePayer: FfiConverterTypeOnchainFeePayer.read(from),
+        fee: FfiConverterTypeOnchainFeePreference.read(from),
+        expiresAt: FfiConverterOptionalInt64.read(from),
+        estimatedDeliverySeconds: FfiConverterOptionalInt64.read(from),
+        raw: FfiConverterOptionalString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalString.write(value.id, into);
+      FfiConverterOptionalBoolean.write(value.feeLimitSupported, into);
+      FfiConverterString.write(value.address, into);
+      FfiConverterInt64.write(value.amountSats, into);
+      FfiConverterOptionalInt64.write(value.feeSats, into);
+      FfiConverterOptionalInt64.write(value.totalAmountSats, into);
+      FfiConverterOptionalInt64.write(value.recipientAmountSats, into);
+      FfiConverterTypeOnchainFeePayer.write(value.feePayer, into);
+      FfiConverterTypeOnchainFeePreference.write(value.fee, into);
+      FfiConverterOptionalInt64.write(value.expiresAt, into);
+      FfiConverterOptionalInt64.write(value.estimatedDeliverySeconds, into);
+      FfiConverterOptionalString.write(value.raw, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalString.allocationSize(value.id) +
+        FfiConverterOptionalBoolean.allocationSize(value.feeLimitSupported) +
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterInt64.allocationSize(value.amountSats) +
+        FfiConverterOptionalInt64.allocationSize(value.feeSats) +
+        FfiConverterOptionalInt64.allocationSize(value.totalAmountSats) +
+        FfiConverterOptionalInt64.allocationSize(value.recipientAmountSats) +
+        FfiConverterTypeOnchainFeePayer.allocationSize(value.feePayer) +
+        FfiConverterTypeOnchainFeePreference.allocationSize(value.fee) +
+        FfiConverterOptionalInt64.allocationSize(value.expiresAt) +
+        FfiConverterOptionalInt64.allocationSize(
+          value.estimatedDeliverySeconds
+        ) +
+        FfiConverterOptionalString.allocationSize(value.raw)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type PayInvoiceParams = {
   invoice: string;
   feeLimitMsat?: bigint;
@@ -886,6 +1208,133 @@ const FfiConverterTypePayInvoiceResponse = (() => {
   return new FFIConverter();
 })();
 
+export type PayOnchainOptions = {
+  feeGuardrail?: OnchainFeeGuardrail;
+  dangerouslyDisableFeeGuardrail: boolean;
+};
+
+/**
+ * Generated factory for {@link PayOnchainOptions} record objects.
+ */
+export const PayOnchainOptions = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PayOnchainOptions, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<PayOnchainOptions>,
+  });
+})();
+
+const FfiConverterTypePayOnchainOptions = (() => {
+  type TypeName = PayOnchainOptions;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        feeGuardrail: FfiConverterOptionalTypeOnchainFeeGuardrail.read(from),
+        dangerouslyDisableFeeGuardrail: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalTypeOnchainFeeGuardrail.write(
+        value.feeGuardrail,
+        into
+      );
+      FfiConverterBool.write(value.dangerouslyDisableFeeGuardrail, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalTypeOnchainFeeGuardrail.allocationSize(
+          value.feeGuardrail
+        ) +
+        FfiConverterBool.allocationSize(value.dangerouslyDisableFeeGuardrail)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PayOnchainResponse = {
+  paymentId?: string;
+  txid?: string;
+  state: string;
+  address: string;
+  amountSats: bigint;
+  feeSats?: bigint;
+  totalAmountSats?: bigint;
+  recipientAmountSats?: bigint;
+  createdAt?: bigint;
+  raw?: string;
+};
+
+/**
+ * Generated factory for {@link PayOnchainResponse} record objects.
+ */
+export const PayOnchainResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<PayOnchainResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<PayOnchainResponse>,
+  });
+})();
+
+const FfiConverterTypePayOnchainResponse = (() => {
+  type TypeName = PayOnchainResponse;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        paymentId: FfiConverterOptionalString.read(from),
+        txid: FfiConverterOptionalString.read(from),
+        state: FfiConverterString.read(from),
+        address: FfiConverterString.read(from),
+        amountSats: FfiConverterInt64.read(from),
+        feeSats: FfiConverterOptionalInt64.read(from),
+        totalAmountSats: FfiConverterOptionalInt64.read(from),
+        recipientAmountSats: FfiConverterOptionalInt64.read(from),
+        createdAt: FfiConverterOptionalInt64.read(from),
+        raw: FfiConverterOptionalString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalString.write(value.paymentId, into);
+      FfiConverterOptionalString.write(value.txid, into);
+      FfiConverterString.write(value.state, into);
+      FfiConverterString.write(value.address, into);
+      FfiConverterInt64.write(value.amountSats, into);
+      FfiConverterOptionalInt64.write(value.feeSats, into);
+      FfiConverterOptionalInt64.write(value.totalAmountSats, into);
+      FfiConverterOptionalInt64.write(value.recipientAmountSats, into);
+      FfiConverterOptionalInt64.write(value.createdAt, into);
+      FfiConverterOptionalString.write(value.raw, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalString.allocationSize(value.paymentId) +
+        FfiConverterOptionalString.allocationSize(value.txid) +
+        FfiConverterString.allocationSize(value.state) +
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterInt64.allocationSize(value.amountSats) +
+        FfiConverterOptionalInt64.allocationSize(value.feeSats) +
+        FfiConverterOptionalInt64.allocationSize(value.totalAmountSats) +
+        FfiConverterOptionalInt64.allocationSize(value.recipientAmountSats) +
+        FfiConverterOptionalInt64.allocationSize(value.createdAt) +
+        FfiConverterOptionalString.allocationSize(value.raw)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type Permissions = {
   getInfo: boolean;
   createInvoice: boolean;
@@ -961,6 +1410,69 @@ const FfiConverterTypePermissions = (() => {
         FfiConverterBool.allocationSize(value.listTransactions) +
         FfiConverterBool.allocationSize(value.decode) +
         FfiConverterBool.allocationSize(value.onInvoiceEvents)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type PrepareOnchainTransactionParams = {
+  address: string;
+  amountSats: bigint;
+  fee?: OnchainFeePreference;
+  feePayer?: OnchainFeePayer;
+  description?: string;
+  idempotencyKey?: string;
+};
+
+/**
+ * Generated factory for {@link PrepareOnchainTransactionParams} record objects.
+ */
+export const PrepareOnchainTransactionParams = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      PrepareOnchainTransactionParams,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () =>
+      Object.freeze(defaults()) as Partial<PrepareOnchainTransactionParams>,
+  });
+})();
+
+const FfiConverterTypePrepareOnchainTransactionParams = (() => {
+  type TypeName = PrepareOnchainTransactionParams;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        address: FfiConverterString.read(from),
+        amountSats: FfiConverterInt64.read(from),
+        fee: FfiConverterOptionalTypeOnchainFeePreference.read(from),
+        feePayer: FfiConverterOptionalTypeOnchainFeePayer.read(from),
+        description: FfiConverterOptionalString.read(from),
+        idempotencyKey: FfiConverterOptionalString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.address, into);
+      FfiConverterInt64.write(value.amountSats, into);
+      FfiConverterOptionalTypeOnchainFeePreference.write(value.fee, into);
+      FfiConverterOptionalTypeOnchainFeePayer.write(value.feePayer, into);
+      FfiConverterOptionalString.write(value.description, into);
+      FfiConverterOptionalString.write(value.idempotencyKey, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.address) +
+        FfiConverterInt64.allocationSize(value.amountSats) +
+        FfiConverterOptionalTypeOnchainFeePreference.allocationSize(value.fee) +
+        FfiConverterOptionalTypeOnchainFeePayer.allocationSize(value.feePayer) +
+        FfiConverterOptionalString.allocationSize(value.description) +
+        FfiConverterOptionalString.allocationSize(value.idempotencyKey)
       );
     }
   }
@@ -1452,6 +1964,15 @@ export interface LexeNodeLike {
     payerNote: string | undefined,
     asyncOpts_?: { signal: AbortSignal }
   ) /*throws*/ : Promise<PayInvoiceResponse>;
+  payOnchain(
+    transaction: OnchainTransaction,
+    options: PayOnchainOptions,
+    asyncOpts_?: { signal: AbortSignal }
+  ) /*throws*/ : Promise<PayOnchainResponse>;
+  prepareOnchainTransaction(
+    params: PrepareOnchainTransactionParams,
+    asyncOpts_?: { signal: AbortSignal }
+  ) /*throws*/ : Promise<OnchainTransaction>;
 }
 /**
  * @deprecated Use `LexeNodeLike` instead.
@@ -2157,6 +2678,105 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
     }
   }
 
+  async payOnchain(
+    transaction: OnchainTransaction,
+    options: PayOnchainOptions,
+    asyncOpts_?: { signal: AbortSignal }
+  ): Promise<PayOnchainResponse> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this),
+            FfiConverterTypeOnchainTransaction.lower(
+              transaction,
+              nativeModule().rustbuffer_alloc
+            ),
+            FfiConverterTypePayOnchainOptions.lower(
+              options,
+              nativeModule().rustbuffer_alloc
+            )
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypePayOnchainResponse.lift.bind(
+          FfiConverterTypePayOnchainResponse
+        ),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  async prepareOnchainTransaction(
+    params: PrepareOnchainTransactionParams,
+    asyncOpts_?: { signal: AbortSignal }
+  ): Promise<OnchainTransaction> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this),
+            FfiConverterTypePrepareOnchainTransactionParams.lower(
+              params,
+              nativeModule().rustbuffer_alloc
+            )
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypeOnchainTransaction.lift.bind(
+          FfiConverterTypeOnchainTransaction
+        ),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
   uniffiDestroy(): void {
     const ptr = (this as any)[destructorGuardSymbol];
     if (ptr !== undefined) {
@@ -2260,6 +2880,26 @@ const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
 // FfiConverter for number | undefined
 const FfiConverterOptionalFloat64 = new FfiConverterOptional(
   FfiConverterFloat64
+);
+
+// FfiConverter for OnchainFeeSpeed | undefined
+const FfiConverterOptionalTypeOnchainFeeSpeed = new FfiConverterOptional(
+  FfiConverterTypeOnchainFeeSpeed
+);
+
+// FfiConverter for OnchainFeeGuardrail | undefined
+const FfiConverterOptionalTypeOnchainFeeGuardrail = new FfiConverterOptional(
+  FfiConverterTypeOnchainFeeGuardrail
+);
+
+// FfiConverter for OnchainFeePreference | undefined
+const FfiConverterOptionalTypeOnchainFeePreference = new FfiConverterOptional(
+  FfiConverterTypeOnchainFeePreference
+);
+
+// FfiConverter for OnchainFeePayer | undefined
+const FfiConverterOptionalTypeOnchainFeePayer = new FfiConverterOptional(
+  FfiConverterTypeOnchainFeePayer
 );
 
 // FfiConverter for Array<Offer>
@@ -2428,6 +3068,22 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain() !==
+    59137
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction() !==
+    12904
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_success() !==
     21185
   ) {
@@ -2472,9 +3128,18 @@ export default Object.freeze({
     FfiConverterTypeOffer,
     FfiConverterTypeOnInvoiceEventCallback,
     FfiConverterTypeOnInvoiceEventParams,
+    FfiConverterTypeOnchainFeeGuardrail,
+    FfiConverterTypeOnchainFeePayer,
+    FfiConverterTypeOnchainFeePreference,
+    FfiConverterTypeOnchainFeePreferenceType,
+    FfiConverterTypeOnchainFeeSpeed,
+    FfiConverterTypeOnchainTransaction,
     FfiConverterTypePayInvoiceParams,
     FfiConverterTypePayInvoiceResponse,
+    FfiConverterTypePayOnchainOptions,
+    FfiConverterTypePayOnchainResponse,
     FfiConverterTypePermissions,
+    FfiConverterTypePrepareOnchainTransactionParams,
     FfiConverterTypeTransaction,
   },
 });

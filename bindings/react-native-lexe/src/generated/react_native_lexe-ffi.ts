@@ -248,6 +248,15 @@ interface NativeModuleInterface {
     amountMsats: bigint,
     payerNote: Uint8Array
   ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+    uniffiSelf: bigint,
+    transaction: Uint8Array,
+    options: Uint8Array
+  ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+    uniffiSelf: bigint,
+    params: Uint8Array
+  ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_oninvoiceeventcallback_success(
     uniffiSelf: bigint,
     transaction: Uint8Array,
@@ -280,6 +289,8 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_on_invoice_events(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_pay_invoice(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_pay_offer(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_success(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_pending(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_failure(): number;

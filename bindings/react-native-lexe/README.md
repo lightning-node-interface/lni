@@ -50,7 +50,7 @@ package whenever its Rust or generated native code changes.
 
 ## Usage
 
-`LexeLniNode` implements the shared `LightningNode` interface from
+`LexeLniNode` implements the shared `LightningNode` and `OnchainPayments` interfaces from
 `@sunnyln/lni`. Supply an app-writable directory; the package does not choose or
 create a filesystem location.
 
@@ -156,6 +156,63 @@ scopes, reject unexpected explicit permissions, and check expiry. Inspection
 errors must fail closed. `getPermissions()` only describes the adapter's
 supported operations; it is not proof of this credential's authorization.
 
-This requires Lexe SDK 0.1.23 and a rebuilt native application. Updating the
+This requires Lexe SDK 0.1.23 or newer and a rebuilt native application. Updating the
 JavaScript package alone does not add the native method. No budget enforcement
 or authenticated budget inspection is exposed by this bridge.
+
+### On-chain payments
+
+`LexeLniNode` implements LNI's `OnchainPayments` interface using Lexe SDK
+`0.1.24`. Preparation validates the address/network, amount, fee preference,
+notes, and payment ID locally. It does **not** broadcast or reserve funds.
+
+```ts
+const transaction = await node.prepareOnchainTransaction({
+  address: recipientAddress,
+  amountSats: 10_000,
+  fee: { type: 'speed', speed: 'normal' },
+  // Optional: a fresh 64-character hex ID for this payment.
+  idempotencyKey: paymentId,
+});
+
+// Persist transaction before sending; reuse it for retries.
+const payment = await node.payOnchain(transaction);
+```
+
+Lexe does not expose fee estimation or a maximum fee through this SDK.
+`feeSats` and `totalAmountSats` are therefore absent from the prepared request.
+Prepared transactions explicitly report `feeLimitSupported: false`. Ordinary sends use Lexe's provider-determined fees;
+no override flag is needed. Passing any `feeGuardrail` (including an empty one)
+is rejected before sending, even if `dangerouslyDisableFeeGuardrail` is also set.
+Supplying `feeSats` in the prepared object cannot enforce a cap. The actual fee
+is returned after execution. An app can display: “Network fee determined by
+Lexe. Normal priority. The exact fee is available after sending.”
+
+Supported speeds are `fast`, `normal`, and `slow`, mapped to Lexe's `high`,
+`normal`, and `background` priorities. The default is `normal`. Recipient-paid
+fees, `free`, confirmation targets, custom fee rates, and backend fee settings
+are unsupported. `description` becomes a personal note visible only to the sender.
+
+A generated payment ID is stored in `transaction.id` when no `idempotencyKey`
+is provided. Persist and reuse the same prepared transaction after a timeout or
+unknown outcome. Preparing again without the same ID creates a new payment.
+Lexe returns the existing payment for repeated IDs, including failed payments.
+Execution returns without waiting for confirmations, usually with state
+`pending`; this is not confirmation that the transaction has settled.
+
+Rust exposes the same flow through `LexeNode::prepare_onchain_transaction` and
+`LexeNode::pay_onchain`. Use `pay_onchain_with_options` only when options are
+needed; explicit `fee_guardrail` values are unsupported.
+
+Across the shared LNI interface, omitted fee options use the adapter's provider
+policy. Strike and Blink retain their default quote/estimate checks. Lexe uses
+provider-determined fees. Applications requiring a fee check should pass an
+explicit `feeGuardrail` and handle an unsupported error. Capability fields are
+optional for older adapters; missing values mean unknown, not supported.
+
+The ignored Rust test `lexe::lib::tests::test_pay_onchain_e2e` exercises a real
+send. Run it only deliberately with `LEXE_ONCHAIN_SEND_CONFIRM=YES`,
+`LEXE_CLIENT_CREDENTIALS`, `LEXE_ONCHAIN_ADDRESS`, `LEXE_ONCHAIN_AMOUNT_SATS`, and
+`LEXE_ONCHAIN_IDEMPOTENCY_KEY` set. It uses mainnet and spends real funds.
+
+API reference: [Lexe pay-onchain](https://docs.lexe.tech/cli/#pay-onchain).
