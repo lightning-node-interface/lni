@@ -152,6 +152,11 @@ uniffi_react_native_lexe_fn_method_lexenode_on_invoice_events(
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_pay_offer(
     /*handle*/ uint64_t ptr, RustBuffer offer, int64_t amount_msats,
     RustBuffer payer_note);
+/*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+    /*handle*/ uint64_t ptr, RustBuffer transaction, RustBuffer options);
+/*handle*/ uint64_t
+uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+    /*handle*/ uint64_t ptr, RustBuffer params);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_clone_oninvoiceeventcallback(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
 void uniffi_react_native_lexe_fn_free_oninvoiceeventcallback(
@@ -302,6 +307,9 @@ uint16_t uniffi_react_native_lexe_checksum_method_lexenode_lookup_invoice();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_on_invoice_events();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_pay_invoice();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_pay_offer();
+uint16_t uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction();
 uint16_t
 uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_success();
 uint16_t
@@ -2581,6 +2589,31 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_fn_method_lexenode_pay_offer(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt,
+              "ubrn_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain"),
+          3,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_"
+        "transaction"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexenode_prepare_onchain_transaction"),
+      2,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_fn_clone_oninvoiceeventcallback"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -3370,6 +3403,31 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_pay_offer(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_"
+                                        "checksum_method_lexenode_pay_onchain"),
+          0,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_prepare_"
+        "onchain_transaction"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt,
+                                "ubrn_uniffi_react_native_lexe_checksum_method_"
+                                "lexenode_prepare_onchain_transaction"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_"
         "success"] = jsi::Function::createFromHostFunction(
       rt,
@@ -3889,6 +3947,35 @@ jsi::Value NativeReactNativeLexe::
       uniffi_jsi::Bridging<int64_t>::fromJs(rt, callInvoker, args[2]),
       uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
                                                               args[3]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value = uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                              args[1]),
+      uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                              args[2]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]),
+          uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(
+              rt, callInvoker, args[1]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
                                                          value);
@@ -4713,6 +4800,23 @@ jsi::Value NativeReactNativeLexe::
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
   auto value = uniffi_react_native_lexe_checksum_method_lexenode_pay_offer();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value = uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

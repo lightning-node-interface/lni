@@ -357,7 +357,7 @@ lnurl::get_payment_info(destination, amount_msats) -> Result<PaymentInfo, ApiErr
 lnurl::detect_payment_type(destination) -> PaymentDestination  // Auto-detect: bolt11|bolt12|lnurl|lightning_address
 lnurl::needs_resolution(destination) -> bool  // Check if LNURL resolution needed
 
-// On-chain Bitcoin payments (currently implemented for Strike and Blink)
+// On-chain Bitcoin payments (Strike, Blink, and Lexe)
 node.prepare_onchain_transaction(PrepareOnchainTransactionParams) -> Result<OnchainTransaction, ApiError>
 node.pay_onchain(OnchainTransaction) -> Result<PayOnchainResponse, ApiError>
 node.pay_onchain_with_options(OnchainTransaction, PayOnchainOptions) -> Result<PayOnchainResponse, ApiError>
@@ -372,7 +372,7 @@ node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 On-chain Bitcoin payments
 -------------------------
 
-On-chain payments use a prepare-then-pay flow so apps can show fees before executing a payment. This is currently implemented for Strike and Blink. `fee_payer` answers who pays the mining/provider fee:
+On-chain payments use a prepare-then-pay flow. Strike and Blink provide fee quotes before execution. Lexe supports this interface in Rust and React Native, but its SDK cannot quote or cap fees; preparation only validates the request locally. `fee_payer` answers who pays the mining/provider fee:
 
 - `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
 - `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
@@ -432,7 +432,7 @@ const transaction = await node.prepareOnchainTransaction({
 const payment = await node.payOnchain(transaction);
 ```
 
-`pay_onchain` / `payOnchain` enforces the shared default fee guardrail: `DEFAULT_ONCHAIN_MAX_FEE_SATS` / `DEFAULT_ONCHAIN_MAX_FEE_PERCENT` in Rust and `DEFAULT_ONCHAIN_FEE_GUARDRAIL` in TypeScript. The current defaults are `25_000` sats and `25%` of the send amount. It fails closed when the prepared transaction has no fee quote, such as a recovered duplicate quote that only includes the original quote id.
+For Strike and Blink, `pay_onchain` / `payOnchain` enforces the shared default fee guardrail: `DEFAULT_ONCHAIN_MAX_FEE_SATS` / `DEFAULT_ONCHAIN_MAX_FEE_PERCENT` in Rust and `DEFAULT_ONCHAIN_FEE_GUARDRAIL` in TypeScript. The current defaults are `25_000` sats and `25%` of the send amount. It fails closed when the prepared transaction has no fee quote, such as a recovered duplicate quote that only includes the original quote id.
 
 Use custom limits to make the guardrail stricter or looser:
 
@@ -473,6 +473,19 @@ let payment = node
 For Strike, LNI maps `fast` to `tier_fast`, `normal` to `tier_standard`, and `slow` / `free` to `tier_free`. Use `fee: { type: "backend", value: "tier_..." }` in TypeScript, or `OnchainFeePreferenceType::Backend` with `backend: Some("tier_...")` in Rust, to pass a Strike tier id directly.
 
 For Blink, LNI maps `fast`, `normal`, and `slow` to Blink's `FAST`, `MEDIUM`, and `SLOW` payout speeds. Blink does not support `free`, target-confirmation, sats/vbyte, backend fee preferences, or recipient-paid fees for on-chain sends.
+
+For Lexe, `fast`, `normal`, and `slow` map to `high`, `normal`, and `background`.
+Only sender-paid fees are supported. Prepared transactions report
+`feeLimitSupported: false` (snake_case in
+Rust). Ordinary sends use provider-determined fees without an override flag.
+Explicit fee guardrails are rejected because Lexe cannot enforce them. Strike
+and Blink retain their existing default fee checks. Generic applications that
+require fee protection should supply an explicit guardrail and handle providers
+that reject it. Missing capability metadata means unknown.
+Persist the prepared transaction and reuse it for retries; its ID is Lexe's
+idempotency key. Sends return without waiting for confirmations.
+See the [Lexe on-chain usage guide](bindings/react-native-lexe/README.md#on-chain-payments)
+for examples and the opt-in live test.
 
 Testing Lightning invoice payments
 ----------------------------------

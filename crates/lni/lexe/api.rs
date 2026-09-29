@@ -567,6 +567,7 @@ pub async fn pay_offer(
         .map_err(|error| invalid_input(format!("Invalid BOLT 12 offer: {error}")))?;
     let payment = wallet
         .pay_offer(LexePayOfferRequest {
+            client_payment_id: None,
             offer,
             amount: amount_from_msats(amount_msats, "amount_msats")?,
             message: payer_note,

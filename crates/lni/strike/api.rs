@@ -1122,6 +1122,7 @@ fn onchain_transaction_from_quote(
     raw: String,
 ) -> OnchainTransaction {
     OnchainTransaction {
+        fee_limit_supported: None,
         id: Some(quote.payment_quote_id),
         address,
         amount_sats,
@@ -1758,6 +1759,7 @@ mod tests {
 
     fn test_onchain_transaction(fee_sats: Option<i64>) -> OnchainTransaction {
         OnchainTransaction {
+            fee_limit_supported: None,
             id: Some("quote-1".to_string()),
             address: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh".to_string(),
             amount_sats: 10_000,

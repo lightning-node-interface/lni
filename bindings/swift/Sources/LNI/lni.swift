@@ -2233,6 +2233,8 @@ public protocol LexeNodeProtocol: AnyObject, Sendable {
 
     func decodeOffer(offer: String) async throws  -> String
 
+    func getClientInfo() async throws  -> LexeClientInfo
+
     func getHumanBitcoinAddress() async throws  -> LexeHumanBitcoinAddress
 
     func getInfo() async throws  -> NodeInfo
@@ -2252,6 +2254,15 @@ public protocol LexeNodeProtocol: AnyObject, Sendable {
     func payInvoice(params: PayInvoiceParams) async throws  -> PayInvoiceResponse
 
     func payOffer(offer: String, amountMsats: Int64, payerNote: String?) async throws  -> PayInvoiceResponse
+
+    func payOnchain(transaction: OnchainTransaction) async throws  -> PayOnchainResponse
+
+    func payOnchainWithOptions(transaction: OnchainTransaction, options: PayOnchainOptions) async throws  -> PayOnchainResponse
+
+    /**
+     * Validate a local send request. Lexe does not expose a fee quote.
+     */
+    func prepareOnchainTransaction(params: PrepareOnchainTransactionParams) async throws  -> OnchainTransaction
 
 }
 open class LexeNode: LexeNodeProtocol, @unchecked Sendable {
@@ -2378,6 +2389,23 @@ open func decodeOffer(offer: String)async throws  -> String  {
             completeFunc: ffi_lni_rust_future_complete_rust_buffer,
             freeFunc: ffi_lni_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+
+open func getClientInfo()async throws  -> LexeClientInfo  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_lexenode_get_client_info(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLexeClientInfo_lift,
             errorHandler: FfiConverterTypeApiError_lift
         )
 }
@@ -2549,6 +2577,60 @@ open func payOffer(offer: String, amountMsats: Int64, payerNote: String?)async t
             completeFunc: ffi_lni_rust_future_complete_rust_buffer,
             freeFunc: ffi_lni_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypePayInvoiceResponse_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+
+open func payOnchain(transaction: OnchainTransaction)async throws  -> PayOnchainResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_lexenode_pay_onchain(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeOnchainTransaction_lower(transaction)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePayOnchainResponse_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+
+open func payOnchainWithOptions(transaction: OnchainTransaction, options: PayOnchainOptions)async throws  -> PayOnchainResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_lexenode_pay_onchain_with_options(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeOnchainTransaction_lower(transaction),FfiConverterTypePayOnchainOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePayOnchainResponse_lift,
+            errorHandler: FfiConverterTypeApiError_lift
+        )
+}
+
+    /**
+     * Validate a local send request. Lexe does not expose a fee quote.
+     */
+open func prepareOnchainTransaction(params: PrepareOnchainTransactionParams)async throws  -> OnchainTransaction  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_lni_fn_method_lexenode_prepare_onchain_transaction(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypePrepareOnchainTransactionParams_lower(params)
+                )
+            },
+            pollFunc: ffi_lni_rust_future_poll_rust_buffer,
+            completeFunc: ffi_lni_rust_future_complete_rust_buffer,
+            freeFunc: ffi_lni_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnchainTransaction_lift,
             errorHandler: FfiConverterTypeApiError_lift
         )
 }
@@ -7791,6 +7873,128 @@ public func FfiConverterTypeGaloyProvider_lower(_ value: GaloyProvider) -> RustB
 }
 
 
+/**
+ * Authenticated credential grants returned by the Lexe node.
+ * Unlike `get_permissions`, this describes this client's authorization.
+ */
+public struct LexeClientInfo {
+    public var kind: String
+    public var clientPubkey: String?
+    public var label: String?
+    public var createdAtMs: Int64?
+    public var expiresAtMs: Int64?
+    public var scopes: [String]
+    public var permissions: [String]
+    public var effectivePermissions: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: String, clientPubkey: String?, label: String?, createdAtMs: Int64?, expiresAtMs: Int64?, scopes: [String], permissions: [String], effectivePermissions: [String]) {
+        self.kind = kind
+        self.clientPubkey = clientPubkey
+        self.label = label
+        self.createdAtMs = createdAtMs
+        self.expiresAtMs = expiresAtMs
+        self.scopes = scopes
+        self.permissions = permissions
+        self.effectivePermissions = effectivePermissions
+    }
+}
+
+#if compiler(>=6)
+extension LexeClientInfo: Sendable {}
+#endif
+
+
+extension LexeClientInfo: Equatable, Hashable {
+    public static func ==(lhs: LexeClientInfo, rhs: LexeClientInfo) -> Bool {
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.clientPubkey != rhs.clientPubkey {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.createdAtMs != rhs.createdAtMs {
+            return false
+        }
+        if lhs.expiresAtMs != rhs.expiresAtMs {
+            return false
+        }
+        if lhs.scopes != rhs.scopes {
+            return false
+        }
+        if lhs.permissions != rhs.permissions {
+            return false
+        }
+        if lhs.effectivePermissions != rhs.effectivePermissions {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(kind)
+        hasher.combine(clientPubkey)
+        hasher.combine(label)
+        hasher.combine(createdAtMs)
+        hasher.combine(expiresAtMs)
+        hasher.combine(scopes)
+        hasher.combine(permissions)
+        hasher.combine(effectivePermissions)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLexeClientInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LexeClientInfo {
+        return
+            try LexeClientInfo(
+                kind: FfiConverterString.read(from: &buf),
+                clientPubkey: FfiConverterOptionString.read(from: &buf),
+                label: FfiConverterOptionString.read(from: &buf),
+                createdAtMs: FfiConverterOptionInt64.read(from: &buf),
+                expiresAtMs: FfiConverterOptionInt64.read(from: &buf),
+                scopes: FfiConverterSequenceString.read(from: &buf),
+                permissions: FfiConverterSequenceString.read(from: &buf),
+                effectivePermissions: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LexeClientInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterOptionString.write(value.clientPubkey, into: &buf)
+        FfiConverterOptionString.write(value.label, into: &buf)
+        FfiConverterOptionInt64.write(value.createdAtMs, into: &buf)
+        FfiConverterOptionInt64.write(value.expiresAtMs, into: &buf)
+        FfiConverterSequenceString.write(value.scopes, into: &buf)
+        FfiConverterSequenceString.write(value.permissions, into: &buf)
+        FfiConverterSequenceString.write(value.effectivePermissions, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLexeClientInfo_lift(_ buf: RustBuffer) throws -> LexeClientInfo {
+    return try FfiConverterTypeLexeClientInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLexeClientInfo_lower(_ value: LexeClientInfo) -> RustBuffer {
+    return FfiConverterTypeLexeClientInfo.lower(value)
+}
+
+
 public struct LexeConfig {
     /**
      * Portable client credentials exported by the Lexe app.
@@ -9270,6 +9474,10 @@ public func FfiConverterTypeOnchainFeePreference_lower(_ value: OnchainFeePrefer
 
 public struct OnchainTransaction {
     public var id: String?
+    /**
+     * Whether the provider supports a maximum fee. None means unknown.
+     */
+    public var feeLimitSupported: Bool?
     public var address: String
     public var amountSats: Int64
     public var feeSats: Int64?
@@ -9283,8 +9491,12 @@ public struct OnchainTransaction {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String? = nil, address: String, amountSats: Int64, feeSats: Int64? = nil, totalAmountSats: Int64? = nil, recipientAmountSats: Int64? = nil, feePayer: OnchainFeePayer, fee: OnchainFeePreference, expiresAt: Int64? = nil, estimatedDeliverySeconds: Int64? = nil, raw: String? = nil) {
+    public init(id: String? = nil,
+        /**
+         * Whether the provider supports a maximum fee. None means unknown.
+         */feeLimitSupported: Bool? = nil, address: String, amountSats: Int64, feeSats: Int64? = nil, totalAmountSats: Int64? = nil, recipientAmountSats: Int64? = nil, feePayer: OnchainFeePayer, fee: OnchainFeePreference, expiresAt: Int64? = nil, estimatedDeliverySeconds: Int64? = nil, raw: String? = nil) {
         self.id = id
+        self.feeLimitSupported = feeLimitSupported
         self.address = address
         self.amountSats = amountSats
         self.feeSats = feeSats
@@ -9306,6 +9518,9 @@ extension OnchainTransaction: Sendable {}
 extension OnchainTransaction: Equatable, Hashable {
     public static func ==(lhs: OnchainTransaction, rhs: OnchainTransaction) -> Bool {
         if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.feeLimitSupported != rhs.feeLimitSupported {
             return false
         }
         if lhs.address != rhs.address {
@@ -9343,6 +9558,7 @@ extension OnchainTransaction: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(feeLimitSupported)
         hasher.combine(address)
         hasher.combine(amountSats)
         hasher.combine(feeSats)
@@ -9366,6 +9582,7 @@ public struct FfiConverterTypeOnchainTransaction: FfiConverterRustBuffer {
         return
             try OnchainTransaction(
                 id: FfiConverterOptionString.read(from: &buf),
+                feeLimitSupported: FfiConverterOptionBool.read(from: &buf),
                 address: FfiConverterString.read(from: &buf),
                 amountSats: FfiConverterInt64.read(from: &buf),
                 feeSats: FfiConverterOptionInt64.read(from: &buf),
@@ -9381,6 +9598,7 @@ public struct FfiConverterTypeOnchainTransaction: FfiConverterRustBuffer {
 
     public static func write(_ value: OnchainTransaction, into buf: inout [UInt8]) {
         FfiConverterOptionString.write(value.id, into: &buf)
+        FfiConverterOptionBool.write(value.feeLimitSupported, into: &buf)
         FfiConverterString.write(value.address, into: &buf)
         FfiConverterInt64.write(value.amountSats, into: &buf)
         FfiConverterOptionInt64.write(value.feeSats, into: &buf)
@@ -9824,6 +10042,11 @@ public func FfiConverterTypePayKeysendResponse_lower(_ value: PayKeysendResponse
 }
 
 
+/**
+ * With no explicit guardrail, the adapter applies its provider policy:
+ * quoted-fee adapters check their default limits; Lexe uses provider-set fees.
+ * An explicit guardrail must be rejected when it cannot be checked.
+ */
 public struct PayOnchainOptions {
     public var feeGuardrail: OnchainFeeGuardrail?
     public var dangerouslyDisableFeeGuardrail: Bool
@@ -10840,15 +11063,23 @@ public struct StrikeConfig {
     public var socks5Proxy: String?
     public var acceptInvalidCerts: Bool?
     public var httpTimeout: Int64?
+    /**
+     * Settlement polling budget in seconds after execution; default 60. Zero skips polling.
+     */
+    public var paymentSettlementTimeout: Int64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(baseUrl: String? = "https://api.strike.me/v1", apiKey: String, socks5Proxy: String? = "", acceptInvalidCerts: Bool? = false, httpTimeout: Int64? = Int64(120)) {
+    public init(baseUrl: String? = "https://api.strike.me/v1", apiKey: String, socks5Proxy: String? = "", acceptInvalidCerts: Bool? = false, httpTimeout: Int64? = Int64(120),
+        /**
+         * Settlement polling budget in seconds after execution; default 60. Zero skips polling.
+         */paymentSettlementTimeout: Int64? = Int64(60)) {
         self.baseUrl = baseUrl
         self.apiKey = apiKey
         self.socks5Proxy = socks5Proxy
         self.acceptInvalidCerts = acceptInvalidCerts
         self.httpTimeout = httpTimeout
+        self.paymentSettlementTimeout = paymentSettlementTimeout
     }
 }
 
@@ -10874,6 +11105,9 @@ extension StrikeConfig: Equatable, Hashable {
         if lhs.httpTimeout != rhs.httpTimeout {
             return false
         }
+        if lhs.paymentSettlementTimeout != rhs.paymentSettlementTimeout {
+            return false
+        }
         return true
     }
 
@@ -10883,6 +11117,7 @@ extension StrikeConfig: Equatable, Hashable {
         hasher.combine(socks5Proxy)
         hasher.combine(acceptInvalidCerts)
         hasher.combine(httpTimeout)
+        hasher.combine(paymentSettlementTimeout)
     }
 }
 
@@ -10899,7 +11134,8 @@ public struct FfiConverterTypeStrikeConfig: FfiConverterRustBuffer {
                 apiKey: FfiConverterString.read(from: &buf),
                 socks5Proxy: FfiConverterOptionString.read(from: &buf),
                 acceptInvalidCerts: FfiConverterOptionBool.read(from: &buf),
-                httpTimeout: FfiConverterOptionInt64.read(from: &buf)
+                httpTimeout: FfiConverterOptionInt64.read(from: &buf),
+                paymentSettlementTimeout: FfiConverterOptionInt64.read(from: &buf)
         )
     }
 
@@ -10909,6 +11145,7 @@ public struct FfiConverterTypeStrikeConfig: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.socks5Proxy, into: &buf)
         FfiConverterOptionBool.write(value.acceptInvalidCerts, into: &buf)
         FfiConverterOptionInt64.write(value.httpTimeout, into: &buf)
+        FfiConverterOptionInt64.write(value.paymentSettlementTimeout, into: &buf)
     }
 }
 
@@ -13434,6 +13671,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lni_checksum_method_lexenode_decode_offer() != 39770) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lni_checksum_method_lexenode_get_client_info() != 24693) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lni_checksum_method_lexenode_get_human_bitcoin_address() != 43838) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13462,6 +13702,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_method_lexenode_pay_offer() != 61351) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_lexenode_pay_onchain() != 59099) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_lexenode_pay_onchain_with_options() != 44125) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lni_checksum_method_lexenode_prepare_onchain_transaction() != 48477) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lni_checksum_method_lightningnode_get_permissions() != 33385) {

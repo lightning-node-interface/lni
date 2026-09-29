@@ -949,6 +949,7 @@ pub async fn prepare_onchain_transaction(
     let fee_sats = response.on_chain_tx_fee.amount;
 
     Ok(OnchainTransaction {
+        fee_limit_supported: None,
         id: None,
         address: params.address,
         amount_sats: params.amount_sats,
@@ -2102,6 +2103,7 @@ mod tests {
         let payment = pay_onchain(
             &config,
             OnchainTransaction {
+                fee_limit_supported: None,
                 id: None,
                 address: "bc1qexample".to_string(),
                 amount_sats: 10_000,

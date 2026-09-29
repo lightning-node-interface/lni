@@ -24,7 +24,8 @@ let package = Package(
         ),
         // Binary XCFramework containing the native library
         // 
-        // NOTE: The checksum below is a placeholder. When creating a new release:
+        // The URL and checksum below identify the matching published archive.
+        // When creating a new release:
         // 1. Build the XCFramework: ./bindings/swift/build.sh --release --ios
         // 2. Rename to lniFFI.xcframework
         // 3. Create zip: zip -r lniFFI.xcframework.zip lniFFI.xcframework
@@ -36,8 +37,8 @@ let package = Package(
         // .binaryTarget(name: "lniFFI", path: "bindings/swift/lniFFI.xcframework")
         .binaryTarget(
             name: "lniFFI",
-            url: "https://github.com/lightning-node-interface/lni/releases/download/v0.2.0/lniFFI.xcframework.zip",
-            checksum: "cac08ee1e25a888df8952d530c4a798850cd84537aef394435f12c2d2f0890a3"
+            url: "https://github.com/lightning-node-interface/lni/releases/download/swift-v0.2.5-lexe-onchain/lniFFI.xcframework.zip",
+            checksum: "d06f6acb60e070158062418c468ca3985165a9f8cbbe9792a2a77e335a7a680e"
         )
     ]
 )
