@@ -40,14 +40,17 @@ done
 
 echo "Building LNI library with UniFFI feature ($BUILD_TYPE)..."
 
+# Match the minimum supported iOS version declared in the root Package.swift.
+export IPHONEOS_DEPLOYMENT_TARGET=14.0
+
 cd "$ROOT_DIR"
 
 # Build for host platform (needed for uniffi-bindgen)
 if [ "$BUILD_TYPE" == "release" ]; then
-    cargo build --package lni --features uniffi --release
+    cargo build --locked --package lni --features uniffi --release
     LIB_PATH="$ROOT_DIR/target/release"
 else
-    cargo build --package lni --features uniffi
+    cargo build --locked --package lni --features uniffi
     LIB_PATH="$ROOT_DIR/target/debug"
 fi
 
@@ -67,6 +70,8 @@ if [ "$BUILD_IOS" = true ]; then
     
     # Create libs directory
     LIBS_DIR="$SCRIPT_DIR/libs"
+    # Cargo may reuse dependencies built for React Native's higher iOS minimum.
+    IOS_TARGET_DIR="$ROOT_DIR/target/swift-ios${IPHONEOS_DEPLOYMENT_TARGET}"
     mkdir -p "$LIBS_DIR"
     
     # Build for iOS Simulator
@@ -77,11 +82,11 @@ if [ "$BUILD_IOS" = true ]; then
         rustup target add "$target" 2>/dev/null || true
         
         if [ "$BUILD_TYPE" == "release" ]; then
-            cargo build --package lni --features uniffi --release --target "$target"
-            cp "$ROOT_DIR/target/$target/release/liblni.a" "$LIBS_DIR/liblni-$target.a"
+            cargo build --locked --package lni --features uniffi --release --target "$target" --target-dir "$IOS_TARGET_DIR"
+            cp "$IOS_TARGET_DIR/$target/release/liblni.a" "$LIBS_DIR/liblni-$target.a"
         else
-            cargo build --package lni --features uniffi --target "$target"
-            cp "$ROOT_DIR/target/$target/debug/liblni.a" "$LIBS_DIR/liblni-$target.a"
+            cargo build --locked --package lni --features uniffi --target "$target" --target-dir "$IOS_TARGET_DIR"
+            cp "$IOS_TARGET_DIR/$target/debug/liblni.a" "$LIBS_DIR/liblni-$target.a"
         fi
         echo "    Copied to $LIBS_DIR/liblni-$target.a"
     done
@@ -101,11 +106,11 @@ if [ "$BUILD_IOS" = true ]; then
     rustup target add "$IOS_DEVICE_TARGET" 2>/dev/null || true
     
     if [ "$BUILD_TYPE" == "release" ]; then
-        cargo build --package lni --features uniffi --release --target "$IOS_DEVICE_TARGET"
-        cp "$ROOT_DIR/target/$IOS_DEVICE_TARGET/release/liblni.a" "$LIBS_DIR/liblni-ios-device.a"
+        cargo build --locked --package lni --features uniffi --release --target "$IOS_DEVICE_TARGET" --target-dir "$IOS_TARGET_DIR"
+        cp "$IOS_TARGET_DIR/$IOS_DEVICE_TARGET/release/liblni.a" "$LIBS_DIR/liblni-ios-device.a"
     else
-        cargo build --package lni --features uniffi --target "$IOS_DEVICE_TARGET"
-        cp "$ROOT_DIR/target/$IOS_DEVICE_TARGET/debug/liblni.a" "$LIBS_DIR/liblni-ios-device.a"
+        cargo build --locked --package lni --features uniffi --target "$IOS_DEVICE_TARGET" --target-dir "$IOS_TARGET_DIR"
+        cp "$IOS_TARGET_DIR/$IOS_DEVICE_TARGET/debug/liblni.a" "$LIBS_DIR/liblni-ios-device.a"
     fi
     echo "  Created $LIBS_DIR/liblni-ios-device.a"
     
@@ -134,14 +139,14 @@ echo "Found library: $LIB_FILE"
 
 # Build the uniffi-bindgen tool
 echo "Building uniffi-bindgen..."
-cargo build --package lni-swift-bindgen
+cargo build --locked --package lni-swift-bindgen
 
 # Create output directory
 OUTPUT_DIR="$SCRIPT_DIR/Sources/LNI"
 mkdir -p "$OUTPUT_DIR"
 
 echo "Generating Swift bindings..."
-cargo run --package lni-swift-bindgen -- generate --library "$LIB_FILE" --language swift --out-dir "$OUTPUT_DIR"
+cargo run --locked --package lni-swift-bindgen -- generate --library "$LIB_FILE" --language swift --out-dir "$OUTPUT_DIR"
 
 # UniFFI emits trailing spaces; normalize them consistently with the drift check.
 awk '{ sub(/[[:blank:]]+$/, ""); print }' "$OUTPUT_DIR/lni.swift" > "$OUTPUT_DIR/lni.swift.tmp"
@@ -225,13 +230,9 @@ if [ "$BUILD_IOS" = true ]; then
         CHECKSUM=$(swift package compute-checksum "$ZIP_FILE")
         echo "  Checksum: $CHECKSUM"
         
-        # Update Package.swift with the new checksum
-        PACKAGE_SWIFT="$SCRIPT_DIR/Package.swift"
-        if [ -f "$PACKAGE_SWIFT" ]; then
-            # Use sed to replace the checksum line
-            sed -i '' "s/checksum: \"[a-f0-9]*\"/checksum: \"$CHECKSUM\"/" "$PACKAGE_SWIFT"
-            echo "  Updated Package.swift with new checksum"
-        fi
+        # Keep the existing URL/checksum pair intact until the archive is published.
+        # The manifest lives at the repository root, not in bindings/swift.
+        echo "  After publishing, update $ROOT_DIR/Package.swift with the new URL and checksum."
         
         echo ""
         echo "Release package ready!"
@@ -242,7 +243,7 @@ if [ "$BUILD_IOS" = true ]; then
         # gh release create v0.1.2 lniFFI.xcframework.zip --title "v0.1.2" --notes "release 3"
         echo "  1. Create a GitHub release with the desired version tag"
         echo "  2. Upload lniFFI.xcframework.zip to the release"
-        echo "  3. Update the version in Package.swift URL if needed"
+        echo "  3. Update the URL and checksum together in $ROOT_DIR/Package.swift"
         
         cd "$ROOT_DIR"
     else

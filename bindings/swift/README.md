@@ -216,28 +216,31 @@ This will:
 - Build the XCFramework for iOS devices and simulators
 - Create `lniFFI.xcframework.zip`
 - Calculate the SHA256 checksum
-- Automatically update `Package.swift` with the new checksum
+- Print the checksum for the root `Package.swift`; leave its existing URL/checksum pair unchanged until publication
 
-### 2. Update Version (if needed)
+### 2. Publish the Archive
 
-If releasing a new version, update the URL in `Package.swift`:
+Create a new release for the commit used to build the archive, then upload it.
+Use a Swift-specific tag for a Swift-only release; `v*` tags trigger the Node.js
+release workflow:
+
+```bash
+gh release create swift-vX.Y.Z lniFFI.xcframework.zip --target <built-commit> --title "LNI Swift vX.Y.Z" --notes "Release notes here"
+```
+
+### 3. Update the Manifest
+
+Update both the URL and checksum in the repository-root `Package.swift` using
+that published archive and the checksum printed by the build. Regenerated Swift
+bindings must ship with the matching binary; an older archive may lack required
+FFI symbols or use incompatible record layouts.
 
 ```swift
 .binaryTarget(
     name: "lniFFI",
-    url: "https://github.com/lightning-node-interface/lni/releases/download/vX.Y.Z/lniFFI.xcframework.zip",
-    checksum: "..."
+    url: "https://github.com/lightning-node-interface/lni/releases/download/swift-vX.Y.Z/lniFFI.xcframework.zip",
+    checksum: "<checksum printed by the build>"
 )
-```
-
-### 3. Create GitHub Release and Upload
-
-```bash
-# Create a new release and upload the zip file
-gh release create vX.Y.Z lniFFI.xcframework.zip --title "vX.Y.Z" --notes "Release notes here"
-
-# Or upload to an existing release
-gh release upload vX.Y.Z lniFFI.xcframework.zip
 ```
 
 ### 4. Commit and Push
