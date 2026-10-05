@@ -449,6 +449,29 @@ impl LexeNode {
         Ok(self.inner.pay_invoice(params.into()).await?.into())
     }
 
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: PrepareOnchainTransactionParams,
+    ) -> Result<OnchainTransaction, LexeError> {
+        Ok(self
+            .inner
+            .prepare_onchain_transaction(params.into())
+            .await?
+            .into())
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: OnchainTransaction,
+        options: PayOnchainOptions,
+    ) -> Result<PayOnchainResponse, LexeError> {
+        Ok(self
+            .inner
+            .pay_onchain_with_options(transaction.into(), options.into())
+            .await?
+            .into())
+    }
+
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, LexeError> {
         Ok(self.inner.create_offer(params.into()).await?.into())
     }
@@ -534,5 +557,311 @@ mod tests {
         });
 
         assert!(result.is_err());
+    }
+}
+
+#[derive(Clone, uniffi::Enum)]
+pub enum OnchainFeeSpeed {
+    Fast,
+    Normal,
+    Slow,
+    Free,
+}
+
+impl From<OnchainFeeSpeed> for lni::OnchainFeeSpeed {
+    fn from(value: OnchainFeeSpeed) -> Self {
+        match value {
+            OnchainFeeSpeed::Fast => Self::Fast,
+            OnchainFeeSpeed::Normal => Self::Normal,
+            OnchainFeeSpeed::Slow => Self::Slow,
+            OnchainFeeSpeed::Free => Self::Free,
+        }
+    }
+}
+
+impl From<lni::OnchainFeeSpeed> for OnchainFeeSpeed {
+    fn from(value: lni::OnchainFeeSpeed) -> Self {
+        match value {
+            lni::OnchainFeeSpeed::Fast => Self::Fast,
+            lni::OnchainFeeSpeed::Normal => Self::Normal,
+            lni::OnchainFeeSpeed::Slow => Self::Slow,
+            lni::OnchainFeeSpeed::Free => Self::Free,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Enum)]
+pub enum OnchainFeePayer {
+    Sender,
+    Recipient,
+}
+
+impl From<OnchainFeePayer> for lni::OnchainFeePayer {
+    fn from(value: OnchainFeePayer) -> Self {
+        match value {
+            OnchainFeePayer::Sender => Self::Sender,
+            OnchainFeePayer::Recipient => Self::Recipient,
+        }
+    }
+}
+
+impl From<lni::OnchainFeePayer> for OnchainFeePayer {
+    fn from(value: lni::OnchainFeePayer) -> Self {
+        match value {
+            lni::OnchainFeePayer::Sender => Self::Sender,
+            lni::OnchainFeePayer::Recipient => Self::Recipient,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Enum)]
+pub enum OnchainFeePreferenceType {
+    Default,
+    Speed,
+    TargetConf,
+    SatsPerVbyte,
+    Backend,
+}
+
+impl From<OnchainFeePreferenceType> for lni::OnchainFeePreferenceType {
+    fn from(value: OnchainFeePreferenceType) -> Self {
+        match value {
+            OnchainFeePreferenceType::Default => Self::Default,
+            OnchainFeePreferenceType::Speed => Self::Speed,
+            OnchainFeePreferenceType::TargetConf => Self::TargetConf,
+            OnchainFeePreferenceType::SatsPerVbyte => Self::SatsPerVbyte,
+            OnchainFeePreferenceType::Backend => Self::Backend,
+        }
+    }
+}
+
+impl From<lni::OnchainFeePreferenceType> for OnchainFeePreferenceType {
+    fn from(value: lni::OnchainFeePreferenceType) -> Self {
+        match value {
+            lni::OnchainFeePreferenceType::Default => Self::Default,
+            lni::OnchainFeePreferenceType::Speed => Self::Speed,
+            lni::OnchainFeePreferenceType::TargetConf => Self::TargetConf,
+            lni::OnchainFeePreferenceType::SatsPerVbyte => Self::SatsPerVbyte,
+            lni::OnchainFeePreferenceType::Backend => Self::Backend,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct OnchainFeePreference {
+    pub preference_type: OnchainFeePreferenceType,
+    pub speed: Option<OnchainFeeSpeed>,
+    pub target_conf: Option<i64>,
+    pub sats_per_vbyte: Option<f64>,
+    pub backend: Option<String>,
+}
+
+impl From<OnchainFeePreference> for lni::OnchainFeePreference {
+    fn from(value: OnchainFeePreference) -> Self {
+        Self {
+            preference_type: value.preference_type.into(),
+            speed: value.speed.map(Into::into),
+            target_conf: value.target_conf,
+            sats_per_vbyte: value.sats_per_vbyte,
+            backend: value.backend,
+        }
+    }
+}
+
+impl From<lni::OnchainFeePreference> for OnchainFeePreference {
+    fn from(value: lni::OnchainFeePreference) -> Self {
+        Self {
+            preference_type: value.preference_type.into(),
+            speed: value.speed.map(Into::into),
+            target_conf: value.target_conf,
+            sats_per_vbyte: value.sats_per_vbyte,
+            backend: value.backend,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct PrepareOnchainTransactionParams {
+    pub address: String,
+    pub amount_sats: i64,
+    pub fee: Option<OnchainFeePreference>,
+    pub fee_payer: Option<OnchainFeePayer>,
+    pub description: Option<String>,
+    pub idempotency_key: Option<String>,
+}
+
+impl From<PrepareOnchainTransactionParams> for lni::PrepareOnchainTransactionParams {
+    fn from(value: PrepareOnchainTransactionParams) -> Self {
+        Self {
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee: value.fee.map(Into::into),
+            fee_payer: value.fee_payer.map(Into::into),
+            description: value.description,
+            idempotency_key: value.idempotency_key,
+        }
+    }
+}
+
+impl From<lni::PrepareOnchainTransactionParams> for PrepareOnchainTransactionParams {
+    fn from(value: lni::PrepareOnchainTransactionParams) -> Self {
+        Self {
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee: value.fee.map(Into::into),
+            fee_payer: value.fee_payer.map(Into::into),
+            description: value.description,
+            idempotency_key: value.idempotency_key,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct OnchainTransaction {
+    pub id: Option<String>,
+    pub fee_limit_supported: Option<bool>,
+    pub address: String,
+    pub amount_sats: i64,
+    pub fee_sats: Option<i64>,
+    pub total_amount_sats: Option<i64>,
+    pub recipient_amount_sats: Option<i64>,
+    pub fee_payer: OnchainFeePayer,
+    pub fee: OnchainFeePreference,
+    pub expires_at: Option<i64>,
+    pub estimated_delivery_seconds: Option<i64>,
+    pub raw: Option<String>,
+}
+
+impl From<OnchainTransaction> for lni::OnchainTransaction {
+    fn from(value: OnchainTransaction) -> Self {
+        Self {
+            id: value.id,
+            fee_limit_supported: value.fee_limit_supported,
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee_sats: value.fee_sats,
+            total_amount_sats: value.total_amount_sats,
+            recipient_amount_sats: value.recipient_amount_sats,
+            fee_payer: value.fee_payer.into(),
+            fee: value.fee.into(),
+            expires_at: value.expires_at,
+            estimated_delivery_seconds: value.estimated_delivery_seconds,
+            raw: value.raw,
+        }
+    }
+}
+
+impl From<lni::OnchainTransaction> for OnchainTransaction {
+    fn from(value: lni::OnchainTransaction) -> Self {
+        Self {
+            id: value.id,
+            fee_limit_supported: value.fee_limit_supported,
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee_sats: value.fee_sats,
+            total_amount_sats: value.total_amount_sats,
+            recipient_amount_sats: value.recipient_amount_sats,
+            fee_payer: value.fee_payer.into(),
+            fee: value.fee.into(),
+            expires_at: value.expires_at,
+            estimated_delivery_seconds: value.estimated_delivery_seconds,
+            raw: value.raw,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct OnchainFeeGuardrail {
+    pub max_fee_sats: Option<i64>,
+    pub max_fee_percent: Option<f64>,
+}
+
+impl From<OnchainFeeGuardrail> for lni::OnchainFeeGuardrail {
+    fn from(value: OnchainFeeGuardrail) -> Self {
+        Self {
+            max_fee_sats: value.max_fee_sats,
+            max_fee_percent: value.max_fee_percent,
+        }
+    }
+}
+
+impl From<lni::OnchainFeeGuardrail> for OnchainFeeGuardrail {
+    fn from(value: lni::OnchainFeeGuardrail) -> Self {
+        Self {
+            max_fee_sats: value.max_fee_sats,
+            max_fee_percent: value.max_fee_percent,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct PayOnchainOptions {
+    pub fee_guardrail: Option<OnchainFeeGuardrail>,
+    pub dangerously_disable_fee_guardrail: bool,
+}
+
+impl From<PayOnchainOptions> for lni::PayOnchainOptions {
+    fn from(value: PayOnchainOptions) -> Self {
+        Self {
+            fee_guardrail: value.fee_guardrail.map(Into::into),
+            dangerously_disable_fee_guardrail: value.dangerously_disable_fee_guardrail,
+        }
+    }
+}
+
+impl From<lni::PayOnchainOptions> for PayOnchainOptions {
+    fn from(value: lni::PayOnchainOptions) -> Self {
+        Self {
+            fee_guardrail: value.fee_guardrail.map(Into::into),
+            dangerously_disable_fee_guardrail: value.dangerously_disable_fee_guardrail,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct PayOnchainResponse {
+    pub payment_id: Option<String>,
+    pub txid: Option<String>,
+    pub state: String,
+    pub address: String,
+    pub amount_sats: i64,
+    pub fee_sats: Option<i64>,
+    pub total_amount_sats: Option<i64>,
+    pub recipient_amount_sats: Option<i64>,
+    pub created_at: Option<i64>,
+    pub raw: Option<String>,
+}
+
+impl From<PayOnchainResponse> for lni::PayOnchainResponse {
+    fn from(value: PayOnchainResponse) -> Self {
+        Self {
+            payment_id: value.payment_id,
+            txid: value.txid,
+            state: value.state,
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee_sats: value.fee_sats,
+            total_amount_sats: value.total_amount_sats,
+            recipient_amount_sats: value.recipient_amount_sats,
+            created_at: value.created_at,
+            raw: value.raw,
+        }
+    }
+}
+
+impl From<lni::PayOnchainResponse> for PayOnchainResponse {
+    fn from(value: lni::PayOnchainResponse) -> Self {
+        Self {
+            payment_id: value.payment_id,
+            txid: value.txid,
+            state: value.state,
+            address: value.address,
+            amount_sats: value.amount_sats,
+            fee_sats: value.fee_sats,
+            total_amount_sats: value.total_amount_sats,
+            recipient_amount_sats: value.recipient_amount_sats,
+            created_at: value.created_at,
+            raw: value.raw,
+        }
     }
 }

@@ -86,6 +86,13 @@ protected:
   jsi::Value cpp_uniffi_react_native_lexe_fn_method_lexenode_pay_offer(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_fn_method_lexenode_pay_onchain(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexenode_prepare_onchain_transaction(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_fn_clone_oninvoiceeventcallback(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -302,6 +309,13 @@ protected:
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_checksum_method_lexenode_pay_offer(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_checksum_method_lexenode_pay_onchain(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexenode_prepare_onchain_transaction(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value

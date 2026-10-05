@@ -1,8 +1,13 @@
 import { LniError } from '@sunnyln/lni';
-import type { LightningNode } from '@sunnyln/lni';
+import type { LightningNode, OnchainPayments } from '@sunnyln/lni';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LexeLniNode } from '../LexeLniNode';
+import {
+  OnchainFeePayer,
+  OnchainFeePreferenceType,
+  OnchainFeeSpeed,
+} from '../generated/react_native_lexe';
 import type {
   LexeNodeLike,
   NodeInfo,
@@ -65,6 +70,27 @@ function makeNativeNode(
   overrides: Partial<TestNativeNode> = {}
 ): TestNativeNode {
   return {
+    prepareOnchainTransaction: vi.fn(async (params) => ({
+      feeLimitSupported: false,
+      id: params.idempotencyKey ?? 'ab'.repeat(32),
+      address: params.address,
+      amountSats: params.amountSats,
+      recipientAmountSats: params.amountSats,
+      feePayer: OnchainFeePayer.Sender,
+      fee: params.fee ?? { preferenceType: OnchainFeePreferenceType.Default },
+      raw: JSON.stringify(params.description ?? null),
+    })),
+    payOnchain: vi.fn(async (transaction) => ({
+      paymentId: 'payment-index',
+      txid: 'cd'.repeat(32),
+      state: 'pending',
+      address: transaction.address,
+      amountSats: transaction.amountSats,
+      feeSats: 250n,
+      totalAmountSats: transaction.amountSats + 250n,
+      recipientAmountSats: transaction.amountSats,
+      createdAt: 1_700_000_000n,
+    })),
     createInvoice: vi.fn(async () => nativeTransaction()),
     createOffer: vi.fn(async () => ({ offerId: 'id', bolt12: 'offer' })),
     decode: vi.fn(async (value: string) => value),
@@ -331,4 +357,128 @@ describe('authenticated Lexe grants', () => {
       'inspection unavailable'
     );
   });
+});
+
+describe('Lexe on-chain adapter', () => {
+  it('preserves the prepared id and note through native execution', async () => {
+    const native = makeNativeNode();
+    const node: OnchainPayments = new LexeLniNode(
+      { clientCredentials: 'test' },
+      native
+    );
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'test-address',
+      amountSats: 10_000,
+      fee: { type: 'speed', speed: 'slow' },
+      description: 'test note',
+      idempotencyKey: 'ab'.repeat(32),
+    });
+    expect(native.prepareOnchainTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountSats: 10_000n,
+        fee: {
+          preferenceType: OnchainFeePreferenceType.Speed,
+          speed: OnchainFeeSpeed.Slow,
+        },
+      })
+    );
+    expect(transaction.feeSats).toBeUndefined();
+    expect(transaction.raw).toBe('test note');
+    expect(transaction).toMatchObject({
+      feeLimitSupported: false,
+    });
+    const result = await node.payOnchain(transaction);
+    expect(native.payOnchain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'ab'.repeat(32),
+        amountSats: 10_000n,
+        raw: '"test note"',
+      }),
+      { dangerouslyDisableFeeGuardrail: false, feeGuardrail: undefined }
+    );
+    expect(result).toMatchObject({
+      state: 'pending',
+      amountSats: 10_000,
+      feeSats: 250,
+      totalAmountSats: 10_250,
+      txid: 'cd'.repeat(32),
+    });
+    await node.payOnchain(transaction);
+    expect(native.payOnchain).toHaveBeenLastCalledWith(expect.anything(), {
+      dangerouslyDisableFeeGuardrail: false,
+      feeGuardrail: undefined,
+    });
+  });
+
+  it('rejects unsafe amounts and unsupported fee controls before calling native code', async () => {
+    const native = makeNativeNode();
+    const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+    for (const amountSats of [
+      NaN,
+      Infinity,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        node.prepareOnchainTransaction({ address: 'test', amountSats })
+      ).rejects.toBeInstanceOf(LniError);
+    }
+    await expect(
+      node.prepareOnchainTransaction({
+        address: 'test',
+        amountSats: 1,
+        fee: { type: 'satsPerVbyte', satsPerVbyte: 2 },
+      })
+    ).rejects.toBeInstanceOf(LniError);
+    await expect(
+      node.prepareOnchainTransaction({
+        address: 'test',
+        amountSats: 1,
+        feePayer: 'recipient',
+      })
+    ).rejects.toBeInstanceOf(LniError);
+    expect(native.prepareOnchainTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects responses that lose integer precision', async () => {
+    const native = makeNativeNode({
+      payOnchain: vi.fn(async () => ({
+        address: 'test',
+        amountSats: 9007199254740992n,
+        state: 'pending',
+      })),
+    });
+    const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'test',
+      amountSats: 1,
+    });
+    await expect(
+      node.payOnchain(transaction, { dangerouslyDisableFeeGuardrail: true })
+    ).rejects.toBeInstanceOf(LniError);
+  });
+});
+
+it('rejects explicit fee limits before native execution, including with the old override', async () => {
+  const native = makeNativeNode();
+  const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+  const transaction = await node.prepareOnchainTransaction({
+    address: 'test',
+    amountSats: 10000,
+  });
+  for (const feeGuardrail of [{ maxFeeSats: 500 }, { maxFeePercent: 5 }, {}]) {
+    for (const dangerouslyDisableFeeGuardrail of [false, true]) {
+      await expect(
+        node.payOnchain(transaction, {
+          feeGuardrail,
+          dangerouslyDisableFeeGuardrail,
+        })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining(
+          'does not support a maximum network fee'
+        ),
+      });
+    }
+  }
+  expect(native.payOnchain).not.toHaveBeenCalled();
 });

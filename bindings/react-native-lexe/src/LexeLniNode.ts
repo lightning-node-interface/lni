@@ -4,6 +4,12 @@ import type {
   CreateOfferParams,
   InvoiceEventCallback,
   LightningNode,
+  OnchainPayments,
+  OnchainFeePreference,
+  OnchainTransaction,
+  PrepareOnchainTransactionParams,
+  PayOnchainOptions,
+  PayOnchainResponse,
   ListTransactionsParams,
   LookupInvoiceParams,
   NodeInfo,
@@ -19,6 +25,9 @@ import type {
 import {
   InvoiceType as NativeInvoiceType,
   LexeNode,
+  OnchainFeePayer as NativeOnchainFeePayer,
+  OnchainFeeSpeed as NativeOnchainFeeSpeed,
+  OnchainFeePreferenceType as NativeOnchainFeePreferenceType,
 } from './generated/react_native_lexe';
 import type {
   CreateInvoiceParams as NativeCreateInvoiceParams,
@@ -33,8 +42,15 @@ import type {
   PayInvoiceParams as NativePayInvoiceParams,
   PayInvoiceResponse as NativePayInvoiceResponse,
   Permissions as NativePermissions,
+  OnchainFeePreference as NativeOnchainFeePreference,
+  OnchainTransaction as NativeOnchainTransaction,
   Transaction as NativeTransaction,
 } from './generated/react_native_lexe';
+
+/** Lexe uses provider-determined fees and cannot quote or cap them. */
+export interface LexeOnchainTransaction extends OnchainTransaction {
+  feeLimitSupported: false;
+}
 
 export interface LexeLniNodeConfig {
   clientCredentials: string;
@@ -315,6 +331,97 @@ function toNativeInvoiceEventParams(
   };
 }
 
+function toNativeFee(
+  fee: OnchainFeePreference = { type: 'default' }
+): NativeOnchainFeePreference {
+  switch (fee.type) {
+    case 'default':
+      return { preferenceType: NativeOnchainFeePreferenceType.Default };
+    case 'speed': {
+      const speed = {
+        fast: NativeOnchainFeeSpeed.Fast,
+        normal: NativeOnchainFeeSpeed.Normal,
+        slow: NativeOnchainFeeSpeed.Slow,
+        free: NativeOnchainFeeSpeed.Free,
+      }[fee.speed];
+      if (speed === undefined)
+        throw new LniError('InvalidInput', 'Invalid fee speed');
+      return { preferenceType: NativeOnchainFeePreferenceType.Speed, speed };
+    }
+    default:
+      throw new LniError(
+        'InvalidInput',
+        'Lexe supports only default or fast/normal/slow on-chain fee speeds'
+      );
+  }
+}
+
+function fromNativeFee(fee: NativeOnchainFeePreference): OnchainFeePreference {
+  if (fee.preferenceType === NativeOnchainFeePreferenceType.Default)
+    return { type: 'default' };
+  const speed =
+    fee.speed === NativeOnchainFeeSpeed.Fast
+      ? 'fast'
+      : fee.speed === NativeOnchainFeeSpeed.Normal
+        ? 'normal'
+        : fee.speed === NativeOnchainFeeSpeed.Slow
+          ? 'slow'
+          : undefined;
+  if (fee.preferenceType !== NativeOnchainFeePreferenceType.Speed || !speed) {
+    throw new LniError('InvalidInput', 'Invalid Lexe fee preference');
+  }
+  return { type: 'speed', speed };
+}
+
+function toNativeFeePayer(
+  payer: OnchainTransaction['feePayer'] = 'sender'
+): NativeOnchainFeePayer {
+  if (payer !== 'sender')
+    throw new LniError(
+      'InvalidInput',
+      'Lexe supports only sender-paid on-chain fees'
+    );
+  return NativeOnchainFeePayer.Sender;
+}
+
+function fromNativeOnchain(
+  transaction: NativeOnchainTransaction
+): LexeOnchainTransaction {
+  if (transaction.feeLimitSupported !== false) {
+    throw new LniError(
+      'Api',
+      'Unexpected Lexe fee capabilities; rebuild the native app'
+    );
+  }
+  return {
+    feeLimitSupported: transaction.feeLimitSupported,
+    id: transaction.id,
+    address: transaction.address,
+    amountSats: toSafeNumber(transaction.amountSats, 'amountSats'),
+    feeSats: toOptionalSafeNumber(transaction.feeSats, 'feeSats'),
+    totalAmountSats: toOptionalSafeNumber(
+      transaction.totalAmountSats,
+      'totalAmountSats'
+    ),
+    recipientAmountSats: toOptionalSafeNumber(
+      transaction.recipientAmountSats,
+      'recipientAmountSats'
+    ),
+    feePayer:
+      transaction.feePayer === NativeOnchainFeePayer.Sender
+        ? 'sender'
+        : 'recipient',
+    fee: fromNativeFee(transaction.fee),
+    expiresAt: toOptionalSafeNumber(transaction.expiresAt, 'expiresAt'),
+    estimatedDeliverySeconds: toOptionalSafeNumber(
+      transaction.estimatedDeliverySeconds,
+      'estimatedDeliverySeconds'
+    ),
+    raw:
+      transaction.raw === undefined ? undefined : JSON.parse(transaction.raw),
+  };
+}
+
 function nestedErrorMessage(error: unknown): string | undefined {
   if (typeof error !== 'object' || error === null || !('inner' in error)) {
     return undefined;
@@ -342,7 +449,7 @@ function toLniError(error: unknown): LniError {
 }
 
 /** Adapts the native Lexe binding to the shared `LightningNode` interface. */
-export class LexeLniNode implements LightningNode {
+export class LexeLniNode implements LightningNode, OnchainPayments {
   readonly #nativeNode: NativeLexeNode;
   #closed = false;
 
@@ -402,6 +509,89 @@ export class LexeLniNode implements LightningNode {
         this.#nativeNode.payInvoice(toNativePayInvoiceParams(params))
       )
     );
+  }
+
+  /** Validate a local request; Lexe cannot quote the fee before sending. */
+  async prepareOnchainTransaction(
+    params: PrepareOnchainTransactionParams
+  ): Promise<LexeOnchainTransaction> {
+    return fromNativeOnchain(
+      await this.#call(() =>
+        this.#nativeNode.prepareOnchainTransaction({
+          address: params.address,
+          amountSats: toBigInt(params.amountSats, 'amountSats'),
+          fee: toNativeFee(params.fee),
+          feePayer: toNativeFeePayer(params.feePayer),
+          description: params.description,
+          idempotencyKey: params.idempotencyKey,
+        })
+      )
+    );
+  }
+
+  /** Uses provider-determined fees. Explicit fee guardrails are unsupported. */
+  async payOnchain(
+    transaction: OnchainTransaction,
+    options: PayOnchainOptions = {}
+  ): Promise<PayOnchainResponse> {
+    if (options.feeGuardrail !== undefined) {
+      throw new LniError(
+        'InvalidInput',
+        'Lexe does not support a maximum network fee; omit feeGuardrail to use provider-determined fees'
+      );
+    }
+    const payment = await this.#call(() =>
+      this.#nativeNode.payOnchain(
+        {
+          id: transaction.id,
+          address: transaction.address,
+          amountSats: toBigInt(transaction.amountSats, 'amountSats'),
+          feeSats: toOptionalBigInt(transaction.feeSats, 'feeSats'),
+          totalAmountSats: toOptionalBigInt(
+            transaction.totalAmountSats,
+            'totalAmountSats'
+          ),
+          recipientAmountSats: toOptionalBigInt(
+            transaction.recipientAmountSats,
+            'recipientAmountSats'
+          ),
+          feePayer: toNativeFeePayer(transaction.feePayer),
+          fee: toNativeFee(transaction.fee),
+          expiresAt: toOptionalBigInt(transaction.expiresAt, 'expiresAt'),
+          estimatedDeliverySeconds: toOptionalBigInt(
+            transaction.estimatedDeliverySeconds,
+            'estimatedDeliverySeconds'
+          ),
+          raw:
+            transaction.raw === undefined
+              ? undefined
+              : JSON.stringify(transaction.raw),
+        },
+        {
+          dangerouslyDisableFeeGuardrail:
+            options.dangerouslyDisableFeeGuardrail ?? false,
+          feeGuardrail: undefined,
+        }
+      )
+    );
+    return {
+      paymentId: payment.paymentId,
+      txid: payment.txid,
+      state: payment.state,
+      address: payment.address,
+      amountSats: toSafeNumber(payment.amountSats, 'amountSats'),
+      feeSats: toOptionalSafeNumber(payment.feeSats, 'feeSats'),
+      totalAmountSats: toOptionalSafeNumber(
+        payment.totalAmountSats,
+        'totalAmountSats'
+      ),
+      recipientAmountSats: toOptionalSafeNumber(
+        payment.recipientAmountSats,
+        'recipientAmountSats'
+      ),
+      createdAt: toOptionalSafeNumber(payment.createdAt, 'createdAt'),
+      raw: payment.raw === undefined ? undefined : JSON.parse(payment.raw),
+    };
   }
 
   async createOffer(params: CreateOfferParams): Promise<Offer> {

@@ -162,6 +162,30 @@ impl LexeNode {
         crate::lexe::api::pay_invoice(&self.wallet, params).await
     }
 
+    /// Validate a local send request. Lexe does not expose a fee quote.
+    pub async fn prepare_onchain_transaction(
+        &self,
+        params: crate::PrepareOnchainTransactionParams,
+    ) -> Result<crate::OnchainTransaction, ApiError> {
+        super::onchain::prepare(params, &self.network)
+    }
+
+    pub async fn pay_onchain(
+        &self,
+        transaction: crate::OnchainTransaction,
+    ) -> Result<crate::PayOnchainResponse, ApiError> {
+        self.pay_onchain_with_options(transaction, crate::PayOnchainOptions::default())
+            .await
+    }
+
+    pub async fn pay_onchain_with_options(
+        &self,
+        transaction: crate::OnchainTransaction,
+        options: crate::PayOnchainOptions,
+    ) -> Result<crate::PayOnchainResponse, ApiError> {
+        super::onchain::pay(&self.wallet, transaction, options, &self.network).await
+    }
+
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, ApiError> {
         crate::lexe::api::create_offer(&self.wallet, params).await
     }
@@ -225,6 +249,45 @@ mod tests {
     use sha2::Digest;
 
     use super::*;
+
+    /// Sends real funds only when explicitly invoked with --ignored and confirmed.
+    #[tokio::test]
+    #[ignore = "broadcasts an on-chain bitcoin payment"]
+    async fn test_pay_onchain_e2e() {
+        assert_eq!(
+            std::env::var("LEXE_ONCHAIN_SEND_CONFIRM").as_deref(),
+            Ok("YES")
+        );
+        let (_data_dir, node) = integration_node().expect("LEXE_CLIENT_CREDENTIALS is required");
+        let amount_sats = std::env::var("LEXE_ONCHAIN_AMOUNT_SATS")
+            .expect("LEXE_ONCHAIN_AMOUNT_SATS is required")
+            .parse()
+            .expect("integer amount");
+        let transaction = node
+            .prepare_onchain_transaction(crate::PrepareOnchainTransactionParams {
+                address: std::env::var("LEXE_ONCHAIN_ADDRESS")
+                    .expect("LEXE_ONCHAIN_ADDRESS is required"),
+                amount_sats,
+                fee: None,
+                fee_payer: None,
+                description: Some("LNI Lexe on-chain integration".to_owned()),
+                idempotency_key: Some(
+                    std::env::var("LEXE_ONCHAIN_IDEMPOTENCY_KEY").expect(
+                        "LEXE_ONCHAIN_IDEMPOTENCY_KEY is required to safely retry this test",
+                    ),
+                ),
+            })
+            .await
+            .expect("prepare on-chain payment");
+        assert!(transaction.fee_sats.is_none());
+        let payment = node
+            .pay_onchain(transaction)
+            .await
+            .expect("execute on-chain payment");
+        assert!(payment.payment_id.is_some());
+        assert_eq!(payment.amount_sats, amount_sats);
+        assert!(matches!(payment.state.as_str(), "pending" | "completed"));
+    }
 
     fn optional_test_env_var(name: &str) -> Option<String> {
         dotenv::dotenv().ok();

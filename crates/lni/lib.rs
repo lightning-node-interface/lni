@@ -294,6 +294,7 @@ pub mod spark {
 pub mod lexe {
     pub mod api;
     pub mod lib;
+    pub mod onchain;
     pub use lib::{LexeClientInfo, LexeConfig, LexeHumanBitcoinAddress, LexeNode};
 }
 
