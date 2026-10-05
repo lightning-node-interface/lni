@@ -119,7 +119,7 @@ The scoped npm name is intentionally separate from the internal native identity.
 
 ## Publishing
 
-The package version is declared in `package.json` and is currently `0.2.23`.
+The package version is declared in `package.json` and is currently `0.2.24`.
 For a local release, authenticate with npm and inspect the tarball before
 publishing:
 
@@ -133,7 +133,7 @@ corepack yarn release:pack
 corepack yarn release:public
 ```
 
-`release:pack` creates `sunnyln-react-native-lni-lexe-0.2.23.tgz` in this
+`release:pack` creates `sunnyln-react-native-lni-lexe-0.2.24.tgz` in this
 directory.
 `release:public` repeats the native build and validation before running
 `npm publish --access public`. An npm version can only be published once, so
