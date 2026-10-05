@@ -8,7 +8,7 @@
 # 3. Builds for Android targets using cargo-ndk (default, use --no-android to skip)
 #
 # Prerequisites:
-# - cargo-ndk: cargo install cargo-ndk
+# - cargo-ndk: cargo install cargo-ndk --locked
 # - Android NDK: Set ANDROID_NDK_HOME environment variable
 # - Rust targets: rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
 #
@@ -22,13 +22,16 @@
 # - Must be authenticated: gh auth login
 # - Version is read from Cargo.toml
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EXAMPLE_DIR="$SCRIPT_DIR/example"
+LNI_FEATURES="${LNI_FEATURES:-uniffi,rustls-tls,spark}"
+ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-}"
 
 # Parse arguments
+ORIGINAL_RUSTFLAGS="${RUSTFLAGS:-}"
 BUILD_TYPE="release"
 BUILD_ANDROID=true
 PUBLISH_RELEASE=false
@@ -43,6 +46,10 @@ for arg in "$@"; do
             ;;
         --publish)
             PUBLISH_RELEASE=true
+            ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            exit 2
             ;;
     esac
 done
@@ -67,12 +74,12 @@ fi
 if [ "$BUILD_ANDROID" = true ]; then
     if ! command -v cargo-ndk &> /dev/null; then
         echo "Error: cargo-ndk is required for Android builds."
-        echo "Install it with: cargo install cargo-ndk"
+        echo "Install it with: cargo install cargo-ndk --locked"
         echo "Or skip Android builds with: ./build.sh --no-android"
         exit 1
     fi
     
-    if [ -z "$ANDROID_NDK_HOME" ]; then
+    if [ -z "${ANDROID_NDK_HOME:-}" ]; then
         echo "Warning: ANDROID_NDK_HOME is not set."
         echo "Attempting to find NDK automatically..."
         
@@ -100,10 +107,10 @@ cd "$ROOT_DIR"
 
 # Build for host platform (needed for uniffi-bindgen)
 if [ "$BUILD_TYPE" == "release" ]; then
-    cargo build --package lni --features uniffi --release
+    cargo build --locked --package lni --no-default-features --features "$LNI_FEATURES" --release
     LIB_PATH="$ROOT_DIR/target/release"
 else
-    cargo build --package lni --features uniffi
+    cargo build --locked --package lni --no-default-features --features "$LNI_FEATURES"
     LIB_PATH="$ROOT_DIR/target/debug"
 fi
 
@@ -114,7 +121,25 @@ if [ "$BUILD_ANDROID" = true ]; then
     
     # Ensure Android targets are installed
     echo "Ensuring Rust Android targets are installed..."
-    rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android 2>/dev/null || true
+    # Toolchain installation is a separate, explicitly approved operation.
+    ANDROID_ABIS="${ANDROID_ABIS:-arm64-v8a armeabi-v7a x86_64 x86}"
+    NDK_TARGETS=()
+    for abi in $ANDROID_ABIS; do
+        case "$abi" in
+            arm64-v8a) target=aarch64-linux-android ;;
+            armeabi-v7a) target=armv7-linux-androideabi ;;
+            x86_64) target=x86_64-linux-android ;;
+            x86) target=i686-linux-android ;;
+            *) echo "Unsupported Android ABI: $abi" >&2; exit 2 ;;
+        esac
+        if ! rustup target list --installed | grep -Fxq "$target"; then
+            echo "Missing Rust target $target. Install it after approval and rerun." >&2
+            exit 1
+        fi
+        NDK_TARGETS+=(-t "$target")
+    done
+    # Android 15+ devices can use 16 KiB pages.
+    export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-z,max-page-size=16384"
     
     # Create jniLibs directory
     JNILIBS_DIR="$EXAMPLE_DIR/app/src/main/jniLibs"
@@ -130,21 +155,15 @@ if [ "$BUILD_ANDROID" = true ]; then
     if [ "$BUILD_TYPE" == "release" ]; then
         echo "Building release for Android targets..."
         cargo ndk \
-            -t aarch64-linux-android \
-            -t armv7-linux-androideabi \
-            -t x86_64-linux-android \
-            -t i686-linux-android \
+            "${NDK_TARGETS[@]}" \
             -o "$JNILIBS_DIR" \
-            build --package lni --features uniffi --release
+            build --locked --package lni --no-default-features --features "$LNI_FEATURES" --release
     else
         echo "Building debug for Android targets..."
         cargo ndk \
-            -t aarch64-linux-android \
-            -t armv7-linux-androideabi \
-            -t x86_64-linux-android \
-            -t i686-linux-android \
+            "${NDK_TARGETS[@]}" \
             -o "$JNILIBS_DIR" \
-            build --package lni --features uniffi
+            build --locked --package lni --no-default-features --features "$LNI_FEATURES"
     fi
     
     echo "Android builds complete!"
@@ -164,18 +183,24 @@ fi
 
 echo "Found library: $LIB_FILE"
 
+# Do not apply Android linker flags to the host binding generator.
+export RUSTFLAGS="$ORIGINAL_RUSTFLAGS"
+
 # Build the uniffi-bindgen tool
 echo "Building uniffi-bindgen..."
-cargo build --package lni-kotlin-bindgen
+cargo build --locked --package lni-kotlin-bindgen
 
 # Create output directory
 OUTPUT_DIR="$SCRIPT_DIR/src/main/kotlin"
 mkdir -p "$OUTPUT_DIR"
 
 echo "Generating Kotlin bindings..."
-cargo run --package lni-kotlin-bindgen -- generate --library "$LIB_FILE" --language kotlin --out-dir "$OUTPUT_DIR"
+cargo run --locked --package lni-kotlin-bindgen -- generate --library "$LIB_FILE" --language kotlin --out-dir "$OUTPUT_DIR"
 
 echo ""
+MANIFEST_ABIS=""
+if [ "$BUILD_ANDROID" = true ]; then MANIFEST_ABIS="$ANDROID_ABIS"; fi
+"${LNI_PYTHON:-python3}" "$SCRIPT_DIR/verify-bindings.py" "$LNI_FEATURES" "$LIB_FILE" "$MANIFEST_ABIS"
 echo "Kotlin bindings generated successfully in: $OUTPUT_DIR"
 echo ""
 echo "Generated files:"
