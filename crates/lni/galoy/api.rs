@@ -162,7 +162,7 @@ fn galoy_graphql_error(
     )
 }
 
-fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
+fn request_headers(config: &GaloyConfig) -> Result<reqwest::header::HeaderMap, ApiError> {
     let mut headers = reqwest::header::HeaderMap::new();
 
     if let Some(additional_headers) = &config.additional_headers {
@@ -186,8 +186,9 @@ fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
         }
     }
 
-    let api_key_header = header::HeaderValue::from_str(&config.api_key)
+    let mut api_key_header = header::HeaderValue::from_str(&config.api_key)
         .map_err(|_| ApiError::InvalidInput("Invalid Galoy API key header value".to_string()))?;
+    api_key_header.set_sensitive(true);
     headers.insert("X-API-KEY", api_key_header);
 
     headers.insert(
@@ -195,7 +196,11 @@ fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
         header::HeaderValue::from_static("application/json"),
     );
 
-    let mut client_builder = crate::http_client_builder().default_headers(headers);
+    Ok(headers)
+}
+
+fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
+    let mut client_builder = crate::http_client_builder().default_headers(request_headers(config)?);
     if config.accept_invalid_certs.unwrap_or(false) {
         client_builder = client_builder.danger_accept_invalid_certs(true);
     }
@@ -231,6 +236,56 @@ fn client(config: &GaloyConfig) -> Result<reqwest::Client, ApiError> {
     })
 }
 
+// Restrict the official Blink path without changing self-hosted Galoy transports.
+fn pinned_blink(config: &GaloyConfig) -> bool {
+    config.provider.id == "blink" && config.base_url == "https://api.blink.sv/graphql"
+}
+async fn bounded_blink_body(mut response: reqwest::Response) -> Result<String, ApiError> {
+    const MAX: usize = 2 * 1024 * 1024;
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX as u64)
+    {
+        return Err(ApiError::InvalidInput(
+            "Blink response exceeds limit".into(),
+        ));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| ApiError::NetworkError("Blink response unavailable".into()))?
+    {
+        if bytes.len().saturating_add(chunk.len()) > MAX {
+            return Err(ApiError::InvalidInput(
+                "Blink response exceeds limit".into(),
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    String::from_utf8(bytes)
+        .map_err(|_| ApiError::InvalidInput("Invalid Blink response encoding".into()))
+}
+fn transaction_msats(config: &GaloyConfig, sats: i64) -> Result<i64, ApiError> {
+    if config.provider.id == "blink" {
+        sats.checked_abs()
+            .and_then(|value| value.checked_mul(1000))
+            .ok_or_else(|| ApiError::InvalidInput("Invalid Blink transaction amount".into()))
+    } else {
+        Ok(sats.abs() * 1000)
+    }
+}
+fn transaction_direction(config: &GaloyConfig, direction: &str) -> Result<&'static str, ApiError> {
+    match direction {
+        "SEND" => Ok("outgoing"),
+        "RECEIVE" => Ok("incoming"),
+        _ if config.provider.id == "blink" => Err(ApiError::InvalidInput(
+            "Invalid Blink transaction direction".into(),
+        )),
+        _ => Ok("incoming"),
+    }
+}
+
 async fn execute_graphql_query<T>(
     config: &GaloyConfig,
     query: &str,
@@ -240,7 +295,28 @@ async fn execute_graphql_query<T>(
 where
     T: for<'de> serde::Deserialize<'de>,
 {
-    let client = client(config)?;
+    let pinned = pinned_blink(config);
+    let client = if pinned {
+        if config.accept_invalid_certs.unwrap_or(false)
+            || config
+                .socks5_proxy
+                .as_deref()
+                .is_some_and(|v| !v.is_empty())
+        {
+            return Err(ApiError::InvalidInput(
+                "Official Blink requires direct verified HTTPS".into(),
+            ));
+        }
+        let url = crate::lnurl::validate_public_https_url(&config.base_url)?;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            crate::lnurl::lnurl_http_client(&url),
+        )
+        .await
+        .map_err(|_| ApiError::NetworkError("Blink DNS lookup timed out".into()))??
+    } else {
+        client(config)?
+    };
     let request = GraphQLRequest {
         query: query.to_string(),
         variables,
@@ -248,14 +324,23 @@ where
 
     let response = client
         .post(&config.base_url)
+        .headers(request_headers(config)?)
         .json(&request)
         .send()
         .await
         .map_err(|e| transport_error(&config.provider.id, operation, e))?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
+    let status = response.status();
+    let response_text = if pinned {
+        bounded_blink_body(response).await?
+    } else {
+        response
+            .text()
+            .await
+            .map_err(|_| ApiError::NetworkError("GraphQL response unavailable".into()))?
+    };
+    if !status.is_success() {
+        let error_text = response_text;
         return Err(attach_provider(
             config,
             provider_error_from_response(
@@ -268,9 +353,6 @@ where
         ));
     }
 
-    let response_text = response.text().await.map_err(|e| ApiError::Http {
-        reason: format!("Failed to read GraphQL response: {}", e),
-    })?;
     let graphql_response: GraphQLResponse<T> =
         serde_json::from_str(&response_text).map_err(|e| ApiError::Json {
             reason: format!(
@@ -1275,8 +1357,8 @@ async fn list_transactions_impl(
         let (amount_msats, fees_paid) = if let Some(currency) = &node.settlement_currency {
             if currency.eq_ignore_ascii_case("BTC") {
                 // BTC amounts are in satoshis, convert to millisatoshis
-                let amount = (node.settlement_amount.unwrap_or(0).abs()) * 1000;
-                let fees = (node.settlement_fee.unwrap_or(0).abs()) * 1000;
+                let amount = transaction_msats(config, node.settlement_amount.unwrap_or(0))?;
+                let fees = transaction_msats(config, node.settlement_fee.unwrap_or(0))?;
                 (amount, fees)
             } else if currency == "USD" {
                 // USD amounts - for now return 0 as we can't meaningfully convert to satoshis
@@ -1301,12 +1383,7 @@ async fn list_transactions_impl(
         };
 
         all_transactions.push(Transaction {
-            type_: if node.direction == "SEND" {
-                "outgoing"
-            } else {
-                "incoming"
-            }
-            .to_string(),
+            type_: transaction_direction(config, &node.direction)?.to_string(),
             invoice: "".to_string(), // Not available from this query
             preimage,
             payment_hash,
@@ -1448,6 +1525,71 @@ mod tests {
         ),
     ];
     const AMOUNTLESS_BOLT11: &str = "lnbc1pj48ugqdplf38yjgz8v9kx77fqv9kk7atww3kx2umnypex2emjv4ehx6t0dcsxv6tcw36hyegpp5pyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyysjzgfpyyssp5pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9q9qrsgqcqpjvcwldrltwv8ce6n00l8gl20vz5q3vu56hhmla07u39tmdy0ll6cs9crysytmdvugwrv2e6nwhfvlhd0mnjvskaefd43j9vdzjaggtygqe8yu0t";
+
+    #[test]
+    fn blink_amount_normalization_rejects_overflow() {
+        let config: GaloyConfig = (&crate::blink::BlinkConfig::default()).into();
+        assert_eq!(transaction_msats(&config, -21).unwrap(), 21_000);
+        assert!(transaction_msats(&config, i64::MIN).is_err());
+        assert!(transaction_msats(&config, i64::MAX).is_err());
+        assert!(transaction_msats(&config, i64::MAX / 1000 + 1).is_err());
+        assert_eq!(
+            transaction_msats(&config, i64::MAX / 1000).unwrap(),
+            (i64::MAX / 1000) * 1000
+        );
+    }
+
+    #[tokio::test]
+    async fn official_blink_rejects_unsafe_options_and_unknown_direction() {
+        let mut config: GaloyConfig = (&crate::blink::BlinkConfig::default()).into();
+        assert!(pinned_blink(&config));
+        assert_eq!(transaction_direction(&config, "SEND").unwrap(), "outgoing");
+        assert_eq!(
+            transaction_direction(&config, "RECEIVE").unwrap(),
+            "incoming"
+        );
+        assert!(transaction_direction(&config, "OTHER").is_err());
+        config.accept_invalid_certs = Some(true);
+        assert!(
+            execute_graphql_query::<serde_json::Value>(&config, "query {}", None, "test")
+                .await
+                .is_err()
+        );
+        config.accept_invalid_certs = Some(false);
+        config.socks5_proxy = Some("socks5://127.0.0.1:1".into());
+        assert!(
+            execute_graphql_query::<serde_json::Value>(&config, "query {}", None, "test")
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn blink_response_body_limit_is_enforced_on_local_http() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 4096];
+            stream.read(&mut request).await.unwrap();
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\ncontent-length: 2097153\r\nconnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+        let response = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap();
+        assert!(bounded_blink_body(response).await.is_err());
+        server.await.unwrap();
+    }
 
     fn explicit_config(base_url: String, currency: &str) -> GaloyConfig {
         GaloyConfig {

@@ -120,7 +120,7 @@ pub fn decode_lnurl(lnurl: &str) -> Result<String, ApiError> {
         .map_err(|e| ApiError::InvalidInput(format!("LNURL contains invalid UTF-8: {}", e)))
 }
 
-fn validate_public_https_url(raw: &str) -> Result<reqwest::Url, ApiError> {
+pub(crate) fn validate_public_https_url(raw: &str) -> Result<reqwest::Url, ApiError> {
     let url = reqwest::Url::parse(raw)
         .map_err(|e| ApiError::InvalidInput(format!("Invalid LNURL URL: {}", e)))?;
 
@@ -190,26 +190,18 @@ fn is_public_ipv4(ip: Ipv4Addr) -> bool {
 }
 
 fn is_public_ipv6(ip: Ipv6Addr) -> bool {
-    if let Some(ipv4) = ip.to_ipv4() {
+    if let Some(ipv4) = ip.to_ipv4_mapped() {
         return is_public_ipv4(ipv4);
     }
-
-    let segments = ip.segments();
-    !(ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || segments[0] & 0xfe00 == 0xfc00
-        || segments[0] & 0xffc0 == 0xfe80
-        || segments[0] & 0xffc0 == 0xfec0
-        || (segments[0] == 0x0064 && segments[1] == 0xff9b)
-        || (segments[0] == 0x0100 && segments[1] == 0 && segments[2] == 0 && segments[3] == 0)
-        || (segments[0] == 0x2001 && segments[1] == 0)
-        || (segments[0] == 0x2001 && segments[1] == 2)
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
-        || segments[0] == 0x2002)
+    let [first, second, ..] = ip.segments();
+    (first & 0xe000) == 0x2000
+        && !(first == 0x2001 && second <= 0x01ff)
+        && first != 0x2002
+        && !(first == 0x2001 && second == 0x0db8)
+        && !(first == 0x3fff && (second & 0xf000) == 0)
 }
 
-fn is_public_ip(ip: IpAddr) -> bool {
+pub(crate) fn is_public_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => is_public_ipv4(ip),
         IpAddr::V6(ip) => is_public_ipv6(ip),
@@ -225,7 +217,7 @@ fn validate_resolved_lnurl_addresses(addresses: &[SocketAddr]) -> Result<(), Api
     Ok(())
 }
 
-async fn lnurl_http_client(url: &reqwest::Url) -> Result<reqwest::Client, ApiError> {
+pub(crate) async fn lnurl_http_client(url: &reqwest::Url) -> Result<reqwest::Client, ApiError> {
     let hostname = url
         .host_str()
         .ok_or_else(|| ApiError::InvalidInput("Invalid LNURL URL: missing hostname".to_string()))?;
@@ -245,6 +237,7 @@ async fn lnurl_http_client(url: &reqwest::Url) -> Result<reqwest::Client, ApiErr
     validate_resolved_lnurl_addresses(&addresses)?;
 
     let mut builder = reqwest::Client::builder()
+        .no_proxy()
         .https_only(true)
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(30));
@@ -402,31 +395,34 @@ fn callback_url_with_amount(
 }
 
 async fn fetch_lnurl_json_value(url: &str) -> Result<serde_json::Value, ApiError> {
+    let failure = || ApiError::LnurlError("LNURL endpoint response unavailable or invalid".into());
     let url = validate_public_https_url(url)?;
     let client = lnurl_http_client(&url).await?;
-
-    let response = require_successful_lnurl_response(
-        client
-            .get(url)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| ApiError::NetworkError(format!("Failed to fetch LNURL: {}", e)))?,
-    )?;
-
-    let text = response
-        .text()
+    let mut response = client
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
         .await
-        .map_err(|e| ApiError::NetworkError(format!("Failed to read LNURL response: {}", e)))?;
-
-    let value = serde_json::from_str::<serde_json::Value>(&text).map_err(|e| {
-        ApiError::InvalidInput(format!(
-            "Invalid LNURL JSON response: {} - {}",
-            e,
-            &text[..text.len().min(200)]
-        ))
-    })?;
-    handle_lnurl_error_value(&value)?;
+        .map_err(|_| failure())?;
+    if !response.status().is_success() {
+        return Err(failure());
+    }
+    const LIMIT: usize = 1_048_576;
+    if response
+        .content_length()
+        .is_some_and(|length| length > LIMIT as u64)
+    {
+        return Err(failure());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| failure())? {
+        if bytes.len().saturating_add(chunk.len()) > LIMIT {
+            return Err(failure());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let value = serde_json::from_slice(&bytes).map_err(|_| failure())?;
+    handle_lnurl_error_value(&value).map_err(|_| failure())?;
     Ok(value)
 }
 
@@ -793,3 +789,9 @@ mod tests {
         assert!(format!("{:?}", error).contains("does not match requested amount"));
     }
 }
+
+pub mod receive;
+pub use receive::{
+    create_lnurl_receive_invoice, verify_lnurl_receive_invoice, LnurlReceiveInvoice,
+    LnurlReceiveSettlement,
+};

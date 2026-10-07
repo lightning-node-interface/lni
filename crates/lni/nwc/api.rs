@@ -12,13 +12,38 @@ use std::future::Future;
 use std::str::FromStr;
 use std::time::Duration;
 
-// Helper function to create NWC client
-async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
+struct PinnedNwc {
+    inner: NWC,
+    _proxy: super::pinned_proxy::PinnedProxy,
+}
+impl std::ops::Deref for PinnedNwc {
+    type Target = NWC;
+    fn deref(&self) -> &NWC {
+        &self.inner
+    }
+}
+
+// The guard owns the restricted dial gateway for the full request lifetime.
+async fn create_nwc_client(config: &NwcConfig) -> Result<PinnedNwc, ApiError> {
     let uri = NostrWalletConnectURI::from_str(&config.nwc_uri).map_err(|e| ApiError::Api {
         reason: format!("Invalid NWC URI: {}", e),
     })?;
 
+    if config
+        .socks5_proxy
+        .as_deref()
+        .is_some_and(|proxy| !proxy.is_empty())
+    {
+        return Err(ApiError::InvalidInput(
+            "External NWC proxies are not supported by the pinned dial gate".into(),
+        ));
+    }
+    let proxy =
+        super::pinned_proxy::PinnedProxy::start(uri.relays.iter().map(|relay| relay.as_str()))
+            .await
+            .map_err(|_| ApiError::NetworkError("NWC relay dial unavailable".into()))?;
     let relay_opts = RelayOptions::default()
+        .connection_mode(ConnectionMode::Proxy(proxy.address))
         .verify_subscriptions(true)
         .ban_relay_on_mismatch(true);
     let timeout = nwc_request_timeout(config);
@@ -27,7 +52,10 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
         .timeout(timeout);
     let nwc = NWC::with_opts(uri, opts);
 
-    Ok(nwc)
+    Ok(PinnedNwc {
+        inner: nwc,
+        _proxy: proxy,
+    })
 }
 
 fn nwc_request_timeout(config: &NwcConfig) -> Duration {
@@ -108,7 +136,7 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
                         .unwrap_or_default()
                         .to_string()
                 }),
-                network: nwc_info.network.unwrap_or_else(|| "mainnet".to_string()),
+                network: nwc_info.network.unwrap_or_else(|| "unknown".to_string()),
                 block_height: nwc_info.block_height.unwrap_or(0) as i64,
                 block_hash: nwc_info.block_hash.unwrap_or_default(),
                 send_balance_msat: balance as i64,
@@ -134,7 +162,7 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
                 alias: "NWC Node".to_string(),
                 color: "".to_string(),
                 pubkey,
-                network: "mainnet".to_string(),
+                network: "unknown".to_string(),
                 block_height: 0,
                 block_hash: "".to_string(),
                 send_balance_msat: balance as i64,

@@ -15,13 +15,34 @@ This package provides Kotlin bindings for LNI, allowing you to interact with var
 - **ClnNode** - Core Lightning (CLN)
 - **NwcNode** - Nostr Wallet Connect
 - **SpeedNode** - Speed Lightning service
+- **GaloyNode**, **FlashNode** - Galoy-compatible services
+- **SparkNode** - Breez Spark (default `spark` feature)
+- **LexeNode** - revocable Lexe credentials, Lightning and on-chain methods
+
+Receive-only support is separate from spending: `createLnurlReceiveInvoice` and
+`verifyLnurlReceiveInvoice` support Lightning Address/LNURL accounts; watch-only
+Bitcoin APIs derive external addresses from account public keys or ranged public
+descriptors and inspect a
+user-selected Esplora backend. Watch-only configurations never contain private keys.
+Eight branded XPUB wallets share these APIs; branding does not change derivation.
+Generic Bitcoin addresses use `validateBitcoinAddress` and the same observer.
+
+Do not infer payment settlement from successful submission or a remote `settled`
+flag. Lightning settlement requires the exact invoice's preimage. Esplora results
+are observations from a trusted backend, not independently verified consensus.
+The host must persist allocated indices, retain transaction outputs by txid/vout,
+apply its confirmation threshold, and reconcile reorganizations.
 
 ## Building
 
 ### Prerequisites
 
 - Rust toolchain (stable)
-- Cargo
+- Cargo from PATH (including any security wrapper)
+- Python 3 for API/artifact verification (standard library only)
+- Existing locked dependencies; obtain approval before installing missing tools
+- For Android: `cargo-ndk`, Android NDK, and requested Rust Android targets
+  already installed. The build never installs targets or package tools.
 
 ### Generate Kotlin bindings
 
@@ -29,9 +50,18 @@ This package provides Kotlin bindings for LNI, allowing you to interact with var
 ./build.sh --release
 ```
 
-This will:
-1. Build the LNI library with UniFFI support
-2. Generate Kotlin bindings in `src/main/kotlin/uniffi/lni/`
+The build uses `--locked`, preserves PATH package-manager wrappers, generates
+Kotlin from the matching native library, and builds Android libraries with 16 KiB
+page alignment (verified in each ELF load segment). It writes a generated
+`build-manifest.json` pairing feature flags, source hashes, and artifact hashes. To generate host bindings only, use `./build.sh --no-android`.
+To build only ARM64, set `ANDROID_ABIS=arm64-v8a`.
+
+`LNI_FEATURES=uniffi,rustls-tls` excludes the optional Spark implementation when
+an application only needs the other providers. The default preserves all existing
+providers. Always generate Kotlin and native libraries with the same feature list;
+never pair generated code from a different build. Generated sources and binaries
+are intentionally ignored by Git. No version bump or publication is needed for
+local integration.
 
 ## Usage
 
@@ -58,7 +88,7 @@ val invoiceParams = CreateInvoiceParams(
     description = "Test invoice"
 )
 val transaction = node.createInvoice(invoiceParams)
-println("Invoice: ${transaction.invoice}")
+// Render the invoice privately; never log invoices, credentials or preimages.
 
 // Don't forget to clean up
 node.close()
@@ -180,3 +210,26 @@ dependencies {
 ## License
 
 Same license as the main LNI project.
+
+## NWC relay dialing
+
+NWC uses a restricted process-local SOCKS5 dial gate because its upstream pool
+has no transport injection hook. The gate only accepts the configured WSS relay
+hosts and ports, validates every DNS answer, and opens a concrete public socket.
+The original WSS hostname remains the TLS/SNI identity. Request cancellation drops
+the gate and its bounded sessions. External SOCKS proxies are rejected instead
+of silently bypassing these checks; this path does not support Tor-only relays.
+
+`pollAuthorization` performs a bounded NWA kind-13194 response lookup on the
+fixed Alby relays through the same pinned dial gate. It verifies the signed
+event, intended application key and authorization time window. The application
+must persist the pending wallet-only key privately, enforce one-use completion,
+validate the returned relay and authenticate the resulting wallet connection
+before offering payments. Hosted callback state and Coinos native origin checks
+belong to the integrating application; a relay response never authorizes a payment.
+
+The official Blink GraphQL endpoint uses the same public-address DNS pinning and
+verified HTTPS discipline, disables environment proxies and redirects, and bounds
+response bodies to 2 MiB. It rejects insecure TLS/proxy overrides and unknown
+transaction directions. Configurable generic Galoy endpoints retain their existing
+transport options; applications must explicitly constrain those if exposing them.
