@@ -20,6 +20,7 @@ import {
   type UniffiRustCallStatus,
   AbstractFfiConverterByteArray,
   FfiConverterArray,
+  FfiConverterArrayBuffer,
   FfiConverterBool,
   FfiConverterFloat64,
   FfiConverterInt32,
@@ -27,6 +28,8 @@ import {
   FfiConverterObject,
   FfiConverterObjectWithCallbacks,
   FfiConverterOptional,
+  FfiConverterUInt32,
+  FfiConverterUInt64,
   FfiConverterUInt8,
   RustBuffer,
   UniffiAbstractObject,
@@ -442,6 +445,166 @@ const FfiConverterTypeLexeConfig = (() => {
         FfiConverterString.allocationSize(value.clientCredentials) +
         FfiConverterOptionalString.allocationSize(value.dataDir) +
         FfiConverterOptionalString.allocationSize(value.network)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type LexeConnectOptions = {
+  redirectUri?: string;
+  postUrl?: string;
+  mailboxUrl?: string;
+  scopes: Array<string>;
+  permissions: Array<string>;
+  account?: string;
+  metadata?: string;
+  requesterName?: string;
+  requesterIcon?: string;
+  label?: string;
+  /**
+   * Suggested credential expiry, in Unix milliseconds; editable in Lexe.
+   */
+  expiresAtMs?: bigint;
+  /**
+   * Local request lifetime, 1–300 seconds. Defaults to 300.
+   */
+  requestTtlSecs?: number;
+};
+
+/**
+ * Generated factory for {@link LexeConnectOptions} record objects.
+ */
+export const LexeConnectOptions = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<LexeConnectOptions, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<LexeConnectOptions>,
+  });
+})();
+
+const FfiConverterTypeLexeConnectOptions = (() => {
+  type TypeName = LexeConnectOptions;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        redirectUri: FfiConverterOptionalString.read(from),
+        postUrl: FfiConverterOptionalString.read(from),
+        mailboxUrl: FfiConverterOptionalString.read(from),
+        scopes: FfiConverterSequenceString.read(from),
+        permissions: FfiConverterSequenceString.read(from),
+        account: FfiConverterOptionalString.read(from),
+        metadata: FfiConverterOptionalString.read(from),
+        requesterName: FfiConverterOptionalString.read(from),
+        requesterIcon: FfiConverterOptionalString.read(from),
+        label: FfiConverterOptionalString.read(from),
+        expiresAtMs: FfiConverterOptionalUInt64.read(from),
+        requestTtlSecs: FfiConverterOptionalUInt32.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalString.write(value.redirectUri, into);
+      FfiConverterOptionalString.write(value.postUrl, into);
+      FfiConverterOptionalString.write(value.mailboxUrl, into);
+      FfiConverterSequenceString.write(value.scopes, into);
+      FfiConverterSequenceString.write(value.permissions, into);
+      FfiConverterOptionalString.write(value.account, into);
+      FfiConverterOptionalString.write(value.metadata, into);
+      FfiConverterOptionalString.write(value.requesterName, into);
+      FfiConverterOptionalString.write(value.requesterIcon, into);
+      FfiConverterOptionalString.write(value.label, into);
+      FfiConverterOptionalUInt64.write(value.expiresAtMs, into);
+      FfiConverterOptionalUInt32.write(value.requestTtlSecs, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalString.allocationSize(value.redirectUri) +
+        FfiConverterOptionalString.allocationSize(value.postUrl) +
+        FfiConverterOptionalString.allocationSize(value.mailboxUrl) +
+        FfiConverterSequenceString.allocationSize(value.scopes) +
+        FfiConverterSequenceString.allocationSize(value.permissions) +
+        FfiConverterOptionalString.allocationSize(value.account) +
+        FfiConverterOptionalString.allocationSize(value.metadata) +
+        FfiConverterOptionalString.allocationSize(value.requesterName) +
+        FfiConverterOptionalString.allocationSize(value.requesterIcon) +
+        FfiConverterOptionalString.allocationSize(value.label) +
+        FfiConverterOptionalUInt64.allocationSize(value.expiresAtMs) +
+        FfiConverterOptionalUInt32.allocationSize(value.requestTtlSecs)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
+export type LexeConnectResponse = {
+  clientCredentials?: string;
+  error?: string;
+  errorMessage?: string;
+  scopes: Array<string>;
+  permissions: Array<string>;
+  expiresAtMs?: bigint;
+  account?: string;
+  metadata?: string;
+};
+
+/**
+ * Generated factory for {@link LexeConnectResponse} record objects.
+ */
+export const LexeConnectResponse = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<LexeConnectResponse, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<LexeConnectResponse>,
+  });
+})();
+
+const FfiConverterTypeLexeConnectResponse = (() => {
+  type TypeName = LexeConnectResponse;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        clientCredentials: FfiConverterOptionalString.read(from),
+        error: FfiConverterOptionalString.read(from),
+        errorMessage: FfiConverterOptionalString.read(from),
+        scopes: FfiConverterSequenceString.read(from),
+        permissions: FfiConverterSequenceString.read(from),
+        expiresAtMs: FfiConverterOptionalUInt64.read(from),
+        account: FfiConverterOptionalString.read(from),
+        metadata: FfiConverterOptionalString.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterOptionalString.write(value.clientCredentials, into);
+      FfiConverterOptionalString.write(value.error, into);
+      FfiConverterOptionalString.write(value.errorMessage, into);
+      FfiConverterSequenceString.write(value.scopes, into);
+      FfiConverterSequenceString.write(value.permissions, into);
+      FfiConverterOptionalUInt64.write(value.expiresAtMs, into);
+      FfiConverterOptionalString.write(value.account, into);
+      FfiConverterOptionalString.write(value.metadata, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterOptionalString.allocationSize(value.clientCredentials) +
+        FfiConverterOptionalString.allocationSize(value.error) +
+        FfiConverterOptionalString.allocationSize(value.errorMessage) +
+        FfiConverterSequenceString.allocationSize(value.scopes) +
+        FfiConverterSequenceString.allocationSize(value.permissions) +
+        FfiConverterOptionalUInt64.allocationSize(value.expiresAtMs) +
+        FfiConverterOptionalString.allocationSize(value.account) +
+        FfiConverterOptionalString.allocationSize(value.metadata)
       );
     }
   }
@@ -1658,6 +1821,263 @@ const FfiConverterTypeLexeError = (() => {
   }
   return new FFIConverter();
 })();
+
+export interface LexeConnectSessionLike {
+  acceptBody(body: ArrayBuffer) /*throws*/ : LexeConnectResponse;
+  acceptRedirect(url: string) /*throws*/ : LexeConnectResponse;
+  cancel() /*throws*/ : void;
+  connectionString() /*throws*/ : string;
+  pollMailbox(asyncOpts_?: {
+    signal: AbortSignal;
+  }) /*throws*/ : Promise<LexeConnectResponse | undefined>;
+}
+/**
+ * @deprecated Use `LexeConnectSessionLike` instead.
+ */
+export type LexeConnectSessionInterface = LexeConnectSessionLike;
+
+export class LexeConnectSession
+  extends UniffiAbstractObject
+  implements LexeConnectSessionLike
+{
+  readonly [uniffiTypeNameSymbol] = 'LexeConnectSession';
+  readonly [destructorGuardSymbol]: UniffiGcObject;
+  readonly [pointerLiteralSymbol]: UniffiHandle;
+  constructor(options: LexeConnectOptions) /*throws*/ {
+    super();
+    const pointer = uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+        FfiConverterTypeLexeError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+          FfiConverterTypeLexeConnectOptions.lower(
+            options,
+            nativeModule().rustbuffer_alloc
+          ),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
+    );
+    this[pointerLiteralSymbol] = pointer;
+    this[destructorGuardSymbol] =
+      uniffiTypeLexeConnectSessionObjectFactory.bless(pointer);
+  }
+
+  acceptBody(body: ArrayBuffer): LexeConnectResponse /*throws*/ {
+    return ((__rb: Uint8Array) => {
+      try {
+        return FfiConverterTypeLexeConnectResponse.lift(__rb);
+      } finally {
+        nativeModule().rustbuffer_free(__rb);
+      }
+    })(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+            FfiConverterArrayBuffer.lower(
+              body,
+              nativeModule().rustbuffer_alloc
+            ),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
+      )
+    );
+  }
+
+  acceptRedirect(url: string): LexeConnectResponse /*throws*/ {
+    return ((__rb: Uint8Array) => {
+      try {
+        return FfiConverterTypeLexeConnectResponse.lift(__rb);
+      } finally {
+        nativeModule().rustbuffer_free(__rb);
+      }
+    })(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+            FfiConverterString.lower(url, nativeModule().rustbuffer_alloc),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
+      )
+    );
+  }
+
+  cancel(): void /*throws*/ {
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+        FfiConverterTypeLexeError
+      ),
+      /*caller:*/ (callStatus) => {
+        nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+          uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
+    );
+  }
+
+  connectionString(): string /*throws*/ {
+    return ((__rb: Uint8Array) => {
+      try {
+        return FfiConverterString.lift(__rb);
+      } finally {
+        nativeModule().rustbuffer_free(__rb);
+      }
+    })(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+            callStatus
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
+      )
+    );
+  }
+
+  async pollMailbox(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<LexeConnectResponse | undefined> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterOptionalTypeLexeConnectResponse.lift.bind(
+          FfiConverterOptionalTypeLexeConnectResponse
+        ),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  uniffiDestroy(): void {
+    const ptr = (this as any)[destructorGuardSymbol];
+    if (ptr !== undefined) {
+      const pointer = uniffiTypeLexeConnectSessionObjectFactory.pointer(this);
+      uniffiTypeLexeConnectSessionObjectFactory.freePointer(pointer);
+      uniffiTypeLexeConnectSessionObjectFactory.unbless(ptr);
+      delete (this as any)[destructorGuardSymbol];
+    }
+  }
+
+  static instanceOf(obj_: any): obj_ is LexeConnectSession {
+    return uniffiTypeLexeConnectSessionObjectFactory.isConcreteType(obj_);
+  }
+}
+
+const uniffiTypeLexeConnectSessionObjectFactory: UniffiObjectFactory<LexeConnectSessionLike> =
+  (() => {
+    return {
+      create(pointer: UniffiHandle): LexeConnectSessionLike {
+        const instance = Object.create(LexeConnectSession.prototype);
+        instance[pointerLiteralSymbol] = pointer;
+        instance[destructorGuardSymbol] = this.bless(pointer);
+        instance[uniffiTypeNameSymbol] = 'LexeConnectSession';
+        return instance;
+      },
+
+      bless(p: UniffiHandle): UniffiGcObject {
+        return uniffiCaller.rustCall(
+          /*caller:*/ (status) =>
+            nativeModule().ubrn_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_pointer(
+              p,
+              status
+            ),
+          /*liftString:*/ FfiConverterString.lift
+        );
+      },
+
+      unbless(ptr_: UniffiGcObject) {
+        ptr_.markDestroyed();
+      },
+
+      pointer(obj_: LexeConnectSessionLike): UniffiHandle {
+        if ((obj_ as any)[destructorGuardSymbol] === undefined) {
+          throw new UniffiInternalError.UnexpectedNullPointer();
+        }
+        return (obj_ as any)[pointerLiteralSymbol];
+      },
+
+      clonePointer(obj_: LexeConnectSessionLike): UniffiHandle {
+        const pointer = this.pointer(obj_);
+        return uniffiCaller.rustCall(
+          /*caller:*/ (callStatus) =>
+            nativeModule().ubrn_uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+              pointer,
+              callStatus
+            ),
+          /*liftString:*/ FfiConverterString.lift
+        );
+      },
+
+      freePointer(pointer: UniffiHandle): void {
+        uniffiCaller.rustCall(
+          /*caller:*/ (callStatus) =>
+            nativeModule().ubrn_uniffi_react_native_lexe_fn_free_lexeconnectsession(
+              pointer,
+              callStatus
+            ),
+          /*liftString:*/ FfiConverterString.lift
+        );
+      },
+
+      isConcreteType(obj_: any): obj_ is LexeConnectSessionLike {
+        return (
+          obj_[destructorGuardSymbol] &&
+          obj_[uniffiTypeNameSymbol] === 'LexeConnectSession'
+        );
+      },
+    };
+  })();
+const FfiConverterTypeLexeConnectSession = new FfiConverterObject(
+  uniffiTypeLexeConnectSessionObjectFactory
+);
 
 export interface OnInvoiceEventCallback {
   success(transaction: Transaction | undefined): void;
@@ -2877,6 +3297,12 @@ const FfiConverterOptionalTypeInvoiceType = new FfiConverterOptional(
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
 
+// FfiConverter for bigint | undefined
+const FfiConverterOptionalUInt64 = new FfiConverterOptional(FfiConverterUInt64);
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalUInt32 = new FfiConverterOptional(FfiConverterUInt32);
+
 // FfiConverter for number | undefined
 const FfiConverterOptionalFloat64 = new FfiConverterOptional(
   FfiConverterFloat64
@@ -2900,6 +3326,11 @@ const FfiConverterOptionalTypeOnchainFeePreference = new FfiConverterOptional(
 // FfiConverter for OnchainFeePayer | undefined
 const FfiConverterOptionalTypeOnchainFeePayer = new FfiConverterOptional(
   FfiConverterTypeOnchainFeePayer
+);
+
+// FfiConverter for LexeConnectResponse | undefined
+const FfiConverterOptionalTypeLexeConnectResponse = new FfiConverterOptional(
+  FfiConverterTypeLexeConnectResponse
 );
 
 // FfiConverter for Array<Offer>
@@ -2937,6 +3368,54 @@ function uniffiEnsureInitialized() {
     throw new UniffiInternalError.ContractVersionMismatch(
       scaffoldingContractVersion,
       bindingsContractVersion
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new() !==
+    24434
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body() !==
+    7266
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect() !==
+    16776
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel() !==
+    349
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string() !==
+    52805
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox() !==
+    42431
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox'
     );
   }
   if (
@@ -3120,6 +3599,9 @@ export default Object.freeze({
     FfiConverterTypeHumanBitcoinAddress,
     FfiConverterTypeInvoiceType,
     FfiConverterTypeLexeConfig,
+    FfiConverterTypeLexeConnectOptions,
+    FfiConverterTypeLexeConnectResponse,
+    FfiConverterTypeLexeConnectSession,
     FfiConverterTypeLexeError,
     FfiConverterTypeLexeNode,
     FfiConverterTypeListTransactionsParams,

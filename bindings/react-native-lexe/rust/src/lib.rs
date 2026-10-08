@@ -1,3 +1,6 @@
+mod connect;
+pub use connect::{LexeConnectOptions, LexeConnectResponse, LexeConnectSession};
+
 use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]

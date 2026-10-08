@@ -293,8 +293,10 @@ pub mod spark {
 
 pub mod lexe {
     pub mod api;
+    pub mod connect;
     pub mod lib;
     pub mod onchain;
+    pub use connect::{LexeConnectOptions, LexeConnectResponse, LexeConnectSession};
     pub use lib::{LexeClientInfo, LexeConfig, LexeHumanBitcoinAddress, LexeNode};
 }
 
