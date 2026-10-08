@@ -115,6 +115,34 @@ protected:
   cpp_uniffi_react_native_lexe_fn_method_oninvoiceeventcallback_failure(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_fn_free_lexeconnectsession(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_ffi_react_native_lexe_rust_future_poll_u8(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
@@ -330,7 +358,31 @@ protected:
   cpp_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_failure(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
   jsi::Value cpp_uniffi_react_native_lexe_checksum_constructor_lexenode_new(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
   jsi::Value cpp_ffi_react_native_lexe_uniffi_contract_version(
@@ -341,6 +393,10 @@ protected:
       size_t count);
   jsi::Value
   cpp_uniffi_internal_fn_method_oninvoiceeventcallback_ffi__bless_pointer(
+      jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+      size_t count);
+  jsi::Value
+  cpp_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_pointer(
       jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
       size_t count);
 

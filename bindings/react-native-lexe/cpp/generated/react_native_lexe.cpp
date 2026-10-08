@@ -172,6 +172,26 @@ void uniffi_react_native_lexe_fn_method_oninvoiceeventcallback_pending(
 void uniffi_react_native_lexe_fn_method_oninvoiceeventcallback_failure(
     /*handle*/ uint64_t ptr, RustBuffer transaction,
     RustCallStatus *uniffi_out_err);
+/*handle*/ uint64_t uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+    /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+void uniffi_react_native_lexe_fn_free_lexeconnectsession(
+    /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+/*handle*/ uint64_t
+uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+    RustBuffer options, RustCallStatus *uniffi_out_err);
+RustBuffer uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+    /*handle*/ uint64_t ptr, RustBuffer body, RustCallStatus *uniffi_out_err);
+RustBuffer
+uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+    /*handle*/ uint64_t ptr, RustBuffer url, RustCallStatus *uniffi_out_err);
+void uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+    /*handle*/ uint64_t ptr, RustCallStatus *uniffi_out_err);
+RustBuffer
+uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+    /*handle*/ uint64_t ptr, RustCallStatus *uniffi_out_err);
+/*handle*/ uint64_t
+uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+    /*handle*/ uint64_t ptr);
 RustBuffer
 ffi_react_native_lexe_rustbuffer_alloc(uint64_t size,
                                        RustCallStatus *uniffi_out_err);
@@ -316,7 +336,17 @@ uint16_t
 uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_pending();
 uint16_t
 uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_failure();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect();
+uint16_t uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox();
 uint16_t uniffi_react_native_lexe_checksum_constructor_lexenode_new();
+uint16_t uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new();
 uint32_t ffi_react_native_lexe_uniffi_contract_version();
 }
 
@@ -2688,6 +2718,102 @@ NativeReactNativeLexe::NativeReactNativeLexe(
             ->cpp_uniffi_react_native_lexe_fn_method_oninvoiceeventcallback_failure(
                 rt, thisVal, args, count);
       });
+  props["ubrn_uniffi_react_native_lexe_fn_clone_lexeconnectsession"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "ubrn_uniffi_react_native_lexe_fn_clone_lexeconnectsession"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_fn_free_lexeconnectsession"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt, "ubrn_uniffi_react_native_lexe_fn_free_lexeconnectsession"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_free_lexeconnectsession(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_"
+                                        "constructor_lexeconnectsession_new"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_"
+        "body"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexeconnectsession_accept_body"),
+      2,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_"
+        "redirect"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexeconnectsession_accept_redirect"),
+      2,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_"
+                                        "method_lexeconnectsession_cancel"),
+          1,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+                    rt, thisVal, args, count);
+          });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_"
+        "string"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexeconnectsession_connection_string"),
+      1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_"
+        "mailbox"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexeconnectsession_poll_mailbox"),
+      1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+                rt, thisVal, args, count);
+      });
   props["ubrn_ffi_react_native_lexe_rust_future_poll_u8"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -3464,6 +3590,68 @@ NativeReactNativeLexe::NativeReactNativeLexe(
             ->cpp_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_failure(
                 rt, thisVal, args, count);
       });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_"
+        "accept_body"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexeconnectsession_accept_body"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_"
+        "accept_redirect"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt,
+                                "ubrn_uniffi_react_native_lexe_checksum_method_"
+                                "lexeconnectsession_accept_redirect"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_"
+        "cancel"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexeconnectsession_cancel"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_"
+        "connection_string"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt,
+                                "ubrn_uniffi_react_native_lexe_checksum_method_"
+                                "lexeconnectsession_connection_string"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_"
+        "mailbox"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexeconnectsession_poll_mailbox"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_checksum_constructor_lexenode_new"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -3476,6 +3664,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_checksum_constructor_lexenode_new(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_"
+        "new"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "constructor_lexeconnectsession_new"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new(
+                rt, thisVal, args, count);
+      });
   props["ubrn_ffi_react_native_lexe_uniffi_contract_version"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -3510,6 +3710,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
              const jsi::Value *args, size_t count) -> jsi::Value {
         return this
             ->cpp_uniffi_internal_fn_method_oninvoiceeventcallback_ffi__bless_pointer(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_"
+        "pointer"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_internal_fn_method_"
+                                    "lexeconnectsession_ffi__bless_pointer"),
+      1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_pointer(
                 rt, thisVal, args, count);
       });
 
@@ -3704,6 +3916,21 @@ jsi::Value NativeReactNativeLexe::
   auto static destructor = [](uint64_t p) {
     RustCallStatus status = {0};
     uniffi_react_native_lexe_fn_free_oninvoiceeventcallback(p, &status);
+  };
+  auto ptrObj =
+      std::make_shared<uniffi_jsi::DestructibleObject>(pointer, destructor);
+  auto obj = jsi::Object::createFromHostObject(rt, ptrObj);
+  return jsi::Value(rt, obj);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_pointer(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto pointer =
+      uniffi_jsi::Bridging<uint64_t>::fromJs(rt, callInvoker, args[0]);
+  auto static destructor = [](uint64_t p) {
+    RustCallStatus status = {0};
+    uniffi_react_native_lexe_fn_free_lexeconnectsession(p, &status);
   };
   auto ptrObj =
       std::make_shared<uniffi_jsi::DestructibleObject>(pointer, destructor);
@@ -4078,6 +4305,135 @@ jsi::Value NativeReactNativeLexe::
       rt, callInvoker, status, args[count - 1]);
 
   return jsi::Value::undefined();
+}
+jsi::Value
+NativeReactNativeLexe::cpp_uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value
+NativeReactNativeLexe::cpp_uniffi_react_native_lexe_fn_free_lexeconnectsession(
+    jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+    size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_react_native_lexe_fn_free_lexeconnectsession(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return jsi::Value::undefined();
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value = uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+      uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                              args[0]),
+      &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]),
+          uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(
+              rt, callInvoker, args[1]),
+          &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi::react_native_lexe::Bridging<RustBuffer>::toJs(rt, callInvoker,
+                                                               value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]),
+          uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(
+              rt, callInvoker, args[1]),
+          &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi::react_native_lexe::Bridging<RustBuffer>::toJs(rt, callInvoker,
+                                                               value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return jsi::Value::undefined();
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  RustCallStatus status =
+      uniffi::react_native_lexe::Bridging<RustCallStatus>::rustSuccess(rt);
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]),
+          &status);
+  uniffi::react_native_lexe::Bridging<RustCallStatus>::copyIntoJs(
+      rt, callInvoker, status, args[count - 1]);
+
+  return uniffi::react_native_lexe::Bridging<RustBuffer>::toJs(rt, callInvoker,
+                                                               value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
 }
 jsi::Value NativeReactNativeLexe::cpp_ffi_react_native_lexe_rust_future_poll_u8(
     jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
@@ -4848,10 +5204,64 @@ jsi::Value NativeReactNativeLexe::
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
 jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
     cpp_uniffi_react_native_lexe_checksum_constructor_lexenode_new(
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
   auto value = uniffi_react_native_lexe_checksum_constructor_lexenode_new();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

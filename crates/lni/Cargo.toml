@@ -44,6 +44,7 @@ once_cell = "1.19"
 breez-sdk-spark = { git = "https://github.com/breez/spark-sdk", tag = "0.6.3", default-features = false, features = ["rustls-tls"] }
 bip39 = "2.2.2"
 bech32 = "0.11"
+lexe-connect = { version = "0.1.26", default-features = false, features = ["crypto"] }
 
 [dev-dependencies]
 async-attributes = "1.1.1"

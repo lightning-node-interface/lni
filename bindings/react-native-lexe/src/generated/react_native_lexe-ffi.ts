@@ -166,6 +166,14 @@ interface NativeModuleInterface {
     uniffi_out_err: UniffiRustCallStatus
   ): void;
   ubrn_ffi_react_native_lexe_rust_future_free_void(handle: bigint): void;
+  ubrn_uniffi_react_native_lexe_fn_clone_lexeconnectsession(
+    ptr: bigint,
+    uniffi_out_err: UniffiRustCallStatus
+  ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_free_lexeconnectsession(
+    ptr: bigint,
+    uniffi_out_err: UniffiRustCallStatus
+  ): void;
   ubrn_uniffi_react_native_lexe_fn_clone_lexenode(
     ptr: bigint,
     uniffi_out_err: UniffiRustCallStatus
@@ -185,6 +193,31 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_fn_init_callback_vtable_oninvoiceeventcallback(
     vtable: UniffiVTableCallbackInterfaceReactNativeLexeOnInvoiceEventCallback
   ): void;
+  ubrn_uniffi_react_native_lexe_fn_constructor_lexeconnectsession_new(
+    options: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+    uniffiSelf: bigint,
+    body: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+    uniffiSelf: bigint,
+    url: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_cancel(
+    uniffiSelf: bigint,
+    uniffi_out_err: UniffiRustCallStatus
+  ): void;
+  ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+    uniffiSelf: bigint,
+    uniffi_out_err: UniffiRustCallStatus
+  ): Uint8Array;
+  ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_poll_mailbox(
+    uniffiSelf: bigint
+  ): bigint;
   ubrn_uniffi_react_native_lexe_fn_constructor_lexenode_new(
     config: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
@@ -273,6 +306,12 @@ interface NativeModuleInterface {
     uniffi_out_err: UniffiRustCallStatus
   ): void;
   ubrn_ffi_react_native_lexe_uniffi_contract_version(): number;
+  ubrn_uniffi_react_native_lexe_checksum_constructor_lexeconnectsession_new(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_body(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_accept_redirect(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_cancel(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox(): number;
   ubrn_uniffi_react_native_lexe_checksum_constructor_lexenode_new(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_invoice(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_offer(): number;
@@ -294,6 +333,10 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_success(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_pending(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_oninvoiceeventcallback_failure(): number;
+  ubrn_uniffi_internal_fn_method_lexeconnectsession_ffi__bless_pointer(
+    pointer: bigint,
+    uniffi_out_err: UniffiRustCallStatus
+  ): UniffiGcObject;
   ubrn_uniffi_internal_fn_method_oninvoiceeventcallback_ffi__bless_pointer(
     pointer: bigint,
     uniffi_out_err: UniffiRustCallStatus

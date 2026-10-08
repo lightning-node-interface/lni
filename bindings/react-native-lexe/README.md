@@ -3,6 +3,18 @@
 React Native bindings for the Lexe Lightning wallet, generated from Rust with
 `uniffi-bindgen-react-native`.
 
+## Connect an existing Lexe wallet
+
+Use `LexeConnect` to request credentials through Lexe's approval screen, then
+pass the approved `clientCredentials` to `LexeLniNode`. It supports encrypted
+app callbacks, HTTPS POST delivery, and mailbox polling with cancellation.
+The same protocol implementation is available in Rust as
+`lni::lexe::LexeConnectSession`.
+
+See [LexeConnect usage and lifecycle](../../docs/LEXE_CONNECT.md) for Rust and
+React Native examples. Native libraries and the app must be rebuilt to use these
+new bridge methods.
+
 ## Requirements
 
 - React Native with Hermes and the New Architecture enabled
