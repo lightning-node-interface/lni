@@ -391,6 +391,16 @@ function onchainAmountToSats(amount?: StrikeAmount): number | undefined {
   return Number.isFinite(btc) ? Math.round(btc * 100_000_000) : undefined;
 }
 
+/** Parse quote amounts exactly; never infer a fee from rounded or partial input. */
+function quoteAmountToSats(amount?: StrikeAmount): number | undefined {
+  if (amount?.currency !== 'BTC' || !/^\d+(?:\.\d{1,8})?$/.test(amount.amount)) {
+    return undefined;
+  }
+  const [whole, fraction = ''] = amount.amount.split('.');
+  const sats = BigInt(whole!) * 100_000_000n + BigInt(fraction.padEnd(8, '0'));
+  return sats <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(sats) : undefined;
+}
+
 function defaultOnchainFee(): OnchainFeePreference {
   return { type: 'speed', speed: 'normal' };
 }
@@ -1039,13 +1049,28 @@ export class StrikeNode implements LightningNode, OnchainPayments {
     feePayer: OnchainFeePayer,
     quote: StrikeOnchainPaymentQuoteResponse
   ): OnchainTransaction {
+    const totalAmountSats = quoteAmountToSats(quote.totalAmount);
+    const recipientAmountSats = quoteAmountToSats(quote.amount);
+    const derivedFee =
+      totalAmountSats !== undefined &&
+      recipientAmountSats !== undefined &&
+      totalAmountSats >= recipientAmountSats
+        ? totalAmountSats - recipientAmountSats
+        : undefined;
+    // Strike can omit totalFee for internal transfers. Missing is not itself zero.
+    const feeSats =
+      quote.totalFee == null
+        ? derivedFee
+        : quoteAmountToSats(quote.totalFee) === derivedFee
+          ? derivedFee
+          : undefined;
     return {
       id: quote.paymentQuoteId,
       address,
       amountSats,
-      feeSats: onchainAmountToSats(quote.totalFee),
-      totalAmountSats: onchainAmountToSats(quote.totalAmount),
-      recipientAmountSats: onchainAmountToSats(quote.amount),
+      feeSats,
+      totalAmountSats,
+      recipientAmountSats,
       feePayer,
       fee,
       expiresAt: quote.validUntil ? toUnixSeconds(Date.parse(quote.validUntil)) : undefined,
