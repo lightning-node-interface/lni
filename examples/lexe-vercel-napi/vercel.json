@@ -1,0 +1,9 @@
+{
+  "installCommand": "",
+  "functions": {
+    "api/probe.ts": {
+      "includeFiles": "native/*.node",
+      "maxDuration": 30
+    }
+  }
+}

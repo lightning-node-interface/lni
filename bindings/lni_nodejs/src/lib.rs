@@ -32,6 +32,9 @@ pub use speed::SpeedNode;
 mod spark;
 pub use spark::SparkNode;
 
+mod lexe;
+pub use lexe::LexeNode;
+
 mod lnurl;
 pub use lnurl::*;
 

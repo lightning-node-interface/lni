@@ -593,3 +593,11 @@ export declare class SparkNode {
   decode(str: string): Promise<string>
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
+
+/** Stateless Lexe access for server-side Node.js functions. */
+export declare class LexeNode {
+  constructor(clientCredentials: string, network?: string | undefined | null)
+  getInfo(): Promise<NodeInfo>
+  /** May return the same address until Lexe detects a payment to it. */
+  getNextUnusedAddress(): Promise<string>
+}

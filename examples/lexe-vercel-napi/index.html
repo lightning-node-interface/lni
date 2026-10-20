@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lexe on Vercel · Native Node.js demo</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: #f5f6f8; background: radial-gradient(circle at 80% 0%, #203b51 0, #101821 34%, #090d12 72%); }
+      main { width: min(100% - 40px, 760px); margin: 0 auto; padding: 52px 0 80px; }
+      .eyebrow { color: #6fd9be; font-size: 13px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { margin: 24px 0 14px; font-size: clamp(42px, 8vw, 72px); line-height: 1.02; letter-spacing: -.06em; }
+      .intro { max-width: 580px; color: #a7b6c2; font-size: 18px; line-height: 1.55; }
+      .card { margin-top: 44px; padding: clamp(24px, 5vw, 40px); border: 1px solid #304352; border-radius: 24px; background: #14202bcf; box-shadow: 0 24px 80px #0005; }
+      .label { color: #92a8b7; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+      #address { display: block; min-height: 72px; margin: 24px 0; color: #fff; font-size: clamp(17px, 2.9vw, 23px); line-height: 1.55; overflow-wrap: anywhere; user-select: all; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      button { appearance: none; border: 0; border-radius: 11px; padding: 12px 18px; background: #7ce5c7; color: #09231d; font: inherit; font-weight: 750; cursor: pointer; }
+      button.secondary { border: 1px solid #486071; background: transparent; color: #e1eef5; }
+      button:disabled { opacity: .5; cursor: wait; }
+      #status { margin: 18px 0 0; color: #a7b6c2; font-size: 14px; }
+      .note { margin-top: 28px; color: #91a4b2; font-size: 14px; line-height: 1.55; }
+      .links { display: flex; gap: 20px; margin-top: 44px; font-size: 14px; }
+      a { color: #87dfcf; text-underline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">Lexe × Vercel × napi-rs</div>
+      <h1>A Bitcoin address from Rust on Vercel.</h1>
+      <p class="intro">This address comes from the Lexe Rust SDK through LNI’s native Node.js binding, running in a Vercel function.</p>
+      <section class="card" aria-labelledby="address-label">
+        <div id="address-label" class="label">Next unused receiving address</div>
+        <code id="address" aria-live="polite">Loading address…</code>
+        <div class="actions">
+          <button id="copy" disabled>Copy address</button>
+          <button id="refresh" class="secondary">Refresh</button>
+        </div>
+        <p id="status" role="status">Connecting to Lexe…</p>
+      </section>
+      <p class="note">This is a live wallet address. Refreshing can return the same address until the wallet uses it. The client credential remains on the server.</p>
+      <nav class="links" aria-label="Technical checks">
+        <a href="/api/probe">Vercel runtime</a>
+        <a href="/api/probe?mode=load">Native addon check</a>
+      </nav>
+    </main>
+    <script>
+      const addressElement = document.querySelector('#address');
+      const statusElement = document.querySelector('#status');
+      const copyButton = document.querySelector('#copy');
+      const refreshButton = document.querySelector('#refresh');
+      let currentAddress = '';
+
+      async function loadAddress() {
+        refreshButton.disabled = true;
+        statusElement.textContent = 'Connecting to Lexe…';
+        try {
+          const response = await fetch('/api/probe?mode=address', { cache: 'no-store' });
+          const result = await response.json();
+          if (!response.ok || !result.ok || typeof result.address !== 'string') throw new Error('Address unavailable');
+          currentAddress = result.address;
+          addressElement.textContent = currentAddress;
+          copyButton.disabled = false;
+          statusElement.textContent = 'Fetched live from the Lexe wallet.';
+        } catch {
+          addressElement.textContent = 'Address unavailable';
+          statusElement.textContent = 'The wallet request failed. Please try again.';
+          copyButton.disabled = true;
+        } finally {
+          refreshButton.disabled = false;
+        }
+      }
+
+      copyButton.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(currentAddress);
+          statusElement.textContent = 'Address copied.';
+        } catch {
+          statusElement.textContent = 'Could not copy. Select the address above to copy it manually.';
+        }
+      });
+      refreshButton.addEventListener('click', loadAddress);
+      loadAddress();
+    </script>
+  </body>
+</html>
