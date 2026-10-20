@@ -1830,6 +1830,39 @@ mod tests {
     }
 
     #[test]
+    fn recipient_pays_quote_fees_match_the_deducted_amount() {
+        for include_fee in [true, false] {
+            let mut response = serde_json::json!({
+                "paymentQuoteId": "recipient-pays-quote",
+                "amount": {"amount": "0.00009000", "currency": "BTC"},
+                "totalAmount": {"amount": "0.00010000", "currency": "BTC"},
+            });
+            if include_fee {
+                response["totalFee"] =
+                    serde_json::json!({"amount": "0.00001000", "currency": "BTC"});
+            }
+            let quote = serde_json::from_value(response).unwrap();
+            let fee_payer = OnchainFeePayer::Recipient;
+            assert_eq!(strike_fee_policy(&fee_payer), "INCLUSIVE");
+            let transaction = onchain_transaction_from_quote(
+                "bc1qrecipient".into(),
+                10_000,
+                default_onchain_fee(),
+                fee_payer,
+                quote,
+                "{}".into(),
+            );
+            assert_eq!(transaction.amount_sats, 10_000);
+            assert_eq!(transaction.total_amount_sats, Some(10_000));
+            assert_eq!(transaction.recipient_amount_sats, Some(9_000));
+            assert_eq!(transaction.fee_sats, Some(1_000));
+            assert!(
+                assert_onchain_fee_guardrail(&transaction, PayOnchainOptions::default()).is_ok()
+            );
+        }
+    }
+
+    #[test]
     fn quote_fees_do_not_fall_back_when_explicit_fee_is_invalid() {
         for (fee, currency, expected) in [
             ("0", "BTC", Some(0)),
