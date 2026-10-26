@@ -175,8 +175,10 @@ or authenticated budget inspection is exposed by this bridge.
 ### On-chain payments
 
 `LexeLniNode` implements LNI's `OnchainPayments` interface using Lexe SDK
-`0.1.24`. Preparation validates the address/network, amount, fee preference,
-notes, and payment ID locally. It does **not** broadcast or reserve funds.
+`0.1.27` and its stable `pay_onchain_preflight` API. Preparation validates the
+address/network, amount, fee preference, notes, and payment ID, then fetches
+wallet-specific fee estimates. It requires network access and credentials
+authorized to spend. It does **not** broadcast or reserve funds.
 
 ```ts
 const transaction = await node.prepareOnchainTransaction({
@@ -187,18 +189,33 @@ const transaction = await node.prepareOnchainTransaction({
   idempotencyKey: paymentId,
 });
 
+// Estimated miner fee and total debit in integer satoshis:
+const estimatedFeeSats = transaction.feeSats;
+const estimatedTotalSats = transaction.totalAmountSats;
+const recipientSats = transaction.recipientAmountSats;
+
 // Persist transaction before sending; reuse it for retries.
 const payment = await node.payOnchain(transaction);
+// payment.feeSats is the actual fee after submission.
 ```
 
-Lexe does not expose fee estimation or a maximum fee through this SDK.
-`feeSats` and `totalAmountSats` are therefore absent from the prepared request.
-Prepared transactions explicitly report `feeLimitSupported: false`. Ordinary sends use Lexe's provider-determined fees;
-no override flag is needed. Passing any `feeGuardrail` (including an empty one)
+`feeSats` and `totalAmountSats` are estimates, not locked quotes. The recipient
+receives `recipientAmountSats`, equal to the requested amount for sender-paid
+fees. Prepared transactions still report `feeLimitSupported: false`. Ordinary
+sends use Lexe's provider-determined fees; no override flag is needed.
+Passing any `feeGuardrail` (including an empty one)
 is rejected before sending, even if `dangerouslyDisableFeeGuardrail` is also set.
 Supplying `feeSats` in the prepared object cannot enforce a cap. The actual fee
-is returned after execution. An app can display: “Network fee determined by
-Lexe. Normal priority. The exact fee is available after sending.”
+is returned after execution. Label displayed fees as estimates.
+
+Refresh by preparing again with the same `idempotencyKey`, address, amount,
+and note; change only the desired speed. Keep the ID when fetching estimates
+for Slow / Medium / Fast. Preflight failures reject preparation without sending;
+a missing fast estimate does not fall back to another priority. Lexe requires
+normal priority to be affordable before returning even slow estimates. The
+SDK's generic errors do not reliably distinguish insufficient funds from other
+wallet, authorization, or node/version errors. See the
+[preflight guide](../../docs/LEXE_ONCHAIN_PREFLIGHT.md) for details.
 
 Supported speeds are `fast`, `normal`, and `slow`, mapped to Lexe's `high`,
 `normal`, and `background` priorities. The default is `normal`. Recipient-paid
@@ -209,6 +226,10 @@ A generated payment ID is stored in `transaction.id` when no `idempotencyKey`
 is provided. Persist and reuse the same prepared transaction after a timeout or
 unknown outcome. Preparing again without the same ID creates a new payment.
 Lexe returns the existing payment for repeated IDs, including failed payments.
+Preflight rejects already-submitted IDs, so do not refresh before retrying a
+send. Retry the persisted preparation directly, including older preparations
+without fee fields. Rebuild native libraries to enable preflight; updating
+JavaScript alone is insufficient.
 Execution returns without waiting for confirmations, usually with state
 `pending`; this is not confirmation that the transaction has settled.
 

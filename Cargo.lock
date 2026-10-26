@@ -2825,9 +2825,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lexe"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9041fa825aa3378695ee22be046c5b98874a25c283eafbead8f66c8aaa8ea289"
+checksum = "c79effea574f10f9b5efd6c448248acd096019d85bb896469eb4756ea0064759"
 dependencies = [
  "anyhow",
  "bip39",
@@ -2854,9 +2854,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-api"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b10a8f1fcc9c66c4e11d92a5e79e9ef301f99022b49086a08f41f52ae139c12"
+checksum = "c9d5d7cf5c254c9047018915f9b58a9c482401bff629fc15f7ceabf52f258186"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -2890,9 +2890,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-api-core"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12b523e83abbd852e41cc4f86597c4ae5c38983a366391b6fe1a8c0bf2e047fc"
+checksum = "1548993706d8875af9db5197a4e6df73aea41805102cf8779f19b8048cfa5ef1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2928,18 +2928,18 @@ dependencies = [
 
 [[package]]
 name = "lexe-byte-array"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5605fcbb7cbdb6e549aca29180dd57ee976e6d46b9c7f98915f8cb5f4b2d5f4"
+checksum = "80bb270a3f591bce5e4ee7c5cb1d66f7c33d12a5b60f2ee23d5bfe065b01016a"
 dependencies = [
  "lexe-hex",
 ]
 
 [[package]]
 name = "lexe-common"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f361f187dd493b1b6ccd92b1b3d9202554f30bd7bf11c06d0694979784cbd4d"
+checksum = "7e609f56d151057e4b91ec997e6e99cfdb5b81ae66326cd988d58fc9974f2bb5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2979,9 +2979,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-connect"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c26b5e4fe7e4920b72302a8dab4009e6c167da005d5980f3eba1ec9a4d6710d"
+checksum = "6cd40b8b4023c2a7cb35f8ab018b38399fc84783fbfe4051f97360ed18679b8e"
 dependencies = [
  "base64 0.21.7",
  "lexe-byte-array",
@@ -2998,9 +2998,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-crypto"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2e94f8b78441f5e698ff940bc754fa6b067f41f87da4558f8e527e2538f8f5f"
+checksum = "21033c13fba9e1da880e15260a463da530081871adee7fa33351ae5ff7fc5101"
 dependencies = [
  "bcs",
  "hpke",
@@ -3018,9 +3018,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-enclave"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da6b2fa14c13ea50ddbe0ab808f8f2fb4ed567b1b50ae30973dfb57394eaac2a"
+checksum = "d6d6a21f595464be2f38182c4d8f05a9fc364c334013c1d850e1120883ad9874"
 dependencies = [
  "cfg-if",
  "lexe-byte-array",
@@ -3035,15 +3035,15 @@ dependencies = [
 
 [[package]]
 name = "lexe-hex"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b607948a28a3338e89200e4f98e93433c9e6d149174bff20d6975c51be7c3527"
+checksum = "d7084683b491f60afdc9cc83e89cef49792158024d47aa678b4e11619fe87139"
 
 [[package]]
 name = "lexe-logger"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12d4c51401b9f88b52a9fa128dc559f6bf7975f0f2127a871744343460079919"
+checksum = "4e60d9db2a31cc7534e33be6544d0e503f10ee47fe033570c00bf5b71003e6ba"
 dependencies = [
  "anyhow",
  "lexe-api",
@@ -3053,9 +3053,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-node-client"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd42ba866b5437a707ee8c1d3aab2004820b532b44dacd8f446648d8dd5e55f6"
+checksum = "844a02cdd1a9dac4707c09b40d79ff4cd4ef6158a578e9943e86e57c5f147932"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3073,9 +3073,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-payment-uri"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "585b58dd1c7002d874c4cbf965622eec8a2c59e509d2ca568d3a91296a29aa19"
+checksum = "fbc961f8746a5bfd06107702b316e7e037d5b26a0f8820c8c76a10d88ea2132c"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -3097,9 +3097,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-payment-uri-core"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb4c7f47dddab3b3961966668db2324553d67efd15e33b9749f037d29400231"
+checksum = "1b0bb013419afec6c67572f22000badd8c8b640a141bc8c990ba96ddc9c787cb"
 dependencies = [
  "anyhow",
  "bech32",
@@ -3107,7 +3107,9 @@ dependencies = [
  "cfg-if",
  "lexe-api-core",
  "lexe-common",
+ "lexe-connect",
  "lexe-crypto",
+ "lexe-uri",
  "percent-encoding",
  "rust_decimal",
  "serde",
@@ -3117,9 +3119,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-serde"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e39404ae0001591a84c17196e99d89d127eb52e968634c08f420253bb4a75b12"
+checksum = "c9cbb354257f0a9d342f264a8a7ebb0015b3a41bda758f8aa5a860006ad66098"
 dependencies = [
  "base64 0.21.7",
  "lexe-hex",
@@ -3128,9 +3130,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-sha256"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50af3e9327a88c40a93052865c98a9aab6d6b3ecec793111f6afd2cd88ba24a2"
+checksum = "bd9d72fb4e9efc79017d2a121b5baef08bfbfac4d12100607007e75dddefb3a9"
 dependencies = [
  "lexe-byte-array",
  "lexe-std",
@@ -3140,18 +3142,18 @@ dependencies = [
 
 [[package]]
 name = "lexe-std"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e8e47e6363409ee9f557fa1cd0382dbd6f3780af8b15423da2529aec8c9015"
+checksum = "bc25a0c8002ab237ead74846677bd565312b9e613e39dafacaa41204646ba1e9"
 dependencies = [
  "ref-cast",
 ]
 
 [[package]]
 name = "lexe-tls"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59b3bc0d9220d6fca46a471be8e9fdcf5bb89a36634417dc8d91f4a72b1d8bc5"
+checksum = "431e678bf7bd01979b729de82812b93a2b10e612bb6a52b0030878bfdf68ee42"
 dependencies = [
  "anyhow",
  "asn1-rs 0.7.2",
@@ -3183,9 +3185,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-tls-core"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b88bd8fa971de49327c1c4d6b957268a62f209e4ad981f3f60170ec1c9b5cc"
+checksum = "745f3dece2f6c7a0aff0d69d023f1e6ea5bb1b631214317cc954331159a0e054"
 dependencies = [
  "rustls",
  "rustls-webpki",
@@ -3194,9 +3196,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-tokio"
-version = "0.1.24"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bf09dfe95d8662898fdd49b5c580568c17021e7b9928a1bc94b9462b29ef82d"
+checksum = "ac2a7075417ef15ed65a58c8ff87c3a0c8ba706827cd57231b220df795889b98"
 dependencies = [
  "futures",
  "thiserror 2.0.17",
@@ -3206,9 +3208,9 @@ dependencies = [
 
 [[package]]
 name = "lexe-uri"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20b5a1015f1e3d4417dee0cf4b0eeb1c1611e008b1ce46ab569bf1a9ed6d2a12"
+checksum = "be42ae544e604ee3f566eb8ad33729c457ce9adda2469c6c4b62f64acf10f0cf"
 dependencies = [
  "percent-encoding",
 ]
