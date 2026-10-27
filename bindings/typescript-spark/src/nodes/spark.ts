@@ -1514,24 +1514,34 @@ export class SparkNode implements LightningNode {
         status: initResult.status,
       });
 
+      let status = initResult.status ?? '';
+      const failedStatuses = new Set([
+        'LIGHTNING_PAYMENT_FAILED',
+        'TRANSFER_FAILED',
+        'USER_TRANSFER_VALIDATION_FAILED',
+        'PREIMAGE_PROVIDING_FAILED',
+        'USER_SWAP_RETURNED',
+        'USER_SWAP_RETURN_FAILED',
+      ]);
+      const succeededStatuses = new Set([
+        'LIGHTNING_PAYMENT_SUCCEEDED',
+        'PREIMAGE_PROVIDED',
+        'TRANSFER_COMPLETED',
+      ]);
+      if (failedStatuses.has(status)) {
+        throw new LniError('Api', `Spark Lightning payment failed: ${status}`);
+      }
       let preimage =
         typeof initResult.paymentPreimage === 'string' ? initResult.paymentPreimage : '';
       let fee = initResult.fee;
 
       // Poll for completion if payment was only initiated
       const requestId = initResult.id;
-      if (!preimage && requestId && typeof wallet.getLightningSendRequest === 'function') {
-        const terminalStatuses = new Set([
-          'LIGHTNING_PAYMENT_SUCCEEDED',
-          'PREIMAGE_PROVIDED',
-          'TRANSFER_COMPLETED',
-          'LIGHTNING_PAYMENT_FAILED',
-          'TRANSFER_FAILED',
-          'USER_TRANSFER_VALIDATION_FAILED',
-          'PREIMAGE_PROVIDING_FAILED',
-          'USER_SWAP_RETURNED',
-          'USER_SWAP_RETURN_FAILED',
-        ]);
+      if (
+        !(preimage && succeededStatuses.has(status)) &&
+        requestId &&
+        typeof wallet.getLightningSendRequest === 'function'
+      ) {
         const maxPollMs = 60_000;
         const pollIntervalMs = 2_000;
         const startedAt = Date.now();
@@ -1540,19 +1550,18 @@ export class SparkNode implements LightningNode {
           await new Promise((r) => setTimeout(r, pollIntervalMs));
           try {
             const req = await wallet.getLightningSendRequest(requestId);
-            const status = req?.status ?? '';
+            status = req?.status ?? '';
             emitSparkDebugCheckpoint('pay_invoice:poll', { status });
-            if (req?.paymentPreimage) {
+            if (typeof req?.paymentPreimage === 'string' && req.paymentPreimage) {
               preimage = req.paymentPreimage;
-              if (req.fee) {
+              if (req.fee !== undefined) {
                 fee = req.fee;
               }
-              break;
             }
-            if (terminalStatuses.has(status)) {
-              if (status.includes('FAILED') || status.includes('RETURN')) {
-                throw new LniError('Api', `Spark Lightning payment failed: ${status}`);
-              }
+            if (failedStatuses.has(status)) {
+              throw new LniError('Api', `Spark Lightning payment failed: ${status}`);
+            }
+            if (succeededStatuses.has(status)) {
               break;
             }
           } catch (error) {
@@ -1566,9 +1575,34 @@ export class SparkNode implements LightningNode {
         }
       }
 
-      let paymentHash = extractPaymentHashFromInvoice(params.invoice);
-      if (!paymentHash && preimage) {
-        paymentHash = await sha256HexOfHexString(preimage);
+      if (!preimage || !succeededStatuses.has(status)) {
+        throw new LniError(
+          'Api',
+          `Spark Lightning payment is indeterminate${requestId ? ` (payment id: ${requestId})` : ''}; reconcile before retrying.`
+        );
+      }
+
+      const paymentHash = extractPaymentHashFromInvoice(params.invoice);
+      if (!/^[0-9a-f]{64}$/i.test(preimage)) {
+        throw new LniError(
+          'Api',
+          'Spark Lightning payment returned invalid settlement proof; reconcile before retrying.'
+        );
+      }
+      let proofHash: string;
+      try {
+        proofHash = await sha256HexOfHexString(preimage);
+      } catch {
+        throw new LniError(
+          'Api',
+          'Spark Lightning payment returned invalid settlement proof; reconcile before retrying.'
+        );
+      }
+      if (!paymentHash || proofHash !== paymentHash.toLowerCase()) {
+        throw new LniError(
+          'Api',
+          'Spark Lightning payment returned invalid settlement proof; reconcile before retrying.'
+        );
       }
 
       emitSparkDebugCheckpoint('pay_invoice:complete', {
