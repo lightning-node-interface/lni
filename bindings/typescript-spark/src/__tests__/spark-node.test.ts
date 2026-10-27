@@ -3,6 +3,8 @@ import type { StorageProvider } from '@sunnyln/lni';
 
 const TEST_MNEMONIC =
   'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+const TEST_PREIMAGE = '00'.repeat(32);
+const TEST_PAYMENT_HASH = '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925';
 
 function mockBolt11Decoder(options: { amountMsats?: string } = {}): void {
   vi.doMock('@sunnyln/lni', async (importOriginal) => {
@@ -14,10 +16,12 @@ function mockBolt11Decoder(options: { amountMsats?: string } = {}): void {
           return {
             amountMsats: Number(options.amountMsats),
             expiresAt: 3600,
+            payment_hash: TEST_PAYMENT_HASH,
           };
         }
         return {
           expiresAt: 3600,
+          payment_hash: TEST_PAYMENT_HASH,
         };
       }),
     };
@@ -61,7 +65,8 @@ describe('SparkNode payInvoice', () => {
     mockBolt11Decoder({ amountMsats: '118000' });
     const { SparkNode } = await import('../nodes/spark.js');
     const payLightningInvoice = vi.fn(async () => ({
-      paymentPreimage: '',
+      status: 'LIGHTNING_PAYMENT_SUCCEEDED',
+      paymentPreimage: TEST_PREIMAGE,
       fee: { originalValue: 0, originalUnit: 'SATOSHI' },
     }));
 
@@ -93,7 +98,8 @@ describe('SparkNode payInvoice', () => {
     mockBolt11Decoder();
     const { SparkNode } = await import('../nodes/spark.js');
     const payLightningInvoice = vi.fn(async () => ({
-      paymentPreimage: '',
+      status: 'LIGHTNING_PAYMENT_SUCCEEDED',
+      paymentPreimage: TEST_PREIMAGE,
       fee: { originalValue: 0, originalUnit: 'SATOSHI' },
     }));
 
@@ -119,6 +125,60 @@ describe('SparkNode payInvoice', () => {
       expect.objectContaining({
         amountSatsToSend: 118,
       })
+    );
+  });
+
+  it.each([
+    ['LIGHTNING_PAYMENT_FAILED', 'Spark Lightning payment failed'],
+    ['LIGHTNING_PAYMENT_SUCCEEDED', 'indeterminate'],
+    ['LIGHTNING_PAYMENT_PENDING', 'indeterminate'],
+  ])('rejects proofless %s without a pollable request', async (status, message) => {
+    mockBolt11Decoder({ amountMsats: '118000' });
+    const { SparkNode } = await import('../nodes/spark.js');
+    const payLightningInvoice = vi.fn(async () => ({ status, paymentPreimage: '' }));
+    const node = new SparkNode({ mnemonic: TEST_MNEMONIC, sdkEntry: 'bare' });
+    (node as unknown as { getWallet: () => Promise<unknown> }).getWallet = async () => ({
+      payLightningInvoice,
+    });
+
+    await expect(node.payInvoice({ invoice: 'with-amount' })).rejects.toThrow(message);
+  });
+
+  it('returns an indeterminate error when polling reaches its deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      mockBolt11Decoder({ amountMsats: '118000' });
+      const { SparkNode } = await import('../nodes/spark.js');
+      const getLightningSendRequest = vi.fn(async () => ({ status: 'LIGHTNING_PAYMENT_PENDING' }));
+      const node = new SparkNode({ mnemonic: TEST_MNEMONIC, sdkEntry: 'bare' });
+      (node as unknown as { getWallet: () => Promise<unknown> }).getWallet = async () => ({
+        payLightningInvoice: async () => ({ id: 'payment-1', status: 'LIGHTNING_PAYMENT_PENDING' }),
+        getLightningSendRequest,
+      });
+
+      const payment = node.payInvoice({ invoice: 'with-amount' });
+      const assertion = expect(payment).rejects.toThrow('indeterminate');
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+      expect(getLightningSendRequest).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects a successful status with a preimage for another invoice', async () => {
+    mockBolt11Decoder({ amountMsats: '118000' });
+    const { SparkNode } = await import('../nodes/spark.js');
+    const node = new SparkNode({ mnemonic: TEST_MNEMONIC, sdkEntry: 'bare' });
+    (node as unknown as { getWallet: () => Promise<unknown> }).getWallet = async () => ({
+      payLightningInvoice: async () => ({
+        status: 'LIGHTNING_PAYMENT_SUCCEEDED',
+        paymentPreimage: '01'.repeat(32),
+      }),
+    });
+
+    await expect(node.payInvoice({ invoice: 'with-amount' })).rejects.toThrow(
+      'invalid settlement proof'
     );
   });
 });

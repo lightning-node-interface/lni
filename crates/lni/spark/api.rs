@@ -7,6 +7,7 @@ use breez_sdk_spark::{
     PaymentDetails, PaymentStatus, PaymentType, PrepareSendPaymentRequest, ReceivePaymentMethod,
     ReceivePaymentRequest, SdkEvent, SendPaymentRequest,
 };
+use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 
@@ -78,6 +79,17 @@ fn extract_payment_info(payment: &breez_sdk_spark::Payment) -> Option<PaymentInf
 
 fn has_payment_preimage(payment: &breez_sdk_spark::Payment) -> bool {
     extract_payment_info(payment).is_some_and(|info| !info.preimage.is_empty())
+}
+
+fn is_settled_payment(payment: &breez_sdk_spark::Payment) -> bool {
+    payment.status == PaymentStatus::Completed && has_payment_preimage(payment)
+}
+
+fn preimage_matches_hash(preimage: &str, payment_hash: &str) -> bool {
+    let Ok(bytes) = hex::decode(preimage) else {
+        return false;
+    };
+    bytes.len() == 32 && hex::encode(Sha256::digest(bytes)) == payment_hash.to_ascii_lowercase()
 }
 
 /// Convert a Breez Payment to an LNI Transaction.
@@ -242,6 +254,8 @@ pub async fn pay_invoice(
     sdk: Arc<BreezSdk>,
     invoice_params: PayInvoiceParams,
 ) -> Result<PayInvoiceResponse, ApiError> {
+    let expected_payment_hash = extract_payment_hash(&invoice_params.invoice)
+        .ok_or_else(|| ApiError::InvalidInput("Invalid BOLT11 invoice".to_string()))?;
     // Prepare the payment first
     let prepare_response = sdk
         .prepare_send_payment(PrepareSendPaymentRequest {
@@ -274,7 +288,7 @@ pub async fn pay_invoice(
     let timeout = Duration::from_secs(timeout_secs);
     let started_at = Instant::now();
 
-    while !has_payment_preimage(&payment)
+    while !is_settled_payment(&payment)
         && payment.status != PaymentStatus::Failed
         && started_at.elapsed() < timeout
     {
@@ -296,18 +310,24 @@ pub async fn pay_invoice(
             reason: "Spark Lightning payment failed".to_string(),
         });
     }
+    if !is_settled_payment(&payment) {
+        return Err(ApiError::Api {
+            reason: format!("Spark Lightning payment is indeterminate (payment id: {}); reconcile before retrying", payment.id),
+        });
+    }
 
-    let payment_info = extract_payment_info(&payment);
-    let payment_hash = payment_info
-        .as_ref()
-        .map(|info| info.payment_hash.clone())
-        .filter(|payment_hash| !payment_hash.is_empty())
-        .or_else(|| extract_payment_hash(&invoice_params.invoice))
+    let preimage = extract_payment_info(&payment)
+        .map(|info| info.preimage)
         .unwrap_or_default();
-    let preimage = payment_info.map(|info| info.preimage).unwrap_or_default();
+
+    if !preimage_matches_hash(&preimage, &expected_payment_hash) {
+        return Err(ApiError::Api {
+            reason: "Spark Lightning payment returned invalid settlement proof; reconcile before retrying".to_string(),
+        });
+    }
 
     Ok(PayInvoiceResponse {
-        payment_hash,
+        payment_hash: expected_payment_hash,
         preimage,
         fee_msats: (payment.fees as i64) * 1000,
     })
@@ -663,6 +683,36 @@ mod tests {
         assert_eq!(info.payment_hash, "payment-hash");
         assert_eq!(info.preimage, "settled-preimage");
         assert!(has_payment_preimage(&payment));
+        assert!(is_settled_payment(&payment));
+    }
+
+    #[test]
+    fn pending_or_proofless_payment_is_not_settled() {
+        let mut payment = payment(PaymentDetails::Lightning {
+            description: None,
+            preimage: None,
+            invoice: "invoice".to_string(),
+            payment_hash: "payment-hash".to_string(),
+            destination_pubkey: "destination".to_string(),
+            lnurl_pay_info: None,
+            lnurl_withdraw_info: None,
+            lnurl_receive_metadata: None,
+        });
+        assert!(!is_settled_payment(&payment));
+        if let Some(PaymentDetails::Lightning { preimage, .. }) = &mut payment.details {
+            *preimage = Some("settled-preimage".to_string());
+        }
+        payment.status = PaymentStatus::Pending;
+        assert!(!is_settled_payment(&payment));
+    }
+
+    #[test]
+    fn proof_must_match_invoice_hash() {
+        let preimage = "00".repeat(32);
+        let hash = "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925";
+        assert!(preimage_matches_hash(&preimage, hash));
+        assert!(!preimage_matches_hash(&"01".repeat(32), hash));
+        assert!(!preimage_matches_hash("not-hex", hash));
     }
 
     #[test]
