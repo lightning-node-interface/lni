@@ -47,7 +47,7 @@ import type {
   Transaction as NativeTransaction,
 } from './generated/react_native_lexe';
 
-/** Lexe uses provider-determined fees and cannot quote or cap them. */
+/** Wallet-specific fee estimates; Lexe cannot enforce a fee cap. */
 export interface LexeOnchainTransaction extends OnchainTransaction {
   feeLimitSupported: false;
 }
@@ -511,7 +511,7 @@ export class LexeLniNode implements LightningNode, OnchainPayments {
     );
   }
 
-  /** Validate a local request; Lexe cannot quote the fee before sending. */
+  /** Fetch a fee estimate; reuse the payment ID when refreshing before submission. */
   async prepareOnchainTransaction(
     params: PrepareOnchainTransactionParams
   ): Promise<LexeOnchainTransaction> {

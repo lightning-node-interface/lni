@@ -507,6 +507,9 @@ pub async fn pay_invoice(
         invoice,
         fallback_amount: optional_amount_from_msats(params.amount_msats, "amount_msats")?,
         personal_note: None,
+        partner_pk: None,
+        partner_prop_fee: None,
+        partner_base_fee: None,
     };
 
     let payment = if let Some(timeout_secs) = params.timeout_seconds {

@@ -372,7 +372,7 @@ node.list_transactions(ListTransactionsParams) -> Result<Transaction, ApiError>
 On-chain Bitcoin payments
 -------------------------
 
-On-chain payments use a prepare-then-pay flow. Strike and Blink provide fee quotes before execution. Lexe supports this interface in Rust and React Native, but its SDK cannot quote or cap fees; preparation only validates the request locally. `fee_payer` answers who pays the mining/provider fee:
+On-chain payments use a prepare-then-pay flow. Strike and Blink provide fee quotes before execution. Lexe supports this interface in Rust and React Native, using wallet-specific fee estimates from Lexe SDK 0.1.27. Estimates are not locked quotes, and Lexe cannot cap fees. `fee_payer` answers who pays the mining/provider fee:
 
 - `OnchainFeePayer::Sender` means the recipient receives the full requested amount and the sender pays fees on top.
 - `OnchainFeePayer::Recipient` means fees are deducted from the requested amount.
@@ -486,6 +486,8 @@ Persist the prepared transaction and reuse it for retries; its ID is Lexe's
 idempotency key. Sends return without waiting for confirmations.
 See the [Lexe on-chain usage guide](bindings/react-native-lexe/README.md#on-chain-payments)
 for examples and the opt-in live test.
+See the [Lexe preflight guide](docs/LEXE_ONCHAIN_PREFLIGHT.md) for fee estimates,
+refresh behavior, and failure handling.
 
 Testing Lightning invoice payments
 ----------------------------------
