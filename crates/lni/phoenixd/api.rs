@@ -607,7 +607,7 @@ pub async fn list_transactions(
         reason: e.to_string(),
     })?;
     let incoming_text = incoming_text.as_str();
-    let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text).unwrap();
+    let incoming_payments: Vec<InvoiceResponse> = serde_json::from_str(&incoming_text)?;
 
     let mut transactions: Vec<Transaction> = vec![];
 
@@ -690,7 +690,7 @@ pub async fn list_transactions(
     })?;
     let outgoing_text = outgoing_text.as_str();
     let outgoing_payments: Vec<OutgoingPaymentResponse> =
-        serde_json::from_str(&outgoing_text).unwrap();
+        serde_json::from_str(&outgoing_text)?;
 
     // Convert outgoing payments into "outgoing" Transaction
     for payment in outgoing_payments {
@@ -792,8 +792,10 @@ pub async fn poll_invoice_events<F>(
                 break;
             }
             "error" => {
-                callback("failure".to_string(), transaction);
-                // break;
+                // A failed HTTP poll is not evidence that the invoice failed.
+                // Keep retrying until the payment window expires; consumers
+                // may tear down a live Tor circuit on a terminal failure.
+                callback("pending".to_string(), transaction);
             }
             _ => {
                 callback("pending".to_string(), transaction);
