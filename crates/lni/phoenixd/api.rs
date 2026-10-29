@@ -496,7 +496,11 @@ pub async fn lookup_invoice(
     _limit: Option<i64>,
     _search: Option<String>,
 ) -> Result<Transaction, ApiError> {
-    let url = format!("{}/payments/incoming/{}", config.url, payment_hash.unwrap());
+    let payment_hash = payment_hash.filter(|hash| {
+        hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }).ok_or_else(|| nwc_error("INVALID_INPUT", "An exact payment hash is required"))?;
+    let payment_hash = payment_hash.to_ascii_lowercase();
+    let url = format!("{}/payments/incoming/{}", config.url, payment_hash);
     let client = client(&config)?;
     let response = client
         .get(&url)
@@ -522,47 +526,115 @@ pub async fn lookup_invoice(
         reason: e.to_string(),
     })?;
     let response_text = response_text.as_str();
-    dbg!(response_text);
     let inv: InvoiceResponse = serde_json::from_str(&response_text)?;
+    incoming_invoice_transaction(inv, &payment_hash)
+}
 
-    let settled_at = if inv.completed_at.is_some() && inv.is_paid {
-        (inv.completed_at.unwrap_or(0) / 1000) as i64
-    } else {
-        0
-    };
-
-    // Determine the amount: use received_sat if paid, otherwise decode from invoice
-    let amount_msats = if inv.received_sat > 0 {
-        inv.received_sat * 1000
+// Only an exact incoming lookup may provide recipient settlement evidence.
+// Never log this response: it contains invoices and preimages.
+fn incoming_invoice_transaction(
+    inv: InvoiceResponse,
+    expected_hash: &str,
+) -> Result<Transaction, ApiError> {
+    if inv.payment_hash.len() != 64
+        || !inv.payment_hash.bytes().all(|b| b.is_ascii_hexdigit())
+        || !inv.payment_hash.eq_ignore_ascii_case(expected_hash)
+    {
+        return Err(nwc_error("INVALID_RESPONSE", "Incoming payment hash mismatch"));
+    }
+    if inv.received_sat < 0 || inv.fees < 0 || inv.created_at < 0
+        || inv.completed_at.map_or(false, |at| at < 0)
+        || (inv.is_paid && inv.completed_at.unwrap_or(0) <= 0)
+        || (!inv.is_paid && inv.completed_at.unwrap_or(0) > 0)
+    {
+        return Err(nwc_error("INVALID_RESPONSE", "Inconsistent incoming settlement record"));
+    }
+    let settled_at = if inv.is_paid { inv.completed_at.unwrap_or(0) / 1000 } else { 0 };
+    let amount_msats = inv.received_sat.checked_mul(1000)
+        .ok_or_else(|| nwc_error("INVALID_RESPONSE", "Incoming amount overflow"))?;
+    let fees_paid = inv.fees.checked_mul(1000)
+        .ok_or_else(|| nwc_error("INVALID_RESPONSE", "Incoming fee overflow"))?;
+    // For a paid invoice, only the actual received amount is evidence. Never
+    // substitute the amount requested by the encoded invoice.
+    let amount_msats = if inv.is_paid || amount_msats > 0 {
+        amount_msats
     } else if let Some(invoice_str) = &inv.invoice {
-        // Try to decode the invoice to get the amount
         match Bolt11Invoice::from_str(invoice_str) {
-            Ok(decoded_invoice) => decoded_invoice.amount_milli_satoshis().unwrap_or(0) as i64,
+            Ok(decoded) => {
+                let amount = decoded.amount_milli_satoshis().unwrap_or(0);
+                if amount > i64::MAX as u64 {
+                    return Err(nwc_error("INVALID_RESPONSE", "Invoice amount overflow"));
+                }
+                amount as i64
+            }
             Err(_) => 0,
         }
-    } else {
-        0
-    };
-
-    let txn = Transaction {
+    } else { 0 };
+    Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: inv.invoice.unwrap_or_default(),
         preimage: inv.preimage,
-        payment_hash: inv.payment_hash,
+        payment_hash: inv.payment_hash.to_ascii_lowercase(),
         amount_msats,
-        fees_paid: inv.fees * 1000,
+        fees_paid,
         created_at: inv.created_at,
-        expires_at: 0, // TODO
+        expires_at: 0,
         settled_at,
         description: inv.description.unwrap_or_default(),
-        description_hash: "".to_string(), // TODO
-        payer_note: Some(inv.payer_note.unwrap_or("".to_string())),
-        external_id: Some(inv.external_id.unwrap_or("".to_string())),
-        settlement_type: None,
-        settlement_state: None,
+        description_hash: String::new(),
+        payer_note: inv.payer_note,
+        external_id: inv.external_id,
+        settlement_type: Some(crate::SettlementType::Lightning),
+        settlement_state: Some(if inv.is_paid {
+            crate::SettlementState::Completed
+        } else {
+            crate::SettlementState::Pending
+        }),
         txid: None,
-    };
-    Ok(txn)
+    })
+}
+
+/// Locate one incoming payment by an exact payer note, then re-read its
+/// recipient-owned record by payment hash. Search results are only candidates.
+/// Missing or ambiguous results never establish settlement.
+pub async fn lookup_incoming_by_payer_note(
+    config: PhoenixdConfig,
+    payer_note: &str,
+) -> Result<Option<Transaction>, ApiError> {
+    if payer_note.is_empty() || payer_note.len() > 1024 {
+        return Err(nwc_error("INVALID_INPUT", "Invalid payer note length"));
+    }
+    let candidates = list_transactions(config.clone(), ListTransactionsParams {
+        from: 0, limit: 2500, payment_hash: None,
+        search: Some(payer_note.to_owned()), created_after: None, created_before: None,
+    }).await?;
+    let hash = exact_incoming_note_hash(&candidates, payer_note)?;
+    let Some(hash) = hash else { return Ok(None); };
+    let transaction = lookup_invoice(config, Some(hash), None, None, None).await?;
+    if transaction.payer_note.as_deref() != Some(payer_note) {
+        return Err(nwc_error("INVALID_RESPONSE", "Incoming payer note mismatch"));
+    }
+    Ok(Some(transaction))
+}
+
+fn exact_incoming_note_hash(
+    candidates: &[Transaction],
+    payer_note: &str,
+) -> Result<Option<String>, ApiError> {
+    let mut hashes = std::collections::BTreeSet::new();
+    for transaction in candidates {
+        if transaction.type_ != "incoming"
+            || transaction.payer_note.as_deref() != Some(payer_note) { continue; }
+        if transaction.payment_hash.len() != 64
+            || !transaction.payment_hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(nwc_error("INVALID_RESPONSE", "Invalid incoming payment hash"));
+        }
+        hashes.insert(transaction.payment_hash.to_ascii_lowercase());
+    }
+    if hashes.len() > 1 {
+        return Err(nwc_error("INVALID_RESPONSE", "Ambiguous incoming payer note"));
+    }
+    Ok(hashes.into_iter().next())
 }
 
 pub async fn list_transactions(
@@ -818,4 +890,96 @@ pub async fn on_invoice_events(
         _ => {}
     })
     .await;
+}
+
+#[cfg(test)]
+mod incoming_evidence_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn incoming_http_lookup_rejects_response_for_another_payment() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0u8; 1];
+                stream.read_exact(&mut byte).await.unwrap();
+                request.push(byte[0]);
+                assert!(request.len() < 8192);
+            }
+            let line = String::from_utf8(request).unwrap();
+            assert!(line.starts_with(&format!("GET /payments/incoming/{} ", "22".repeat(32))));
+            let body = serde_json::to_string(&record()).unwrap();
+            let reply = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+            stream.write_all(reply.as_bytes()).await.unwrap();
+        });
+        let config = PhoenixdConfig { url: format!("http://{}", address), ..Default::default() };
+        let result = tokio::time::timeout(Duration::from_secs(5),
+            lookup_invoice(config, Some("22".repeat(32)), None, None, None)).await.unwrap();
+        assert!(result.is_err());
+        server.await.unwrap();
+    }
+
+    fn record() -> InvoiceResponse {
+        serde_json::from_value(serde_json::json!({
+            "preimage": "", "paymentHash": "11".repeat(32),
+            "receivedSat": 2, "fees": 0, "completedAt": 1700000001000_i64,
+            "createdAt": 1700000000000_i64, "isPaid": true
+        })).unwrap()
+    }
+
+    #[test]
+    fn incoming_lookup_preserves_exact_settlement_evidence() {
+        let txn = incoming_invoice_transaction(record(), &"11".repeat(32)).unwrap();
+        assert_eq!(txn.amount_msats, 2000);
+        assert_eq!(txn.settled_at, 1700000001);
+        assert_eq!(txn.settlement_type, Some(crate::SettlementType::Lightning));
+        assert_eq!(txn.settlement_state, Some(crate::SettlementState::Completed));
+    }
+
+    #[test]
+    fn incoming_lookup_rejects_wrong_hash_and_contradictory_status() {
+        assert!(incoming_invoice_transaction(record(), &"22".repeat(32)).is_err());
+        let mut inv = record(); inv.completed_at = None;
+        assert!(incoming_invoice_transaction(inv, &"11".repeat(32)).is_err());
+        let mut inv = record(); inv.is_paid = false;
+        assert!(incoming_invoice_transaction(inv, &"11".repeat(32)).is_err());
+    }
+
+    #[test]
+    fn incoming_lookup_checks_amounts_and_preserves_zero_received() {
+        for amount in [-1, i64::MAX] {
+            let mut inv = record(); inv.received_sat = amount;
+            assert!(incoming_invoice_transaction(inv, &"11".repeat(32)).is_err());
+        }
+        let mut inv = record(); inv.fees = i64::MAX;
+        assert!(incoming_invoice_transaction(inv, &"11".repeat(32)).is_err());
+        let mut inv = record(); inv.received_sat = 0;
+        assert_eq!(incoming_invoice_transaction(inv, &"11".repeat(32)).unwrap().amount_msats, 0);
+    }
+
+    #[test]
+    fn incoming_lookup_pending_is_not_settled() {
+        let mut inv = record(); inv.is_paid = false; inv.completed_at = None;
+        let txn = incoming_invoice_transaction(inv, &"11".repeat(32)).unwrap();
+        assert_eq!(txn.settled_at, 0);
+        assert_eq!(txn.settlement_state, Some(crate::SettlementState::Pending));
+    }
+
+    #[test]
+    fn payer_note_lookup_ignores_substrings_and_outgoing_and_rejects_ambiguity() {
+        let mut txn = incoming_invoice_transaction(record(), &"11".repeat(32)).unwrap();
+        txn.payer_note = Some("prefix-round-id-suffix".into());
+        assert_eq!(exact_incoming_note_hash(&[txn.clone()], "round-id").unwrap(), None);
+        txn.payer_note = Some("round-id".into());
+        txn.type_ = "outgoing".into();
+        assert_eq!(exact_incoming_note_hash(&[txn.clone()], "round-id").unwrap(), None);
+        txn.type_ = "incoming".into();
+        assert_eq!(exact_incoming_note_hash(&[txn.clone(), txn.clone()], "round-id").unwrap(), Some("11".repeat(32)));
+        let mut other = txn.clone(); other.payment_hash = "22".repeat(32);
+        assert!(exact_incoming_note_hash(&[txn, other], "round-id").is_err());
+    }
 }
