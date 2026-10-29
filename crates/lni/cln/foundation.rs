@@ -141,6 +141,9 @@ pub struct ValidatedInvoice {
     amountless: bool,
 }
 impl ValidatedInvoice {
+    pub fn account(&self) -> NativeAccount {
+        self.account
+    }
     pub fn invoice(&self) -> &str {
         &self.text
     }
@@ -359,6 +362,82 @@ impl ClnFoundation {
             account: self.account,
             text: text.to_owned(),
             digest: Sha256::digest(text.as_bytes()).into(),
+            payment_hash: hash,
+            amount_msat: amount,
+            payee,
+            expires_at_ms: expires,
+            amountless,
+        })
+    }
+
+    /// Reconstruct an exact previously inspected artifact for read-only recovery.
+    /// The durable intent supplies its digest/hash/amount; no new offer binding or
+    /// freshness is inferred here. Dispatch still rejects expired artifacts.
+    pub fn restore_for_lookup(
+        &self,
+        text: &str,
+        expected_digest: [u8; 32],
+        expected: InvoiceExpectation,
+    ) -> Result<ValidatedInvoice> {
+        canonical_text(text)?;
+        let digest: [u8; 32] = Sha256::digest(text.as_bytes()).into();
+        if digest != expected_digest
+            || expected.expected_payment_hash.is_none()
+            || expected.amount_msat == 0
+            || expected.amount_msat > i64::MAX as u64
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        let (hash, amount, payee, expires, amountless) = if text.starts_with("lni1") {
+            let invoice = parse_bolt12(text)?;
+            if invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network()) {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            (
+                invoice.payment_hash().0,
+                invoice.amount_msats(),
+                invoice.signing_pubkey().serialize(),
+                milliseconds(
+                    invoice
+                        .created_at()
+                        .checked_add(invoice.relative_expiry())
+                        .ok_or(AdapterError::InvoiceMismatch)?,
+                )?,
+                false,
+            )
+        } else {
+            let invoice =
+                Bolt11Invoice::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
+            invoice
+                .check_signature()
+                .map_err(|_| AdapterError::InvoiceMismatch)?;
+            if invoice.currency() != self.account.chain.currency()
+                || invoice
+                    .features()
+                    .map_or(false, |f| f.requires_unknown_bits())
+            {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            (
+                decode32(&invoice.payment_hash().to_string())?,
+                invoice
+                    .amount_milli_satoshis()
+                    .unwrap_or(expected.amount_msat),
+                invoice.recover_payee_pub_key().serialize(),
+                milliseconds(invoice.expires_at().ok_or(AdapterError::InvoiceMismatch)?)?,
+                invoice.amount_milli_satoshis().is_none(),
+            )
+        };
+        if Some(hash) != expected.expected_payment_hash
+            || amount != expected.amount_msat
+            || expected.expected_payee.map_or(false, |p| p != payee)
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        Ok(ValidatedInvoice {
+            account: self.account,
+            text: text.to_owned(),
+            digest,
             payment_hash: hash,
             amount_msat: amount,
             payee,

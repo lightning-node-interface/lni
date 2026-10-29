@@ -816,3 +816,29 @@ async fn receiving_ambiguous_mismatched_and_contradictory_evidence_cannot_author
     }
     finish(worker).await;
 }
+
+#[tokio::test]
+async fn historical_invoice_restore_requires_exact_durable_binding_and_cannot_pay_expired() {
+    let (config, worker) = server(handshake()).await;
+    let adapter = ClnFoundation::connect(config, account()).await.unwrap();
+    let text = bolt11();
+    let digest: [u8; 32] = Sha256::digest(text.as_bytes()).into();
+    let expected = InvoiceExpectation {
+        expected_payment_hash: Some(hash()),
+        ..expectation()
+    };
+    let restored = adapter.restore_for_lookup(&text, digest, expected).unwrap();
+    let expired = Observation {
+        now_ms: 1_700_010_000_000,
+        uncertainty_ms: 0,
+    };
+    assert!(adapter.inspect_bolt11(&text, expected, expired).is_err());
+    assert!(adapter
+        .restore_for_lookup(&text, [9; 32], expected)
+        .is_err());
+    assert!(matches!(
+        adapter.dispatch(&restored, request(), expired).await,
+        Err(AdapterError::InvalidInput)
+    ));
+    finish(worker).await;
+}
