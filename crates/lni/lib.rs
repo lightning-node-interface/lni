@@ -227,6 +227,7 @@ pub mod phoenixd {
 
 pub mod cln {
     pub mod api;
+    pub mod foundation;
     pub mod lib;
     pub mod types;
     pub use lib::{ClnConfig, ClnNode};

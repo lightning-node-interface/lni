@@ -562,8 +562,8 @@ fn incoming_invoice_transaction(
     let settled_at = if inv.is_paid { inv.completed_at.unwrap_or(0) / 1000 } else { 0 };
     let amount_msats = inv.received_sat.checked_mul(1000)
         .ok_or_else(|| nwc_error("INVALID_RESPONSE", "Incoming amount overflow"))?;
-    let fees_paid = inv.fees.checked_mul(1000)
-        .ok_or_else(|| nwc_error("INVALID_RESPONSE", "Incoming fee overflow"))?;
+    // Phoenixd ApiType.IncomingPayment.fees is MilliSatoshi, unlike receivedSat.
+    let fees_paid = inv.fees;
     // For a paid invoice, only the actual received amount is evidence. Never
     // substitute the amount requested by the encoded invoice.
     let amount_msats = if inv.is_paid || amount_msats > 0 {
@@ -721,7 +721,7 @@ pub async fn list_transactions(
             preimage: inc_payment.preimage,
             payment_hash: inc_payment.payment_hash,
             amount_msats: inc_payment.received_sat * 1000,
-            fees_paid: inc_payment.fees * 1000,
+            fees_paid: inc_payment.fees,
             created_at: (inc_payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
             settled_at: settled_at.unwrap_or(0),
@@ -804,7 +804,7 @@ pub async fn list_transactions(
             preimage: payment.preimage.unwrap_or("".to_string()),
             payment_hash: payment.payment_hash.unwrap_or("".to_string()),
             amount_msats: payment.sent * 1000,
-            fees_paid: payment.fees * 1000,
+            fees_paid: payment.fees,
             created_at: (payment.created_at / 1000) as i64,
             expires_at: 0, // TODO
             settled_at: settled_at.unwrap_or(0),
@@ -975,6 +975,10 @@ mod incoming_evidence_tests {
             assert!(incoming_invoice_transaction(inv, &payment_hash()).is_err());
         }
         let mut inv = record(); inv.fees = i64::MAX;
+        assert_eq!(incoming_invoice_transaction(inv, &payment_hash()).unwrap().fees_paid, i64::MAX);
+        let mut inv = record(); inv.fees = 1234;
+        assert_eq!(incoming_invoice_transaction(inv, &payment_hash()).unwrap().fees_paid, 1234);
+        let mut inv = record(); inv.fees = -1;
         assert!(incoming_invoice_transaction(inv, &payment_hash()).is_err());
         let mut inv = record(); inv.received_sat = 0;
         assert_eq!(incoming_invoice_transaction(inv, &payment_hash()).unwrap().amount_msats, 0);
