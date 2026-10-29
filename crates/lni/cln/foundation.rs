@@ -214,17 +214,46 @@ pub enum IncomingStatus {
     Settled(IncomingSettlement),
 }
 
+pub const INCOMING_UPDATE_PAGE_LIMIT: usize = 16;
+#[derive(Clone, PartialEq, Eq)]
+pub struct IncomingInvoiceCandidate {
+    pub payment_id: [u8; 32],
+    pub payment_hash: [u8; 32],
+    pub invoice_digest: [u8; 32],
+    pub updated_index: u64,
+}
+#[derive(Clone, PartialEq, Eq)]
+pub struct IncomingUpdatePage {
+    pub account: NativeAccount,
+    pub from_index: u64,
+    pub next_index: u64,
+    pub rows_seen: usize,
+    pub candidates: Vec<IncomingInvoiceCandidate>,
+}
+
 /// Does not implement Debug and never includes native JSON/error bodies in errors.
 pub struct ClnFoundation {
     base: reqwest::Url,
     client: reqwest::Client,
     account: NativeAccount,
+    outgoing_ready: bool,
 }
 
 impl ClnFoundation {
     /// Verify the actual account and source-observed capabilities before exposing
     /// payment support. This performs read-only RPCs; no invoice acquisition/pay.
     pub async fn connect(config: ClnConfig, expected: NativeAccount) -> Result<Self> {
+        Self::connect_for(config, expected, true).await
+    }
+    /// Receiving-only capability requires no wallet payment or fetch permission.
+    pub async fn connect_receiving(config: ClnConfig, expected: NativeAccount) -> Result<Self> {
+        Self::connect_for(config, expected, false).await
+    }
+    async fn connect_for(
+        config: ClnConfig,
+        expected: NativeAccount,
+        outgoing_ready: bool,
+    ) -> Result<Self> {
         PublicKey::from_slice(&expected.node_id).map_err(|_| AdapterError::InvalidInput)?;
         let mut base = reqwest::Url::parse(&config.url).map_err(|_| AdapterError::InvalidInput)?;
         if !base.username().is_empty()
@@ -273,38 +302,49 @@ impl ClnFoundation {
             base,
             client: builder.build().map_err(|_| AdapterError::InvalidInput)?,
             account: expected,
+            outgoing_ready,
         };
         adapter.check_account().await?;
-        for (command, required) in [
-            ("pay", &["label", "maxfee"][..]),
-            ("listpays", &["payment_hash"][..]),
-            ("fetchinvoice", &["offer", "amount_msat", "payer_note"][..]),
-        ] {
-            let help = adapter.rpc("help", json!({"command":command})).await?;
-            let rows = help
-                .get("help")
-                .and_then(Value::as_array)
-                .ok_or(AdapterError::Unsupported)?;
-            if rows.len() != 1 {
-                return Err(AdapterError::Unsupported);
+        if outgoing_ready {
+            for (command, required) in [
+                ("pay", &["label", "maxfee"][..]),
+                ("listpays", &["payment_hash"][..]),
+                ("fetchinvoice", &["offer", "amount_msat", "payer_note"][..]),
+            ] {
+                adapter.require_command(command, required).await?;
             }
-            let text = rows[0]
-                .get("command")
-                .and_then(Value::as_str)
-                .ok_or(AdapterError::Unsupported)?;
-            let tokens: Vec<_> = text
-                .split_whitespace()
-                .map(|t| t.trim_matches(['[', ']']))
-                .collect();
-            if tokens.first().copied() != Some(command)
-                || required.iter().any(|field| !tokens.contains(field))
-            {
-                return Err(AdapterError::Unsupported);
-            }
+        } else {
+            adapter
+                .require_command("listinvoices", &["payment_hash", "index", "start", "limit"])
+                .await?;
         }
         Ok(adapter)
     }
 
+    async fn require_command(&self, command: &str, required: &[&str]) -> Result<()> {
+        let help = self.rpc("help", json!({"command":command})).await?;
+        let rows = help
+            .get("help")
+            .and_then(Value::as_array)
+            .ok_or(AdapterError::Unsupported)?;
+        if rows.len() != 1 {
+            return Err(AdapterError::Unsupported);
+        }
+        let text = rows[0]
+            .get("command")
+            .and_then(Value::as_str)
+            .ok_or(AdapterError::Unsupported)?;
+        let tokens: Vec<_> = text
+            .split_whitespace()
+            .map(|t| t.trim_matches(['[', ']']))
+            .collect();
+        if tokens.first().copied() != Some(command)
+            || required.iter().any(|field| !tokens.contains(field))
+        {
+            return Err(AdapterError::Unsupported);
+        }
+        Ok(())
+    }
     pub fn account(&self) -> NativeAccount {
         self.account
     }
@@ -455,6 +495,9 @@ impl ClnFoundation {
         expected: InvoiceExpectation,
         observation: Observation,
     ) -> Result<ValidatedInvoice> {
+        if !self.outgoing_ready {
+            return Err(AdapterError::Unsupported);
+        }
         canonical_text(offer_text)?;
         let offer = Offer::from_str(offer_text).map_err(|_| AdapterError::InvoiceMismatch)?;
         if offer.to_string() != offer_text
@@ -525,6 +568,9 @@ impl ClnFoundation {
         request: DispatchRequest,
         observation: Observation,
     ) -> Result<PaymentStatus> {
+        if !self.outgoing_ready {
+            return Err(AdapterError::Unsupported);
+        }
         if invoice.account != self.account
             || request.operation == [0; 16]
             || request.fee_limit_msat > i64::MAX as u64
@@ -696,6 +742,113 @@ impl ClnFoundation {
             }
             _ => Ok(IncomingStatus::Unknown),
         }
+    }
+
+    /// Bounded UPDATED-index discovery only. A returned candidate is not settled
+    /// evidence: the caller must persist its association and perform the exact
+    /// hash lookup before a ledger claim. No node history is silently skipped.
+    pub async fn incoming_updates(&self, from_index: u64) -> Result<IncomingUpdatePage> {
+        if from_index == 0 || from_index > i64::MAX as u64 {
+            return Err(AdapterError::InvalidInput);
+        }
+        self.check_account().await?;
+        self.require_command("listinvoices", &["payment_hash", "index", "start", "limit"])
+            .await?;
+        let reply = self
+            .rpc(
+                "listinvoices",
+                json!({"index":"updated","start":from_index,"limit":INCOMING_UPDATE_PAGE_LIMIT}),
+            )
+            .await?;
+        let rows = reply
+            .get("invoices")
+            .and_then(Value::as_array)
+            .ok_or(AdapterError::InvalidResponse)?;
+        if rows.len() > INCOMING_UPDATE_PAGE_LIMIT {
+            return Err(AdapterError::InvalidResponse);
+        }
+        let mut last = None;
+        let mut candidates = Vec::new();
+        let mut hashes = Vec::new();
+        for row in rows {
+            let index = row
+                .get("updated_index")
+                .and_then(Value::as_u64)
+                .ok_or(AdapterError::InvalidResponse)?;
+            if index < from_index
+                || index >= i64::MAX as u64
+                || last.map_or(false, |n| index <= n)
+                || row
+                    .get("created_index")
+                    .and_then(Value::as_u64)
+                    .map_or(true, |n| n == 0)
+            {
+                return Err(AdapterError::InvalidResponse);
+            }
+            last = Some(index);
+            let status = row
+                .get("status")
+                .and_then(Value::as_str)
+                .ok_or(AdapterError::InvalidResponse)?;
+            if !["unpaid", "paid", "expired"].contains(&status) {
+                return Err(AdapterError::InvalidResponse);
+            }
+            if status != "paid" || row.get("paid_outpoint").map_or(false, |v| !v.is_null()) {
+                continue;
+            }
+            let note = match row.get("invreq_payer_note").and_then(Value::as_str) {
+                Some(n)
+                    if n.len() == 64
+                        && n.bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) =>
+                {
+                    n
+                }
+                _ => continue,
+            };
+            let payment_id = decode32(note)?;
+            if payment_id == [0; 32] {
+                continue;
+            }
+            if row.get("bolt11").map_or(false, |v| !v.is_null()) {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            let text = row
+                .get("bolt12")
+                .and_then(Value::as_str)
+                .ok_or(AdapterError::InvalidResponse)?;
+            canonical_text(text)?;
+            let invoice = parse_bolt12(text)?;
+            let payment_hash = decode32(
+                row.get("payment_hash")
+                    .and_then(Value::as_str)
+                    .ok_or(AdapterError::InvalidResponse)?,
+            )?;
+            if invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network())
+                || invoice.payment_hash().0 != payment_hash
+                || invoice.payer_note().map(|n| n.to_string()).as_deref() != Some(note)
+                || hashes.contains(&payment_hash)
+                || invoice.amount_msats() == 0
+                || invoice.amount_msats() > i64::MAX as u64
+            {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            hashes.push(payment_hash);
+            candidates.push(IncomingInvoiceCandidate {
+                payment_id,
+                payment_hash,
+                invoice_digest: Sha256::digest(text.as_bytes()).into(),
+                updated_index: index,
+            });
+        }
+        self.check_account().await?;
+        Ok(IncomingUpdatePage {
+            account: self.account,
+            from_index,
+            next_index: last.map_or(from_index, |n| n + 1),
+            rows_seen: rows.len(),
+            candidates,
+        })
     }
 
     async fn records(&self, hash: [u8; 32]) -> Result<Vec<Value>> {

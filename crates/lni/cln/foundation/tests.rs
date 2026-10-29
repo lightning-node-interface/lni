@@ -842,3 +842,131 @@ async fn historical_invoice_restore_requires_exact_durable_binding_and_cannot_pa
     ));
     finish(worker).await;
 }
+
+fn receiving_handshake() -> Vec<Step> {
+    vec![
+        step("getinfo", info()),
+        step(
+            "help",
+            json!({"help":[{"command":"listinvoices [payment_hash] [index] [start] [limit]"}]}),
+        ),
+    ]
+}
+fn updates_help() -> Step {
+    step(
+        "help",
+        json!({"help":[{"command":"listinvoices [payment_hash] [index] [start] [limit]"}]}),
+    )
+}
+#[tokio::test]
+async fn receiving_discovery_is_bounded_indexed_signed_and_requires_separate_exact_lookup() {
+    let (_, text) = bolt12([8; 32]);
+    let mut row = incoming_row(&text, true);
+    row["invreq_payer_note"] = json!(hex::encode([8; 32]));
+    row["updated_index"] = json!(7);
+    row["created_index"] = json!(2);
+    let mut steps = receiving_handshake();
+    steps.push(step("getinfo", info()));
+    steps.push(updates_help());
+    steps.push(Step {
+        path: "listinvoices",
+        body: Some(json!({"index":"updated","start":4,"limit":16})),
+        reply: Some(json!({"invoices":[row.clone()]})),
+    });
+    steps.push(step("getinfo", info()));
+    steps.push(step("getinfo", info()));
+    steps.push(Step {
+        path: "listinvoices",
+        body: Some(json!({"payment_hash":hex::encode(hash())})),
+        reply: Some(json!({"invoices":[row]})),
+    });
+    let (config, worker) = server(steps).await;
+    let adapter = ClnFoundation::connect_receiving(config, account())
+        .await
+        .unwrap();
+    let page = adapter.incoming_updates(4).await.unwrap();
+    assert!(page.account == account() && page.next_index == 8 && page.rows_seen == 1);
+    assert!(
+        page.candidates.len() == 1
+            && page.candidates[0].payment_id == [8; 32]
+            && page.candidates[0].payment_hash == hash()
+    );
+    assert!(matches!(
+        adapter
+            .lookup_incoming(page.candidates[0].payment_hash, observation())
+            .await
+            .unwrap(),
+        IncomingStatus::Settled(_)
+    ));
+    let restored = adapter
+        .restore_for_lookup(
+            &bolt11(),
+            Sha256::digest(bolt11().as_bytes()).into(),
+            InvoiceExpectation {
+                expected_payment_hash: Some(hash()),
+                ..expectation()
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        adapter.dispatch(&restored, request(), observation()).await,
+        Err(AdapterError::Unsupported)
+    ));
+    assert!(matches!(
+        adapter
+            .fetch_bolt12("invalid", [1; 32], expectation(), observation())
+            .await,
+        Err(AdapterError::Unsupported)
+    ));
+    finish(worker).await;
+}
+#[tokio::test]
+async fn malformed_or_unbound_updated_pages_never_yield_a_cursor_advance() {
+    let (_, text) = bolt12([8; 32]);
+    let mut valid = incoming_row(&text, true);
+    valid["invreq_payer_note"] = json!(hex::encode([8; 32]));
+    valid["updated_index"] = json!(7);
+    valid["created_index"] = json!(2);
+    for case in 0..5 {
+        let mut row = valid.clone();
+        match case {
+            0 => row["updated_index"] = json!(3),
+            1 => row["invreq_payer_note"] = json!(hex::encode([9; 32])),
+            2 => row["payment_hash"] = json!(hex::encode([1; 32])),
+            3 => row["created_index"] = json!(0),
+            _ => row["updated_index"] = json!(i64::MAX as u64),
+        }
+        let mut steps = receiving_handshake();
+        steps.push(step("getinfo", info()));
+        steps.push(updates_help());
+        steps.push(step("listinvoices", json!({"invoices":[row]})));
+        let (config, worker) = server(steps).await;
+        let adapter = ClnFoundation::connect_receiving(config, account())
+            .await
+            .unwrap();
+        assert!(adapter.incoming_updates(4).await.is_err());
+        finish(worker).await;
+    }
+}
+#[tokio::test]
+async fn empty_updates_keep_cursor_and_unrelated_native_metadata_is_not_a_payment_candidate() {
+    let mut steps = receiving_handshake();
+    for rows in [
+        json!([]),
+        json!([{"created_index":2,"updated_index":10,"status":"expired"}]),
+    ] {
+        steps.push(step("getinfo", info()));
+        steps.push(updates_help());
+        steps.push(step("listinvoices", json!({"invoices":rows})));
+        steps.push(step("getinfo", info()));
+    }
+    let (config, worker) = server(steps).await;
+    let adapter = ClnFoundation::connect_receiving(config, account())
+        .await
+        .unwrap();
+    let empty = adapter.incoming_updates(4).await.unwrap();
+    assert!(empty.next_index == 4 && empty.candidates.is_empty());
+    let expired = adapter.incoming_updates(4).await.unwrap();
+    assert!(expired.next_index == 11 && expired.candidates.is_empty());
+    finish(worker).await;
+}
