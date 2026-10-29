@@ -193,6 +193,28 @@ pub enum PaymentStatus {
     FailedFinal,
 }
 
+/// Ephemeral native proof for the existing paid-construction input. Deliberately
+/// neither Debug, Clone nor serializable: financial records retain the exact
+/// invoice and sanitized settlement, never the preimage. Recover it by an exact
+/// read-only lookup, not by repeating pay.
+pub struct ConstructionPaymentProof {
+    settlement: NativeSettlement,
+    preimage: [u8; 32],
+}
+impl ConstructionPaymentProof {
+    pub fn settlement(&self) -> &NativeSettlement {
+        &self.settlement
+    }
+    pub fn preimage(&self) -> &[u8; 32] {
+        &self.preimage
+    }
+}
+impl Drop for ConstructionPaymentProof {
+    fn drop(&mut self) {
+        self.preimage.fill(0);
+    }
+}
+
 /// Evidence from an exact account-owned Lightning invoice lookup. Amount is the
 /// amount actually received, not the requested invoice amount. The ledger must
 /// validate its accepted amount/window/hash-or-ID binding before authorization.
@@ -560,6 +582,35 @@ impl ClnFoundation {
         })
     }
 
+    /// Restore an exact historical invoice for a pinned offer/note. Expiry may
+    /// prevent new dispatch but never prevents read-only reconciliation.
+    pub fn restore_bolt12_for_offer_lookup(
+        &self,
+        text: &str,
+        expected_digest: [u8; 32],
+        offer_text: &str,
+        payment_id: [u8; 32],
+        expected: InvoiceExpectation,
+    ) -> Result<ValidatedInvoice> {
+        if !self.outgoing_ready || payment_id == [0; 32] {
+            return Err(AdapterError::Unsupported);
+        }
+        canonical_text(offer_text)?;
+        let offer = Offer::from_str(offer_text).map_err(|_| AdapterError::InvoiceMismatch)?;
+        let invoice = parse_bolt12(text)?;
+        if offer.to_string() != offer_text
+            || offer.offer_features().requires_unknown_bits()
+            || !offer.chains().contains(&ChainHash::using_genesis_block(self.account.chain.network()))
+            || invoice.offer_id() != Some(offer.id())
+            || invoice.payer_note().map(|s| s.to_string()) != Some(hex::encode(payment_id))
+            || invoice.invoice_features().requires_unknown_bits()
+            || invoice.invoice_request_features().requires_unknown_bits()
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        self.restore_for_lookup(text, expected_digest, expected)
+    }
+
     /// Invoke at most once under a consumed durable ledger permit. Existing
     /// native records are recovered first; pay is never repeated on uncertainty.
     pub async fn dispatch(
@@ -617,6 +668,33 @@ impl ClnFoundation {
             &self.records(invoice.payment_hash).await?,
             observation,
         )
+    }
+
+    /// Read-only proof recovery. It applies exactly the same single-record,
+    /// native account, label, invoice, amount, time and hash checks as lookup.
+    /// Pending/failed/ambiguous results yield no construction proof.
+    pub async fn lookup_construction_proof(
+        &self,
+        invoice: &ValidatedInvoice,
+        operation: [u8; 16],
+        observation: Observation,
+    ) -> Result<Option<ConstructionPaymentProof>> {
+        if !self.outgoing_ready {
+            return Err(AdapterError::Unsupported);
+        }
+        if invoice.account != self.account || operation == [0; 16] {
+            return Err(AdapterError::InvalidInput);
+        }
+        self.check_account().await?;
+        let rows = self.records(invoice.payment_hash).await?;
+        let PaymentStatus::Settled(settlement) =
+            self.interpret(invoice, operation, &rows, observation)?
+        else {
+            return Ok(None);
+        };
+        let preimage = decode32(rows[0].get("preimage").and_then(Value::as_str)
+            .ok_or(AdapterError::InvalidResponse)?)?;
+        Ok(Some(ConstructionPaymentProof { settlement, preimage }))
     }
 
     /// Read-only exact native receiving lookup. Public payer claims and a paid

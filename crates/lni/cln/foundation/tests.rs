@@ -970,3 +970,45 @@ async fn empty_updates_keep_cursor_and_unrelated_native_metadata_is_not_a_paymen
     assert!(expired.next_index == 11 && expired.candidates.is_empty());
     finish(worker).await;
 }
+
+#[tokio::test]
+async fn construction_proof_is_lookup_only_and_exactly_bound() {
+    let invoice = bolt11();
+    let mut wrong = row(&invoice, "complete");
+    wrong["label"] = json!(hex::encode([99; 16]));
+    let mut steps = handshake();
+    steps.extend([
+        step("getinfo", info()),
+        step("listpays", json!({"pays":[wrong]})),
+        step("getinfo", info()),
+        step("listpays", json!({"pays":[row(&invoice,"complete"),row(&invoice,"complete")]})),
+        step("getinfo", info()),
+        step("listpays", json!({"pays":[row(&invoice,"complete")]})),
+    ]);
+    let (config, worker) = server(steps).await;
+    let adapter = ClnFoundation::connect(config, account()).await.unwrap();
+    let prepared = adapter.inspect_bolt11(&invoice, expectation(), observation()).unwrap();
+    for _ in 0..2 {
+        assert!(adapter.lookup_construction_proof(&prepared, request().operation, observation()).await.unwrap().is_none());
+    }
+    let proof = adapter.lookup_construction_proof(&prepared, request().operation, observation()).await.unwrap().unwrap();
+    assert_eq!(*proof.preimage(), preimage());
+    assert_eq!(proof.settlement().fee_msat, 50);
+    assert_eq!(proof.settlement().invoice_digest, prepared.digest());
+    finish(worker).await;
+}
+
+#[tokio::test]
+async fn restored_construction_invoice_still_requires_exact_offer_and_payer_note() {
+    let (offer, invoice) = bolt12([7;32]);
+    let (config, worker) = server(handshake()).await;
+    let adapter=ClnFoundation::connect(config,account()).await.unwrap();
+    let digest: [u8;32]=Sha256::digest(invoice.as_bytes()).into();
+    let expected=InvoiceExpectation{expected_payment_hash:Some(hash()),..expectation()};
+    assert!(adapter.restore_bolt12_for_offer_lookup(&invoice,digest,&offer,[7;32],expected).is_ok());
+    assert!(adapter.restore_bolt12_for_offer_lookup(&invoice,digest,&offer,[8;32],expected).is_err());
+    let (other,_) = bolt12([8;32]);
+    // Same offer may issue several notes; changed note still cannot restore.
+    assert!(adapter.restore_bolt12_for_offer_lookup(&invoice,digest,&other,[8;32],expected).is_err());
+    finish(worker).await;
+}
