@@ -36,6 +36,15 @@ The current expanded Lexe addon is about 19.9 MB.
 
 Open `/` to see a live Bitcoin receiving address. The public page calls
 `/api/probe?mode=address`; only the address is returned, never the credential.
+The page also has a LexeConnect flow. Press **Start connection**, open the
+approval link in Lexe, and approve the `read_info` and `receive` scopes. The
+browser keeps one streamed `POST /api/connect` request open while its native
+LexeConnect session polls the encrypted mailbox. Once Lexe approves, that same
+function uses the returned credential to fetch the wallet's Lightning address,
+Bitcoin receiving address, and optional human Bitcoin address. Only those
+addresses are sent to the browser. The credential is not saved by this demo.
+The request expires after four minutes; closing the page cancels it.
+
 Call `/api/probe` to see the deployed Node platform and architecture, or
 `/api/probe?mode=load` to verify that Node loaded the Rust addon. To test
 Lexe's network path, set `LEXE_PROBE_TOKEN`, `LEXE_CLIENT_CREDENTIALS`, and
@@ -53,7 +62,9 @@ The Node binding also exposes the React Native Lexe wallet operations and a
 `LexeConnect` helper with mailbox polling, cancellation, and response mapping.
 `LexeConnectSession` holds its private response key in memory. A Vercel function
 cannot rely on a later request landing in the same process, so a production
-Connect flow needs a durable handoff design or an always-running component.
+Connect flow that survives a closed browser request needs a durable handoff
+design or an always-running component. This single-request demo stays within
+Vercel's configured function duration.
 Payment history and invoice monitoring require a persistent `dataDir`; the
 stateless Vercel probe intentionally does not exercise those operations.
 
