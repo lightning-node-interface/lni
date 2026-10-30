@@ -310,7 +310,8 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { InvoiceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, SparkNode, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo, generateMnemonic, sayAfterWithTokio } = nativeBinding
+const { InvoiceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, SparkNode, LexeNode, LexeConnectSession, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo, generateMnemonic, sayAfterWithTokio } = nativeBinding
+require('./lexe-events').installLexeInvoiceEvents(LexeNode)
 
 module.exports.InvoiceType = InvoiceType
 module.exports.PhoenixdNode = PhoenixdNode
@@ -321,6 +322,9 @@ module.exports.NwcNode = NwcNode
 module.exports.StrikeNode = StrikeNode
 module.exports.SpeedNode = SpeedNode
 module.exports.SparkNode = SparkNode
+module.exports.LexeNode = LexeNode
+module.exports.LexeConnectSession = LexeConnectSession
+module.exports.LexeConnect = require('./lexe-connect').createLexeConnectClass(LexeConnectSession)
 module.exports.detectPaymentType = detectPaymentType
 module.exports.needsResolution = needsResolution
 module.exports.resolveToBolt11 = resolveToBolt11

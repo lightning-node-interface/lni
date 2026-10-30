@@ -1,0 +1,11 @@
+{
+  "name": "lni-lexe-vercel-napi-poc",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
+  }
+}
