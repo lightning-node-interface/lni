@@ -54,7 +54,7 @@
         <p id="connect-status" class="status" role="status">Ready to connect.</p>
         <div id="approval-flow" class="flow" hidden>
           <h3>Approve in Lexe</h3>
-          <p>Open the link below. If Lexe is on another device, copy the link and open it there.</p>
+          <p>Open the link below. After approving, return to this tab to see your addresses. If this browser allows it, the Lexe tab will close automatically. For another device, copy the link and open it there.</p>
           <div class="actions">
             <a id="open-lexe" class="button" target="_blank" rel="noopener noreferrer" hidden>Open Lexe approval</a>
             <button id="copy-connect" class="secondary" hidden>Copy connection link</button>
@@ -142,6 +142,15 @@
       let connectController;
       let connectionString = '';
       let connectionFinished = false;
+      let approvalTab;
+
+      function returnFromLexe() {
+        if (approvalTab && !approvalTab.closed) {
+          approvalTab.close();
+          window.focus();
+        }
+        approvalTab = undefined;
+      }
 
       function clearConnectionLink() {
         connectionString = '';
@@ -191,6 +200,7 @@
           connectionFinished = true;
         }
         if (connectionFinished) {
+          returnFromLexe();
           approvalFlow.hidden = true;
           clearConnectionLink();
         }
@@ -245,6 +255,7 @@
         } catch (error) {
           const wasCancelled = controller.signal.aborted;
           controller.abort();
+          returnFromLexe();
           if (wasCancelled) {
             connectStatus.textContent = 'Connection cancelled.';
           } else {
@@ -261,6 +272,23 @@
 
       startConnectButton.addEventListener('click', startConnect);
       cancelConnectButton.addEventListener('click', () => connectController?.abort());
+      openLexeLink.addEventListener('click', (event) => {
+        if (!connectionString) return;
+        if (approvalTab && !approvalTab.closed) approvalTab.close();
+        approvalTab = undefined;
+        // Keep a handle to this user-opened tab so approval can bring the user
+        // back. Sever its opener before navigating to the external site.
+        const tab = window.open('about:blank', '_blank');
+        if (!tab) return; // The normal target="_blank" link is the fallback.
+        try {
+          tab.opener = null;
+          tab.location.replace(connectionString);
+          approvalTab = tab;
+          event.preventDefault();
+        } catch {
+          tab.close();
+        }
+      });
       copyConnectButton.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(connectionString);
