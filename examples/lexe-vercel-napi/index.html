@@ -46,7 +46,7 @@
       <section class="card primary" aria-labelledby="connect-title">
         <div class="label">Your wallet · LexeConnect</div>
         <h2 id="connect-title">Connect with Lexe</h2>
-        <p class="copy">Start a connection, open the Lexe approval page, and approve the request. Keep this page open while Lexe responds.</p>
+        <p class="copy">Start a connection, open the Lexe approval page, and approve the request. Keep this page open while Lexe responds. Lexe does not redirect here; this page waits for the encrypted mailbox response.</p>
         <div class="actions">
           <button id="start-connect">Start connection</button>
           <button id="cancel-connect" class="secondary" hidden>Cancel</button>
@@ -162,6 +162,10 @@
           copyConnectButton.hidden = false;
           approvalFlow.hidden = false;
           connectStatus.textContent = 'Waiting for approval in Lexe. This request expires in about four minutes.';
+        } else if (event === 'retrying') {
+          connectStatus.textContent = 'The Lexe mailbox is temporarily unavailable. Retrying while this page stays open…';
+        } else if (event === 'waiting') {
+          connectStatus.textContent = 'Waiting for approval in Lexe. Keep this page open.';
         } else if (event === 'approved') {
           if (typeof data.bitcoinAddress !== 'string' || !data.bitcoinAddress) throw new Error('Bitcoin address missing');
           document.querySelector('#lightning-address').textContent = data.lightningAddress || 'Not configured in this wallet';
@@ -181,7 +185,9 @@
           connectStatus.textContent = 'The request expired. Start a new connection to try again.';
           connectionFinished = true;
         } else if (event === 'error') {
-          connectStatus.textContent = 'The connection failed. Start again to retry.';
+          connectStatus.textContent = ['wallet_init', 'wallet_addresses'].includes(data.stage)
+            ? 'Lexe approved the connection, but address lookup failed. Start a new connection to retry.'
+            : 'The connection failed. Start again to retry.';
           connectionFinished = true;
         }
         if (connectionFinished) {

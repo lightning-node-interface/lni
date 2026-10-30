@@ -93,30 +93,55 @@ export default async function handler(request: ConnectRequest, response: Connect
   response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   response.statusCode = 200;
   let disconnected = false;
+  let finished = false;
+  let stage = 'mailbox';
   response.on('close', () => {
     disconnected = true;
     session.cancel();
+    if (!finished) console.info('lexe_connect: client_disconnected');
   });
 
   try {
     // The response remains open with this session. No key is serialized or
     // shared across Vercel invocations, and no credential is sent to the client.
     send(response, 'ready', { connectionString: session.connectionString() });
+    console.info('lexe_connect: ready');
     const deadline = Date.now() + REQUEST_TTL_SECONDS * 1000;
+    let mailboxFailures = 0;
     while (!disconnected && Date.now() < deadline) {
-      const result = await session.pollMailbox();
+      let result: ConnectResult | null | undefined;
+      try {
+        result = await session.pollMailbox();
+        if (mailboxFailures > 0) {
+          send(response, 'waiting', {});
+          mailboxFailures = 0;
+        }
+      } catch (error) {
+        if (disconnected) break;
+        const message = error instanceof Error ? error.message : '';
+        if (message.includes('mailbox request failed') && Date.now() < deadline) {
+          mailboxFailures += 1;
+          if (mailboxFailures === 1) send(response, 'retrying', {});
+          await delay(Math.min(1000 * 2 ** Math.min(mailboxFailures, 3), 5000));
+          continue;
+        }
+        throw error;
+      }
       if (disconnected) break;
       if (result) {
+        console.info('lexe_connect: mailbox_response');
         if (!result.clientCredentials) {
           send(response, 'rejected', { reason: result.error === 'user_rejected' ? 'rejected' : 'error' });
           break;
         }
 
+        stage = 'wallet_init';
         const node = new binding.LexeNode(
           result.clientCredentials,
           process.env.LEXE_NETWORK || 'mainnet',
         );
         try {
+          stage = 'wallet_addresses';
           const [human, bitcoinAddress] = await Promise.all([
             node.getHumanBitcoinAddress(),
             node.getNextUnusedAddress(),
@@ -127,6 +152,7 @@ export default async function handler(request: ConnectRequest, response: Connect
               bitcoinAddress,
               humanBitcoinAddress: human.humanBitcoinAddress || null,
             });
+            console.info('lexe_connect: addresses_returned');
           }
         } finally {
           node.close();
@@ -138,11 +164,16 @@ export default async function handler(request: ConnectRequest, response: Connect
     }
     if (!disconnected && Date.now() >= deadline) {
       send(response, 'expired', {});
+      console.info('lexe_connect: expired');
     }
   } catch {
-    if (!disconnected) send(response, 'error', { message: 'LexeConnect request failed. Please try again.' });
+    console.warn(`lexe_connect: ${stage}_failed`);
+    if (!disconnected) send(response, 'error', { stage });
   } finally {
     session.cancel();
-    if (!disconnected) response.end();
+    if (!disconnected) {
+      finished = true;
+      response.end();
+    }
   }
 }
