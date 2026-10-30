@@ -1,5 +1,5 @@
 {
-  "installCommand": "",
+  "installCommand": "pnpm install --frozen-lockfile",
   "functions": {
     "api/probe.ts": {
       "includeFiles": "native/*.node",

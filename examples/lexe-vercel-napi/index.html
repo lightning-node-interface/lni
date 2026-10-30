@@ -27,6 +27,7 @@
       .flow { margin-top: 25px; padding-top: 24px; border-top: 1px solid #38554f; }
       .flow h3 { margin: 0; font-size: 18px; }
       .flow p { color: #b3c5ce; line-height: 1.5; }
+      .connect-qr { display: block; width: min(100%, 320px); height: auto; margin: 20px 0; border: 10px solid white; border-radius: 12px; background: white; }
       .result { display: grid; gap: 20px; margin-top: 28px; padding-top: 25px; border-top: 1px solid #38554f; }
       .result-row { display: grid; gap: 8px; }
       .result code, #address { display: block; color: #fff; font-size: clamp(17px, 2.9vw, 22px); line-height: 1.5; overflow-wrap: anywhere; user-select: all; }
@@ -46,7 +47,7 @@
       <section class="card primary" aria-labelledby="connect-title">
         <div class="label">Your wallet · LexeConnect</div>
         <h2 id="connect-title">Connect with Lexe</h2>
-        <p class="copy">Start a connection, open the Lexe approval page, and approve the request. Keep this page open while Lexe responds. Lexe does not redirect here; this page waits for the encrypted mailbox response.</p>
+        <p class="copy">Start a connection and scan the QR code with Lexe on your phone. Keep this page open; your addresses will appear here after approval.</p>
         <div class="actions">
           <button id="start-connect">Start connection</button>
           <button id="cancel-connect" class="secondary" hidden>Cancel</button>
@@ -54,7 +55,9 @@
         <p id="connect-status" class="status" role="status">Ready to connect.</p>
         <div id="approval-flow" class="flow" hidden>
           <h3>Approve in Lexe</h3>
-          <p>Open the link below. After approving, return to this tab to see your addresses. If this browser allows it, the Lexe tab will close automatically. For another device, copy the link and open it there.</p>
+          <p>Scan this QR code with the Lexe app on your phone. This page will update automatically after you approve.</p>
+          <img id="connect-qr" class="connect-qr" alt="LexeConnect QR code to scan with the Lexe app" width="320" height="320" hidden>
+          <p>Using Lexe on this device? Open the approval link in a new tab, then return here after approving.</p>
           <div class="actions">
             <a id="open-lexe" class="button" target="_blank" rel="noopener noreferrer" hidden>Open Lexe approval</a>
             <button id="copy-connect" class="secondary" hidden>Copy connection link</button>
@@ -136,24 +139,18 @@
       const cancelConnectButton = document.querySelector('#cancel-connect');
       const connectStatus = document.querySelector('#connect-status');
       const approvalFlow = document.querySelector('#approval-flow');
+      const connectQr = document.querySelector('#connect-qr');
       const openLexeLink = document.querySelector('#open-lexe');
       const copyConnectButton = document.querySelector('#copy-connect');
       const connectedResult = document.querySelector('#connected-result');
       let connectController;
       let connectionString = '';
       let connectionFinished = false;
-      let approvalTab;
-
-      function returnFromLexe() {
-        if (approvalTab && !approvalTab.closed) {
-          approvalTab.close();
-          window.focus();
-        }
-        approvalTab = undefined;
-      }
 
       function clearConnectionLink() {
         connectionString = '';
+        connectQr.removeAttribute('src');
+        connectQr.hidden = true;
         openLexeLink.removeAttribute('href');
         openLexeLink.hidden = true;
         copyConnectButton.hidden = true;
@@ -165,7 +162,12 @@
           if (url.protocol !== 'https:' || url.hostname !== 'lexe.app' || url.pathname !== '/connect') {
             throw new Error('Unexpected Lexe approval link');
           }
+          if (typeof data.qrDataUrl !== 'string' || !data.qrDataUrl.startsWith('data:image/png;base64,')) {
+            throw new Error('Lexe approval QR missing');
+          }
           connectionString = url.toString();
+          connectQr.src = data.qrDataUrl;
+          connectQr.hidden = false;
           openLexeLink.href = connectionString;
           openLexeLink.hidden = false;
           copyConnectButton.hidden = false;
@@ -200,7 +202,6 @@
           connectionFinished = true;
         }
         if (connectionFinished) {
-          returnFromLexe();
           approvalFlow.hidden = true;
           clearConnectionLink();
         }
@@ -255,7 +256,6 @@
         } catch (error) {
           const wasCancelled = controller.signal.aborted;
           controller.abort();
-          returnFromLexe();
           if (wasCancelled) {
             connectStatus.textContent = 'Connection cancelled.';
           } else {
@@ -272,23 +272,6 @@
 
       startConnectButton.addEventListener('click', startConnect);
       cancelConnectButton.addEventListener('click', () => connectController?.abort());
-      openLexeLink.addEventListener('click', (event) => {
-        if (!connectionString) return;
-        if (approvalTab && !approvalTab.closed) approvalTab.close();
-        approvalTab = undefined;
-        // Keep a handle to this user-opened tab so approval can bring the user
-        // back. Sever its opener before navigating to the external site.
-        const tab = window.open('about:blank', '_blank');
-        if (!tab) return; // The normal target="_blank" link is the fallback.
-        try {
-          tab.opener = null;
-          tab.location.replace(connectionString);
-          approvalTab = tab;
-          event.preventDefault();
-        } catch {
-          tab.close();
-        }
-      });
       copyConnectButton.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(connectionString);

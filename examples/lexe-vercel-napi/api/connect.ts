@@ -15,6 +15,14 @@ type ConnectResult = {
   error?: string | null;
 };
 
+type QrCode = {
+  toDataURL(text: string, options: {
+    errorCorrectionLevel: 'M';
+    margin: number;
+    width: number;
+  }): Promise<string>;
+};
+
 type LexeBinding = {
   LexeConnectSession?: new (options: {
     scopes: string[];
@@ -40,7 +48,7 @@ declare const process: {
   arch: string;
   env: Record<string, string | undefined>;
 };
-declare function require(path: string): LexeBinding;
+declare function require(path: string): unknown;
 
 const REQUEST_TTL_SECONDS = 240;
 
@@ -78,6 +86,14 @@ export default async function handler(request: ConnectRequest, response: Connect
     return response.end('Lexe binding unavailable');
   }
 
+  let qrCode: QrCode;
+  try {
+    qrCode = require('qrcode') as QrCode;
+  } catch {
+    response.statusCode = 500;
+    return response.end('QR renderer unavailable');
+  }
+
   let session: InstanceType<NonNullable<LexeBinding['LexeConnectSession']>>;
   try {
     session = new binding.LexeConnectSession({
@@ -88,6 +104,21 @@ export default async function handler(request: ConnectRequest, response: Connect
   } catch {
     response.statusCode = 500;
     return response.end('Could not start LexeConnect');
+  }
+
+  let connectionString: string;
+  let qrDataUrl: string;
+  try {
+    connectionString = session.connectionString();
+    qrDataUrl = await qrCode.toDataURL(connectionString, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 320,
+    });
+  } catch {
+    session.cancel();
+    response.statusCode = 500;
+    return response.end('Could not render LexeConnect QR');
   }
 
   response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -104,7 +135,7 @@ export default async function handler(request: ConnectRequest, response: Connect
   try {
     // The response remains open with this session. No key is serialized or
     // shared across Vercel invocations, and no credential is sent to the client.
-    send(response, 'ready', { connectionString: session.connectionString() });
+    send(response, 'ready', { connectionString, qrDataUrl });
     console.info('lexe_connect: ready');
     const deadline = Date.now() + REQUEST_TTL_SECONDS * 1000;
     let mailboxFailures = 0;

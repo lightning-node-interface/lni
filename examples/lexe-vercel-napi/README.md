@@ -36,8 +36,12 @@ The current expanded Lexe addon is about 19.9 MB.
 
 Open `/` to see a live Bitcoin receiving address. The public page calls
 `/api/probe?mode=address`; only the address is returned, never the credential.
-The page also has a LexeConnect flow. Press **Start connection**, open the
-approval link in Lexe, and approve the `read_info` and `receive` scopes. The
+The page also has a LexeConnect flow. Press **Start connection** and scan the
+QR code on the Vercel page with the Lexe app. Approve the `read_info` and
+`receive` scopes; the Vercel page stays open and updates after approval. On
+the same device, the approval link opens Lexe in another tab, so return to the
+Vercel tab after approving. The QR image is rendered in the Vercel function
+with the pinned `qrcode` package and sent only to the requesting browser. The
 browser keeps one streamed `POST /api/connect` request open while its native
 LexeConnect session polls the encrypted mailbox. Once Lexe approves, that same
 function uses the returned credential to fetch the wallet's Lightning address,
