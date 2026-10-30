@@ -367,6 +367,9 @@ impl PhoenixdFoundation {
         path: &str,
         fields: Option<Vec<(&str, String)>>,
     ) -> Result<Option<Value>> {
+        // StatusPages maps an absent operation to this exact 404 body. Other
+        // 404s remain uncertain; this never licenses retrying a claimed pay.
+        let absent_lookup = method == Method::GET && path.starts_with("eltor/outgoing/");
         let url = self
             .base
             .join(path)
@@ -379,6 +382,24 @@ impl PhoenixdFoundation {
             request = request.form(&fields);
         }
         let mut response = request.send().await.map_err(|_| AdapterError::Uncertain)?;
+        if absent_lookup && response.status() == StatusCode::NOT_FOUND {
+            let mut body = Vec::new();
+            while let Some(part) = response
+                .chunk()
+                .await
+                .map_err(|_| AdapterError::Uncertain)?
+            {
+                if part.len() > 64usize.saturating_sub(body.len()) {
+                    return Err(AdapterError::Uncertain);
+                }
+                body.extend_from_slice(&part);
+            }
+            return if body == b"Not found" {
+                Ok(None)
+            } else {
+                Err(AdapterError::Uncertain)
+            };
+        }
         if response.status() == StatusCode::NO_CONTENT {
             return Ok(None);
         }
