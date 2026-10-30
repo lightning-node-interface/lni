@@ -6,7 +6,7 @@ use lightning::bitcoin::{
 use lightning_invoice::{InvoiceBuilder, PaymentSecret};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-fn observation() -> Observation {
+pub(crate) fn observation() -> Observation {
     Observation {
         now_ms: 1_700_000_100_000,
         uncertainty_ms: 0,
@@ -18,7 +18,7 @@ fn key(n: u8) -> SecretKey {
 fn pubkey(n: u8) -> [u8; 33] {
     PublicKey::from_secret_key(&Secp256k1::new(), &key(n)).serialize()
 }
-fn account() -> NativeAccount {
+pub(crate) fn account() -> NativeAccount {
     NativeAccount {
         node_id: pubkey(1),
         chain: Chain::Regtest,
@@ -31,10 +31,10 @@ fn expectation() -> InvoiceExpectation {
         expected_payment_hash: None,
     }
 }
-fn preimage() -> [u8; 32] {
+pub(crate) fn preimage() -> [u8; 32] {
     [42; 32]
 }
-fn hash() -> [u8; 32] {
+pub(crate) fn hash() -> [u8; 32] {
     Sha256::digest(preimage()).into()
 }
 fn bolt11() -> String {
@@ -54,7 +54,7 @@ fn bolt11_for(signer: u8) -> String {
         .to_string()
 }
 
-fn bolt12(note: [u8; 32]) -> (String, String) {
+pub(crate) fn bolt12(note: [u8; 32]) -> (String, String) {
     use lightning::{
         blinded_path::payment::{
             BlindedPaymentPath, Bolt12RefundContext, PaymentConstraints, PaymentContext,

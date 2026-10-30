@@ -202,6 +202,18 @@ pub struct ConstructionPaymentProof {
     preimage: [u8; 32],
 }
 impl ConstructionPaymentProof {
+    pub(crate) fn from_verified_native(
+        settlement: NativeSettlement,
+        preimage: [u8; 32],
+    ) -> Result<Self> {
+        if <[u8; 32]>::from(Sha256::digest(preimage)) != settlement.payment_hash {
+            return Err(AdapterError::InvalidResponse);
+        }
+        Ok(Self {
+            settlement,
+            preimage,
+        })
+    }
     pub fn settlement(&self) -> &NativeSettlement {
         &self.settlement
     }
@@ -409,38 +421,10 @@ impl ClnFoundation {
         expected: InvoiceExpectation,
         observation: Observation,
     ) -> Result<ValidatedInvoice> {
-        canonical_text(text)?;
-        let invoice = Bolt11Invoice::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
-        invoice
-            .check_signature()
-            .map_err(|_| AdapterError::InvoiceMismatch)?;
-        let payee = invoice.recover_payee_pub_key().serialize();
-        if expected.expected_payee != Some(payee)
-            || invoice.currency() != self.account.chain.currency()
-            || invoice
-                .features()
-                .map_or(false, |f| f.requires_unknown_bits())
-        {
-            return Err(AdapterError::InvoiceMismatch);
-        }
-        let amountless = invoice.amount_milli_satoshis().is_none();
-        let amount = invoice
-            .amount_milli_satoshis()
-            .unwrap_or(expected.amount_msat);
-        let hash = decode32(&invoice.payment_hash().to_string())?;
-        let created = milliseconds(invoice.duration_since_epoch())?;
-        let expires = milliseconds(invoice.expires_at().ok_or(AdapterError::InvoiceMismatch)?)?;
-        validate_invoice_values(amount, hash, created, expires, expected, observation)?;
-        Ok(ValidatedInvoice {
+        InvoiceVerifier {
             account: self.account,
-            text: text.to_owned(),
-            digest: Sha256::digest(text.as_bytes()).into(),
-            payment_hash: hash,
-            amount_msat: amount,
-            payee,
-            expires_at_ms: expires,
-            amountless,
-        })
+        }
+        .inspect_bolt11(text, expected, observation)
     }
 
     /// Reconstruct an exact previously inspected artifact for read-only recovery.
@@ -452,71 +436,10 @@ impl ClnFoundation {
         expected_digest: [u8; 32],
         expected: InvoiceExpectation,
     ) -> Result<ValidatedInvoice> {
-        canonical_text(text)?;
-        let digest: [u8; 32] = Sha256::digest(text.as_bytes()).into();
-        if digest != expected_digest
-            || expected.expected_payment_hash.is_none()
-            || expected.amount_msat == 0
-            || expected.amount_msat > i64::MAX as u64
-        {
-            return Err(AdapterError::InvoiceMismatch);
-        }
-        let (hash, amount, payee, expires, amountless) = if text.starts_with("lni1") {
-            let invoice = parse_bolt12(text)?;
-            if invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network()) {
-                return Err(AdapterError::InvoiceMismatch);
-            }
-            (
-                invoice.payment_hash().0,
-                invoice.amount_msats(),
-                invoice.signing_pubkey().serialize(),
-                milliseconds(
-                    invoice
-                        .created_at()
-                        .checked_add(invoice.relative_expiry())
-                        .ok_or(AdapterError::InvoiceMismatch)?,
-                )?,
-                false,
-            )
-        } else {
-            let invoice =
-                Bolt11Invoice::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
-            invoice
-                .check_signature()
-                .map_err(|_| AdapterError::InvoiceMismatch)?;
-            if invoice.currency() != self.account.chain.currency()
-                || invoice
-                    .features()
-                    .map_or(false, |f| f.requires_unknown_bits())
-            {
-                return Err(AdapterError::InvoiceMismatch);
-            }
-            (
-                decode32(&invoice.payment_hash().to_string())?,
-                invoice
-                    .amount_milli_satoshis()
-                    .unwrap_or(expected.amount_msat),
-                invoice.recover_payee_pub_key().serialize(),
-                milliseconds(invoice.expires_at().ok_or(AdapterError::InvoiceMismatch)?)?,
-                invoice.amount_milli_satoshis().is_none(),
-            )
-        };
-        if Some(hash) != expected.expected_payment_hash
-            || amount != expected.amount_msat
-            || expected.expected_payee.map_or(false, |p| p != payee)
-        {
-            return Err(AdapterError::InvoiceMismatch);
-        }
-        Ok(ValidatedInvoice {
+        InvoiceVerifier {
             account: self.account,
-            text: text.to_owned(),
-            digest,
-            payment_hash: hash,
-            amount_msat: amount,
-            payee,
-            expires_at_ms: expires,
-            amountless,
-        })
+        }
+        .restore_for_lookup(text, expected_digest, expected)
     }
 
     /// Fetch-only native BOLT12 acquisition. No pay RPC occurs here. The signed
@@ -554,43 +477,10 @@ impl ClnFoundation {
             .get("invoice")
             .and_then(Value::as_str)
             .ok_or(AdapterError::InvalidResponse)?;
-        canonical_text(text)?;
-        let invoice = parse_bolt12(text)?;
-        let payee = invoice.signing_pubkey().serialize();
-        if invoice.offer_id() != Some(offer.id())
-            || invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network())
-            || invoice.payer_note().map(|n| n.to_string()) != Some(note)
-            || expected.expected_payee.map_or(false, |p| p != payee)
-            || invoice.invoice_features().requires_unknown_bits()
-            || invoice.invoice_request_features().requires_unknown_bits()
-        {
-            return Err(AdapterError::InvoiceMismatch);
-        }
-        let created = milliseconds(invoice.created_at())?;
-        let expires = milliseconds(
-            invoice
-                .created_at()
-                .checked_add(invoice.relative_expiry())
-                .ok_or(AdapterError::InvoiceMismatch)?,
-        )?;
-        validate_invoice_values(
-            invoice.amount_msats(),
-            invoice.payment_hash().0,
-            created,
-            expires,
-            expected,
-            observation,
-        )?;
-        Ok(ValidatedInvoice {
+        InvoiceVerifier {
             account: self.account,
-            text: text.to_owned(),
-            digest: Sha256::digest(text.as_bytes()).into(),
-            payment_hash: invoice.payment_hash().0,
-            amount_msat: invoice.amount_msats(),
-            payee,
-            expires_at_ms: expires,
-            amountless: false,
-        })
+        }
+        .inspect_bolt12_for_offer(text, offer_text, payment_id, expected, observation)
     }
 
     /// Restore an exact historical invoice for a pinned offer/note. Expiry may
@@ -603,23 +493,19 @@ impl ClnFoundation {
         payment_id: [u8; 32],
         expected: InvoiceExpectation,
     ) -> Result<ValidatedInvoice> {
-        if !self.outgoing_ready || payment_id == [0; 32] {
+        if !self.outgoing_ready {
             return Err(AdapterError::Unsupported);
         }
-        canonical_text(offer_text)?;
-        let offer = Offer::from_str(offer_text).map_err(|_| AdapterError::InvoiceMismatch)?;
-        let invoice = parse_bolt12(text)?;
-        if offer.to_string() != offer_text
-            || offer.offer_features().requires_unknown_bits()
-            || !offer.chains().contains(&ChainHash::using_genesis_block(self.account.chain.network()))
-            || invoice.offer_id() != Some(offer.id())
-            || invoice.payer_note().map(|s| s.to_string()) != Some(hex::encode(payment_id))
-            || invoice.invoice_features().requires_unknown_bits()
-            || invoice.invoice_request_features().requires_unknown_bits()
-        {
-            return Err(AdapterError::InvoiceMismatch);
+        InvoiceVerifier {
+            account: self.account,
         }
-        self.restore_for_lookup(text, expected_digest, expected)
+        .restore_bolt12_for_offer_lookup(
+            text,
+            expected_digest,
+            offer_text,
+            payment_id,
+            expected,
+        )
     }
 
     /// Invoke at most once under a consumed durable ledger permit. Existing
@@ -703,9 +589,16 @@ impl ClnFoundation {
         else {
             return Ok(None);
         };
-        let preimage = decode32(rows[0].get("preimage").and_then(Value::as_str)
-            .ok_or(AdapterError::InvalidResponse)?)?;
-        Ok(Some(ConstructionPaymentProof { settlement, preimage }))
+        let preimage = decode32(
+            rows[0]
+                .get("preimage")
+                .and_then(Value::as_str)
+                .ok_or(AdapterError::InvalidResponse)?,
+        )?;
+        Ok(Some(ConstructionPaymentProof {
+            settlement,
+            preimage,
+        }))
     }
 
     /// Read-only exact native receiving lookup. Public payer claims and a paid
@@ -1071,6 +964,231 @@ impl ClnFoundation {
     }
 }
 
+/// Pure signed-invoice validation shared by native wallet adapters. This type
+/// performs no HTTP/wallet work and conveys no settlement or dispatch authority.
+pub struct InvoiceVerifier {
+    account: NativeAccount,
+}
+impl InvoiceVerifier {
+    pub fn new(account: NativeAccount) -> Result<Self> {
+        PublicKey::from_slice(&account.node_id).map_err(|_| AdapterError::InvalidInput)?;
+        Ok(Self { account })
+    }
+    pub fn inspect_bolt11(
+        &self,
+        text: &str,
+        expected: InvoiceExpectation,
+        observation: Observation,
+    ) -> Result<ValidatedInvoice> {
+        canonical_text(text)?;
+        let invoice = Bolt11Invoice::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
+        invoice
+            .check_signature()
+            .map_err(|_| AdapterError::InvoiceMismatch)?;
+        let payee = invoice.recover_payee_pub_key().serialize();
+        if expected.expected_payee != Some(payee)
+            || invoice.currency() != self.account.chain.currency()
+            || invoice
+                .features()
+                .map_or(false, |f| f.requires_unknown_bits())
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        let amountless = invoice.amount_milli_satoshis().is_none();
+        let amount = invoice
+            .amount_milli_satoshis()
+            .unwrap_or(expected.amount_msat);
+        let hash = decode32(&invoice.payment_hash().to_string())?;
+        let created = milliseconds(invoice.duration_since_epoch())?;
+        let expires = milliseconds(invoice.expires_at().ok_or(AdapterError::InvoiceMismatch)?)?;
+        validate_invoice_values(amount, hash, created, expires, expected, observation)?;
+        Ok(ValidatedInvoice {
+            account: self.account,
+            text: text.to_owned(),
+            digest: Sha256::digest(text.as_bytes()).into(),
+            payment_hash: hash,
+            amount_msat: amount,
+            payee,
+            expires_at_ms: expires,
+            amountless,
+        })
+    }
+
+    pub fn restore_for_lookup(
+        &self,
+        text: &str,
+        expected_digest: [u8; 32],
+        expected: InvoiceExpectation,
+    ) -> Result<ValidatedInvoice> {
+        canonical_text(text)?;
+        let digest: [u8; 32] = Sha256::digest(text.as_bytes()).into();
+        if digest != expected_digest
+            || expected.expected_payment_hash.is_none()
+            || expected.amount_msat == 0
+            || expected.amount_msat > i64::MAX as u64
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        let (hash, amount, payee, expires, amountless) = if text.starts_with("lni1") {
+            let invoice = parse_bolt12(text)?;
+            if invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network()) {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            (
+                invoice.payment_hash().0,
+                invoice.amount_msats(),
+                invoice.signing_pubkey().serialize(),
+                milliseconds(
+                    invoice
+                        .created_at()
+                        .checked_add(invoice.relative_expiry())
+                        .ok_or(AdapterError::InvoiceMismatch)?,
+                )?,
+                false,
+            )
+        } else {
+            let invoice =
+                Bolt11Invoice::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
+            invoice
+                .check_signature()
+                .map_err(|_| AdapterError::InvoiceMismatch)?;
+            if invoice.currency() != self.account.chain.currency()
+                || invoice
+                    .features()
+                    .map_or(false, |f| f.requires_unknown_bits())
+            {
+                return Err(AdapterError::InvoiceMismatch);
+            }
+            (
+                decode32(&invoice.payment_hash().to_string())?,
+                invoice
+                    .amount_milli_satoshis()
+                    .unwrap_or(expected.amount_msat),
+                invoice.recover_payee_pub_key().serialize(),
+                milliseconds(invoice.expires_at().ok_or(AdapterError::InvoiceMismatch)?)?,
+                invoice.amount_milli_satoshis().is_none(),
+            )
+        };
+        if Some(hash) != expected.expected_payment_hash
+            || amount != expected.amount_msat
+            || expected.expected_payee.map_or(false, |p| p != payee)
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        Ok(ValidatedInvoice {
+            account: self.account,
+            text: text.to_owned(),
+            digest,
+            payment_hash: hash,
+            amount_msat: amount,
+            payee,
+            expires_at_ms: expires,
+            amountless,
+        })
+    }
+
+    pub fn restore_bolt12_for_offer_lookup(
+        &self,
+        text: &str,
+        expected_digest: [u8; 32],
+        offer_text: &str,
+        payment_id: [u8; 32],
+        expected: InvoiceExpectation,
+    ) -> Result<ValidatedInvoice> {
+        if payment_id == [0; 32] {
+            return Err(AdapterError::Unsupported);
+        }
+        canonical_text(offer_text)?;
+        let offer = Offer::from_str(offer_text).map_err(|_| AdapterError::InvoiceMismatch)?;
+        let invoice = parse_bolt12(text)?;
+        if offer.to_string() != offer_text
+            || offer.offer_features().requires_unknown_bits()
+            || !offer.chains().contains(&ChainHash::using_genesis_block(
+                self.account.chain.network(),
+            ))
+            || invoice.offer_id() != Some(offer.id())
+            || invoice.payer_note().map(|s| s.to_string()) != Some(hex::encode(payment_id))
+            || invoice.invoice_features().requires_unknown_bits()
+            || invoice.invoice_request_features().requires_unknown_bits()
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        self.restore_for_lookup(text, expected_digest, expected)
+    }
+
+    pub fn validate_bolt12_offer(&self, text: &str) -> Result<()> {
+        canonical_text(text)?;
+        let offer = Offer::from_str(text).map_err(|_| AdapterError::InvoiceMismatch)?;
+        if offer.to_string() != text
+            || offer.offer_features().requires_unknown_bits()
+            || !offer.chains().contains(&ChainHash::using_genesis_block(
+                self.account.chain.network(),
+            ))
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        Ok(())
+    }
+    pub fn inspect_bolt12_for_offer(
+        &self,
+        text: &str,
+        offer_text: &str,
+        payment_id: [u8; 32],
+        expected: InvoiceExpectation,
+        observation: Observation,
+    ) -> Result<ValidatedInvoice> {
+        canonical_text(offer_text)?;
+        let offer = Offer::from_str(offer_text).map_err(|_| AdapterError::InvoiceMismatch)?;
+        if offer.to_string() != offer_text
+            || offer.offer_features().requires_unknown_bits()
+            || !offer.chains().contains(&ChainHash::using_genesis_block(
+                self.account.chain.network(),
+            ))
+            || payment_id == [0; 32]
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        let note = hex::encode(payment_id);
+        canonical_text(text)?;
+        let invoice = parse_bolt12(text)?;
+        let payee = invoice.signing_pubkey().serialize();
+        if invoice.offer_id() != Some(offer.id())
+            || invoice.chain() != ChainHash::using_genesis_block(self.account.chain.network())
+            || invoice.payer_note().map(|n| n.to_string()) != Some(note)
+            || expected.expected_payee.map_or(false, |p| p != payee)
+            || invoice.invoice_features().requires_unknown_bits()
+            || invoice.invoice_request_features().requires_unknown_bits()
+        {
+            return Err(AdapterError::InvoiceMismatch);
+        }
+        let created = milliseconds(invoice.created_at())?;
+        let expires = milliseconds(
+            invoice
+                .created_at()
+                .checked_add(invoice.relative_expiry())
+                .ok_or(AdapterError::InvoiceMismatch)?,
+        )?;
+        validate_invoice_values(
+            invoice.amount_msats(),
+            invoice.payment_hash().0,
+            created,
+            expires,
+            expected,
+            observation,
+        )?;
+        Ok(ValidatedInvoice {
+            account: self.account,
+            text: text.to_owned(),
+            digest: Sha256::digest(text.as_bytes()).into(),
+            payment_hash: invoice.payment_hash().0,
+            amount_msat: invoice.amount_msats(),
+            payee,
+            expires_at_ms: expires,
+            amountless: false,
+        })
+    }
+}
+
 /// Explicit receiving-only test exception. Never relax outgoing verification,
 /// public/DNS destinations, plaintext transport, proxies or redirects.
 fn receiving_test_tls_endpoint(url: &reqwest::Url) -> bool {
@@ -1185,4 +1303,4 @@ fn seconds(value: Option<&Value>) -> Result<i64> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
