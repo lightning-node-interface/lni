@@ -177,6 +177,8 @@
           connectStatus.textContent = 'The Lexe mailbox is temporarily unavailable. Retrying while this page stays open…';
         } else if (event === 'waiting') {
           connectStatus.textContent = 'Waiting for approval in Lexe. Keep this page open.';
+        } else if (event === 'lookup_retrying') {
+          connectStatus.textContent = 'Lexe approved the connection. Retrying the wallet address lookup…';
         } else if (event === 'approved') {
           if (typeof data.bitcoinAddress !== 'string' || !data.bitcoinAddress) throw new Error('Bitcoin address missing');
           document.querySelector('#lightning-address').textContent = data.lightningAddress || 'Not configured in this wallet';

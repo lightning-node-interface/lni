@@ -15,6 +15,11 @@ type ConnectResult = {
   error?: string | null;
 };
 
+type HumanAddresses = {
+  lightningAddress: string;
+  humanBitcoinAddress: string;
+};
+
 type QrCode = {
   toDataURL(text: string, options: {
     errorCorrectionLevel: 'M';
@@ -34,10 +39,7 @@ type LexeBinding = {
     cancel(): void;
   };
   LexeNode?: new (credentials: string, network: string) => {
-    getHumanBitcoinAddress(): Promise<{
-      lightningAddress: string;
-      humanBitcoinAddress: string;
-    }>;
+    getHumanBitcoinAddress(): Promise<HumanAddresses>;
     getNextUnusedAddress(): Promise<string>;
     close(): void;
   };
@@ -173,10 +175,29 @@ export default async function handler(request: ConnectRequest, response: Connect
         );
         try {
           stage = 'wallet_addresses';
-          const [human, bitcoinAddress] = await Promise.all([
-            node.getHumanBitcoinAddress(),
-            node.getNextUnusedAddress(),
-          ]);
+          let human: HumanAddresses | undefined;
+          let bitcoinAddress: string | undefined;
+          const lookupDeadline = Date.now() + 25_000;
+          let attempts = 0;
+          while (!disconnected && Date.now() < lookupDeadline && (!human || !bitcoinAddress)) {
+            const [humanResult, bitcoinResult] = await Promise.allSettled([
+              human ? Promise.resolve(human) : node.getHumanBitcoinAddress(),
+              bitcoinAddress ? Promise.resolve(bitcoinAddress) : node.getNextUnusedAddress(),
+            ]);
+            if (humanResult.status === 'fulfilled') human = humanResult.value;
+            if (bitcoinResult.status === 'fulfilled' && bitcoinResult.value) {
+              bitcoinAddress = bitcoinResult.value;
+            }
+            if (human && bitcoinAddress) break;
+            if (!disconnected && Date.now() < lookupDeadline) {
+              send(response, 'lookup_retrying', {});
+              attempts += 1;
+              await delay(Math.min(1000 * 2 ** Math.min(attempts, 2), 4000));
+            }
+          }
+          if (!disconnected && (!human || !bitcoinAddress)) {
+            throw new Error('Wallet address lookup failed after retries');
+          }
           if (!disconnected) {
             send(response, 'approved', {
               lightningAddress: human.lightningAddress || null,

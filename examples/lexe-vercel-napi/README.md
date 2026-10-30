@@ -47,7 +47,14 @@ LexeConnect session polls the encrypted mailbox. Once Lexe approves, that same
 function uses the returned credential to fetch the wallet's Lightning address,
 Bitcoin receiving address, and optional human Bitcoin address. Only those
 addresses are sent to the browser. The credential is not saved by this demo.
-The request expires after four minutes; closing the page cancels it.
+The request expires after four minutes; closing the page cancels it. After
+approval, transient address lookup failures are retried for up to 25 seconds
+while successful lookup results are retained in the request.
+
+The personal Vercel project has a production Firewall rule named **Limit
+LexeConnect starts**: it denies requests to `/api/connect` after six requests
+per IP in a 600-second window. This project-level rule is not deployed from
+the repository, so recreate it if the example is deployed to another project.
 
 Call `/api/probe` to see the deployed Node platform and architecture, or
 `/api/probe?mode=load` to verify that Node loaded the Rust addon. To test
