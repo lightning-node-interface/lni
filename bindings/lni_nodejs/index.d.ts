@@ -287,6 +287,7 @@ export interface PrepareOnchainTransactionParams {
 }
 export interface OnchainTransaction {
   id?: string
+  feeLimitSupported?: boolean
   address: string
   amountSats: number
   feeSats?: number
@@ -594,10 +595,104 @@ export declare class SparkNode {
   onInvoiceEvents(params: OnInvoiceEventParams, callback: (arg0: string, arg1?: Transaction | undefined | null) => void): void
 }
 
-/** Stateless Lexe access for server-side Node.js functions. */
+export interface LexeClientInfo {
+  kind: string
+  clientPubkey?: string
+  label?: string
+  createdAtMs?: number
+  expiresAtMs?: number
+  scopes: string[]
+  permissions: string[]
+  effectivePermissions: string[]
+}
+
+export interface LexeHumanBitcoinAddress {
+  humanBitcoinAddress: string
+  lightningAddress: string
+  offer: string
+  updatable: boolean
+}
+
+/** Stateless by default. Supply dataDir for payment history and invoice monitoring. */
 export declare class LexeNode {
-  constructor(clientCredentials: string, network?: string | undefined | null)
+  constructor(clientCredentials: string, network?: string | null, dataDir?: string | null)
+  close(): void
+  getPermissions(): Promise<Permissions>
+  getClientInfo(): Promise<LexeClientInfo>
   getInfo(): Promise<NodeInfo>
+  getHumanBitcoinAddress(): Promise<LexeHumanBitcoinAddress>
   /** May return the same address until Lexe detects a payment to it. */
   getNextUnusedAddress(): Promise<string>
+  createInvoice(params: CreateInvoiceParams): Promise<Transaction>
+  payInvoice(params: PayInvoiceParams): Promise<PayInvoiceResponse>
+  prepareOnchainTransaction(params: PrepareOnchainTransactionParams): Promise<OnchainTransaction>
+  payOnchain(transaction: OnchainTransaction, options?: PayOnchainOptions | null): Promise<PayOnchainResponse>
+  createOffer(params: CreateOfferParams): Promise<Offer>
+  /** Lexe's SDK currently does not support this operation. */
+  getOffer(search?: string | null): Promise<Offer>
+  /** Lexe's SDK currently does not support this operation. */
+  listOffers(search?: string | null): Promise<Offer[]>
+  payOffer(offer: string, amountMsats: number, payerNote?: string | null): Promise<PayInvoiceResponse>
+  lookupInvoice(params: LookupInvoiceParams): Promise<Transaction>
+  listTransactions(params: ListTransactionsParams): Promise<Transaction[]>
+  decode(value: string): Promise<string>
+  decodeOffer(offer: string): Promise<string>
+  /** Requires dataDir. Resolves after a terminal event. */
+  onInvoiceEvents(params: OnInvoiceEventParams, callback: (status: 'success' | 'pending' | 'failure', transaction?: Transaction) => void): Promise<void>
+}
+
+export interface LexeConnectOptions {
+  redirectUri?: string
+  postUrl?: string
+  mailboxUrl?: string
+  scopes?: string[]
+  permissions?: string[]
+  account?: string
+  metadata?: string
+  requesterName?: string
+  requesterIcon?: string
+  label?: string
+  expiresAtMs?: number
+  requestTtlSecs?: number
+}
+
+/** A verified response. Approved responses contain clientCredentials. */
+export interface LexeConnectResponse {
+  clientCredentials?: string
+  error?: string
+  errorMessage?: string
+  scopes: string[]
+  permissions: string[]
+  expiresAtMs?: number
+  account?: string
+  metadata?: string
+}
+
+/** In-memory, single-use requester session. Keep it until delivery or cancel it. */
+export declare class LexeConnectSession {
+  constructor(options: LexeConnectOptions)
+  /** Sensitive link or QR payload; do not log. */
+  connectionString(): string
+  acceptRedirect(url: string): LexeConnectResponse
+  /** Takes raw encrypted POST or mailbox bytes. */
+  acceptBody(body: Uint8Array): LexeConnectResponse
+  /** Returns null while the mailbox has no response. */
+  pollMailbox(): Promise<LexeConnectResponse | null | undefined>
+  cancel(): void
+}
+
+export type LexeConnectResult =
+  | { status: 'approved', clientCredentials: string, scopes: string[], permissions: string[], expiresAtMs?: number, account?: string, metadata?: string }
+  | { status: 'rejected' | 'error', error: 'user_rejected' | 'other', message?: string, account?: string, metadata?: string }
+
+/** One LexeConnect attempt; retain this instance until its response arrives. */
+export declare class LexeConnect {
+  constructor(config: LexeConnectOptions)
+  connectionString(): string
+  acceptRedirect(url: string): LexeConnectResult
+  acceptBody(body: Uint8Array): LexeConnectResult
+  pollMailbox(signal?: AbortSignal): Promise<LexeConnectResult | undefined>
+  waitForResponse(options?: { signal?: AbortSignal, pollIntervalMs?: number }): Promise<LexeConnectResult>
+  cancel(): void
+  dispose(): void
 }

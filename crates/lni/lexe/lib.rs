@@ -5,6 +5,8 @@ use lexe::{
     types::auth::{ClientCredentials, CredentialsRef},
     wallet::LexeWallet,
 };
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
 
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
@@ -14,6 +16,7 @@ use crate::{
 /// Authenticated credential grants returned by the Lexe node.
 /// Unlike `get_permissions`, this describes this client's authorization.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexeClientInfo {
     pub kind: String,
@@ -28,6 +31,7 @@ pub struct LexeClientInfo {
 
 /// Lexe's human-readable Bitcoin and Lightning receiving addresses.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexeHumanBitcoinAddress {
     pub human_bitcoin_address: String,

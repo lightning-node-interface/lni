@@ -12,8 +12,17 @@ type ProbeResponse = {
 
 type LexeBinding = {
   LexeNode?: new (credentials: string, network: string) => {
+    close(): void;
     getInfo(): Promise<unknown>;
+    getPermissions(): Promise<{ getInfo: boolean; createInvoice: boolean }>;
+    getClientInfo(): Promise<{ kind: string; scopes: string[] }>;
+    getHumanBitcoinAddress(): Promise<{ humanBitcoinAddress: string }>;
     getNextUnusedAddress(): Promise<string>;
+    [method: string]: unknown;
+  };
+  LexeConnectSession?: new (options: { scopes: string[] }) => {
+    connectionString(): string;
+    cancel(): void;
   };
 };
 
@@ -74,7 +83,21 @@ export default async function handler(request: ProbeRequest, response: ProbeResp
     return response.end(JSON.stringify({ ok: false, stage: 'addon_export' }));
   }
 
-  if (mode !== 'wallet' && mode !== 'address') {
+  if (mode === 'connect') {
+    try {
+      if (typeof binding.LexeConnectSession !== 'function') throw new Error('missing export');
+      const session = new binding.LexeConnectSession({ scopes: ['receive'] });
+      const connectionString = session.connectionString();
+      if (connectionString.length < 20) throw new Error('invalid connection string');
+      session.cancel();
+      return response.end(JSON.stringify({ ok: true, stage: 'connect_session' }));
+    } catch {
+      response.statusCode = 500;
+      return response.end(JSON.stringify({ ok: false, stage: 'connect_session' }));
+    }
+  }
+
+  if (mode !== 'wallet' && mode !== 'address' && mode !== 'capabilities') {
     return response.end(JSON.stringify({ ok: true, stage: 'addon_load' }));
   }
 
@@ -93,11 +116,35 @@ export default async function handler(request: ProbeRequest, response: ProbeResp
   }
 
   try {
+    if (mode === 'capabilities') {
+      const methods = [
+        'createInvoice', 'payInvoice', 'prepareOnchainTransaction', 'payOnchain',
+        'createOffer', 'getOffer', 'listOffers', 'payOffer', 'lookupInvoice',
+        'listTransactions', 'decode', 'decodeOffer', 'onInvoiceEventsRaw',
+      ];
+      if (methods.some((method) => typeof node[method] !== 'function')) {
+        throw new Error('missing wallet export');
+      }
+      const [info, permissions, clientInfo, humanAddress] = await Promise.all([
+        node.getInfo(), node.getPermissions(), node.getClientInfo(), node.getHumanBitcoinAddress(),
+      ]);
+      if (!info || !permissions.getInfo || !permissions.createInvoice ||
+          !clientInfo.kind || !Array.isArray(clientInfo.scopes) ||
+          typeof humanAddress.humanBitcoinAddress !== 'string') {
+        throw new Error('invalid capability result');
+      }
+      node.close();
+      let rejectedAfterClose = false;
+      try { await node.getInfo(); } catch { rejectedAfterClose = true; }
+      if (!rejectedAfterClose) throw new Error('closed node still accepts requests');
+      return response.end(JSON.stringify({ ok: true, stage: 'wallet_capabilities' }));
+    }
     if (mode === 'wallet') await node.getInfo();
     const address = await node.getNextUnusedAddress();
     if (typeof address !== 'string' || address.length < 20) {
       throw new Error('Invalid address result');
     }
+    node.close();
     return response.end(JSON.stringify(mode === 'address'
       ? { ok: true, address }
       : { ok: true, stage: 'wallet_address' }));

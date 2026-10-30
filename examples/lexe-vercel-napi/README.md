@@ -32,6 +32,7 @@ settings reduced the stripped addon from 35.3 MB to 19.1 MB (46%) without
 removing any LNI exports. The `release` profile in `crates/lni/Cargo.toml` is
 ignored for workspace builds because Cargo profiles must be declared at the
 workspace root; the environment overrides above apply to this build only.
+The current expanded Lexe addon is about 19.9 MB.
 
 Open `/` to see a live Bitcoin receiving address. The public page calls
 `/api/probe?mode=address`; only the address is returned, never the credential.
@@ -42,6 +43,19 @@ optionally `LEXE_NETWORK` in Vercel. Then call `/api/probe?mode=wallet` with the
 token in the `x-probe-token` header. The credential needs permission to read
 node info and receive an address. The function returns only `wallet_address`
 on success.
+
+`/api/probe?mode=connect` checks that the native LexeConnect session can be
+created and cancelled without returning its sensitive connection string.
+`/api/probe?mode=capabilities` checks Lexe permissions, credential metadata,
+and the human Bitcoin address API, returning only a success stage.
+
+The Node binding also exposes the React Native Lexe wallet operations and a
+`LexeConnect` helper with mailbox polling, cancellation, and response mapping.
+`LexeConnectSession` holds its private response key in memory. A Vercel function
+cannot rely on a later request landing in the same process, so a production
+Connect flow needs a durable handoff design or an always-running component.
+Payment history and invoice monitoring require a persistent `dataDir`; the
+stateless Vercel probe intentionally does not exercise those operations.
 
 Lexe's `get_next_unused_address` may return the same address until a payment
 arrives, so this probe does not establish suitability for unique order addresses.
