@@ -639,6 +639,63 @@ async fn secret_bearing_configuration_and_nonlocal_plain_http_are_rejected_witho
 }
 
 #[tokio::test]
+async fn receiving_tls_override_is_explicit_private_and_never_outgoing() {
+    for url in [
+        "https://127.0.0.1/",
+        "https://100.64.0.1/",
+        "https://100.127.255.254/",
+    ] {
+        assert!(receiving_test_tls_endpoint(
+            &reqwest::Url::parse(url).unwrap()
+        ));
+        let config = ClnConfig {
+            url: url.into(),
+            accept_invalid_certs: Some(true),
+            rune: "fixture-only-rune".into(),
+            ..Default::default()
+        };
+        // Rejected before a socket/request, including on a private destination.
+        assert!(matches!(
+            ClnFoundation::connect(config, account()).await,
+            Err(AdapterError::InvalidInput)
+        ));
+    }
+    for url in [
+        "http://100.64.0.1/",
+        "https://100.63.255.255/",
+        "https://100.128.0.1/",
+        "https://192.168.1.1/",
+        "https://wallet.example/",
+        "https://8.8.8.8/",
+    ] {
+        assert!(!receiving_test_tls_endpoint(
+            &reqwest::Url::parse(url).unwrap()
+        ));
+        let config = ClnConfig {
+            url: url.into(),
+            accept_invalid_certs: Some(true),
+            rune: "fixture-only-rune".into(),
+            ..Default::default()
+        };
+        assert!(matches!(
+            ClnFoundation::connect_receiving(config, account()).await,
+            Err(AdapterError::InvalidInput)
+        ));
+    }
+    let config = ClnConfig {
+        url: "https://100.64.0.1/".into(),
+        accept_invalid_certs: Some(true),
+        socks5_proxy: Some("socks5h://127.0.0.1:1".into()),
+        rune: "fixture-only-rune".into(),
+        ..Default::default()
+    };
+    assert!(matches!(
+        ClnFoundation::connect_receiving(config, account()).await,
+        Err(AdapterError::InvalidInput)
+    ));
+}
+
+#[tokio::test]
 async fn bolt12_invalid_native_signature_cannot_be_used_for_payment() {
     let (offer, invoice) = bolt12([7; 32]);
     let mut bytes = invoice.into_bytes();

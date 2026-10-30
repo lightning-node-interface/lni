@@ -282,7 +282,6 @@ impl ClnFoundation {
             || base.password().is_some()
             || base.query().is_some()
             || base.fragment().is_some()
-            || config.accept_invalid_certs == Some(true)
         {
             return Err(AdapterError::InvalidInput);
         }
@@ -292,6 +291,17 @@ impl ClnFoundation {
                     .host_str()
                     .and_then(|s| s.trim_matches(['[', ']']).parse::<std::net::IpAddr>().ok())
                     .map_or(false, |ip| ip.is_loopback()))
+        {
+            return Err(AdapterError::InvalidInput);
+        }
+        let insecure_tls = config.accept_invalid_certs == Some(true);
+        if insecure_tls
+            && (outgoing_ready
+                || !receiving_test_tls_endpoint(&base)
+                || config
+                    .socks5_proxy
+                    .as_deref()
+                    .map_or(false, |p| !p.is_empty()))
         {
             return Err(AdapterError::InvalidInput);
         }
@@ -311,6 +321,7 @@ impl ClnFoundation {
             return Err(AdapterError::InvalidInput);
         }
         let mut builder = reqwest::Client::builder()
+            .danger_accept_invalid_certs(insecure_tls)
             .no_proxy()
             .retry(reqwest::retry::never())
             .redirect(reqwest::redirect::Policy::none())
@@ -1057,6 +1068,24 @@ impl ClnFoundation {
             return Err(AdapterError::Uncertain);
         }
         Ok(value)
+    }
+}
+
+/// Explicit receiving-only test exception. Never relax outgoing verification,
+/// public/DNS destinations, plaintext transport, proxies or redirects.
+fn receiving_test_tls_endpoint(url: &reqwest::Url) -> bool {
+    if url.scheme() != "https" {
+        return false;
+    }
+    match url
+        .host_str()
+        .and_then(|h| h.parse::<std::net::IpAddr>().ok())
+    {
+        Some(std::net::IpAddr::V4(ip)) => {
+            let octets = ip.octets();
+            ip.is_loopback() || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        }
+        _ => false,
     }
 }
 
