@@ -1,10 +1,10 @@
-//! Lexe does not expose fee estimation or fee caps. Preparation is local only.
+//! Wallet-specific fee estimates through Lexe's stable SDK. Sends cannot cap fees.
 use std::str::FromStr;
 
 use lexe::{
     types::{
         bitcoin::{Amount, ConfirmationPriority},
-        command::PayOnchainRequest,
+        command::{PayOnchainPreflightRequest, PayOnchainPreflightResponse, PayOnchainRequest},
         payment::{ClientPaymentId, Payment, PaymentStatus},
     },
     wallet::LexeWallet,
@@ -93,7 +93,7 @@ fn request(transaction: &OnchainTransaction, network: &str) -> Result<PayOnchain
     Ok(req)
 }
 
-pub fn prepare(
+fn prepare_local(
     params: PrepareOnchainTransactionParams,
     network: &str,
 ) -> Result<OnchainTransaction, ApiError> {
@@ -122,6 +122,66 @@ pub fn prepare(
     Ok(transaction)
 }
 
+pub async fn prepare(
+    wallet: &LexeWallet,
+    params: PrepareOnchainTransactionParams,
+    network: &str,
+) -> Result<OnchainTransaction, ApiError> {
+    prepare_using(params, network, |req| wallet.pay_onchain_preflight(req)).await
+}
+
+// This operation only accepts preflight requests. Never invoke it from pay:
+// upstream rejects preflight for existing IDs, but send retries must still work.
+async fn prepare_using<F, Fut>(
+    params: PrepareOnchainTransactionParams,
+    network: &str,
+    preflight: F,
+) -> Result<OnchainTransaction, ApiError>
+where
+    F: FnOnce(PayOnchainPreflightRequest) -> Fut,
+    Fut: std::future::Future<Output = lexe::anyhow::Result<PayOnchainPreflightResponse>>,
+{
+    let mut transaction = prepare_local(params, network)?;
+    let req = request(&transaction, network)?;
+    let estimates = preflight(PayOnchainPreflightRequest {
+        client_payment_id: req.client_payment_id,
+        address: req.address,
+        amount: req.amount,
+    })
+    .await
+    // Stable SDK errors are opaque. Do not parse their text or expose payloads
+    // that may contain wallet details; insufficient funds is not a distinct code.
+    .map_err(|_| ApiError::Api {
+        reason: "Lexe on-chain preflight failed; check available funds, spend authorization, node/SDK compatibility, and whether the payment ID was already submitted. No payment was submitted by this preflight.".to_owned(),
+    })?;
+    let estimate = match priority(&transaction.fee)? {
+        ConfirmationPriority::Background => estimates.background_fees,
+        ConfirmationPriority::Normal => estimates.normal_fees,
+        ConfirmationPriority::High => estimates.high_fees.ok_or_else(|| ApiError::Api {
+            reason: "Lexe fast fee estimate is unavailable; select normal or slow".to_owned(),
+        })?,
+    };
+    let fee = sats(estimate)?;
+    transaction.fee_sats = Some(fee);
+    transaction.total_amount_sats = Some(checked_total(transaction.amount_sats, fee)?);
+    Ok(transaction)
+}
+
+fn sats(amount: Amount) -> Result<i64, ApiError> {
+    if amount.msat() % 1_000 != 0 {
+        return Err(invalid(
+            "Lexe returned a fractional-satoshi on-chain amount",
+        ));
+    }
+    i64::try_from(amount.msat() / 1_000).map_err(|_| invalid("Lexe amount exceeds integer range"))
+}
+
+fn checked_total(amount: i64, fee: i64) -> Result<i64, ApiError> {
+    amount
+        .checked_add(fee)
+        .ok_or_else(|| invalid("Lexe total exceeds integer range"))
+}
+
 fn validate_execution(options: &PayOnchainOptions) -> Result<(), ApiError> {
     if options.fee_guardrail.is_some() {
         return Err(invalid("Lexe does not support a maximum network fee; omit fee_guardrail to use provider-determined fees."));
@@ -145,15 +205,6 @@ pub async fn pay(
 }
 
 fn response(payment: &Payment, address: String) -> Result<PayOnchainResponse, ApiError> {
-    let sats = |amount: Amount| -> Result<i64, ApiError> {
-        if amount.msat() % 1_000 != 0 {
-            return Err(invalid(
-                "Lexe returned a fractional-satoshi on-chain amount",
-            ));
-        }
-        i64::try_from(amount.msat() / 1_000)
-            .map_err(|_| invalid("Lexe amount exceeds integer range"))
-    };
     let amount = sats(
         payment
             .amount
@@ -178,11 +229,7 @@ fn response(payment: &Payment, address: String) -> Result<PayOnchainResponse, Ap
             .unwrap_or(address),
         amount_sats: amount,
         fee_sats: Some(fee),
-        total_amount_sats: Some(
-            amount
-                .checked_add(fee)
-                .ok_or_else(|| invalid("Lexe total exceeds integer range"))?,
-        ),
+        total_amount_sats: Some(checked_total(amount, fee)?),
         recipient_amount_sats: Some(amount),
         created_at: Some(payment.created_at.to_i64() / 1_000),
         raw: None,
@@ -192,6 +239,135 @@ fn response(payment: &Payment, address: String) -> Result<PayOnchainResponse, Ap
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn estimates() -> PayOnchainPreflightResponse {
+        PayOnchainPreflightResponse {
+            background_fees: Amount::from_msat(100_000),
+            normal_fees: Amount::from_msat(250_000),
+            high_fees: Some(Amount::from_msat(500_000)),
+        }
+    }
+
+    #[tokio::test]
+    async fn preflight_maps_each_priority_and_refresh_preserves_identity() {
+        for (speed, expected) in [
+            (None, 250),
+            (Some(OnchainFeeSpeed::Slow), 100),
+            (Some(OnchainFeeSpeed::Normal), 250),
+            (Some(OnchainFeeSpeed::Fast), 500),
+        ] {
+            let mut input = params();
+            input.fee = speed.map(|speed| OnchainFeePreference {
+                preference_type: OnchainFeePreferenceType::Speed,
+                speed: Some(speed),
+                ..Default::default()
+            });
+            for _ in 0..2 {
+                let calls = std::cell::Cell::new(0);
+                let prepared = prepare_using(input.clone(), "mainnet", |req| {
+                    calls.set(calls.get() + 1);
+                    assert_eq!(req.client_payment_id.unwrap().to_string(), "ab".repeat(32));
+                    assert_eq!(req.amount.msat(), 10_000_000);
+                    assert_eq!(req.address.assume_checked().to_string(), input.address);
+                    std::future::ready(Ok(estimates()))
+                })
+                .await
+                .unwrap();
+                assert_eq!(calls.get(), 1);
+                assert_eq!(prepared.fee_sats, Some(expected));
+                assert_eq!(prepared.total_amount_sats, Some(10_000 + expected));
+                assert_eq!(prepared.recipient_amount_sats, Some(10_000));
+                assert_eq!(prepared.fee_limit_supported, Some(false));
+                let send = request(&prepared, "mainnet").unwrap();
+                assert_eq!(send.personal_note.as_deref(), Some("test payment"));
+                assert_eq!(send.client_payment_id.unwrap().to_string(), "ab".repeat(32));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_fast_estimate_never_substitutes_another_priority() {
+        for speed in [
+            OnchainFeeSpeed::Slow,
+            OnchainFeeSpeed::Normal,
+            OnchainFeeSpeed::Fast,
+        ] {
+            let mut input = params();
+            input.fee = Some(OnchainFeePreference {
+                preference_type: OnchainFeePreferenceType::Speed,
+                speed: Some(speed.clone()),
+                ..Default::default()
+            });
+            let result = prepare_using(input, "mainnet", |_| async {
+                let mut fees = estimates();
+                fees.high_fees = None;
+                Ok(fees)
+            })
+            .await;
+            if speed == OnchainFeeSpeed::Fast {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("fast fee estimate is unavailable"));
+            } else {
+                assert!(result.is_ok());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn invalid_input_does_not_call_preflight_and_errors_do_not_return_preparations() {
+        let mut input = params();
+        input.amount_sats = -1;
+        assert!(prepare_using(input, "mainnet", |_| async {
+            panic!("invalid input must not reach the network")
+        })
+        .await
+        .is_err());
+
+        // The stable SDK exposes opaque anyhow errors, not typed funds/version codes.
+        for cause in [
+            "insufficient funds",
+            "unknown endpoint",
+            "authentication",
+            "timeout",
+        ] {
+            let calls = std::cell::Cell::new(0);
+            let error = prepare_using(params(), "mainnet", |_| {
+                calls.set(calls.get() + 1);
+                std::future::ready(Err(lexe::anyhow::anyhow!(
+                    "{cause}: private wallet payload"
+                )))
+            })
+            .await
+            .unwrap_err()
+            .to_string();
+            assert_eq!(calls.get(), 1);
+            assert!(error.contains("preflight failed"));
+            assert!(error.contains("No payment was submitted"));
+            assert!(!error.contains("private wallet payload"));
+        }
+    }
+
+    #[tokio::test]
+    async fn fee_conversion_is_exact_and_rejects_fractional_satoshis() {
+        let result = prepare_using(params(), "mainnet", |_| async {
+            let mut fees = estimates();
+            fees.normal_fees = Amount::from_msat(1001);
+            Ok(fees)
+        })
+        .await;
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("fractional-satoshi"));
+        assert_eq!(
+            sats(Amount::from_msat(2_100_000_000_000_000_000)).unwrap(),
+            2_100_000_000_000_000
+        );
+        assert_eq!(checked_total(10_000, 250).unwrap(), 10_250);
+        assert!(checked_total(i64::MAX, 1).is_err());
+    }
 
     fn params() -> PrepareOnchainTransactionParams {
         PrepareOnchainTransactionParams {
@@ -206,7 +382,7 @@ mod tests {
 
     #[test]
     fn preparation_preserves_id_and_note_without_inventing_a_fee() {
-        let transaction = prepare(params(), "mainnet").unwrap();
+        let transaction = prepare_local(params(), "mainnet").unwrap();
         assert_eq!(transaction.id.as_deref(), Some("ab".repeat(32).as_str()));
         assert_eq!(transaction.fee_sats, None);
         assert_eq!(transaction.fee_limit_supported, Some(false));
@@ -222,8 +398,8 @@ mod tests {
     fn fresh_preparations_have_distinct_ids() {
         let mut input = params();
         input.idempotency_key = None;
-        let a = prepare(input.clone(), "mainnet").unwrap();
-        let b = prepare(input, "mainnet").unwrap();
+        let a = prepare_local(input.clone(), "mainnet").unwrap();
+        let b = prepare_local(input, "mainnet").unwrap();
         assert_ne!(a.id, b.id);
         assert_eq!(a.id.unwrap().len(), 64);
     }
@@ -233,24 +409,24 @@ mod tests {
         for amount in [0, -1, i64::MAX] {
             let mut input = params();
             input.amount_sats = amount;
-            assert!(prepare(input, "mainnet").is_err());
+            assert!(prepare_local(input, "mainnet").is_err());
         }
-        assert!(prepare(params(), "testnet3").is_err());
+        assert!(prepare_local(params(), "testnet3").is_err());
         let mut input = params();
         input.address = "not-an-address".to_owned();
-        assert!(prepare(input, "mainnet").is_err());
+        assert!(prepare_local(input, "mainnet").is_err());
         let mut input = params();
         input.idempotency_key = Some("invalid".to_owned());
-        assert!(prepare(input, "mainnet").is_err());
+        assert!(prepare_local(input, "mainnet").is_err());
         let mut input = params();
         input.fee_payer = Some(OnchainFeePayer::Recipient);
-        assert!(prepare(input, "mainnet").is_err());
+        assert!(prepare_local(input, "mainnet").is_err());
         for note in ["".to_owned(), "a".repeat(201), "🦀".repeat(129)] {
             let mut input = params();
             input.description = Some(note);
-            assert!(prepare(input, "mainnet").is_err());
+            assert!(prepare_local(input, "mainnet").is_err());
         }
-        let mut transaction = prepare(params(), "mainnet").unwrap();
+        let mut transaction = prepare_local(params(), "mainnet").unwrap();
         transaction.id = None;
         assert!(request(&transaction, "mainnet").is_err());
     }

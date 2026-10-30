@@ -203,12 +203,13 @@ impl LexeNode {
         crate::lexe::api::pay_invoice(&self.wallet, params).await
     }
 
-    /// Validate a local send request. Lexe does not expose a fee quote.
+    /// Fetch a wallet-specific miner fee estimate without submitting a payment.
+    /// Reuse the same idempotency key when refreshing before submission.
     pub async fn prepare_onchain_transaction(
         &self,
         params: crate::PrepareOnchainTransactionParams,
     ) -> Result<crate::OnchainTransaction, ApiError> {
-        super::onchain::prepare(params, &self.network)
+        super::onchain::prepare(&self.wallet, params, &self.network).await
     }
 
     pub async fn pay_onchain(
@@ -320,7 +321,10 @@ mod tests {
             })
             .await
             .expect("prepare on-chain payment");
-        assert!(transaction.fee_sats.is_none());
+        let fee = transaction.fee_sats.expect("preflight fee estimate");
+        assert_eq!(transaction.total_amount_sats, amount_sats.checked_add(fee));
+        assert_eq!(transaction.recipient_amount_sats, Some(amount_sats));
+        assert_eq!(transaction.fee_limit_supported, Some(false));
         let payment = node
             .pay_onchain(transaction)
             .await

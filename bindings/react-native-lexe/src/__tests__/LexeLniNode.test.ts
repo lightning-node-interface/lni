@@ -75,6 +75,8 @@ function makeNativeNode(
       id: params.idempotencyKey ?? 'ab'.repeat(32),
       address: params.address,
       amountSats: params.amountSats,
+      feeSats: 200n,
+      totalAmountSats: params.amountSats + 200n,
       recipientAmountSats: params.amountSats,
       feePayer: OnchainFeePayer.Sender,
       fee: params.fee ?? { preferenceType: OnchainFeePreferenceType.Default },
@@ -360,6 +362,75 @@ describe('authenticated Lexe grants', () => {
 });
 
 describe('Lexe on-chain adapter', () => {
+  it('refreshes fees with the same payment ID without sending', async () => {
+    const native = makeNativeNode();
+    const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+    for (const speed of ['slow', 'normal', 'fast'] as const) {
+      const prepared = await node.prepareOnchainTransaction({
+        address: 'test-address',
+        amountSats: 10_000,
+        fee: { type: 'speed', speed },
+        idempotencyKey: 'ab'.repeat(32),
+      });
+      expect(prepared.id).toBe('ab'.repeat(32));
+      expect(prepared.feeSats).toBe(200);
+      expect(prepared.feeLimitSupported).toBe(false);
+    }
+    expect(native.prepareOnchainTransaction).toHaveBeenCalledTimes(3);
+    expect(native.payOnchain).not.toHaveBeenCalled();
+  });
+
+  it('propagates preflight errors without submitting a payment', async () => {
+    const native = makeNativeNode({
+      prepareOnchainTransaction: vi.fn(async () => {
+        throw new Error('Lexe on-chain preflight failed');
+      }),
+    });
+    const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+    await expect(
+      node.prepareOnchainTransaction({
+        address: 'test-address',
+        amountSats: 10_000,
+      })
+    ).rejects.toThrow('preflight failed');
+    expect(native.payOnchain).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe native estimates and retries preparations without fee fields', async () => {
+    const native = makeNativeNode();
+    const original = native.prepareOnchainTransaction;
+    for (const field of ['feeSats', 'totalAmountSats'] as const) {
+      native.prepareOnchainTransaction = vi.fn(async (params) => ({
+        ...(await original(params)),
+        [field]: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+      }));
+      const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+      await expect(
+        node.prepareOnchainTransaction({
+          address: 'test-address',
+          amountSats: 10_000,
+        })
+      ).rejects.toThrow();
+    }
+    expect(native.payOnchain).not.toHaveBeenCalled();
+    native.prepareOnchainTransaction = original;
+    vi.mocked(original).mockClear();
+    const node = new LexeLniNode({ clientCredentials: 'test' }, native);
+    const transaction = await node.prepareOnchainTransaction({
+      address: 'test-address',
+      amountSats: 10_000,
+      idempotencyKey: 'ab'.repeat(32),
+    });
+    delete transaction.feeSats;
+    delete transaction.totalAmountSats;
+    await node.payOnchain(transaction);
+    expect(native.payOnchain).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ab'.repeat(32), feeSats: undefined }),
+      expect.anything()
+    );
+    expect(native.prepareOnchainTransaction).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves the prepared id and note through native execution', async () => {
     const native = makeNativeNode();
     const node: OnchainPayments = new LexeLniNode(
@@ -382,7 +453,9 @@ describe('Lexe on-chain adapter', () => {
         },
       })
     );
-    expect(transaction.feeSats).toBeUndefined();
+    expect(transaction.feeSats).toBe(200);
+    expect(transaction.totalAmountSats).toBe(10_200);
+    expect(transaction.recipientAmountSats).toBe(10_000);
     expect(transaction.raw).toBe('test note');
     expect(transaction).toMatchObject({
       feeLimitSupported: false,

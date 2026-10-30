@@ -148,6 +148,31 @@ fn amount_to_sats(amount: Option<&Amount>) -> Option<i64> {
         .map(|btc| (btc * 100_000_000.0).round() as i64)
 }
 
+fn quote_amount_to_sats(amount: &Amount) -> Option<i64> {
+    if amount.currency != "BTC" {
+        return None;
+    }
+    let (whole, fraction) = amount
+        .amount
+        .split_once('.')
+        .unwrap_or((&amount.amount, ""));
+    if whole.is_empty()
+        || !whole.bytes().all(|b| b.is_ascii_digit())
+        || fraction.len() > 8
+        || !fraction.bytes().all(|b| b.is_ascii_digit())
+        || (amount.amount.contains('.') && fraction.is_empty())
+    {
+        return None;
+    }
+    let sats = whole
+        .parse::<i64>()
+        .ok()?
+        .checked_mul(100_000_000)?
+        .checked_add(format!("{:0<8}", fraction).parse::<i64>().ok()?)?;
+    // Match the safe integer range of the TypeScript adapter.
+    (sats <= 9_007_199_254_740_991).then_some(sats)
+}
+
 fn amount_to_msats(amount: Option<&Amount>) -> i64 {
     amount_to_sats(amount).unwrap_or_default() * 1000
 }
@@ -1121,14 +1146,26 @@ fn onchain_transaction_from_quote(
     quote: OnchainPaymentQuoteResponse,
     raw: String,
 ) -> OnchainTransaction {
+    let total_amount_sats = quote_amount_to_sats(&quote.total_amount);
+    let recipient_amount_sats = quote_amount_to_sats(&quote.amount);
+    let derived_fee = total_amount_sats
+        .zip(recipient_amount_sats)
+        .and_then(|(total, recipient)| total.checked_sub(recipient))
+        .filter(|fee| *fee >= 0);
+    // A missing totalFee is only zero when validated totals prove it.
+    let fee_sats = match quote.total_fee.as_ref() {
+        None => derived_fee,
+        Some(fee) if quote_amount_to_sats(fee) == derived_fee => derived_fee,
+        Some(_) => None,
+    };
     OnchainTransaction {
         fee_limit_supported: None,
         id: Some(quote.payment_quote_id),
         address,
         amount_sats,
-        fee_sats: amount_to_sats(quote.total_fee.as_ref()),
-        total_amount_sats: amount_to_sats(Some(&quote.total_amount)),
-        recipient_amount_sats: amount_to_sats(Some(&quote.amount)),
+        fee_sats,
+        total_amount_sats,
+        recipient_amount_sats,
         fee_payer,
         fee,
         expires_at: quote
@@ -1755,6 +1792,107 @@ mod tests {
         };
 
         assert!(async_client(&config).is_err());
+    }
+
+    #[test]
+    fn quote_fees_are_derived_only_from_valid_btc_totals() {
+        for (total, expected) in [
+            ("0.00011000", Some(0)),
+            ("0.00011001", Some(1)),
+            ("0.00011371", Some(371)),
+            ("0.00010999", None),
+            ("0.00011000junk", None),
+            ("-0.00011000", None),
+            ("NaN", None),
+            ("Infinity", None),
+            ("0.000110001", None),
+            ("90071993", None),
+        ] {
+            let quote = serde_json::from_value(serde_json::json!({
+                "paymentQuoteId": "internal-quote",
+                "amount": {"amount": "0.00011000", "currency": "BTC"},
+                "totalAmount": {"amount": total, "currency": "BTC"},
+            }))
+            .unwrap();
+            let transaction = onchain_transaction_from_quote(
+                "bc1qrecipient".into(),
+                11_000,
+                default_onchain_fee(),
+                OnchainFeePayer::Sender,
+                quote,
+                "{}".into(),
+            );
+            assert_eq!(transaction.fee_sats, expected, "{total}");
+            assert_eq!(transaction.recipient_amount_sats, Some(11_000));
+            let guard = assert_onchain_fee_guardrail(&transaction, PayOnchainOptions::default());
+            assert_eq!(guard.is_ok(), expected.is_some(), "{total}");
+        }
+    }
+
+    #[test]
+    fn recipient_pays_quote_fees_match_the_deducted_amount() {
+        for include_fee in [true, false] {
+            let mut response = serde_json::json!({
+                "paymentQuoteId": "recipient-pays-quote",
+                "amount": {"amount": "0.00009000", "currency": "BTC"},
+                "totalAmount": {"amount": "0.00010000", "currency": "BTC"},
+            });
+            if include_fee {
+                response["totalFee"] =
+                    serde_json::json!({"amount": "0.00001000", "currency": "BTC"});
+            }
+            let quote = serde_json::from_value(response).unwrap();
+            let fee_payer = OnchainFeePayer::Recipient;
+            assert_eq!(strike_fee_policy(&fee_payer), "INCLUSIVE");
+            let transaction = onchain_transaction_from_quote(
+                "bc1qrecipient".into(),
+                10_000,
+                default_onchain_fee(),
+                fee_payer,
+                quote,
+                "{}".into(),
+            );
+            assert_eq!(transaction.amount_sats, 10_000);
+            assert_eq!(transaction.total_amount_sats, Some(10_000));
+            assert_eq!(transaction.recipient_amount_sats, Some(9_000));
+            assert_eq!(transaction.fee_sats, Some(1_000));
+            assert!(
+                assert_onchain_fee_guardrail(&transaction, PayOnchainOptions::default()).is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn quote_fees_do_not_fall_back_when_explicit_fee_is_invalid() {
+        for (fee, currency, expected) in [
+            ("0", "BTC", Some(0)),
+            ("0.00000001", "BTC", None),
+            ("invalid", "BTC", None),
+            ("0", "USD", None),
+        ] {
+            let quote = serde_json::from_value(serde_json::json!({
+                "paymentQuoteId": "internal-quote",
+                "amount": {"amount": "0.00011000", "currency": "BTC"},
+                "totalAmount": {"amount": "0.00011000", "currency": "BTC"},
+                "totalFee": {"amount": fee, "currency": currency},
+            }))
+            .unwrap();
+            let transaction = onchain_transaction_from_quote(
+                "bc1qrecipient".into(),
+                11_000,
+                default_onchain_fee(),
+                OnchainFeePayer::Sender,
+                quote,
+                "{}".into(),
+            );
+            assert_eq!(transaction.fee_sats, expected);
+        }
+        let non_btc = Amount {
+            amount: "0.00011000".into(),
+            currency: "USD".into(),
+            fee_policy: None,
+        };
+        assert_eq!(quote_amount_to_sats(&non_btc), None);
     }
 
     fn test_onchain_transaction(fee_sats: Option<i64>) -> OnchainTransaction {
