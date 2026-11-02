@@ -5,6 +5,8 @@ use lexe::{
     types::auth::{ClientCredentials, CredentialsRef},
     wallet::LexeWallet,
 };
+#[cfg(feature = "napi_rs")]
+use napi_derive::napi;
 
 use crate::{
     ApiError, CreateInvoiceParams, CreateOfferParams, ListTransactionsParams, LookupInvoiceParams,
@@ -14,6 +16,7 @@ use crate::{
 /// Authenticated credential grants returned by the Lexe node.
 /// Unlike `get_permissions`, this describes this client's authorization.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexeClientInfo {
     pub kind: String,
@@ -28,6 +31,7 @@ pub struct LexeClientInfo {
 
 /// Lexe's human-readable Bitcoin and Lightning receiving addresses.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexeHumanBitcoinAddress {
     pub human_bitcoin_address: String,
@@ -89,6 +93,18 @@ impl std::fmt::Debug for LexeNode {
 impl LexeNode {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new(config: LexeConfig) -> Result<Self, ApiError> {
+        Self::new_with_persistence(config, true)
+    }
+}
+
+impl LexeNode {
+    /// Initialize without a local payment database for short-lived server processes.
+    /// Payment history operations that require the database are unavailable.
+    pub fn new_stateless(config: LexeConfig) -> Result<Self, ApiError> {
+        Self::new_with_persistence(config, false)
+    }
+
+    fn new_with_persistence(config: LexeConfig, persistent: bool) -> Result<Self, ApiError> {
         if config.client_credentials.trim().is_empty() {
             return Err(ApiError::InvalidInput(
                 "client_credentials must not be empty".to_owned(),
@@ -116,11 +132,14 @@ impl LexeNode {
             .as_deref()
             .filter(|path| !path.is_empty())
             .map(PathBuf::from);
-        let wallet =
+        let wallet = if persistent {
             LexeWallet::load_or_fresh(env_config, CredentialsRef::from(&credentials), data_dir)
-                .map_err(|error| ApiError::Api {
-                    reason: format!("Failed to initialize Lexe wallet: {error}"),
-                })?;
+        } else {
+            LexeWallet::without_db(env_config, CredentialsRef::from(&credentials))
+        }
+        .map_err(|error| ApiError::Api {
+            reason: format!("Failed to initialize Lexe wallet: {error}"),
+        })?;
 
         Ok(Self {
             config,
@@ -146,6 +165,32 @@ impl LexeNode {
 
     pub async fn get_human_bitcoin_address(&self) -> Result<LexeHumanBitcoinAddress, ApiError> {
         crate::lexe::api::get_human_bitcoin_address(&self.wallet).await
+    }
+
+    pub async fn get_next_unused_address(&self) -> Result<String, ApiError> {
+        let response = self
+            .wallet
+            .get_next_unused_address()
+            .await
+            .map_err(|error| ApiError::Api {
+                reason: format!("Failed to get Lexe receiving address: {error}"),
+            })?;
+        let network = if self.network == "mainnet" {
+            "bitcoin"
+        } else {
+            "testnet"
+        }
+        .parse()
+        .map_err(|_| ApiError::Api {
+            reason: "Invalid Lexe Bitcoin network".to_owned(),
+        })?;
+        let address = response
+            .address
+            .require_network(network)
+            .map_err(|_| ApiError::Api {
+                reason: "Lexe receiving address has the wrong network".to_owned(),
+            })?;
+        Ok(address.to_string())
     }
 
     pub async fn create_invoice(
