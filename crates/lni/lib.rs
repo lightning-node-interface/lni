@@ -220,7 +220,6 @@ macro_rules! impl_lightning_node {
 
 pub mod phoenixd {
     pub mod api;
-    pub mod foundation;
     pub mod lib;
     pub mod types;
     pub use lib::{PhoenixdConfig, PhoenixdNode};
@@ -228,7 +227,6 @@ pub mod phoenixd {
 
 pub mod cln {
     pub mod api;
-    pub mod foundation;
     pub mod lib;
     pub mod types;
     pub use lib::{ClnConfig, ClnNode};
