@@ -13,23 +13,23 @@
     "clean:android": "cd android && ./gradlew clean && cd .."
   },
   "dependencies": {
-    "react": "19.0.0",
-    "react-native": "0.78.1",
-    "react-native-dotenv": "^3.4.11",
+    "react": "19.3.1",
+    "react-native": "0.88.1",
+    "react-native-dotenv": "^5.0.0",
     "react-native-fs": "^2.20.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
-    "@babel/preset-env": "^7.25.3",
-    "@babel/runtime": "^7.25.0",
-    "@react-native-community/cli": "15.0.1",
-    "@react-native-community/cli-platform-android": "15.0.1",
-    "@react-native-community/cli-platform-ios": "15.0.1",
-    "@react-native/babel-preset": "0.78.1",
-    "@react-native/metro-config": "0.78.1",
-    "@react-native/typescript-config": "0.78.1",
-    "@types/react": "^19.0.0",
-    "react-native-builder-bob": "0.39.1"
+    "@babel/core": "^8.1.0",
+    "@babel/preset-env": "^8.0.7",
+    "@babel/runtime": "^8.1.0",
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-ios": "20.2.0",
+    "@react-native/babel-preset": "0.88.1",
+    "@react-native/metro-config": "0.88.1",
+    "@react-native/typescript-config": "0.88.1",
+    "@types/react": "^19.3.0",
+    "react-native-builder-bob": "0.44.1"
   },
   "engines": {
     "node": ">=18"

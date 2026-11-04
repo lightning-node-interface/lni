@@ -166,7 +166,7 @@ mod tests {
     use super::*;
     use dotenv::dotenv;
     use lazy_static::lazy_static;
-    use rand::Rng;
+    use rand::RngExt;
     use sha2::{Digest, Sha256};
     use std::env;
     use std::sync::{Arc, Mutex};
@@ -230,7 +230,7 @@ mod tests {
 
         // Generate a random 32-byte preimage
         let mut preimage_bytes = [0u8; 32];
-        rand::thread_rng().fill(&mut preimage_bytes);
+        rand::rng().fill(&mut preimage_bytes);
 
         // Hex encode the preimage for human readability
         let preimage = hex::encode(preimage_bytes);

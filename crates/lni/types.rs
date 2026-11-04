@@ -94,7 +94,7 @@ impl Permissions {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 pub enum InvoiceType {
     Bolt11,
     Bolt12,
@@ -178,7 +178,7 @@ pub struct Transaction {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum SettlementType {
     Lightning,
@@ -190,7 +190,7 @@ pub enum SettlementType {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum SettlementState {
     Pending,
@@ -371,7 +371,7 @@ pub struct PayInvoiceResponse {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum OnchainFeeSpeed {
     Fast,
@@ -383,7 +383,7 @@ pub enum OnchainFeeSpeed {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum OnchainFeePayer {
     Sender,
@@ -399,7 +399,7 @@ impl Default for OnchainFeePayer {
 #[cfg_attr(feature = "napi_rs", napi(string_enum))]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(not(feature = "napi_rs"), derive(Clone))]
+#[derive(Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum OnchainFeePreferenceType {
     Default,

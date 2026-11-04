@@ -271,10 +271,10 @@ impl SparkNode {
   }
 
   #[napi]
-  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
+  pub fn on_invoice_events(
     &self,
     params: lni::types::OnInvoiceEventParams,
-    callback: T,
+    callback: Function<'_, FnArgs<(String, Option<lni::Transaction>)>, ()>,
   ) -> Result<()> {
     let inner = self.inner.clone();
 
@@ -292,14 +292,14 @@ impl SparkNode {
 
           match node.lookup_invoice(lookup_params).await {
             Ok(transaction) if transaction.settled_at > 0 => {
-              let _ = callback("success".to_string(), Some(transaction));
+              let _ = callback.call(("success".to_string(), Some(transaction)).into());
               return;
             }
             Ok(transaction) => {
-              let _ = callback("pending".to_string(), Some(transaction));
+              let _ = callback.call(("pending".to_string(), Some(transaction)).into());
             }
             Err(_) => {
-              let _ = callback("pending".to_string(), None);
+              let _ = callback.call(("pending".to_string(), None).into());
             }
           }
 
@@ -310,7 +310,7 @@ impl SparkNode {
         }
       }
 
-      let _ = callback("failure".to_string(), None);
+      let _ = callback.call(("failure".to_string(), None).into());
     });
 
     Ok(())

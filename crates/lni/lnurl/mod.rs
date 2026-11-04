@@ -244,9 +244,8 @@ async fn lnurl_http_client(url: &reqwest::Url) -> Result<reqwest::Client, ApiErr
     };
     validate_resolved_lnurl_addresses(&addresses)?;
 
-    let mut builder = reqwest::Client::builder()
+    let mut builder = crate::http_client_builder()
         .https_only(true)
-        .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(30));
     if literal_ip.is_none() {
         builder = builder.resolve_to_addrs(hostname, &addresses);

@@ -1,0 +1,21 @@
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index eb1c915f43b2debf5faa7ac3a73c262a161c7a4f..55fc9dbb37fafc891b9c66626bcad96356f0a5f6 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -1548,3 +1548,6 @@ exports.minimatch.Minimatch = Minimatch;
+ exports.minimatch.escape = escape_js_1.escape;
+ exports.minimatch.unescape = unescape_js_1.unescape;
+ //# sourceMappingURL=index.js.map
++// Preserve the callable CommonJS API used by existing React Native tooling,
++// while retaining the patched matcher and all current named exports.
++module.exports = Object.assign(exports.minimatch, exports);
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 1dc27e67064fcbf1f3dce34aa3ea1a134b7be168..6657261baec6c58bbd2cd86361700efe5c10a645 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -1537,3 +1537,5 @@ minimatch.Minimatch = Minimatch;
+ minimatch.escape = escape;
+ minimatch.unescape = unescape;
+ //# sourceMappingURL=index.js.map
++// Compatibility for older ESLint consumers; named exports remain unchanged.
++export default minimatch;

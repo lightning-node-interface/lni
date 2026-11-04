@@ -28,7 +28,8 @@ describe('ArkadeBoltzNode', () => {
       readonly kind = 'contract';
     }
 
-    vi.doMock('@arkade-os/sdk', () => ({
+    vi.doMock('@arkade-os/sdk', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@arkade-os/sdk')>()),
       MnemonicIdentity: {
         fromMnemonic: vi.fn(() => ({ kind: 'identity' })),
       },
@@ -38,14 +39,14 @@ describe('ArkadeBoltzNode', () => {
       InMemoryWalletRepository,
       InMemoryContractRepository,
     }));
-    vi.doMock('@arkade-os/boltz-swap', () => ({
+    vi.doMock('../internal/boltz.js', () => ({ loadBoltz: async () => ({
       ArkadeSwaps: {
         create: createSwapsSpy,
       },
       BoltzSwapProvider: swapProviderSpy,
       decodeInvoice: vi.fn(),
       getInvoicePaymentHash: vi.fn(),
-    }));
+    }) }));
 
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({
@@ -61,7 +62,7 @@ describe('ArkadeBoltzNode', () => {
 
     expect(createSpy).toHaveBeenCalledTimes(1);
     const [walletConfig] = createSpy.mock.calls[0] as unknown as [Record<string, unknown>];
-    expect(walletConfig.arkServerUrl).toBe('https://mutinynet.arkade.sh');
+    expect(walletConfig.arkProvider).toMatchObject({ serverUrl: 'https://mutinynet.arkade.sh' });
     const storage = walletConfig.storage as Record<string, { kind: string }>;
     expect(storage.walletRepository!.kind).toBe('wallet');
     expect(storage.contractRepository!.kind).toBe('contract');
@@ -237,7 +238,8 @@ describe('ArkadeBoltzNode', () => {
   });
 
   it('wraps initialization failures as LniError', async () => {
-    vi.doMock('@arkade-os/sdk', () => ({
+    vi.doMock('@arkade-os/sdk', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@arkade-os/sdk')>()),
       MnemonicIdentity: {
         fromMnemonic: vi.fn(() => ({ kind: 'identity' })),
       },
@@ -249,14 +251,14 @@ describe('ArkadeBoltzNode', () => {
       InMemoryWalletRepository: class {},
       InMemoryContractRepository: class {},
     }));
-    vi.doMock('@arkade-os/boltz-swap', () => ({
+    vi.doMock('../internal/boltz.js', () => ({ loadBoltz: async () => ({
       ArkadeSwaps: {
         create: vi.fn(),
       },
       BoltzSwapProvider: class {},
       decodeInvoice: vi.fn(),
       getInvoicePaymentHash: vi.fn(),
-    }));
+    }) }));
 
     const { ArkadeBoltzNode } = await import('../nodes/arkade-boltz.js');
     const node = new ArkadeBoltzNode({

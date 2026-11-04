@@ -19,11 +19,11 @@ import {
   type UniffiReferenceHolder,
   type UniffiRustCallStatus,
   AbstractFfiConverterByteArray,
+  Cursor,
   FfiConverterArray,
   FfiConverterArrayBuffer,
   FfiConverterBool,
   FfiConverterFloat64,
-  FfiConverterInt32,
   FfiConverterInt64,
   FfiConverterObject,
   FfiConverterObjectWithCallbacks,
@@ -151,27 +151,27 @@ export const ClientInfo = (() => {
 const FfiConverterTypeClientInfo = (() => {
   type TypeName = ClientInfo;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        kind: FfiConverterString.read(from),
-        clientPubkey: FfiConverterOptionalString.read(from),
-        label: FfiConverterOptionalString.read(from),
-        createdAtMs: FfiConverterOptionalInt64.read(from),
-        expiresAtMs: FfiConverterOptionalInt64.read(from),
-        scopes: FfiConverterSequenceString.read(from),
-        permissions: FfiConverterSequenceString.read(from),
-        effectivePermissions: FfiConverterSequenceString.read(from),
+        kind: FfiConverterString.readFromCursor(c),
+        clientPubkey: FfiConverterOptionalString.readFromCursor(c),
+        label: FfiConverterOptionalString.readFromCursor(c),
+        createdAtMs: FfiConverterOptionalInt64.readFromCursor(c),
+        expiresAtMs: FfiConverterOptionalInt64.readFromCursor(c),
+        scopes: FfiConverterSequenceString.readFromCursor(c),
+        permissions: FfiConverterSequenceString.readFromCursor(c),
+        effectivePermissions: FfiConverterSequenceString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.kind, into);
-      FfiConverterOptionalString.write(value.clientPubkey, into);
-      FfiConverterOptionalString.write(value.label, into);
-      FfiConverterOptionalInt64.write(value.createdAtMs, into);
-      FfiConverterOptionalInt64.write(value.expiresAtMs, into);
-      FfiConverterSequenceString.write(value.scopes, into);
-      FfiConverterSequenceString.write(value.permissions, into);
-      FfiConverterSequenceString.write(value.effectivePermissions, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.kind, c);
+      FfiConverterOptionalString.writeIntoCursor(value.clientPubkey, c);
+      FfiConverterOptionalString.writeIntoCursor(value.label, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.createdAtMs, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.expiresAtMs, c);
+      FfiConverterSequenceString.writeIntoCursor(value.scopes, c);
+      FfiConverterSequenceString.writeIntoCursor(value.permissions, c);
+      FfiConverterSequenceString.writeIntoCursor(value.effectivePermissions, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -195,11 +195,10 @@ export enum InvoiceType {
 }
 
 const FfiConverterTypeInvoiceType = (() => {
-  const ordinalConverter = FfiConverterInt32;
   type TypeName = InvoiceType;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
+    readFromCursor(c: Cursor): TypeName {
+      switch (c.readI32()) {
         case 1:
           return InvoiceType.Bolt11;
         case 2:
@@ -208,16 +207,16 @@ const FfiConverterTypeInvoiceType = (() => {
           throw new UniffiInternalError.UnexpectedEnumCase();
       }
     }
-    write(value: TypeName, into: RustBuffer): void {
+    writeIntoCursor(value: TypeName, c: Cursor): void {
       switch (value) {
         case InvoiceType.Bolt11:
-          return ordinalConverter.write(1, into);
+          return c.writeI32(1);
         case InvoiceType.Bolt12:
-          return ordinalConverter.write(2, into);
+          return c.writeI32(2);
       }
     }
     allocationSize(value: TypeName): number {
-      return ordinalConverter.allocationSize(0);
+      return 4;
     }
   }
   return new FFIConverter();
@@ -257,33 +256,33 @@ export const CreateInvoiceParams = (() => {
 const FfiConverterTypeCreateInvoiceParams = (() => {
   type TypeName = CreateInvoiceParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        invoiceType: FfiConverterOptionalTypeInvoiceType.read(from),
-        amountMsats: FfiConverterOptionalInt64.read(from),
-        offer: FfiConverterOptionalString.read(from),
-        description: FfiConverterOptionalString.read(from),
-        descriptionHash: FfiConverterOptionalString.read(from),
-        expiry: FfiConverterOptionalInt64.read(from),
-        rPreimage: FfiConverterOptionalString.read(from),
-        isBlinded: FfiConverterOptionalBoolean.read(from),
-        isKeysend: FfiConverterOptionalBoolean.read(from),
-        isAmp: FfiConverterOptionalBoolean.read(from),
-        isPrivate: FfiConverterOptionalBoolean.read(from),
+        invoiceType: FfiConverterOptionalTypeInvoiceType.readFromCursor(c),
+        amountMsats: FfiConverterOptionalInt64.readFromCursor(c),
+        offer: FfiConverterOptionalString.readFromCursor(c),
+        description: FfiConverterOptionalString.readFromCursor(c),
+        descriptionHash: FfiConverterOptionalString.readFromCursor(c),
+        expiry: FfiConverterOptionalInt64.readFromCursor(c),
+        rPreimage: FfiConverterOptionalString.readFromCursor(c),
+        isBlinded: FfiConverterOptionalBoolean.readFromCursor(c),
+        isKeysend: FfiConverterOptionalBoolean.readFromCursor(c),
+        isAmp: FfiConverterOptionalBoolean.readFromCursor(c),
+        isPrivate: FfiConverterOptionalBoolean.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalTypeInvoiceType.write(value.invoiceType, into);
-      FfiConverterOptionalInt64.write(value.amountMsats, into);
-      FfiConverterOptionalString.write(value.offer, into);
-      FfiConverterOptionalString.write(value.description, into);
-      FfiConverterOptionalString.write(value.descriptionHash, into);
-      FfiConverterOptionalInt64.write(value.expiry, into);
-      FfiConverterOptionalString.write(value.rPreimage, into);
-      FfiConverterOptionalBoolean.write(value.isBlinded, into);
-      FfiConverterOptionalBoolean.write(value.isKeysend, into);
-      FfiConverterOptionalBoolean.write(value.isAmp, into);
-      FfiConverterOptionalBoolean.write(value.isPrivate, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalTypeInvoiceType.writeIntoCursor(value.invoiceType, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.amountMsats, c);
+      FfiConverterOptionalString.writeIntoCursor(value.offer, c);
+      FfiConverterOptionalString.writeIntoCursor(value.description, c);
+      FfiConverterOptionalString.writeIntoCursor(value.descriptionHash, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.expiry, c);
+      FfiConverterOptionalString.writeIntoCursor(value.rPreimage, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.isBlinded, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.isKeysend, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.isAmp, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.isPrivate, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -329,15 +328,15 @@ export const CreateOfferParams = (() => {
 const FfiConverterTypeCreateOfferParams = (() => {
   type TypeName = CreateOfferParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        description: FfiConverterOptionalString.read(from),
-        amountMsats: FfiConverterOptionalInt64.read(from),
+        description: FfiConverterOptionalString.readFromCursor(c),
+        amountMsats: FfiConverterOptionalInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.description, into);
-      FfiConverterOptionalInt64.write(value.amountMsats, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.description, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.amountMsats, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -376,19 +375,19 @@ export const HumanBitcoinAddress = (() => {
 const FfiConverterTypeHumanBitcoinAddress = (() => {
   type TypeName = HumanBitcoinAddress;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        humanBitcoinAddress: FfiConverterString.read(from),
-        lightningAddress: FfiConverterString.read(from),
-        offer: FfiConverterString.read(from),
-        updatable: FfiConverterBool.read(from),
+        humanBitcoinAddress: FfiConverterString.readFromCursor(c),
+        lightningAddress: FfiConverterString.readFromCursor(c),
+        offer: FfiConverterString.readFromCursor(c),
+        updatable: FfiConverterBool.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.humanBitcoinAddress, into);
-      FfiConverterString.write(value.lightningAddress, into);
-      FfiConverterString.write(value.offer, into);
-      FfiConverterBool.write(value.updatable, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.humanBitcoinAddress, c);
+      FfiConverterString.writeIntoCursor(value.lightningAddress, c);
+      FfiConverterString.writeIntoCursor(value.offer, c);
+      FfiConverterBool.writeIntoCursor(value.updatable, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -428,17 +427,17 @@ export const LexeConfig = (() => {
 const FfiConverterTypeLexeConfig = (() => {
   type TypeName = LexeConfig;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        clientCredentials: FfiConverterString.read(from),
-        dataDir: FfiConverterOptionalString.read(from),
-        network: FfiConverterOptionalString.read(from),
+        clientCredentials: FfiConverterString.readFromCursor(c),
+        dataDir: FfiConverterOptionalString.readFromCursor(c),
+        network: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.clientCredentials, into);
-      FfiConverterOptionalString.write(value.dataDir, into);
-      FfiConverterOptionalString.write(value.network, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.clientCredentials, c);
+      FfiConverterOptionalString.writeIntoCursor(value.dataDir, c);
+      FfiConverterOptionalString.writeIntoCursor(value.network, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -492,35 +491,35 @@ export const LexeConnectOptions = (() => {
 const FfiConverterTypeLexeConnectOptions = (() => {
   type TypeName = LexeConnectOptions;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        redirectUri: FfiConverterOptionalString.read(from),
-        postUrl: FfiConverterOptionalString.read(from),
-        mailboxUrl: FfiConverterOptionalString.read(from),
-        scopes: FfiConverterSequenceString.read(from),
-        permissions: FfiConverterSequenceString.read(from),
-        account: FfiConverterOptionalString.read(from),
-        metadata: FfiConverterOptionalString.read(from),
-        requesterName: FfiConverterOptionalString.read(from),
-        requesterIcon: FfiConverterOptionalString.read(from),
-        label: FfiConverterOptionalString.read(from),
-        expiresAtMs: FfiConverterOptionalUInt64.read(from),
-        requestTtlSecs: FfiConverterOptionalUInt32.read(from),
+        redirectUri: FfiConverterOptionalString.readFromCursor(c),
+        postUrl: FfiConverterOptionalString.readFromCursor(c),
+        mailboxUrl: FfiConverterOptionalString.readFromCursor(c),
+        scopes: FfiConverterSequenceString.readFromCursor(c),
+        permissions: FfiConverterSequenceString.readFromCursor(c),
+        account: FfiConverterOptionalString.readFromCursor(c),
+        metadata: FfiConverterOptionalString.readFromCursor(c),
+        requesterName: FfiConverterOptionalString.readFromCursor(c),
+        requesterIcon: FfiConverterOptionalString.readFromCursor(c),
+        label: FfiConverterOptionalString.readFromCursor(c),
+        expiresAtMs: FfiConverterOptionalUInt64.readFromCursor(c),
+        requestTtlSecs: FfiConverterOptionalUInt32.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.redirectUri, into);
-      FfiConverterOptionalString.write(value.postUrl, into);
-      FfiConverterOptionalString.write(value.mailboxUrl, into);
-      FfiConverterSequenceString.write(value.scopes, into);
-      FfiConverterSequenceString.write(value.permissions, into);
-      FfiConverterOptionalString.write(value.account, into);
-      FfiConverterOptionalString.write(value.metadata, into);
-      FfiConverterOptionalString.write(value.requesterName, into);
-      FfiConverterOptionalString.write(value.requesterIcon, into);
-      FfiConverterOptionalString.write(value.label, into);
-      FfiConverterOptionalUInt64.write(value.expiresAtMs, into);
-      FfiConverterOptionalUInt32.write(value.requestTtlSecs, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.redirectUri, c);
+      FfiConverterOptionalString.writeIntoCursor(value.postUrl, c);
+      FfiConverterOptionalString.writeIntoCursor(value.mailboxUrl, c);
+      FfiConverterSequenceString.writeIntoCursor(value.scopes, c);
+      FfiConverterSequenceString.writeIntoCursor(value.permissions, c);
+      FfiConverterOptionalString.writeIntoCursor(value.account, c);
+      FfiConverterOptionalString.writeIntoCursor(value.metadata, c);
+      FfiConverterOptionalString.writeIntoCursor(value.requesterName, c);
+      FfiConverterOptionalString.writeIntoCursor(value.requesterIcon, c);
+      FfiConverterOptionalString.writeIntoCursor(value.label, c);
+      FfiConverterOptionalUInt64.writeIntoCursor(value.expiresAtMs, c);
+      FfiConverterOptionalUInt32.writeIntoCursor(value.requestTtlSecs, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -573,27 +572,27 @@ export const LexeConnectResponse = (() => {
 const FfiConverterTypeLexeConnectResponse = (() => {
   type TypeName = LexeConnectResponse;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        clientCredentials: FfiConverterOptionalString.read(from),
-        error: FfiConverterOptionalString.read(from),
-        errorMessage: FfiConverterOptionalString.read(from),
-        scopes: FfiConverterSequenceString.read(from),
-        permissions: FfiConverterSequenceString.read(from),
-        expiresAtMs: FfiConverterOptionalUInt64.read(from),
-        account: FfiConverterOptionalString.read(from),
-        metadata: FfiConverterOptionalString.read(from),
+        clientCredentials: FfiConverterOptionalString.readFromCursor(c),
+        error: FfiConverterOptionalString.readFromCursor(c),
+        errorMessage: FfiConverterOptionalString.readFromCursor(c),
+        scopes: FfiConverterSequenceString.readFromCursor(c),
+        permissions: FfiConverterSequenceString.readFromCursor(c),
+        expiresAtMs: FfiConverterOptionalUInt64.readFromCursor(c),
+        account: FfiConverterOptionalString.readFromCursor(c),
+        metadata: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.clientCredentials, into);
-      FfiConverterOptionalString.write(value.error, into);
-      FfiConverterOptionalString.write(value.errorMessage, into);
-      FfiConverterSequenceString.write(value.scopes, into);
-      FfiConverterSequenceString.write(value.permissions, into);
-      FfiConverterOptionalUInt64.write(value.expiresAtMs, into);
-      FfiConverterOptionalString.write(value.account, into);
-      FfiConverterOptionalString.write(value.metadata, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.clientCredentials, c);
+      FfiConverterOptionalString.writeIntoCursor(value.error, c);
+      FfiConverterOptionalString.writeIntoCursor(value.errorMessage, c);
+      FfiConverterSequenceString.writeIntoCursor(value.scopes, c);
+      FfiConverterSequenceString.writeIntoCursor(value.permissions, c);
+      FfiConverterOptionalUInt64.writeIntoCursor(value.expiresAtMs, c);
+      FfiConverterOptionalString.writeIntoCursor(value.account, c);
+      FfiConverterOptionalString.writeIntoCursor(value.metadata, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -642,23 +641,23 @@ export const ListTransactionsParams = (() => {
 const FfiConverterTypeListTransactionsParams = (() => {
   type TypeName = ListTransactionsParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        from: FfiConverterInt64.read(from),
-        limit: FfiConverterInt64.read(from),
-        paymentHash: FfiConverterOptionalString.read(from),
-        search: FfiConverterOptionalString.read(from),
-        createdAfter: FfiConverterOptionalInt64.read(from),
-        createdBefore: FfiConverterOptionalInt64.read(from),
+        from: FfiConverterInt64.readFromCursor(c),
+        limit: FfiConverterInt64.readFromCursor(c),
+        paymentHash: FfiConverterOptionalString.readFromCursor(c),
+        search: FfiConverterOptionalString.readFromCursor(c),
+        createdAfter: FfiConverterOptionalInt64.readFromCursor(c),
+        createdBefore: FfiConverterOptionalInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterInt64.write(value.from, into);
-      FfiConverterInt64.write(value.limit, into);
-      FfiConverterOptionalString.write(value.paymentHash, into);
-      FfiConverterOptionalString.write(value.search, into);
-      FfiConverterOptionalInt64.write(value.createdAfter, into);
-      FfiConverterOptionalInt64.write(value.createdBefore, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterInt64.writeIntoCursor(value.from, c);
+      FfiConverterInt64.writeIntoCursor(value.limit, c);
+      FfiConverterOptionalString.writeIntoCursor(value.paymentHash, c);
+      FfiConverterOptionalString.writeIntoCursor(value.search, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.createdAfter, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.createdBefore, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -699,15 +698,15 @@ export const LookupInvoiceParams = (() => {
 const FfiConverterTypeLookupInvoiceParams = (() => {
   type TypeName = LookupInvoiceParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        paymentHash: FfiConverterOptionalString.read(from),
-        search: FfiConverterOptionalString.read(from),
+        paymentHash: FfiConverterOptionalString.readFromCursor(c),
+        search: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.paymentHash, into);
-      FfiConverterOptionalString.write(value.search, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.paymentHash, c);
+      FfiConverterOptionalString.writeIntoCursor(value.search, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -753,37 +752,37 @@ export const NodeInfo = (() => {
 const FfiConverterTypeNodeInfo = (() => {
   type TypeName = NodeInfo;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        alias: FfiConverterString.read(from),
-        color: FfiConverterString.read(from),
-        pubkey: FfiConverterString.read(from),
-        network: FfiConverterString.read(from),
-        blockHeight: FfiConverterInt64.read(from),
-        blockHash: FfiConverterString.read(from),
-        sendBalanceMsat: FfiConverterInt64.read(from),
-        receiveBalanceMsat: FfiConverterInt64.read(from),
-        feeCreditBalanceMsat: FfiConverterInt64.read(from),
-        unsettledSendBalanceMsat: FfiConverterInt64.read(from),
-        unsettledReceiveBalanceMsat: FfiConverterInt64.read(from),
-        pendingOpenSendBalance: FfiConverterInt64.read(from),
-        pendingOpenReceiveBalance: FfiConverterInt64.read(from),
+        alias: FfiConverterString.readFromCursor(c),
+        color: FfiConverterString.readFromCursor(c),
+        pubkey: FfiConverterString.readFromCursor(c),
+        network: FfiConverterString.readFromCursor(c),
+        blockHeight: FfiConverterInt64.readFromCursor(c),
+        blockHash: FfiConverterString.readFromCursor(c),
+        sendBalanceMsat: FfiConverterInt64.readFromCursor(c),
+        receiveBalanceMsat: FfiConverterInt64.readFromCursor(c),
+        feeCreditBalanceMsat: FfiConverterInt64.readFromCursor(c),
+        unsettledSendBalanceMsat: FfiConverterInt64.readFromCursor(c),
+        unsettledReceiveBalanceMsat: FfiConverterInt64.readFromCursor(c),
+        pendingOpenSendBalance: FfiConverterInt64.readFromCursor(c),
+        pendingOpenReceiveBalance: FfiConverterInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.alias, into);
-      FfiConverterString.write(value.color, into);
-      FfiConverterString.write(value.pubkey, into);
-      FfiConverterString.write(value.network, into);
-      FfiConverterInt64.write(value.blockHeight, into);
-      FfiConverterString.write(value.blockHash, into);
-      FfiConverterInt64.write(value.sendBalanceMsat, into);
-      FfiConverterInt64.write(value.receiveBalanceMsat, into);
-      FfiConverterInt64.write(value.feeCreditBalanceMsat, into);
-      FfiConverterInt64.write(value.unsettledSendBalanceMsat, into);
-      FfiConverterInt64.write(value.unsettledReceiveBalanceMsat, into);
-      FfiConverterInt64.write(value.pendingOpenSendBalance, into);
-      FfiConverterInt64.write(value.pendingOpenReceiveBalance, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.alias, c);
+      FfiConverterString.writeIntoCursor(value.color, c);
+      FfiConverterString.writeIntoCursor(value.pubkey, c);
+      FfiConverterString.writeIntoCursor(value.network, c);
+      FfiConverterInt64.writeIntoCursor(value.blockHeight, c);
+      FfiConverterString.writeIntoCursor(value.blockHash, c);
+      FfiConverterInt64.writeIntoCursor(value.sendBalanceMsat, c);
+      FfiConverterInt64.writeIntoCursor(value.receiveBalanceMsat, c);
+      FfiConverterInt64.writeIntoCursor(value.feeCreditBalanceMsat, c);
+      FfiConverterInt64.writeIntoCursor(value.unsettledSendBalanceMsat, c);
+      FfiConverterInt64.writeIntoCursor(value.unsettledReceiveBalanceMsat, c);
+      FfiConverterInt64.writeIntoCursor(value.pendingOpenSendBalance, c);
+      FfiConverterInt64.writeIntoCursor(value.pendingOpenReceiveBalance, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -834,25 +833,25 @@ export const Offer = (() => {
 const FfiConverterTypeOffer = (() => {
   type TypeName = Offer;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        offerId: FfiConverterString.read(from),
-        bolt12: FfiConverterString.read(from),
-        label: FfiConverterOptionalString.read(from),
-        active: FfiConverterOptionalBoolean.read(from),
-        singleUse: FfiConverterOptionalBoolean.read(from),
-        used: FfiConverterOptionalBoolean.read(from),
-        amountMsats: FfiConverterOptionalInt64.read(from),
+        offerId: FfiConverterString.readFromCursor(c),
+        bolt12: FfiConverterString.readFromCursor(c),
+        label: FfiConverterOptionalString.readFromCursor(c),
+        active: FfiConverterOptionalBoolean.readFromCursor(c),
+        singleUse: FfiConverterOptionalBoolean.readFromCursor(c),
+        used: FfiConverterOptionalBoolean.readFromCursor(c),
+        amountMsats: FfiConverterOptionalInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.offerId, into);
-      FfiConverterString.write(value.bolt12, into);
-      FfiConverterOptionalString.write(value.label, into);
-      FfiConverterOptionalBoolean.write(value.active, into);
-      FfiConverterOptionalBoolean.write(value.singleUse, into);
-      FfiConverterOptionalBoolean.write(value.used, into);
-      FfiConverterOptionalInt64.write(value.amountMsats, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.offerId, c);
+      FfiConverterString.writeIntoCursor(value.bolt12, c);
+      FfiConverterOptionalString.writeIntoCursor(value.label, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.active, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.singleUse, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.used, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.amountMsats, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -897,19 +896,19 @@ export const OnInvoiceEventParams = (() => {
 const FfiConverterTypeOnInvoiceEventParams = (() => {
   type TypeName = OnInvoiceEventParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        paymentHash: FfiConverterOptionalString.read(from),
-        search: FfiConverterOptionalString.read(from),
-        pollingDelaySec: FfiConverterInt64.read(from),
-        maxPollingSec: FfiConverterInt64.read(from),
+        paymentHash: FfiConverterOptionalString.readFromCursor(c),
+        search: FfiConverterOptionalString.readFromCursor(c),
+        pollingDelaySec: FfiConverterInt64.readFromCursor(c),
+        maxPollingSec: FfiConverterInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.paymentHash, into);
-      FfiConverterOptionalString.write(value.search, into);
-      FfiConverterInt64.write(value.pollingDelaySec, into);
-      FfiConverterInt64.write(value.maxPollingSec, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.paymentHash, c);
+      FfiConverterOptionalString.writeIntoCursor(value.search, c);
+      FfiConverterInt64.writeIntoCursor(value.pollingDelaySec, c);
+      FfiConverterInt64.writeIntoCursor(value.maxPollingSec, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -948,15 +947,15 @@ export const OnchainFeeGuardrail = (() => {
 const FfiConverterTypeOnchainFeeGuardrail = (() => {
   type TypeName = OnchainFeeGuardrail;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        maxFeeSats: FfiConverterOptionalInt64.read(from),
-        maxFeePercent: FfiConverterOptionalFloat64.read(from),
+        maxFeeSats: FfiConverterOptionalInt64.readFromCursor(c),
+        maxFeePercent: FfiConverterOptionalFloat64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalInt64.write(value.maxFeeSats, into);
-      FfiConverterOptionalFloat64.write(value.maxFeePercent, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalInt64.writeIntoCursor(value.maxFeeSats, c);
+      FfiConverterOptionalFloat64.writeIntoCursor(value.maxFeePercent, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -977,11 +976,10 @@ export enum OnchainFeePreferenceType {
 }
 
 const FfiConverterTypeOnchainFeePreferenceType = (() => {
-  const ordinalConverter = FfiConverterInt32;
   type TypeName = OnchainFeePreferenceType;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
+    readFromCursor(c: Cursor): TypeName {
+      switch (c.readI32()) {
         case 1:
           return OnchainFeePreferenceType.Default;
         case 2:
@@ -996,22 +994,22 @@ const FfiConverterTypeOnchainFeePreferenceType = (() => {
           throw new UniffiInternalError.UnexpectedEnumCase();
       }
     }
-    write(value: TypeName, into: RustBuffer): void {
+    writeIntoCursor(value: TypeName, c: Cursor): void {
       switch (value) {
         case OnchainFeePreferenceType.Default:
-          return ordinalConverter.write(1, into);
+          return c.writeI32(1);
         case OnchainFeePreferenceType.Speed:
-          return ordinalConverter.write(2, into);
+          return c.writeI32(2);
         case OnchainFeePreferenceType.TargetConf:
-          return ordinalConverter.write(3, into);
+          return c.writeI32(3);
         case OnchainFeePreferenceType.SatsPerVbyte:
-          return ordinalConverter.write(4, into);
+          return c.writeI32(4);
         case OnchainFeePreferenceType.Backend:
-          return ordinalConverter.write(5, into);
+          return c.writeI32(5);
       }
     }
     allocationSize(value: TypeName): number {
-      return ordinalConverter.allocationSize(0);
+      return 4;
     }
   }
   return new FFIConverter();
@@ -1025,11 +1023,10 @@ export enum OnchainFeeSpeed {
 }
 
 const FfiConverterTypeOnchainFeeSpeed = (() => {
-  const ordinalConverter = FfiConverterInt32;
   type TypeName = OnchainFeeSpeed;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
+    readFromCursor(c: Cursor): TypeName {
+      switch (c.readI32()) {
         case 1:
           return OnchainFeeSpeed.Fast;
         case 2:
@@ -1042,20 +1039,20 @@ const FfiConverterTypeOnchainFeeSpeed = (() => {
           throw new UniffiInternalError.UnexpectedEnumCase();
       }
     }
-    write(value: TypeName, into: RustBuffer): void {
+    writeIntoCursor(value: TypeName, c: Cursor): void {
       switch (value) {
         case OnchainFeeSpeed.Fast:
-          return ordinalConverter.write(1, into);
+          return c.writeI32(1);
         case OnchainFeeSpeed.Normal:
-          return ordinalConverter.write(2, into);
+          return c.writeI32(2);
         case OnchainFeeSpeed.Slow:
-          return ordinalConverter.write(3, into);
+          return c.writeI32(3);
         case OnchainFeeSpeed.Free:
-          return ordinalConverter.write(4, into);
+          return c.writeI32(4);
       }
     }
     allocationSize(value: TypeName): number {
-      return ordinalConverter.allocationSize(0);
+      return 4;
     }
   }
   return new FFIConverter();
@@ -1090,24 +1087,25 @@ export const OnchainFeePreference = (() => {
 const FfiConverterTypeOnchainFeePreference = (() => {
   type TypeName = OnchainFeePreference;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        preferenceType: FfiConverterTypeOnchainFeePreferenceType.read(from),
-        speed: FfiConverterOptionalTypeOnchainFeeSpeed.read(from),
-        targetConf: FfiConverterOptionalInt64.read(from),
-        satsPerVbyte: FfiConverterOptionalFloat64.read(from),
-        backend: FfiConverterOptionalString.read(from),
+        preferenceType:
+          FfiConverterTypeOnchainFeePreferenceType.readFromCursor(c),
+        speed: FfiConverterOptionalTypeOnchainFeeSpeed.readFromCursor(c),
+        targetConf: FfiConverterOptionalInt64.readFromCursor(c),
+        satsPerVbyte: FfiConverterOptionalFloat64.readFromCursor(c),
+        backend: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterTypeOnchainFeePreferenceType.write(
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterTypeOnchainFeePreferenceType.writeIntoCursor(
         value.preferenceType,
-        into
+        c
       );
-      FfiConverterOptionalTypeOnchainFeeSpeed.write(value.speed, into);
-      FfiConverterOptionalInt64.write(value.targetConf, into);
-      FfiConverterOptionalFloat64.write(value.satsPerVbyte, into);
-      FfiConverterOptionalString.write(value.backend, into);
+      FfiConverterOptionalTypeOnchainFeeSpeed.writeIntoCursor(value.speed, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.targetConf, c);
+      FfiConverterOptionalFloat64.writeIntoCursor(value.satsPerVbyte, c);
+      FfiConverterOptionalString.writeIntoCursor(value.backend, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1130,11 +1128,10 @@ export enum OnchainFeePayer {
 }
 
 const FfiConverterTypeOnchainFeePayer = (() => {
-  const ordinalConverter = FfiConverterInt32;
   type TypeName = OnchainFeePayer;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
+    readFromCursor(c: Cursor): TypeName {
+      switch (c.readI32()) {
         case 1:
           return OnchainFeePayer.Sender;
         case 2:
@@ -1143,16 +1140,16 @@ const FfiConverterTypeOnchainFeePayer = (() => {
           throw new UniffiInternalError.UnexpectedEnumCase();
       }
     }
-    write(value: TypeName, into: RustBuffer): void {
+    writeIntoCursor(value: TypeName, c: Cursor): void {
       switch (value) {
         case OnchainFeePayer.Sender:
-          return ordinalConverter.write(1, into);
+          return c.writeI32(1);
         case OnchainFeePayer.Recipient:
-          return ordinalConverter.write(2, into);
+          return c.writeI32(2);
       }
     }
     allocationSize(value: TypeName): number {
-      return ordinalConverter.allocationSize(0);
+      return 4;
     }
   }
   return new FFIConverter();
@@ -1193,35 +1190,38 @@ export const OnchainTransaction = (() => {
 const FfiConverterTypeOnchainTransaction = (() => {
   type TypeName = OnchainTransaction;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        id: FfiConverterOptionalString.read(from),
-        feeLimitSupported: FfiConverterOptionalBoolean.read(from),
-        address: FfiConverterString.read(from),
-        amountSats: FfiConverterInt64.read(from),
-        feeSats: FfiConverterOptionalInt64.read(from),
-        totalAmountSats: FfiConverterOptionalInt64.read(from),
-        recipientAmountSats: FfiConverterOptionalInt64.read(from),
-        feePayer: FfiConverterTypeOnchainFeePayer.read(from),
-        fee: FfiConverterTypeOnchainFeePreference.read(from),
-        expiresAt: FfiConverterOptionalInt64.read(from),
-        estimatedDeliverySeconds: FfiConverterOptionalInt64.read(from),
-        raw: FfiConverterOptionalString.read(from),
+        id: FfiConverterOptionalString.readFromCursor(c),
+        feeLimitSupported: FfiConverterOptionalBoolean.readFromCursor(c),
+        address: FfiConverterString.readFromCursor(c),
+        amountSats: FfiConverterInt64.readFromCursor(c),
+        feeSats: FfiConverterOptionalInt64.readFromCursor(c),
+        totalAmountSats: FfiConverterOptionalInt64.readFromCursor(c),
+        recipientAmountSats: FfiConverterOptionalInt64.readFromCursor(c),
+        feePayer: FfiConverterTypeOnchainFeePayer.readFromCursor(c),
+        fee: FfiConverterTypeOnchainFeePreference.readFromCursor(c),
+        expiresAt: FfiConverterOptionalInt64.readFromCursor(c),
+        estimatedDeliverySeconds: FfiConverterOptionalInt64.readFromCursor(c),
+        raw: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.id, into);
-      FfiConverterOptionalBoolean.write(value.feeLimitSupported, into);
-      FfiConverterString.write(value.address, into);
-      FfiConverterInt64.write(value.amountSats, into);
-      FfiConverterOptionalInt64.write(value.feeSats, into);
-      FfiConverterOptionalInt64.write(value.totalAmountSats, into);
-      FfiConverterOptionalInt64.write(value.recipientAmountSats, into);
-      FfiConverterTypeOnchainFeePayer.write(value.feePayer, into);
-      FfiConverterTypeOnchainFeePreference.write(value.fee, into);
-      FfiConverterOptionalInt64.write(value.expiresAt, into);
-      FfiConverterOptionalInt64.write(value.estimatedDeliverySeconds, into);
-      FfiConverterOptionalString.write(value.raw, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.id, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.feeLimitSupported, c);
+      FfiConverterString.writeIntoCursor(value.address, c);
+      FfiConverterInt64.writeIntoCursor(value.amountSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.feeSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.totalAmountSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.recipientAmountSats, c);
+      FfiConverterTypeOnchainFeePayer.writeIntoCursor(value.feePayer, c);
+      FfiConverterTypeOnchainFeePreference.writeIntoCursor(value.fee, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.expiresAt, c);
+      FfiConverterOptionalInt64.writeIntoCursor(
+        value.estimatedDeliverySeconds,
+        c
+      );
+      FfiConverterOptionalString.writeIntoCursor(value.raw, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1278,31 +1278,31 @@ export const PayInvoiceParams = (() => {
 const FfiConverterTypePayInvoiceParams = (() => {
   type TypeName = PayInvoiceParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        invoice: FfiConverterString.read(from),
-        feeLimitMsat: FfiConverterOptionalInt64.read(from),
-        feeLimitPercentage: FfiConverterOptionalFloat64.read(from),
-        timeoutSeconds: FfiConverterOptionalInt64.read(from),
-        amountMsats: FfiConverterOptionalInt64.read(from),
-        maxParts: FfiConverterOptionalInt64.read(from),
-        firstHopPubkey: FfiConverterOptionalString.read(from),
-        lastHopPubkey: FfiConverterOptionalString.read(from),
-        allowSelfPayment: FfiConverterOptionalBoolean.read(from),
-        isAmp: FfiConverterOptionalBoolean.read(from),
+        invoice: FfiConverterString.readFromCursor(c),
+        feeLimitMsat: FfiConverterOptionalInt64.readFromCursor(c),
+        feeLimitPercentage: FfiConverterOptionalFloat64.readFromCursor(c),
+        timeoutSeconds: FfiConverterOptionalInt64.readFromCursor(c),
+        amountMsats: FfiConverterOptionalInt64.readFromCursor(c),
+        maxParts: FfiConverterOptionalInt64.readFromCursor(c),
+        firstHopPubkey: FfiConverterOptionalString.readFromCursor(c),
+        lastHopPubkey: FfiConverterOptionalString.readFromCursor(c),
+        allowSelfPayment: FfiConverterOptionalBoolean.readFromCursor(c),
+        isAmp: FfiConverterOptionalBoolean.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.invoice, into);
-      FfiConverterOptionalInt64.write(value.feeLimitMsat, into);
-      FfiConverterOptionalFloat64.write(value.feeLimitPercentage, into);
-      FfiConverterOptionalInt64.write(value.timeoutSeconds, into);
-      FfiConverterOptionalInt64.write(value.amountMsats, into);
-      FfiConverterOptionalInt64.write(value.maxParts, into);
-      FfiConverterOptionalString.write(value.firstHopPubkey, into);
-      FfiConverterOptionalString.write(value.lastHopPubkey, into);
-      FfiConverterOptionalBoolean.write(value.allowSelfPayment, into);
-      FfiConverterOptionalBoolean.write(value.isAmp, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.invoice, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.feeLimitMsat, c);
+      FfiConverterOptionalFloat64.writeIntoCursor(value.feeLimitPercentage, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.timeoutSeconds, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.amountMsats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.maxParts, c);
+      FfiConverterOptionalString.writeIntoCursor(value.firstHopPubkey, c);
+      FfiConverterOptionalString.writeIntoCursor(value.lastHopPubkey, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.allowSelfPayment, c);
+      FfiConverterOptionalBoolean.writeIntoCursor(value.isAmp, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1348,17 +1348,17 @@ export const PayInvoiceResponse = (() => {
 const FfiConverterTypePayInvoiceResponse = (() => {
   type TypeName = PayInvoiceResponse;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        paymentHash: FfiConverterString.read(from),
-        preimage: FfiConverterString.read(from),
-        feeMsats: FfiConverterInt64.read(from),
+        paymentHash: FfiConverterString.readFromCursor(c),
+        preimage: FfiConverterString.readFromCursor(c),
+        feeMsats: FfiConverterInt64.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.paymentHash, into);
-      FfiConverterString.write(value.preimage, into);
-      FfiConverterInt64.write(value.feeMsats, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.paymentHash, c);
+      FfiConverterString.writeIntoCursor(value.preimage, c);
+      FfiConverterInt64.writeIntoCursor(value.feeMsats, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1396,18 +1396,19 @@ export const PayOnchainOptions = (() => {
 const FfiConverterTypePayOnchainOptions = (() => {
   type TypeName = PayOnchainOptions;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        feeGuardrail: FfiConverterOptionalTypeOnchainFeeGuardrail.read(from),
-        dangerouslyDisableFeeGuardrail: FfiConverterBool.read(from),
+        feeGuardrail:
+          FfiConverterOptionalTypeOnchainFeeGuardrail.readFromCursor(c),
+        dangerouslyDisableFeeGuardrail: FfiConverterBool.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalTypeOnchainFeeGuardrail.write(
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalTypeOnchainFeeGuardrail.writeIntoCursor(
         value.feeGuardrail,
-        into
+        c
       );
-      FfiConverterBool.write(value.dangerouslyDisableFeeGuardrail, into);
+      FfiConverterBool.writeIntoCursor(value.dangerouslyDisableFeeGuardrail, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1454,31 +1455,31 @@ export const PayOnchainResponse = (() => {
 const FfiConverterTypePayOnchainResponse = (() => {
   type TypeName = PayOnchainResponse;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        paymentId: FfiConverterOptionalString.read(from),
-        txid: FfiConverterOptionalString.read(from),
-        state: FfiConverterString.read(from),
-        address: FfiConverterString.read(from),
-        amountSats: FfiConverterInt64.read(from),
-        feeSats: FfiConverterOptionalInt64.read(from),
-        totalAmountSats: FfiConverterOptionalInt64.read(from),
-        recipientAmountSats: FfiConverterOptionalInt64.read(from),
-        createdAt: FfiConverterOptionalInt64.read(from),
-        raw: FfiConverterOptionalString.read(from),
+        paymentId: FfiConverterOptionalString.readFromCursor(c),
+        txid: FfiConverterOptionalString.readFromCursor(c),
+        state: FfiConverterString.readFromCursor(c),
+        address: FfiConverterString.readFromCursor(c),
+        amountSats: FfiConverterInt64.readFromCursor(c),
+        feeSats: FfiConverterOptionalInt64.readFromCursor(c),
+        totalAmountSats: FfiConverterOptionalInt64.readFromCursor(c),
+        recipientAmountSats: FfiConverterOptionalInt64.readFromCursor(c),
+        createdAt: FfiConverterOptionalInt64.readFromCursor(c),
+        raw: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterOptionalString.write(value.paymentId, into);
-      FfiConverterOptionalString.write(value.txid, into);
-      FfiConverterString.write(value.state, into);
-      FfiConverterString.write(value.address, into);
-      FfiConverterInt64.write(value.amountSats, into);
-      FfiConverterOptionalInt64.write(value.feeSats, into);
-      FfiConverterOptionalInt64.write(value.totalAmountSats, into);
-      FfiConverterOptionalInt64.write(value.recipientAmountSats, into);
-      FfiConverterOptionalInt64.write(value.createdAt, into);
-      FfiConverterOptionalString.write(value.raw, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterOptionalString.writeIntoCursor(value.paymentId, c);
+      FfiConverterOptionalString.writeIntoCursor(value.txid, c);
+      FfiConverterString.writeIntoCursor(value.state, c);
+      FfiConverterString.writeIntoCursor(value.address, c);
+      FfiConverterInt64.writeIntoCursor(value.amountSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.feeSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.totalAmountSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.recipientAmountSats, c);
+      FfiConverterOptionalInt64.writeIntoCursor(value.createdAt, c);
+      FfiConverterOptionalString.writeIntoCursor(value.raw, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1532,33 +1533,33 @@ export const Permissions = (() => {
 const FfiConverterTypePermissions = (() => {
   type TypeName = Permissions;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        getInfo: FfiConverterBool.read(from),
-        createInvoice: FfiConverterBool.read(from),
-        payInvoice: FfiConverterBool.read(from),
-        createOffer: FfiConverterBool.read(from),
-        getOffer: FfiConverterBool.read(from),
-        listOffers: FfiConverterBool.read(from),
-        payOffer: FfiConverterBool.read(from),
-        lookupInvoice: FfiConverterBool.read(from),
-        listTransactions: FfiConverterBool.read(from),
-        decode: FfiConverterBool.read(from),
-        onInvoiceEvents: FfiConverterBool.read(from),
+        getInfo: FfiConverterBool.readFromCursor(c),
+        createInvoice: FfiConverterBool.readFromCursor(c),
+        payInvoice: FfiConverterBool.readFromCursor(c),
+        createOffer: FfiConverterBool.readFromCursor(c),
+        getOffer: FfiConverterBool.readFromCursor(c),
+        listOffers: FfiConverterBool.readFromCursor(c),
+        payOffer: FfiConverterBool.readFromCursor(c),
+        lookupInvoice: FfiConverterBool.readFromCursor(c),
+        listTransactions: FfiConverterBool.readFromCursor(c),
+        decode: FfiConverterBool.readFromCursor(c),
+        onInvoiceEvents: FfiConverterBool.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterBool.write(value.getInfo, into);
-      FfiConverterBool.write(value.createInvoice, into);
-      FfiConverterBool.write(value.payInvoice, into);
-      FfiConverterBool.write(value.createOffer, into);
-      FfiConverterBool.write(value.getOffer, into);
-      FfiConverterBool.write(value.listOffers, into);
-      FfiConverterBool.write(value.payOffer, into);
-      FfiConverterBool.write(value.lookupInvoice, into);
-      FfiConverterBool.write(value.listTransactions, into);
-      FfiConverterBool.write(value.decode, into);
-      FfiConverterBool.write(value.onInvoiceEvents, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterBool.writeIntoCursor(value.getInfo, c);
+      FfiConverterBool.writeIntoCursor(value.createInvoice, c);
+      FfiConverterBool.writeIntoCursor(value.payInvoice, c);
+      FfiConverterBool.writeIntoCursor(value.createOffer, c);
+      FfiConverterBool.writeIntoCursor(value.getOffer, c);
+      FfiConverterBool.writeIntoCursor(value.listOffers, c);
+      FfiConverterBool.writeIntoCursor(value.payOffer, c);
+      FfiConverterBool.writeIntoCursor(value.lookupInvoice, c);
+      FfiConverterBool.writeIntoCursor(value.listTransactions, c);
+      FfiConverterBool.writeIntoCursor(value.decode, c);
+      FfiConverterBool.writeIntoCursor(value.onInvoiceEvents, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1610,23 +1611,29 @@ export const PrepareOnchainTransactionParams = (() => {
 const FfiConverterTypePrepareOnchainTransactionParams = (() => {
   type TypeName = PrepareOnchainTransactionParams;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        address: FfiConverterString.read(from),
-        amountSats: FfiConverterInt64.read(from),
-        fee: FfiConverterOptionalTypeOnchainFeePreference.read(from),
-        feePayer: FfiConverterOptionalTypeOnchainFeePayer.read(from),
-        description: FfiConverterOptionalString.read(from),
-        idempotencyKey: FfiConverterOptionalString.read(from),
+        address: FfiConverterString.readFromCursor(c),
+        amountSats: FfiConverterInt64.readFromCursor(c),
+        fee: FfiConverterOptionalTypeOnchainFeePreference.readFromCursor(c),
+        feePayer: FfiConverterOptionalTypeOnchainFeePayer.readFromCursor(c),
+        description: FfiConverterOptionalString.readFromCursor(c),
+        idempotencyKey: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.address, into);
-      FfiConverterInt64.write(value.amountSats, into);
-      FfiConverterOptionalTypeOnchainFeePreference.write(value.fee, into);
-      FfiConverterOptionalTypeOnchainFeePayer.write(value.feePayer, into);
-      FfiConverterOptionalString.write(value.description, into);
-      FfiConverterOptionalString.write(value.idempotencyKey, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.address, c);
+      FfiConverterInt64.writeIntoCursor(value.amountSats, c);
+      FfiConverterOptionalTypeOnchainFeePreference.writeIntoCursor(
+        value.fee,
+        c
+      );
+      FfiConverterOptionalTypeOnchainFeePayer.writeIntoCursor(
+        value.feePayer,
+        c
+      );
+      FfiConverterOptionalString.writeIntoCursor(value.description, c);
+      FfiConverterOptionalString.writeIntoCursor(value.idempotencyKey, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1678,37 +1685,37 @@ export const Transaction = (() => {
 const FfiConverterTypeTransaction = (() => {
   type TypeName = Transaction;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
+    readFromCursor(c: Cursor): TypeName {
       return {
-        type: FfiConverterString.read(from),
-        invoice: FfiConverterString.read(from),
-        description: FfiConverterString.read(from),
-        descriptionHash: FfiConverterString.read(from),
-        preimage: FfiConverterString.read(from),
-        paymentHash: FfiConverterString.read(from),
-        amountMsats: FfiConverterInt64.read(from),
-        feesPaid: FfiConverterInt64.read(from),
-        createdAt: FfiConverterInt64.read(from),
-        expiresAt: FfiConverterInt64.read(from),
-        settledAt: FfiConverterInt64.read(from),
-        payerNote: FfiConverterOptionalString.read(from),
-        externalId: FfiConverterOptionalString.read(from),
+        type: FfiConverterString.readFromCursor(c),
+        invoice: FfiConverterString.readFromCursor(c),
+        description: FfiConverterString.readFromCursor(c),
+        descriptionHash: FfiConverterString.readFromCursor(c),
+        preimage: FfiConverterString.readFromCursor(c),
+        paymentHash: FfiConverterString.readFromCursor(c),
+        amountMsats: FfiConverterInt64.readFromCursor(c),
+        feesPaid: FfiConverterInt64.readFromCursor(c),
+        createdAt: FfiConverterInt64.readFromCursor(c),
+        expiresAt: FfiConverterInt64.readFromCursor(c),
+        settledAt: FfiConverterInt64.readFromCursor(c),
+        payerNote: FfiConverterOptionalString.readFromCursor(c),
+        externalId: FfiConverterOptionalString.readFromCursor(c),
       };
     }
-    write(value: TypeName, into: RustBuffer): void {
-      FfiConverterString.write(value.type, into);
-      FfiConverterString.write(value.invoice, into);
-      FfiConverterString.write(value.description, into);
-      FfiConverterString.write(value.descriptionHash, into);
-      FfiConverterString.write(value.preimage, into);
-      FfiConverterString.write(value.paymentHash, into);
-      FfiConverterInt64.write(value.amountMsats, into);
-      FfiConverterInt64.write(value.feesPaid, into);
-      FfiConverterInt64.write(value.createdAt, into);
-      FfiConverterInt64.write(value.expiresAt, into);
-      FfiConverterInt64.write(value.settledAt, into);
-      FfiConverterOptionalString.write(value.payerNote, into);
-      FfiConverterOptionalString.write(value.externalId, into);
+    writeIntoCursor(value: TypeName, c: Cursor): void {
+      FfiConverterString.writeIntoCursor(value.type, c);
+      FfiConverterString.writeIntoCursor(value.invoice, c);
+      FfiConverterString.writeIntoCursor(value.description, c);
+      FfiConverterString.writeIntoCursor(value.descriptionHash, c);
+      FfiConverterString.writeIntoCursor(value.preimage, c);
+      FfiConverterString.writeIntoCursor(value.paymentHash, c);
+      FfiConverterInt64.writeIntoCursor(value.amountMsats, c);
+      FfiConverterInt64.writeIntoCursor(value.feesPaid, c);
+      FfiConverterInt64.writeIntoCursor(value.createdAt, c);
+      FfiConverterInt64.writeIntoCursor(value.expiresAt, c);
+      FfiConverterInt64.writeIntoCursor(value.settledAt, c);
+      FfiConverterOptionalString.writeIntoCursor(value.payerNote, c);
+      FfiConverterOptionalString.writeIntoCursor(value.externalId, c);
     }
     allocationSize(value: TypeName): number {
       return (
@@ -1782,23 +1789,24 @@ export type LexeError = InstanceType<(typeof LexeError)['Lni']>;
 
 // FfiConverter for enum LexeError
 const FfiConverterTypeLexeError = (() => {
-  const ordinalConverter = FfiConverterInt32;
   type TypeName = LexeError;
   class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
-    read(from: RustBuffer): TypeName {
-      switch (ordinalConverter.read(from)) {
+    readFromCursor(c: Cursor): TypeName {
+      switch (c.readI32()) {
         case 1:
-          return new LexeError.Lni({ message: FfiConverterString.read(from) });
+          return new LexeError.Lni({
+            message: FfiConverterString.readFromCursor(c),
+          });
         default:
           throw new UniffiInternalError.UnexpectedEnumCase();
       }
     }
-    write(value: TypeName, into: RustBuffer): void {
+    writeIntoCursor(value: TypeName, c: Cursor): void {
       switch (value.tag) {
         case LexeError_Tags.Lni: {
-          ordinalConverter.write(1, into);
+          c.writeI32(1);
           const inner = value.inner;
-          FfiConverterString.write(inner.message, into);
+          FfiConverterString.writeIntoCursor(inner.message, c);
           return;
         }
         default:
@@ -1810,7 +1818,7 @@ const FfiConverterTypeLexeError = (() => {
       switch (value.tag) {
         case LexeError_Tags.Lni: {
           const inner = value.inner;
-          let size = ordinalConverter.allocationSize(1);
+          let size = 4;
           size += FfiConverterString.allocationSize(inner.message);
           return size;
         }
@@ -1866,54 +1874,45 @@ export class LexeConnectSession
   }
 
   acceptBody(body: ArrayBuffer): LexeConnectResponse /*throws*/ {
-    return ((__rb: Uint8Array) => {
-      try {
-        return FfiConverterTypeLexeConnectResponse.lift(__rb);
-      } finally {
-        nativeModule().rustbuffer_free(__rb);
-      }
-    })(
-      uniffiCaller.rustCallWithError(
-        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
-          FfiConverterTypeLexeError
-        ),
-        /*caller:*/ (callStatus) => {
-          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
-            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
-            FfiConverterArrayBuffer.lower(
-              body,
-              nativeModule().rustbuffer_alloc
-            ),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
-      )
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+        FfiConverterTypeLexeError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_body(
+          uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+          FfiConverterArrayBuffer.lower(body, nativeModule().rustbuffer_alloc),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
     );
+    try {
+      return FfiConverterTypeLexeConnectResponse.lift(__rb);
+    } finally {
+      nativeModule().rustbuffer_free(__rb);
+    }
   }
 
   acceptRedirect(url: string): LexeConnectResponse /*throws*/ {
-    return ((__rb: Uint8Array) => {
-      try {
-        return FfiConverterTypeLexeConnectResponse.lift(__rb);
-      } finally {
-        nativeModule().rustbuffer_free(__rb);
-      }
-    })(
-      uniffiCaller.rustCallWithError(
-        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
-          FfiConverterTypeLexeError
-        ),
-        /*caller:*/ (callStatus) => {
-          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
-            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
-            FfiConverterString.lower(url, nativeModule().rustbuffer_alloc),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
-      )
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+        FfiConverterTypeLexeError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_accept_redirect(
+          uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+          FfiConverterString.lower(url, nativeModule().rustbuffer_alloc),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
     );
+    try {
+      return FfiConverterTypeLexeConnectResponse.lift(__rb);
+    } finally {
+      nativeModule().rustbuffer_free(__rb);
+    }
   }
 
   cancel(): void /*throws*/ {
@@ -1932,26 +1931,23 @@ export class LexeConnectSession
   }
 
   connectionString(): string /*throws*/ {
-    return ((__rb: Uint8Array) => {
-      try {
-        return FfiConverterString.lift(__rb);
-      } finally {
-        nativeModule().rustbuffer_free(__rb);
-      }
-    })(
-      uniffiCaller.rustCallWithError(
-        /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
-          FfiConverterTypeLexeError
-        ),
-        /*caller:*/ (callStatus) => {
-          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
-            uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
-            callStatus
-          );
-        },
-        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
-      )
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeLexeError.lift.bind(
+        FfiConverterTypeLexeError
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexeconnectsession_connection_string(
+          uniffiTypeLexeConnectSessionObjectFactory.clonePointer(this),
+          callStatus
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString)
     );
+    try {
+      return FfiConverterString.lift(__rb);
+    } finally {
+      nativeModule().rustbuffer_free(__rb);
+    }
   }
 
   async pollMailbox(asyncOpts_?: {
@@ -1979,9 +1975,16 @@ export class LexeConnectSession
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterOptionalTypeLexeConnectResponse.lift.bind(
-          FfiConverterOptionalTypeLexeConnectResponse
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterOptionalTypeLexeConnectResponse.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2455,9 +2458,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeTransaction.lift.bind(
-          FfiConverterTypeTransaction
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeTransaction.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2502,7 +2512,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeOffer.lift.bind(FfiConverterTypeOffer),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeOffer.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2544,7 +2563,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterString.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2586,7 +2614,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterString.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2626,9 +2663,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeClientInfo.lift.bind(
-          FfiConverterTypeClientInfo
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeClientInfo.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2668,9 +2712,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeHumanBitcoinAddress.lift.bind(
-          FfiConverterTypeHumanBitcoinAddress
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeHumanBitcoinAddress.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2710,9 +2761,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeNodeInfo.lift.bind(
-          FfiConverterTypeNodeInfo
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeNodeInfo.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2757,7 +2815,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeOffer.lift.bind(FfiConverterTypeOffer),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeOffer.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2797,9 +2864,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypePermissions.lift.bind(
-          FfiConverterTypePermissions
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypePermissions.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2844,9 +2918,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterSequenceTypeOffer.lift.bind(
-          FfiConverterSequenceTypeOffer
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterSequenceTypeOffer.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2891,9 +2972,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterSequenceTypeTransaction.lift.bind(
-          FfiConverterSequenceTypeTransaction
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterSequenceTypeTransaction.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -2938,9 +3026,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeTransaction.lift.bind(
-          FfiConverterTypeTransaction
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeTransaction.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -3027,9 +3122,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypePayInvoiceResponse.lift.bind(
-          FfiConverterTypePayInvoiceResponse
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypePayInvoiceResponse.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -3081,9 +3183,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypePayInvoiceResponse.lift.bind(
-          FfiConverterTypePayInvoiceResponse
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypePayInvoiceResponse.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -3133,9 +3242,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypePayOnchainResponse.lift.bind(
-          FfiConverterTypePayOnchainResponse
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypePayOnchainResponse.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
@@ -3180,9 +3296,16 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // RustBuffer comes back via the shared `rust_future_complete_*`
         // export. The bytes the runtime hands back must be deserialized
         // here using the per-callable return-type converter.
-        /*liftFunc:*/ FfiConverterTypeOnchainTransaction.lift.bind(
-          FfiConverterTypeOnchainTransaction
-        ),
+        // Borrowed view over foreign memory: the call site owns the free,
+        // as on the sync paths. Unconditional — a no-op where buffers are
+        // already JS-owned.
+        /*liftFunc:*/ (__rb) => {
+          try {
+            return FfiConverterTypeOnchainTransaction.lift(__rb);
+          } finally {
+            nativeModule().rustbuffer_free(__rb);
+          }
+        },
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
         /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(

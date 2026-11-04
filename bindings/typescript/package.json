@@ -24,7 +24,7 @@
     "typescript"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   },
   "publishConfig": {
     "access": "public"
@@ -85,8 +85,8 @@
     "test:integration:nwc": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/nwc.real.test.ts"
   },
   "dependencies": {
-    "@getalby/sdk": "^7.0.0",
-    "@scure/base": "^2.0.0",
+    "@getalby/sdk": "^9.0.0",
+    "@scure/base": "^2.4.0",
     "light-bolt11-decoder": "^3.2.0"
   },
   "peerDependencies": {
@@ -98,10 +98,10 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^22.13.5",
-    "esbuild": "^0.25.10",
-    "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "packageManager": "npm@11.14.0"
 }

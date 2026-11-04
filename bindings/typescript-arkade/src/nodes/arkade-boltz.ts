@@ -1,3 +1,4 @@
+import { loadBoltz } from '../internal/boltz.js';
 import type { ArkadeSwapsCreateConfig, SwapRepository } from '@arkade-os/boltz-swap';
 import type { StorageConfig } from '@arkade-os/sdk';
 import {
@@ -254,9 +255,9 @@ export class ArkadeBoltzNode implements LightningNode {
 
   private async initContext(): Promise<ArkadeBoltzContext> {
     const [
-      { InMemoryContractRepository, InMemoryWalletRepository, MnemonicIdentity, Wallet },
+      { InMemoryContractRepository, InMemoryWalletRepository, MnemonicIdentity, Wallet, RestArkProvider, RestIndexerProvider, EsploraProvider },
       boltz,
-    ] = await Promise.all([import('@arkade-os/sdk'), import('@arkade-os/boltz-swap')]);
+    ] = await Promise.all([import('@arkade-os/sdk'), loadBoltz()]);
 
     const identity = MnemonicIdentity.fromMnemonic(this.config.mnemonic, {
       isMainnet: toArkadeNetwork(this.config.network) === 'bitcoin',
@@ -265,9 +266,11 @@ export class ArkadeBoltzNode implements LightningNode {
 
     const wallet = await Wallet.create({
       identity,
-      arkServerUrl: this.config.arkServerUrl,
-      indexerUrl: this.config.indexerUrl,
-      esploraUrl: this.config.esploraUrl,
+      arkProvider: this.config.arkServerUrl ? new RestArkProvider(this.config.arkServerUrl) : undefined,
+      indexerProvider: this.config.indexerUrl || this.config.arkServerUrl
+        ? new RestIndexerProvider(this.config.indexerUrl ?? this.config.arkServerUrl)
+        : undefined,
+      onchainProvider: this.config.esploraUrl ? new EsploraProvider(this.config.esploraUrl) : undefined,
       arkServerPublicKey: this.config.arkServerPublicKey,
       storage: (this.config.walletStorage ?? {
         walletRepository: new InMemoryWalletRepository(),

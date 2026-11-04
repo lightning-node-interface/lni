@@ -49,8 +49,8 @@ impl From<serde_json::Error> for ApiError {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     use bip39::{Language, Mnemonic};
-    use rand::rngs::OsRng;
-    use rand::RngCore;
+    use rand::rngs::SysRng;
+    use rand::TryRng;
 
     let entropy_size = match word_count {
         Some(24) => 32,
@@ -58,7 +58,7 @@ pub fn generate_mnemonic(word_count: Option<u8>) -> Result<String, ApiError> {
     };
 
     let mut entropy = vec![0u8; entropy_size];
-    OsRng.fill_bytes(&mut entropy);
+    SysRng.try_fill_bytes(&mut entropy).map_err(|_| ApiError::Api { reason: "Failed to obtain secure entropy".to_string() })?;
 
     let mnemonic =
         Mnemonic::from_entropy_in(Language::English, &entropy).map_err(|e| ApiError::Api {
@@ -315,7 +315,17 @@ pub use utils::*;
 pub mod database;
 pub use database::{Db, DbError, Payment};
 
-pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
+pub(crate) fn ensure_tls_crypto_provider() {
+    // Reqwest 0.13's no-provider mode requires an installed provider. Preserve
+    // the host application's choice; a concurrent initializer may win the race.
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
+#[doc(hidden)]
+pub fn http_client_builder() -> reqwest::ClientBuilder {
+    ensure_tls_crypto_provider();
     reqwest::Client::builder().redirect(reqwest::redirect::Policy::none())
 }
 

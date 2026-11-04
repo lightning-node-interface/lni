@@ -35,14 +35,13 @@ fn extract_payment_info(payment: &breez_sdk_spark::Payment) -> Option<PaymentInf
     match &payment.details {
         Some(PaymentDetails::Lightning {
             invoice,
-            payment_hash,
-            preimage,
+            htlc_details,
             description,
             ..
         }) => Some(PaymentInfo {
             invoice: invoice.clone(),
-            payment_hash: payment_hash.clone(),
-            preimage: preimage.clone().unwrap_or_default(),
+            payment_hash: htlc_details.payment_hash.clone(),
+            preimage: htlc_details.preimage.clone().unwrap_or_default(),
             description: description.clone().unwrap_or_default(),
         }),
         Some(PaymentDetails::Spark {
@@ -105,7 +104,7 @@ fn payment_to_transaction(payment: &breez_sdk_spark::Payment) -> Option<Transact
         None => {
             // Handle on-chain types
             match &payment.details {
-                Some(PaymentDetails::Deposit { tx_id }) => (
+                Some(PaymentDetails::Deposit { tx_id, .. }) => (
                     tx_id.clone(),
                     "".to_string(),
                     "".to_string(),
@@ -212,6 +211,10 @@ pub async fn create_invoice(
                     payment_method: ReceivePaymentMethod::Bolt11Invoice {
                         description: invoice_params.description.clone().unwrap_or_default(),
                         amount_sats: invoice_params.amount_msats.map(|m| (m / 1000) as u64),
+                        expiry_secs: invoice_params.expiry.map(u32::try_from).transpose()
+                            .map_err(|_| ApiError::InvalidInput("Spark invoice expiry must fit in u32 seconds".to_string()))?,
+                        payment_hash: None,
+                        receiver_identity_public_key: None,
                     },
                 })
                 .await
@@ -259,9 +262,11 @@ pub async fn pay_invoice(
     // Prepare the payment first
     let prepare_response = sdk
         .prepare_send_payment(PrepareSendPaymentRequest {
-            payment_request: invoice_params.invoice.clone(),
+            payment_request: breez_sdk_spark::PaymentRequest::Input { input: invoice_params.invoice.clone() },
             amount: invoice_params.amount_msats.map(|m| (m / 1000) as u128),
             token_identifier: None,
+            conversion_options: None,
+            fee_policy: None,
         })
         .await
         .map_err(|e| ApiError::Api {
@@ -662,6 +667,7 @@ mod tests {
             timestamp: 0,
             method: PaymentMethod::Lightning,
             details: Some(details),
+            conversion_details: None,
         }
     }
 
@@ -669,9 +675,14 @@ mod tests {
     fn extracts_lightning_payment_preimage() {
         let payment = payment(PaymentDetails::Lightning {
             description: None,
-            preimage: Some("settled-preimage".to_string()),
+            htlc_details: SparkHtlcDetails {
+                payment_hash: "payment-hash".to_string(),
+                preimage: Some("settled-preimage".to_string()),
+                expiry_time: 0,
+                status: SparkHtlcStatus::PreimageShared,
+            },
+            conversion_info: None,
             invoice: "invoice".to_string(),
-            payment_hash: "payment-hash".to_string(),
             destination_pubkey: "destination".to_string(),
             lnurl_pay_info: None,
             lnurl_withdraw_info: None,
@@ -690,17 +701,22 @@ mod tests {
     fn pending_or_proofless_payment_is_not_settled() {
         let mut payment = payment(PaymentDetails::Lightning {
             description: None,
-            preimage: None,
+            htlc_details: SparkHtlcDetails {
+                payment_hash: "payment-hash".to_string(),
+                preimage: None,
+                expiry_time: 0,
+                status: SparkHtlcStatus::PreimageShared,
+            },
+            conversion_info: None,
             invoice: "invoice".to_string(),
-            payment_hash: "payment-hash".to_string(),
             destination_pubkey: "destination".to_string(),
             lnurl_pay_info: None,
             lnurl_withdraw_info: None,
             lnurl_receive_metadata: None,
         });
         assert!(!is_settled_payment(&payment));
-        if let Some(PaymentDetails::Lightning { preimage, .. }) = &mut payment.details {
-            *preimage = Some("settled-preimage".to_string());
+        if let Some(PaymentDetails::Lightning { htlc_details, .. }) = &mut payment.details {
+            htlc_details.preimage = Some("settled-preimage".to_string());
         }
         payment.status = PaymentStatus::Pending;
         assert!(!is_settled_payment(&payment));
@@ -719,6 +735,7 @@ mod tests {
     fn extracts_spark_htlc_payment_preimage() {
         let mut payment = payment(PaymentDetails::Spark {
             invoice_details: None,
+            conversion_info: None,
             htlc_details: Some(SparkHtlcDetails {
                 payment_hash: "payment-hash".to_string(),
                 preimage: Some("settled-preimage".to_string()),

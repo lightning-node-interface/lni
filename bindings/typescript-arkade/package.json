@@ -22,7 +22,7 @@
     "typescript"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0 <27"
   },
   "publishConfig": {
     "access": "public"
@@ -43,7 +43,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/build-boltz-vendor.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "npm run clean && npm run typecheck && npm run build",
@@ -55,14 +55,22 @@
     "@sunnyln/lni": "^0.2.24"
   },
   "dependencies": {
-    "@arkade-os/boltz-swap": "^0.3.3",
-    "@arkade-os/sdk": "^0.4.4"
+    "@arkade-os/sdk": "0.5.1",
+    "@scure/btc-signer": "^2.4.1"
   },
   "devDependencies": {
     "@sunnyln/lni": "file:../typescript",
-    "@types/node": "^22.13.5",
-    "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "esbuild": "^0.28.2",
+    "@arkade-os/boltz-swap": "^0.3.67"
   },
-  "packageManager": "npm@11.14.0"
+  "packageManager": "npm@11.14.0",
+  "overrides": {
+    "@arkade-os/boltz-swap": {
+      "@arkade-os/sdk": "$@arkade-os/sdk",
+      "@scure/btc-signer": "2.4.1"
+    }
+  }
 }

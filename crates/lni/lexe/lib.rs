@@ -116,6 +116,7 @@ impl LexeNode {
             .as_deref()
             .filter(|path| !path.is_empty())
             .map(PathBuf::from);
+        crate::ensure_tls_crypto_provider();
         let wallet =
             LexeWallet::load_or_fresh(env_config, CredentialsRef::from(&credentials), data_dir)
                 .map_err(|error| ApiError::Api {

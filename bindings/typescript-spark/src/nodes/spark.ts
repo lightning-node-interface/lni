@@ -1,7 +1,7 @@
 import { Transaction as BtcTransaction } from '@scure/btc-signer';
 import { mnemonicToSeedSync } from '@scure/bip39';
-import { sha256 } from '@noble/hashes/sha2';
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import {
   Identifier as FrostIdentifier,
   KeyPackage as FrostKeyPackage,
@@ -52,6 +52,9 @@ import {
   matchesSearch,
   toUnixSeconds,
 } from '@sunnyln/lni/internal/transform';
+import { validateOutboundAdaptorSignatureLocal } from '../internal/adaptor-signature.js';
+import { pureSparkTransactions } from '../internal/spark-transactions.js';
+import type { SparkFrostBase } from '@buildonspark/spark-sdk/bare';
 import type { SparkConfig } from '../types.js';
 
 type SparkSdkEntry = 'auto' | 'bare' | 'native' | 'default';
@@ -137,6 +140,11 @@ type AggregateFrostBindingParamsLike = {
   adaptorPubKey?: Uint8Array;
 };
 
+type PureSparkFrostMethods = Omit<SparkFrostBase,
+  'generateAdaptorFromSignature' | 'generateSignatureFromExistingAdaptor' |
+  'validateAdaptorSignature' | 'applyAdaptorToSignature' |
+  'getPublicKeyBytes' | 'batchGetPublicKeyBytes'>;
+
 type SparkFrostLike = {
   signFrost(params: SignFrostBindingParamsLike): Promise<Uint8Array>;
   aggregateFrost(params: AggregateFrostBindingParamsLike): Promise<Uint8Array>;
@@ -157,7 +165,7 @@ type SparkFrostLike = {
     threshold: number,
     proofs: Uint8Array[]
   ): Promise<void>;
-};
+} & Pick<SparkFrostBase, keyof typeof pureSparkTransactions>;
 
 const DEFAULT_MAX_FEE_SATS = 20;
 const DEFAULT_PAGE_SIZE = 50;
@@ -424,14 +432,6 @@ function elementBytesFromLike(value: unknown, label: string): Uint8Array {
   throw new LniError('Api', `Spark signer expected element-like value for ${label}.`);
 }
 
-function bytesToBigInt(bytes: Uint8Array): bigint {
-  let value = 0n;
-  for (const byte of bytes) {
-    value = (value << 8n) | BigInt(byte);
-  }
-  return value;
-}
-
 function bigIntToFixedBytes(value: bigint, size: number): Uint8Array {
   const bytes = new Uint8Array(size);
   let remainder = value;
@@ -440,87 +440,6 @@ function bigIntToFixedBytes(value: bigint, size: number): Uint8Array {
     remainder >>= 8n;
   }
   return bytes;
-}
-
-function toXOnlyPublicKey(pubkey: Uint8Array): Uint8Array {
-  if (pubkey.length === 32) {
-    return pubkey;
-  }
-
-  if (pubkey.length === 33 && (pubkey[0] === 0x02 || pubkey[0] === 0x03)) {
-    return pubkey.slice(1);
-  }
-
-  throw new LniError(
-    'InvalidInput',
-    `Spark public key must be 32-byte x-only or 33-byte compressed, got ${pubkey.length} bytes.`
-  );
-}
-
-function validateOutboundAdaptorSignatureLocal(params: {
-  signature: Uint8Array;
-  message: Uint8Array;
-  pubkey: Uint8Array;
-  adaptorPubkey: Uint8Array;
-}): { ok: true } | { ok: false; reason: string } {
-  try {
-    const { signature, message, pubkey, adaptorPubkey } = params;
-    if (message.length !== 32) {
-      return { ok: false, reason: `invalid message length: ${message.length}` };
-    }
-    if (signature.length !== 64) {
-      return { ok: false, reason: `invalid signature length: ${signature.length}` };
-    }
-
-    const r = signature.slice(0, 32);
-    const s = signature.slice(32, 64);
-    const rNum = bytesToBigInt(r);
-    const sNum = bytesToBigInt(s);
-    if (rNum >= secp256k1.CURVE.Fp.ORDER) {
-      return { ok: false, reason: 'invalid signature r >= field order' };
-    }
-    if (sNum >= secp256k1.CURVE.n) {
-      return { ok: false, reason: 'invalid signature s >= curve order' };
-    }
-
-    const xOnlyPubkey = toXOnlyPublicKey(pubkey);
-    const signerPoint = schnorr.utils.lift_x(bytesToBigInt(xOnlyPubkey));
-    signerPoint.assertValidity();
-
-    const challengeBytes = schnorr.utils.taggedHash(
-      'BIP0340/challenge',
-      r,
-      signerPoint.toBytes().slice(1),
-      message
-    );
-    const challengeScalar = bytesToBigInt(challengeBytes) % secp256k1.CURVE.n;
-    const negChallenge = (secp256k1.CURVE.n - challengeScalar) % secp256k1.CURVE.n;
-
-    const sG = secp256k1.Point.BASE.multiplyUnsafe(sNum);
-    const eP = signerPoint.multiplyUnsafe(negChallenge);
-    const baseR = sG.add(eP);
-    if (baseR.equals(secp256k1.Point.ZERO)) {
-      return { ok: false, reason: 'calculated base R is zero' };
-    }
-    baseR.assertValidity();
-
-    const adaptorPoint = secp256k1.Point.fromHex(adaptorPubkey);
-    const adaptedR = baseR.add(adaptorPoint);
-    if (adaptedR.equals(secp256k1.Point.ZERO)) {
-      return { ok: false, reason: 'calculated adapted R is infinity' };
-    }
-    adaptedR.assertValidity();
-    if (adaptedR.toAffine().y % 2n !== 0n) {
-      return { ok: false, reason: 'calculated adapted R y-value is odd' };
-    }
-    if (adaptedR.toAffine().x !== rNum) {
-      return { ok: false, reason: 'calculated adapted R x does not match signature r' };
-    }
-
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, reason: toDebugReason(error) };
-  }
 }
 
 function computeSignatureShareRustCompat(params: {
@@ -636,7 +555,7 @@ function emitSparkDebugCheckpoint(phase: string, meta: Record<string, unknown> =
   } catch {}
 }
 
-const SECP256K1_ORDER = secp256k1.CURVE.n;
+const SECP256K1_ORDER = secp256k1.Point.Fn.ORDER;
 
 function scalarMod(value: bigint): bigint {
   const modded = value % SECP256K1_ORDER;
@@ -725,7 +644,7 @@ function computeExpectedSharePoint(
   const x = BigInt(index);
   let expected = secp256k1.Point.ZERO;
   proofs.forEach((proof, proofIndex) => {
-    const point = secp256k1.Point.fromHex(proof);
+    const point = secp256k1.Point.fromBytes(proof);
     const factor = scalarPow(x, proofIndex);
     expected = expected.add(point.multiply(factor));
   });
@@ -756,7 +675,7 @@ async function pureSplitSecretWithProofs(
   const coefficients: bigint[] = [scalarFromBytes32(secret, 'Spark secret')];
   for (let i = 1; i < threshold; i += 1) {
     coefficients.push(
-      scalarFromBytes32(secp256k1.utils.randomPrivateKey(), `Spark coefficient ${i}`)
+      scalarFromBytes32(secp256k1.utils.randomSecretKey(), `Spark coefficient ${i}`)
     );
   }
 
@@ -1331,15 +1250,19 @@ export class SparkNode implements LightningNode {
     }
 
     const applyPureMethods = (sparkFrost: SparkFrostLike): SparkFrostLike => {
-      sparkFrost.signFrost = async (params) => pureSignFrost(params);
-      sparkFrost.aggregateFrost = async (params) => pureAggregateFrost(params);
-      sparkFrost.createDummyTx = pureCreateDummyTx;
-      sparkFrost.encryptEcies = pureEncryptEcies;
-      sparkFrost.decryptEcies = pureDecryptEcies;
-      sparkFrost.splitSecretWithProofs = pureSplitSecretWithProofs;
-      sparkFrost.recoverSecret = pureRecoverSecret;
-      sparkFrost.validateShare = pureValidateShare;
-      return sparkFrost;
+      // Check every abstract SDK primitive so future SDK additions fail the
+      // build instead of surfacing only when a funded wallet uses that path.
+      return Object.assign(sparkFrost, {
+        signFrost: pureSignFrost,
+        aggregateFrost: pureAggregateFrost,
+        createDummyTx: pureCreateDummyTx,
+        encryptEcies: pureEncryptEcies,
+        decryptEcies: pureDecryptEcies,
+        splitSecretWithProofs: pureSplitSecretWithProofs,
+        recoverSecret: pureRecoverSecret,
+        validateShare: pureValidateShare,
+        ...pureSparkTransactions,
+      } satisfies PureSparkFrostMethods);
     };
 
     if (

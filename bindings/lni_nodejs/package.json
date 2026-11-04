@@ -25,14 +25,15 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@napi-rs/cli": "2.18.4",
-    "ava": "^6.4.1"
+    "@napi-rs/cli": "3.10.9",
+    "@scure/bip39": "^2.4.0",
+    "ava": "^8.3.0"
   },
   "ava": {
     "timeout": "3m"
   },
   "engines": {
-    "node": ">= 10"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "artifacts": "napi artifacts",
@@ -43,8 +44,16 @@
     "universal": "napi universal",
     "version": "napi version"
   },
-  "packageManager": "yarn@4.6.0",
+  "packageManager": "yarn@4.18.1",
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "dotenv": "^18.0.9"
+  },
+  "overrides": {
+    "@vercel/nft": {
+      "glob": "14.0.3"
+    }
+  },
+  "resolutions": {
+    "glob@npm:^13.0.0": "npm:14.0.3"
   }
 }

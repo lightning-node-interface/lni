@@ -7,25 +7,33 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@sunnyln/lni": "file:../../../typescript",
     "@sunnyln/lni-spark": "file:../..",
-    "@react-native-async-storage/async-storage": "^2.2.0",
-    "drizzle-orm": "^0.45.2",
-    "expo": "~54.0.33",
-    "expo-clipboard": "~8.0.7",
-    "expo-sqlite": "~16.0.8",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-get-random-values": "^2.0.0"
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "drizzle-orm": "^0.45.4",
+    "expo": "~58.0.22",
+    "expo-clipboard": "~58.0.4",
+    "expo-sqlite": "~58.0.15",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.1",
+    "react-native": "0.88.1",
+    "react-native-get-random-values": "^2.1.0"
   },
   "devDependencies": {
-    "@types/react": "~19.1.0",
-    "typescript": "~5.9.2"
+    "@types/react": "~19.3.0",
+    "typescript": "~7.0.2",
+    "patch-package": "^8.0.1"
   },
   "private": true,
-  "packageManager": "npm@11.14.0"
+  "packageManager": "npm@11.14.0",
+  "overrides": {
+    "postcss": "^8.5.32",
+    "glob": "14.0.3",
+    "minimatch": "11.0.4",
+    "test-exclude": "8.0.0"
+  }
 }

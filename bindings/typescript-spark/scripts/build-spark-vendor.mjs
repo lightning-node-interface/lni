@@ -19,10 +19,10 @@ const sparkSourcePath = path.resolve(
   'node_modules/@buildonspark/spark-sdk/dist/bare/index.js'
 );
 
-const browserTransportPattern =
-  'return new ConnectionManagerBrowser(config, "identity", BareHttpTransport());';
-const browserTransportReplacement =
-  'return new ConnectionManagerBrowser(config, "identity", (0, import_nice_grpc_web.FetchTransport)());';
+const browserTransportPatches = ['"identity"', 'authMode'].map((authMode) => ({
+  pattern: `return new ConnectionManagerBrowser(config, ${authMode}, BareHttpTransport({ logging }), logging);`,
+  replacement: `return new ConnectionManagerBrowser(config, ${authMode}, (0, import_nice_grpc_web.FetchTransport)(), logging);`,
+}));
 
 const browserAlias = {
   http: path.resolve(shimsDir, 'node-http.js'),
@@ -87,18 +87,23 @@ async function minifyFile(filePath) {
 
 async function patchAndValidateSparkBundle() {
   let source = await readFile(sparkOutputPath, 'utf8');
-  source = source.replace(browserTransportPattern, browserTransportReplacement);
+  for (const { pattern, replacement } of browserTransportPatches) {
+    if (!source.includes(pattern)) {
+      throw new Error('Spark vendor transport call changed; review the browser transport patch.');
+    }
+    source = source.replaceAll(pattern, replacement);
+  }
   await writeFile(sparkOutputPath, source, 'utf8');
 
   if (/WebAssembly|\.wasm|wasm-node|wasm-browser/.test(source)) {
     throw new Error('Spark vendor bundle contains WASM references.');
   }
 
-  if (!source.includes(browserTransportReplacement)) {
+  if (!browserTransportPatches.every(({ replacement }) => source.includes(replacement))) {
     throw new Error('Spark vendor bundle is missing the browser FetchTransport patch.');
   }
 
-  if (source.includes(browserTransportPattern)) {
+  if (/new ConnectionManagerBrowser[^\n]+BareHttpTransport/.test(source)) {
     throw new Error('Spark vendor bundle still references BareHttpTransport.');
   }
 }

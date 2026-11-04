@@ -140,7 +140,7 @@ impl SparkNode {
         let response = self
             .sdk
             .receive_payment(ReceivePaymentRequest {
-                payment_method: ReceivePaymentMethod::BitcoinAddress,
+                payment_method: ReceivePaymentMethod::BitcoinAddress { new_address: None },
             })
             .await
             .map_err(|e| ApiError::Api {
