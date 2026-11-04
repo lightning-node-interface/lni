@@ -1,6 +1,6 @@
 {
   "name": "lni_js",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {

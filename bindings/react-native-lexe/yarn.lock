@@ -3767,8 +3767,8 @@ __metadata:
   linkType: hard
 
 "@sunnyln/lni@file:../typescript::locator=%40sunnyln%2Freact-native-lni-lexe%40workspace%3A.":
-  version: 0.2.24
-  resolution: "@sunnyln/lni@file:../typescript#../typescript::hash=ca1ebe&locator=%40sunnyln%2Freact-native-lni-lexe%40workspace%3A."
+  version: 0.3.0
+  resolution: "@sunnyln/lni@file:../typescript#../typescript::hash=becaac&locator=%40sunnyln%2Freact-native-lni-lexe%40workspace%3A."
   dependencies:
     "@getalby/sdk": "npm:^9.0.0"
     "@scure/base": "npm:^2.4.0"
@@ -3778,7 +3778,7 @@ __metadata:
   peerDependenciesMeta:
     expo-crypto:
       optional: true
-  checksum: 10c0/5f4a1c0bf19759bcb45463aeef0f3afe1f6782b962005a98b11eda02f5fa338e19206290c0be2d7b87d81e02b584be76adc71c0e8f32e246bdc30fb4e43362a8
+  checksum: 10c0/a36ea32e75b4414553967c10ee281bc4167766d3fbb3801cb82a352595764990ee193613b3ee8e4ee9a46f63d96c708b437ac16c35e12f281d1121919d4645b8
   languageName: node
   linkType: hard
 
@@ -3811,7 +3811,7 @@ __metadata:
     vite: "npm:^8.3.5"
     vitest: "npm:^5.1.0"
   peerDependencies:
-    "@sunnyln/lni": ^0.2.24
+    "@sunnyln/lni": ^0.3.0
     react: ^19.3.0
     react-native: ^0.88.0
   languageName: unknown

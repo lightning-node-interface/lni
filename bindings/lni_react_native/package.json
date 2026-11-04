@@ -1,6 +1,6 @@
 {
   "name": "lni_react_native",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "lni_react_native",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",

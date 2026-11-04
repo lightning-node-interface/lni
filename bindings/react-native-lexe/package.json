@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/react-native-lni-lexe",
-  "version": "0.2.26",
+  "version": "0.3.0",
   "description": "React Native bindings for the Lexe Lightning wallet",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -103,7 +103,7 @@
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@sunnyln/lni": "^0.2.24",
+    "@sunnyln/lni": "^0.3.0",
     "react": "^19.3.0",
     "react-native": "^0.88.0"
   },
