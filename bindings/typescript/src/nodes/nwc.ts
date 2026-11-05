@@ -224,7 +224,6 @@ export class NwcNode implements LightningNode {
     this.nip47TimeoutValues = this.timeoutMs
       ? {
           replyTimeout: this.timeoutMs,
-          publishTimeout: Math.min(this.timeoutMs, 5_000),
         }
       : undefined;
     this.client = new NWCClient({

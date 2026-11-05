@@ -1,6 +1,7 @@
-use lightning::blinded_path::message::BlindedMessagePath;
-use lightning::blinded_path::{Direction, IntroductionNode};
-use lightning::offers::offer::{Amount, Offer as Bolt12Offer, Quantity};
+// Reuse Lexe's LDK version instead of compiling a separate lightning dependency.
+use lexe::lightning::blinded_path::message::BlindedMessagePath;
+use lexe::lightning::blinded_path::{Direction, IntroductionNode};
+use lexe::lightning::offers::offer::{Amount, Offer as Bolt12Offer, Quantity};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use serde_json::{json, Map, Value};
 use std::error::Error;
@@ -336,5 +337,20 @@ mod decode_tests {
         assert!(value["sections"].as_array().unwrap().iter().any(|section| {
             section["name"] == "paths" && section["value"].as_array().is_some()
         }));
+    }
+
+    #[test]
+    fn decodes_supplied_recurring_offer_base_fields_and_blinded_path() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "testdata/bolt12-recurring-offer.json"
+        )).unwrap();
+        let decoded = super::decode_offer(fixture["offer"].as_str().unwrap().to_string()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&decoded).unwrap();
+        assert_eq!(value["description"], fixture["description"]);
+        assert_eq!(value["amount"], fixture["amount_msat"]);
+        assert_eq!(value["amountMsats"], 5000);
+        assert_eq!(value["issuerSigningPubkey"], fixture["issuer_signing_pubkey"]);
+        assert_eq!(value["paths"].as_array().unwrap().len(), 1);
+        assert_eq!(value["paths"][0]["blindedHops"].as_array().unwrap().len(), 1);
     }
 }

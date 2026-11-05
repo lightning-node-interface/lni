@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/react-native-lni-lexe",
-  "version": "0.2.26",
+  "version": "0.3.0",
   "description": "React Native bindings for the Lexe Lightning wallet",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -79,40 +79,42 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.1.0",
-    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/compat": "^2.1.1",
+    "@eslint/eslintrc": "^3.3.7",
     "@eslint/js": "^10.0.1",
-    "@react-native-community/cli": "20.1.0",
-    "@react-native/babel-preset": "0.85.0",
-    "@react-native/eslint-config": "0.85.0",
-    "@sunnyln/lni": "0.2.16",
-    "@types/react": "^19.2.0",
-    "del-cli": "^7.0.0",
-    "eslint": "^9.39.4",
+    "@react-native-community/cli": "20.2.0",
+    "@react-native/babel-preset": "0.88.1",
+    "@react-native/eslint-config": "0.88.1",
+    "@sunnyln/lni": "file:../typescript",
+    "@types/react": "^19.3.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "del-cli": "^8.0.1",
+    "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-ft-flow": "^3.0.11",
-    "eslint-plugin-prettier": "^5.5.6",
-    "prettier": "^3.8.3",
-    "react": "19.2.3",
-    "react-native": "0.85.0",
-    "react-native-builder-bob": "^0.43.0",
-    "turbo": "^2.9.16",
-    "typescript": "^6.0.3",
-    "vitest": "^3.2.4"
+    "eslint-plugin-prettier": "^5.5.7",
+    "prettier": "^3.9.10",
+    "react": "19.3.1",
+    "react-native": "0.88.1",
+    "react-native-builder-bob": "^0.44.1",
+    "turbo": "^2.11.10",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@sunnyln/lni": "^0.2.16",
-    "react": "*",
-    "react-native": "*"
+    "@sunnyln/lni": "^0.3.0",
+    "react": "^19.3.0",
+    "react-native": "^0.88.0"
   },
   "dependencies": {
-    "@ubjs/core": "0.31.0-3",
-    "uniffi-bindgen-react-native": "0.31.0-3"
+    "@ubjs/core": "0.31.0-6",
+    "uniffi-bindgen-react-native": "0.31.0-6"
   },
   "workspaces": [
     "example"
   ],
-  "packageManager": "yarn@4.11.0",
+  "packageManager": "yarn@4.18.1",
   "react-native-builder-bob": {
     "source": "src",
     "output": "lib",
@@ -162,5 +164,10 @@
   },
   "engines": {
     "node": ">=22.11.0"
+  },
+  "resolutions": {
+    "glob": "npm:14.0.3",
+    "minimatch": "patch:minimatch@npm%3A11.0.4#~/.yarn/patches/minimatch-npm-11.0.4-dd1fb97a86.patch",
+    "test-exclude": "npm:8.0.0"
   }
 }

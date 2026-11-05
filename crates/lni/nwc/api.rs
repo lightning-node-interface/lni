@@ -5,10 +5,10 @@ use crate::{
     PayInvoiceResponse, Transaction,
 };
 use lightning_invoice::Bolt11Invoice;
-use nwc::nostr::nips::nip47;
+use nostr::nips::nip47;
 use nwc::prelude::*;
 use sha2::{Digest, Sha256};
-use std::future::Future;
+use std::future::IntoFuture;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -22,10 +22,7 @@ async fn create_nwc_client(config: &NwcConfig) -> Result<NWC, ApiError> {
         .verify_subscriptions(true)
         .ban_relay_on_mismatch(true);
     let timeout = nwc_request_timeout(config);
-    let opts = NostrWalletConnectOptions::default()
-        .relay(relay_opts)
-        .timeout(timeout);
-    let nwc = NWC::with_opts(uri, opts);
+    let nwc = NWC::builder(uri).relay(relay_opts).timeout(timeout).build();
 
     Ok(nwc)
 }
@@ -51,9 +48,9 @@ async fn execute_nwc_request<T, F>(
     fallback_prefix: &str,
 ) -> Result<T, ApiError>
 where
-    F: Future<Output = Result<T, nwc::Error>>,
+    F: IntoFuture<Output = Result<T, nwc::error::Error>>,
 {
-    match tokio::time::timeout(timeout, request).await {
+    match tokio::time::timeout(timeout, request.into_future()).await {
         Ok(Ok(response)) => Ok(response),
         Ok(Err(error)) => Err(map_nwc_error(error, fallback_prefix)),
         Err(_) => Err(nwc_timeout_error(timeout)),
@@ -70,17 +67,31 @@ fn nwc_error_code_to_string(code: nip47::ErrorCode) -> String {
         .unwrap_or_else(|_| format!("{:?}", code))
 }
 
-fn map_nwc_error(error: nwc::Error, fallback_prefix: &str) -> ApiError {
-    match error {
-        nwc::Error::Timeout => upstream_nwc_timeout_error(),
-        nwc::Error::NIP47(nip47::Error::ErrorCode(nwc_error)) => ApiError::Nwc {
-            code: nwc_error_code_to_string(nwc_error.code),
-            message: nwc_error.message,
-        },
-        other => ApiError::Api {
-            reason: format!("{}: {}", fallback_prefix, other),
-        },
+fn map_nwc_error(error: nwc::error::Error, fallback_prefix: &str) -> ApiError {
+    if error.kind() == nwc::error::ErrorKind::NoResponse {
+        return upstream_nwc_timeout_error();
     }
+    // Nostr 0.45 serializes NIP-47 errors into its opaque protocol error message.
+    // Only decode that exact protocol category and a recognized, anchored code.
+    let protocol_error = std::error::Error::source(&error)
+        .and_then(|source| source.downcast_ref::<nostr::error::Error>());
+    if error.kind() == nwc::error::ErrorKind::Protocol
+        && protocol_error.is_some_and(|source| source.kind() == nostr::error::ErrorKind::Other)
+    {
+        let message = error.to_string();
+        for code in [
+            nip47::ErrorCode::RateLimited, nip47::ErrorCode::NotImplemented,
+            nip47::ErrorCode::InsufficientBalance, nip47::ErrorCode::PaymentFailed,
+            nip47::ErrorCode::NotFound, nip47::ErrorCode::QuotaExceeded,
+            nip47::ErrorCode::Restricted, nip47::ErrorCode::Unauthorized,
+            nip47::ErrorCode::Internal, nip47::ErrorCode::Other,
+        ] {
+            if let Some(message) = message.strip_suffix(&format!(" [{:?}]", code)) {
+                return ApiError::Nwc { code: nwc_error_code_to_string(code), message: message.to_string() };
+            }
+        }
+    }
+    ApiError::Api { reason: format!("{}: {}", fallback_prefix, error) }
 }
 
 pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
@@ -88,7 +99,10 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
     let timeout = nwc_request_timeout(&config);
 
     // Get balance first
-    let balance = execute_nwc_request(timeout, nwc.get_balance(), "Failed to get balance").await?;
+    let response = execute_nwc_request(timeout, nwc.get_balance(), "Failed to get balance").await?;
+    let balance = i64::try_from(response.balance).map_err(|_| ApiError::Api {
+        reason: "NWC balance exceeds the supported msat range".to_string(),
+    })?;
 
     // Try to get more info using get_info method if available
     let info_result = execute_nwc_request(timeout, nwc.get_info(), "Failed to get info").await;
@@ -111,7 +125,7 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
                 network: nwc_info.network.unwrap_or_else(|| "mainnet".to_string()),
                 block_height: nwc_info.block_height.unwrap_or(0) as i64,
                 block_hash: nwc_info.block_hash.unwrap_or_default(),
-                send_balance_msat: balance as i64,
+                send_balance_msat: balance,
                 receive_balance_msat: 0, // NWC doesn't provide separate receive balance
                 fee_credit_balance_msat: 0,
                 unsettled_send_balance_msat: 0,
@@ -137,7 +151,7 @@ pub async fn get_info(config: NwcConfig) -> Result<NodeInfo, ApiError> {
                 network: "mainnet".to_string(),
                 block_height: 0,
                 block_hash: "".to_string(),
-                send_balance_msat: balance as i64,
+                send_balance_msat: balance,
                 receive_balance_msat: 0,
                 fee_credit_balance_msat: 0,
                 unsettled_send_balance_msat: 0,
@@ -158,7 +172,7 @@ pub async fn get_permissions(config: NwcConfig) -> Result<crate::Permissions, Ap
     if info.methods.is_empty() {
         Ok(crate::permissions::nwc_method_permissions())
     } else {
-        Ok(crate::permissions::normalize_nwc_permissions(info.methods))
+        Ok(crate::permissions::normalize_nwc_permissions(info.methods.iter().map(|method| method.as_str())))
     }
 }
 
@@ -221,13 +235,23 @@ pub async fn create_invoice(
     )
     .await?;
 
+    let payment_hash = match response.payment_hash {
+        Some(hash) => hash,
+        None => Bolt11Invoice::from_str(&response.invoice)
+            .map_err(|_| ApiError::Api {
+                reason: "NWC returned an invalid invoice without a payment hash".to_string(),
+            })?
+            .payment_hash()
+            .to_string(),
+    };
+
     Ok(Transaction {
         type_: "incoming".to_string(),
         invoice: response.invoice,
         description: params.description.unwrap_or_default(),
         description_hash: "".to_string(),
         preimage: "".to_string(), // Not available in response
-        payment_hash: response.payment_hash,
+        payment_hash,
         amount_msats: params.amount_msats.unwrap_or(0),
         fees_paid: 0,
         created_at: 0, // Not available in response
@@ -422,14 +446,14 @@ fn lookup_response_to_transaction(
         payment_hash,
         amount_msats: response.amount as i64,
         fees_paid: response.fees_paid as i64,
-        created_at: response.created_at.as_u64() as i64,
+        created_at: response.created_at.as_secs() as i64,
         expires_at: response
             .expires_at
-            .map(|timestamp| timestamp.as_u64() as i64)
+            .map(|timestamp| timestamp.as_secs() as i64)
             .unwrap_or(0),
         settled_at: response
             .settled_at
-            .map(|timestamp| timestamp.as_u64() as i64)
+            .map(|timestamp| timestamp.as_secs() as i64)
             .unwrap_or(0),
         payer_note: None,
         external_id: None,
@@ -656,6 +680,7 @@ mod tests {
     #[test]
     fn maps_upstream_list_transaction_response() {
         let transaction = lookup_response_to_transaction_from_list(LookupInvoiceResponse {
+            state: None,
             transaction_type: Some(TransactionType::Incoming),
             invoice: Some("invoice".to_string()),
             description: Some("description".to_string()),
@@ -690,10 +715,15 @@ mod tests {
 
     #[test]
     fn maps_nip47_error_codes_to_structured_api_errors() {
-        let error = nwc::Error::NIP47(nip47::Error::ErrorCode(nip47::NIP47Error {
-            code: nip47::ErrorCode::QuotaExceeded,
-            message: "quota spent".to_string(),
-        }));
+        let response = nip47::Response {
+            result_type: nip47::Method::PayInvoice,
+            error: Some(nip47::NIP47Error {
+                code: nip47::ErrorCode::QuotaExceeded,
+                message: "quota spent".to_string(),
+            }),
+            result: None,
+        };
+        let error = nwc::error::Error::from(response.to_pay_invoice().unwrap_err());
 
         match map_nwc_error(error, "Failed to pay invoice") {
             ApiError::Nwc { code, message } => {
@@ -705,8 +735,26 @@ mod tests {
     }
 
     #[test]
+    fn does_not_decode_error_codes_from_unrelated_protocol_failures() {
+        let protocol = nostr::error::Error::with_static_message(
+            nostr::error::ErrorKind::Invalid,
+            "malformed payload [QuotaExceeded]",
+        );
+        assert!(matches!(map_nwc_error(protocol.into(), "request failed"), ApiError::Api { .. }));
+    }
+
+    #[test]
+    fn does_not_decode_error_codes_from_non_protocol_errors() {
+        let error = nwc::error::Error::with_static_message(
+            nwc::error::ErrorKind::Other,
+            "transport failure [QuotaExceeded]",
+        );
+        assert!(matches!(map_nwc_error(error, "request failed"), ApiError::Api { .. }));
+    }
+
+    #[test]
     fn maps_upstream_nwc_timeout_to_network_error() {
-        match map_nwc_error(nwc::Error::Timeout, "Failed to pay invoice") {
+        match map_nwc_error(nwc::error::Error::simple(nwc::error::ErrorKind::NoResponse), "Failed to pay invoice") {
             ApiError::NetworkError(message) => {
                 assert!(message.contains("timed out"));
             }
@@ -732,7 +780,7 @@ mod tests {
             Duration::from_millis(1),
             async {
                 tokio::time::sleep(Duration::from_secs(60)).await;
-                Ok::<(), nwc::Error>(())
+                Ok::<(), nwc::error::Error>(())
             },
             "Failed to pay invoice",
         )
@@ -760,8 +808,8 @@ mod tests {
             Some(50),
         );
 
-        assert_eq!(request.from.map(|timestamp| timestamp.as_u64()), Some(20));
-        assert_eq!(request.until.map(|timestamp| timestamp.as_u64()), Some(30));
+        assert_eq!(request.from.map(|timestamp| timestamp.as_secs()), Some(20));
+        assert_eq!(request.until.map(|timestamp| timestamp.as_secs()), Some(30));
         assert_eq!(request.limit, Some(25));
         assert_eq!(request.offset, Some(50));
     }

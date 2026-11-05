@@ -44,8 +44,8 @@ use std::time::Duration;
 #[napi]
 pub fn generate_mnemonic(word_count: Option<u8>) -> napi::Result<String> {
   use bip39::{Language, Mnemonic};
-  use rand::rngs::OsRng;
-  use rand::RngCore;
+  use rand::rngs::SysRng;
+  use rand::TryRng;
 
   let entropy_size = match word_count {
     Some(24) => 32,
@@ -53,7 +53,7 @@ pub fn generate_mnemonic(word_count: Option<u8>) -> napi::Result<String> {
   };
 
   let mut entropy = vec![0u8; entropy_size];
-  OsRng.fill_bytes(&mut entropy);
+  SysRng.try_fill_bytes(&mut entropy).map_err(|_| napi::Error::from_reason("Failed to obtain secure entropy"))?;
 
   match Mnemonic::from_entropy_in(Language::English, &entropy) {
     Ok(mnemonic) => Ok(mnemonic.to_string()),
@@ -106,7 +106,7 @@ pub async fn say_after_with_tokio(
 }
 
 fn demo_http_client(socks5_proxy: Option<&str>) -> napi::Result<reqwest::Client> {
-  let client_builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
+  let client_builder = lni::http_client_builder();
   if let Some(proxy_url) = socks5_proxy.filter(|url| !url.is_empty()) {
     let proxy = reqwest::Proxy::all(proxy_url)
       .map_err(|_| napi::Error::from_reason("Invalid SOCKS5 proxy configuration"))?;

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::URL_SAFE, Engine};
 use regex::Regex;
 
 use crate::Permissions;
@@ -101,7 +102,7 @@ where
 }
 
 pub fn parse_cln_rune_permissions(rune: &str) -> Permissions {
-    let decoded = match base64::decode_config(pad_base64_url(rune), base64::URL_SAFE) {
+    let decoded = match URL_SAFE.decode(pad_base64_url(rune)) {
         Ok(bytes) => bytes,
         Err(_) => return normalize_cln_permissions(CLN_METHOD_PERMISSIONS.iter().copied()),
     };
@@ -317,7 +318,7 @@ fn decode_jwt_payload(access_token: &str) -> Option<serde_json::Value> {
     let _header = parts.next()?;
     let payload = parts.next()?;
     let _signature = parts.next()?;
-    let decoded = base64::decode_config(pad_base64_url(payload), base64::URL_SAFE).ok()?;
+    let decoded = URL_SAFE.decode(pad_base64_url(payload)).ok()?;
     serde_json::from_slice(&decoded).ok()
 }
 
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn expands_cln_method_prefix_restrictions() {
-        let rune = base64::encode_config("unique-id&method^list|method=getinfo", base64::URL_SAFE);
+        let rune = URL_SAFE.encode("unique-id&method^list|method=getinfo");
 
         assert_eq!(
             parse_cln_rune_permissions(&rune),
@@ -439,7 +440,7 @@ mod tests {
     }
 
     fn base64_url_json(value: &serde_json::Value) -> String {
-        base64::encode_config(value.to_string(), base64::URL_SAFE)
+        URL_SAFE.encode(value.to_string())
             .trim_end_matches('=')
             .to_string()
     }

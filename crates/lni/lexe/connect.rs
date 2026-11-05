@@ -233,10 +233,9 @@ impl LexeConnectSession {
             label: options.label,
             expires_at,
         };
-        let request = PendingRequest::new(&mut rand::rngs::OsRng, params)
+        let request = PendingRequest::new(&mut lexe_crypto::rng::SysRng::new(), params)
             .map_err(|_| invalid("Invalid LexeConnect request options"))?;
-        let http = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+        let http = crate::http_client_builder()
             .timeout(Duration::from_secs(15))
             .build()
             .map_err(|_| transport())?;
@@ -402,7 +401,7 @@ mod tests {
 
     fn delivered_body(session: &LexeConnectSession, outcome: Outcome) -> Vec<u8> {
         match request(session)
-            .respond(&mut rand::rngs::OsRng, outcome)
+            .respond(&mut lexe_crypto::rng::SysRng::new(), outcome)
             .unwrap()
         {
             DeliveryAction::Http(http) => {
@@ -448,7 +447,7 @@ mod tests {
             })
             .unwrap();
             let DeliveryAction::Redirect(url) = request(&session)
-                .respond(&mut rand::rngs::OsRng, approval())
+                .respond(&mut lexe_crypto::rng::SysRng::new(), approval())
                 .unwrap()
             else {
                 panic!("expected redirect")
@@ -539,11 +538,11 @@ mod tests {
                     }
                 }
             }
-            let body = altered.seal(&mut rand::rngs::OsRng, &request).unwrap().0;
+            let body = altered.seal(&mut lexe_crypto::rng::SysRng::new(), &request).unwrap().0;
             assert!(session.accept_body(body).is_err());
         }
         assert!(session
-            .accept_body(response.seal(&mut rand::rngs::OsRng, &request).unwrap().0)
+            .accept_body(response.seal(&mut lexe_crypto::rng::SysRng::new(), &request).unwrap().0)
             .is_ok());
     }
 
@@ -649,7 +648,7 @@ mod tests {
         .unwrap();
         assert!(session.poll_mailbox().await.unwrap().is_none());
         let DeliveryAction::Http(delivery) = request(&session)
-            .respond(&mut rand::rngs::OsRng, Outcome::Rejected)
+            .respond(&mut lexe_crypto::rng::SysRng::new(), Outcome::Rejected)
             .unwrap()
         else {
             panic!("expected mailbox delivery")

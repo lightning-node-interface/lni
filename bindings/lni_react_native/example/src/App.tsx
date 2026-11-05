@@ -601,7 +601,7 @@ export default function App() {
       try {
         await test.fn();
         // Small delay between tests
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise<void>(resolve => setTimeout(resolve, 500));
       } catch (error) {
         updateTestStatus(test.name, 'error', `Unexpected error: ${error}`);
       }

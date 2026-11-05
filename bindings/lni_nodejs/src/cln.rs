@@ -167,17 +167,17 @@ impl ClnNode {
   }
 
   #[napi]
-  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> Result<()>>(
+  pub fn on_invoice_events(
     &self,
     params: lni::types::OnInvoiceEventParams,
-    callback: T,
+    callback: Function<'_, FnArgs<(String, Option<lni::Transaction>)>, ()>,
   ) -> Result<()> {
     let config = self.inner.clone();
 
     // Block on the async function in the current thread, similar to LND's sync approach
     tokio::runtime::Runtime::new().unwrap().block_on(async {
       lni::cln::api::poll_invoice_events(config, params, move |status, tx| {
-        let _ = callback(status.clone(), tx.clone())
+        let _ = callback.call((status.clone(), tx.clone()).into())
           .map_err(|err| napi::Error::from_reason(err.to_string()));
       })
       .await;

@@ -27,7 +27,7 @@ const bolt11Mocks = vi.hoisted(() => ({
 vi.mock('@getalby/sdk/nwc', () => ({
   Nip47Error: nwcMocks.Nip47Error,
   NWCClient: Object.assign(
-    vi.fn().mockImplementation(() => {
+    vi.fn().mockImplementation(function () {
       const client = {
         getInfo: nwcMocks.getInfo,
         getBalance: nwcMocks.getBalance,
@@ -178,7 +178,6 @@ describe('NwcNode.payInvoice', () => {
       expect.any(Function),
       {
         replyTimeout: 15_000,
-        publishTimeout: 5_000,
       }
     );
     expect(nwcMocks.payInvoice).not.toHaveBeenCalled();

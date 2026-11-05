@@ -60,6 +60,22 @@ export interface DecodedBlindedPath {
   }>;
 }
 
+/** Decoded proposal fields only; this does not authorize or schedule payments. */
+export interface DecodedOfferRecurrence {
+  timeUnit: 0 | 1 | 2;
+  timeUnitName: 'seconds' | 'days' | 'months';
+  period: number;
+  compulsoryField: boolean;
+  /** Exact UNIX timestamp, represented as a decimal string to preserve u64 precision. */
+  baseTime?: string;
+  proportionalAmount?: boolean;
+  payWindow?: { secondsBefore: number; secondsAfter: number };
+  /** Maximum period index from the wire; not a count of payments. */
+  limit?: number;
+  /** Inclusive zero-based limit converted to a payment count; absent if unlimited. */
+  maxPayments?: number;
+}
+
 export interface DecodedOffer {
   offer: string;
   prefix: 'lno';
@@ -78,6 +94,8 @@ export interface DecodedOffer {
   issuer?: string;
   quantityMax?: number | 'unbounded';
   issuerSigningPubkey?: string;
+  recurrence?: DecodedOfferRecurrence;
+  rawTlvHex?: string;
 }
 
 export function decode(invoice: string): DecodedInvoice {
@@ -142,9 +160,13 @@ export function decodeOffer(offer: string): DecodedOffer {
       },
     ],
     chains: [],
+    rawTlvHex: bytesToHex(bytes),
   };
 
   for (const record of records) {
+    if (recurrenceFieldType(record.type) !== undefined) {
+      continue;
+    }
     const hex = bytesToHex(record.value);
     switch (record.type) {
       case 2:
@@ -223,7 +245,114 @@ export function decodeOffer(offer: string): DecodedOffer {
     }
   }
 
+  const recurrence = decodeOfferRecurrence(records);
+  if (recurrence) {
+    decoded.recurrence = recurrence.value;
+    decoded.sections.push(...recurrence.sections);
+  }
   return decoded;
+}
+
+// BOLT #1240, revision 941b20d: types 24/25/26/27/29. Core Lightning
+// deploys the same payloads at 1_000_000_000 + type while the proposal is experimental.
+// https://github.com/lightning/bolts/pull/1240
+// https://github.com/ElementsProject/lightning/blob/master/wire/bolt12_wire.csv
+function recurrenceFieldType(type: number): number | undefined {
+  const field = type >= 1_000_000_000 ? type - 1_000_000_000 : type;
+  return [24, 25, 26, 27, 29].includes(field) ? field : undefined;
+}
+
+function decodeOfferRecurrence(
+  records: Array<{ type: number; value: Uint8Array }>
+): { value: DecodedOfferRecurrence; sections: DecodedOfferSection[] } | undefined {
+  const fields = new Map<number, { type: number; value: Uint8Array }>();
+  let experimental: boolean | undefined;
+  for (const record of records) {
+    const field = recurrenceFieldType(record.type);
+    if (field === undefined) continue;
+    const isExperimental = record.type >= 1_000_000_000;
+    if (experimental !== undefined && experimental !== isExperimental) {
+      throw new Error('Invalid BOLT12 recurrence: mixed draft and experimental fields.');
+    }
+    experimental = isExperimental;
+    fields.set(field, record);
+  }
+  if (fields.size === 0) return undefined;
+
+  const primary = fields.get(24) ?? fields.get(25);
+  if (!primary || (fields.has(24) && fields.has(25))) {
+    throw new Error('Invalid BOLT12 recurrence: expected exactly one recurrence field.');
+  }
+  const timeUnit = primary.value[0];
+  if (timeUnit !== 0 && timeUnit !== 1 && timeUnit !== 2) {
+    throw new Error('Invalid BOLT12 recurrence time unit.');
+  }
+  const period = Number(recurrenceUint(primary.value.slice(1), 4, 'period'));
+  if (period === 0) throw new Error('Invalid BOLT12 recurrence: zero period.');
+  const recurrence: DecodedOfferRecurrence = {
+    timeUnit,
+    timeUnitName: (['seconds', 'days', 'months'] as const)[timeUnit],
+    period,
+    compulsoryField: fields.has(24),
+  };
+  const sections: DecodedOfferSection[] = [
+    {
+      name: fields.has(24) ? 'recurrence_compulsory' : 'recurrence_optional',
+      type: primary.type,
+      value: { timeUnit, period },
+      raw: bytesToHex(primary.value),
+    },
+  ];
+
+  const base = fields.get(26);
+  if (base) {
+    if (!recurrence.compulsoryField) {
+      throw new Error('Invalid BOLT12 recurrence: optional recurrence cannot include a base.');
+    }
+    const proportional = base.value[0];
+    if (proportional !== 0 && proportional !== 1) {
+      throw new Error('Invalid BOLT12 recurrence proportional amount flag.');
+    }
+    recurrence.baseTime = recurrenceUint(base.value.slice(1), 8, 'base time').toString();
+    recurrence.proportionalAmount = proportional === 1;
+    sections.push({
+      name: 'recurrence_base', type: base.type,
+      value: { baseTime: recurrence.baseTime, proportionalAmount: recurrence.proportionalAmount },
+      raw: bytesToHex(base.value),
+    });
+  }
+  const window = fields.get(27);
+  if (window) {
+    if (window.value.length < 4) {
+      throw new Error('Invalid BOLT12 recurrence pay window length.');
+    }
+    recurrence.payWindow = {
+      secondsBefore: Number(integerFromBytes(window.value.slice(0, 4))),
+      secondsAfter: Number(recurrenceUint(window.value.slice(4), 4, 'pay window')),
+    };
+    sections.push({
+      name: 'recurrence_paywindow', type: window.type,
+      value: recurrence.payWindow, raw: bytesToHex(window.value),
+    });
+  }
+  const limit = fields.get(29);
+  if (limit) {
+    recurrence.limit = Number(recurrenceUint(limit.value, 4, 'limit'));
+    if (recurrence.limit === 0) throw new Error('Invalid BOLT12 recurrence: zero limit.');
+    recurrence.maxPayments = recurrence.limit + 1;
+    sections.push({
+      name: 'recurrence_limit', type: limit.type,
+      value: recurrence.limit, raw: bytesToHex(limit.value),
+    });
+  }
+  return { value: recurrence, sections };
+}
+
+function recurrenceUint(bytes: Uint8Array, maxBytes: number, field: string): bigint {
+  if (bytes.length > maxBytes || bytes[0] === 0) {
+    throw new Error(`Invalid BOLT12 recurrence ${field}: non-canonical or oversized integer.`);
+  }
+  return integerFromBytes(bytes);
 }
 
 function applyBolt11Section(result: DecodedInvoice, section: LightBolt11Section): void {

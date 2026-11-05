@@ -180,17 +180,17 @@ impl StrikeNode {
   }
 
   #[napi]
-  pub fn on_invoice_events<T: Fn(String, Option<lni::Transaction>) -> napi::Result<()>>(
+  pub fn on_invoice_events(
     &self,
     params: lni::types::OnInvoiceEventParams,
-    callback: T,
+    callback: napi::bindgen_prelude::Function<'_, napi::bindgen_prelude::FnArgs<(String, Option<lni::Transaction>)>, ()>,
   ) -> napi::Result<()> {
     let config = self.inner.clone();
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     rt.block_on(async move {
       lni::strike::api::poll_invoice_events(config, params, move |status, transaction| {
-        let _ = callback(status, transaction);
+        let _ = callback.call((status, transaction).into());
       })
       .await;
     });

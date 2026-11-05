@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-spark",
-  "version": "0.2.24",
+  "version": "0.3.0",
   "private": false,
   "description": "Optional Spark adapter for @sunnyln/lni with browser and Expo compatible pure TypeScript signer patching.",
   "type": "module",
@@ -21,7 +21,7 @@
     "typescript"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   },
   "publishConfig": {
     "access": "public"
@@ -56,25 +56,25 @@
     "test:integration": "NODE_TLS_REJECT_UNAUTHORIZED=0 node --env-file=../../crates/lni/.env ./node_modules/vitest/vitest.mjs run src/__tests__/integration/spark.real.test.ts"
   },
   "peerDependencies": {
-    "@sunnyln/lni": "^0.2.24"
+    "@sunnyln/lni": "^0.3.0"
   },
   "dependencies": {
-    "@buildonspark/spark-sdk": "^0.6.3",
-    "@frosts/core": "^0.2.2-alpha.3",
-    "@frosts/secp256k1-tr": "^0.2.2-alpha.3",
-    "@noble/curves": "^1.9.7",
-    "@noble/hashes": "^1.7.0",
-    "@scure/bip39": "^1.5.4",
-    "@scure/btc-signer": "^1.8.1",
+    "@buildonspark/spark-sdk": "^0.14.0",
+    "@frosts/core": "^0.2.2-alpha.4",
+    "@frosts/secp256k1-tr": "^0.2.2-alpha.4",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "@scure/btc-signer": "^2.4.1",
     "buffer": "^6.0.3",
-    "eciesjs": "^0.4.17"
+    "eciesjs": "^0.5.0"
   },
   "devDependencies": {
     "@sunnyln/lni": "file:../typescript",
-    "@types/node": "^22.13.5",
-    "esbuild": "^0.25.10",
-    "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "packageManager": "npm@11.14.0"
 }
