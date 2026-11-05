@@ -4381,23 +4381,6 @@ dependencies = [
 
 [[package]]
 name = "lightning"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "982ffb82e8362ea95e03a5de8a6004bceb7a577fc1f07d5b02cfc3fc7c930a90"
-dependencies = [
- "bech32 0.11.1",
- "bitcoin",
- "dnssec-prover",
- "hashbrown 0.13.2",
- "libm",
- "lightning-invoice 0.34.1",
- "lightning-macros",
- "lightning-types 0.3.5",
- "possiblyrandom",
-]
-
-[[package]]
-name = "lightning"
 version = "0.3.0-rc3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f30977ed299fb40895c8c719013ae9bcf345fdc18358b8b53f8d8959b2fbbf9"
@@ -4522,7 +4505,6 @@ dependencies = [
  "lexe",
  "lexe-connect",
  "lexe-crypto",
- "lightning 0.2.7",
  "lightning-invoice 0.34.1",
  "napi",
  "napi-derive",
