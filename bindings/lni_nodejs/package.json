@@ -40,6 +40,7 @@
     "build:debug": "napi build --platform",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
+    "test:lexe": "node --test lexe-connect.test.js lexe-events.test.js",
     "universal": "napi universal",
     "version": "napi version"
   },

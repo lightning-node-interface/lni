@@ -32,6 +32,12 @@ pub use speed::SpeedNode;
 mod spark;
 pub use spark::SparkNode;
 
+mod lexe;
+pub use lexe::LexeNode;
+
+mod lexe_connect;
+pub use lexe_connect::{LexeConnectOptions, LexeConnectResponse, LexeConnectSession};
+
 mod lnurl;
 pub use lnurl::*;
 
