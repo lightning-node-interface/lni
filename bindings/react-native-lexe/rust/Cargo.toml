@@ -1,4 +1,5 @@
 [package]
+license = "MIT"
 name = "react-native-lni-lexe"
 version = "0.1.0"
 edition = "2021"

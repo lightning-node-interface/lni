@@ -1,4 +1,5 @@
 {
+  "license": "MIT",
   "name": "@sunnyln/lni-arkade",
   "version": "0.2.24",
   "private": false,
