@@ -108,6 +108,15 @@ function makeNativeNode(
       effectivePermissions: ['node_info'],
     })),
     getInfo: vi.fn(async () => nativeInfo),
+    getReceivingCapabilities: vi.fn(async () => ({
+      nodeVersion: '0.10.9',
+      exclusiveAddresses: true,
+    })),
+    getExclusiveAddress: vi.fn(async () => 'test-exclusive-address'),
+    checkAddress: vi.fn(async () => ({
+      receivedTxids: [],
+      syncedBlockHeight: 900_000,
+    })),
     getHumanBitcoinAddress: vi.fn(async () => ({
       humanBitcoinAddress: '₿test@lexe.app',
       lightningAddress: 'test@lexe.app',
@@ -554,4 +563,121 @@ it('rejects explicit fee limits before native execution, including with the old 
     }
   }
   expect(native.payOnchain).not.toHaveBeenCalled();
+});
+
+describe('Lexe exclusive receiving', () => {
+  it('reports authenticated capabilities for old and updated nodes', async () => {
+    const getReceivingCapabilities = vi
+      .fn()
+      .mockResolvedValueOnce({
+        nodeVersion: '0.10.8',
+        exclusiveAddresses: false,
+      })
+      .mockResolvedValueOnce({
+        nodeVersion: '0.10.9',
+        exclusiveAddresses: true,
+      });
+    const node = makeNode(makeNativeNode({ getReceivingCapabilities }));
+    await expect(node.getReceivingCapabilities()).resolves.toEqual({
+      nodeVersion: '0.10.8',
+      exclusiveAddresses: false,
+    });
+    await expect(node.getReceivingCapabilities()).resolves.toEqual({
+      nodeVersion: '0.10.9',
+      exclusiveAddresses: true,
+    });
+    expect(getReceivingCapabilities).toHaveBeenCalledTimes(2);
+  });
+
+  it('requests every exclusive address from the native wallet without caching', async () => {
+    const getExclusiveAddress = vi
+      .fn()
+      .mockResolvedValueOnce('test-address-a')
+      .mockResolvedValueOnce('test-address-b');
+    const node = makeNode(makeNativeNode({ getExclusiveAddress }));
+    await expect(node.getExclusiveAddress()).resolves.toBe('test-address-a');
+    await expect(node.getExclusiveAddress()).resolves.toBe('test-address-b');
+    expect(getExclusiveAddress).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncs receives and forwards the previous height on the next check', async () => {
+    const receivedTxids = ['test-txid'];
+    const checkAddress = vi.fn(async () => ({
+      receivedTxids,
+      syncedBlockHeight: 900_000,
+    }));
+    const node = makeNode(makeNativeNode({ checkAddress }));
+    const first = await node.checkAddress('test-address');
+    expect(checkAddress).toHaveBeenNthCalledWith(1, 'test-address', undefined);
+    expect(first).toEqual({
+      receivedTxids: ['test-txid'],
+      syncedBlockHeight: 900_000,
+    });
+    await node.checkAddress('test-address', first.syncedBlockHeight);
+    expect(checkAddress).toHaveBeenNthCalledWith(2, 'test-address', 900_000);
+    first.receivedTxids.push('local-only');
+    expect(receivedTxids).toEqual(['test-txid']);
+  });
+
+  it.each([0, 0xffffffff])('accepts u32 boundary height %s', async (height) => {
+    const native = makeNativeNode();
+    await makeNode(native).checkAddress('test-address', height);
+    expect(native.checkAddress).toHaveBeenCalledWith('test-address', height);
+  });
+
+  it.each([-1, 1.5, NaN, Infinity, 0x100000000, Number.MAX_SAFE_INTEGER])(
+    'rejects invalid height %s before calling native code',
+    async (height) => {
+      const native = makeNativeNode();
+      await expect(
+        makeNode(native).checkAddress('test-address', height)
+      ).rejects.toMatchObject({
+        name: 'LniError',
+        code: 'InvalidInput',
+      });
+      expect(native.checkAddress).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    'getReceivingCapabilities',
+    'getExclusiveAddress',
+    'checkAddress',
+  ] as const)('preserves native errors from %s', async (method) => {
+    const error = { inner: { message: 'receiving unavailable' } };
+    const native = makeNativeNode({
+      [method]: vi.fn(async () => {
+        throw error;
+      }),
+    });
+    const node = makeNode(native);
+    const request =
+      method === 'checkAddress'
+        ? node.checkAddress('test-address')
+        : node[method]();
+    await expect(request).rejects.toMatchObject({
+      name: 'LniError',
+      code: 'Api',
+      message: 'receiving unavailable',
+      cause: error,
+    });
+  });
+
+  it('rejects receiving calls after close without entering native code', async () => {
+    const native = makeNativeNode();
+    const node = makeNode(native);
+    node.close();
+    await expect(node.getReceivingCapabilities()).rejects.toThrow(
+      'Lexe node is closed'
+    );
+    await expect(node.getExclusiveAddress()).rejects.toThrow(
+      'Lexe node is closed'
+    );
+    await expect(node.checkAddress('test-address')).rejects.toThrow(
+      'Lexe node is closed'
+    );
+    expect(native.getReceivingCapabilities).not.toHaveBeenCalled();
+    expect(native.getExclusiveAddress).not.toHaveBeenCalled();
+    expect(native.checkAddress).not.toHaveBeenCalled();
+  });
 });

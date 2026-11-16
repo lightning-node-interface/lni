@@ -132,6 +132,36 @@ impl From<lni::lexe::LexeClientInfo> for ClientInfo {
 }
 
 #[derive(Clone, uniffi::Record)]
+pub struct ReceivingCapabilities {
+    pub node_version: String,
+    pub exclusive_addresses: bool,
+}
+
+impl From<lni::lexe::LexeReceivingCapabilities> for ReceivingCapabilities {
+    fn from(value: lni::lexe::LexeReceivingCapabilities) -> Self {
+        Self {
+            node_version: value.node_version,
+            exclusive_addresses: value.exclusive_addresses,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct AddressCheck {
+    pub received_txids: Vec<String>,
+    pub synced_block_height: u32,
+}
+
+impl From<lni::lexe::LexeAddressCheck> for AddressCheck {
+    fn from(value: lni::lexe::LexeAddressCheck) -> Self {
+        Self {
+            received_txids: value.received_txids,
+            synced_block_height: value.synced_block_height,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
 pub struct HumanBitcoinAddress {
     pub human_bitcoin_address: String,
     pub lightning_address: String,
@@ -432,6 +462,26 @@ impl LexeNode {
 
     pub async fn get_info(&self) -> Result<NodeInfo, LexeError> {
         Ok(self.inner.get_info().await?.into())
+    }
+
+    pub async fn get_receiving_capabilities(&self) -> Result<ReceivingCapabilities, LexeError> {
+        Ok(self.inner.get_receiving_capabilities().await?.into())
+    }
+
+    pub async fn get_exclusive_address(&self) -> Result<String, LexeError> {
+        Ok(self.inner.get_exclusive_address().await?)
+    }
+
+    pub async fn check_address(
+        &self,
+        address: String,
+        synced_block_height: Option<u32>,
+    ) -> Result<AddressCheck, LexeError> {
+        Ok(self
+            .inner
+            .check_address(address, synced_block_height)
+            .await?
+            .into())
     }
 
     pub async fn get_human_bitcoin_address(&self) -> Result<HumanBitcoinAddress, LexeError> {

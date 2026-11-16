@@ -117,6 +117,9 @@ void uniffi_react_native_lexe_fn_free_lexenode(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_constructor_lexenode_new(
     RustBuffer config, RustCallStatus *uniffi_out_err);
+/*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_check_address(
+    /*handle*/ uint64_t ptr, RustBuffer address,
+    RustBuffer synced_block_height);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_create_invoice(
     /*handle*/ uint64_t ptr, RustBuffer params);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_create_offer(
@@ -128,6 +131,9 @@ void uniffi_react_native_lexe_fn_free_lexenode(
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
     /*handle*/ uint64_t ptr);
 /*handle*/ uint64_t
+uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+    /*handle*/ uint64_t ptr);
+/*handle*/ uint64_t
 uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
     /*handle*/ uint64_t ptr);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_get_info(
@@ -135,6 +141,9 @@ uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_get_offer(
     /*handle*/ uint64_t ptr, RustBuffer search);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_get_permissions(
+    /*handle*/ uint64_t ptr);
+/*handle*/ uint64_t
+uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
     /*handle*/ uint64_t ptr);
 /*handle*/ uint64_t uniffi_react_native_lexe_fn_method_lexenode_list_offers(
     /*handle*/ uint64_t ptr, RustBuffer search);
@@ -311,16 +320,21 @@ void ffi_react_native_lexe_rust_future_free_void(
     /*handle*/ uint64_t handle);
 void ffi_react_native_lexe_rust_future_complete_void(
     /*handle*/ uint64_t handle, RustCallStatus *uniffi_out_err);
+uint16_t uniffi_react_native_lexe_checksum_method_lexenode_check_address();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_create_invoice();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_create_offer();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_decode();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_decode_offer();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_client_info();
 uint16_t
+uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address();
+uint16_t
 uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_info();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_offer();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_get_permissions();
+uint16_t
+uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_list_offers();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_list_transactions();
 uint16_t uniffi_react_native_lexe_checksum_method_lexenode_lookup_invoice();
@@ -2436,6 +2450,19 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_fn_constructor_lexenode_new(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_check_address"] =
+      jsi::Function::createFromHostFunction(
+          rt,
+          jsi::PropNameID::forAscii(
+              rt,
+              "ubrn_uniffi_react_native_lexe_fn_method_lexenode_check_address"),
+          3,
+          [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+                 const jsi::Value *args, size_t count) -> jsi::Value {
+            return this
+                ->cpp_uniffi_react_native_lexe_fn_method_lexenode_check_address(
+                    rt, thisVal, args, count);
+          });
   props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_create_invoice"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -2497,6 +2524,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_"
+        "address"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexenode_get_exclusive_address"),
+      1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_"
         "address"] = jsi::Function::createFromHostFunction(
       rt,
@@ -2545,6 +2584,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
                 ->cpp_uniffi_react_native_lexe_fn_method_lexenode_get_permissions(
                     rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_receiving_"
+        "capabilities"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_fn_method_"
+                                    "lexenode_get_receiving_capabilities"),
+      1,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_fn_method_lexenode_list_offers"] =
       jsi::Function::createFromHostFunction(
           rt,
@@ -3345,6 +3396,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
             return this->cpp_ffi_react_native_lexe_rust_future_complete_void(
                 rt, thisVal, args, count);
           });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_check_"
+        "address"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexenode_check_address"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_check_address(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_"
         "invoice"] = jsi::Function::createFromHostFunction(
       rt,
@@ -3408,6 +3471,18 @@ NativeReactNativeLexe::NativeReactNativeLexe(
             ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info(
                 rt, thisVal, args, count);
       });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_"
+        "address"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "ubrn_uniffi_react_native_lexe_checksum_"
+                                    "method_lexenode_get_exclusive_address"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address(
+                rt, thisVal, args, count);
+      });
   props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_"
         "bitcoin_address"] = jsi::Function::createFromHostFunction(
       rt,
@@ -3455,6 +3530,19 @@ NativeReactNativeLexe::NativeReactNativeLexe(
              const jsi::Value *args, size_t count) -> jsi::Value {
         return this
             ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_permissions(
+                rt, thisVal, args, count);
+      });
+  props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_"
+        "capabilities"] = jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt,
+                                "ubrn_uniffi_react_native_lexe_checksum_method_"
+                                "lexenode_get_receiving_capabilities"),
+      0,
+      [this](jsi::Runtime &rt, const jsi::Value &thisVal,
+             const jsi::Value *args, size_t count) -> jsi::Value {
+        return this
+            ->cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities(
                 rt, thisVal, args, count);
       });
   props["ubrn_uniffi_react_native_lexe_checksum_method_lexenode_list_offers"] =
@@ -3986,6 +4074,21 @@ NativeReactNativeLexe::cpp_uniffi_react_native_lexe_fn_constructor_lexenode_new(
                                                          value);
 }
 jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_check_address(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value = uniffi_react_native_lexe_fn_method_lexenode_check_address(
+      uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                        args[0]),
+      uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                              args[1]),
+      uniffi::react_native_lexe::Bridging<RustBuffer>::fromJs(rt, callInvoker,
+                                                              args[2]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
     cpp_uniffi_react_native_lexe_fn_method_lexenode_create_invoice(
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
@@ -4049,6 +4152,18 @@ jsi::Value NativeReactNativeLexe::
                                                          value);
 }
 jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
     cpp_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
@@ -4091,6 +4206,18 @@ jsi::Value NativeReactNativeLexe::
   auto value = uniffi_react_native_lexe_fn_method_lexenode_get_permissions(
       uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
                                                         args[0]));
+
+  return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
+                                                         value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
+          uniffi_jsi::Bridging</*handle*/ uint64_t>::fromJs(rt, callInvoker,
+                                                            args[0]));
 
   return uniffi_jsi::Bridging</*handle*/ uint64_t>::toJs(rt, callInvoker,
                                                          value);
@@ -5033,6 +5160,15 @@ NativeReactNativeLexe::cpp_ffi_react_native_lexe_rust_future_complete_void(
   return jsi::Value::undefined();
 }
 jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_check_address(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexenode_check_address();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
     cpp_uniffi_react_native_lexe_checksum_method_lexenode_create_invoice(
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
@@ -5075,6 +5211,15 @@ jsi::Value NativeReactNativeLexe::
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }
 jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
     cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address(
         jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
         size_t count) {
@@ -5105,6 +5250,15 @@ jsi::Value NativeReactNativeLexe::
         size_t count) {
   auto value =
       uniffi_react_native_lexe_checksum_method_lexenode_get_permissions();
+
+  return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
+}
+jsi::Value NativeReactNativeLexe::
+    cpp_uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities(
+        jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args,
+        size_t count) {
+  auto value =
+      uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities();
 
   return uniffi_jsi::Bridging<uint16_t>::toJs(rt, callInvoker, value);
 }

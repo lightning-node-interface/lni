@@ -222,6 +222,11 @@ interface NativeModuleInterface {
     config: Uint8Array,
     uniffi_out_err: UniffiRustCallStatus
   ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_check_address(
+    uniffiSelf: bigint,
+    address: Uint8Array,
+    syncedBlockHeight: Uint8Array
+  ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_create_invoice(
     uniffiSelf: bigint,
     params: Uint8Array
@@ -241,6 +246,9 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_client_info(
     uniffiSelf: bigint
   ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+    uniffiSelf: bigint
+  ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_human_bitcoin_address(
     uniffiSelf: bigint
   ): bigint;
@@ -252,6 +260,9 @@ interface NativeModuleInterface {
     search: Uint8Array
   ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_permissions(
+    uniffiSelf: bigint
+  ): bigint;
+  ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
     uniffiSelf: bigint
   ): bigint;
   ubrn_uniffi_react_native_lexe_fn_method_lexenode_list_offers(
@@ -313,15 +324,18 @@ interface NativeModuleInterface {
   ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_connection_string(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexeconnectsession_poll_mailbox(): number;
   ubrn_uniffi_react_native_lexe_checksum_constructor_lexenode_new(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_check_address(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_invoice(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_offer(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_decode(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_decode_offer(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_client_info(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_info(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_offer(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_permissions(): number;
+  ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_list_offers(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_list_transactions(): number;
   ubrn_uniffi_react_native_lexe_checksum_method_lexenode_lookup_invoice(): number;
