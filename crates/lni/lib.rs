@@ -284,6 +284,7 @@ pub mod speed {
     pub use lib::{SpeedConfig, SpeedNode};
 }
 
+#[cfg(feature = "spark")]
 pub mod spark {
     pub mod api;
     pub mod lib;
@@ -474,7 +475,7 @@ pub fn create_nwc_node(config: nwc::NwcConfig) -> Arc<dyn LightningNode> {
 }
 
 /// Create a Spark node as a polymorphic LightningNode
-#[cfg(feature = "uniffi")]
+#[cfg(all(feature = "uniffi", feature = "spark"))]
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn create_spark_node(
     config: spark::SparkConfig,
@@ -645,22 +646,25 @@ mod debug_redaction_tests {
             &["speed-api-key-secret", proxy],
         );
 
-        let spark = crate::spark::SparkConfig {
-            mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
-            passphrase: Some("spark-passphrase-secret".to_string()),
-            api_key: Some("spark-api-key-secret".to_string()),
-            storage_dir: "/tmp/lni-spark-secret-path".to_string(),
-            network: Some("mainnet".to_string()),
-        };
-        assert_redacted(
-            "SparkConfig",
-            &format!("{:?}", spark),
-            &[
-                "abandon abandon abandon",
-                "spark-passphrase-secret",
-                "spark-api-key-secret",
-                "/tmp/lni-spark-secret-path",
-            ],
-        );
+        #[cfg(feature = "spark")]
+        {
+            let spark = crate::spark::SparkConfig {
+                mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
+                passphrase: Some("spark-passphrase-secret".to_string()),
+                api_key: Some("spark-api-key-secret".to_string()),
+                storage_dir: "/tmp/lni-spark-secret-path".to_string(),
+                network: Some("mainnet".to_string()),
+            };
+            assert_redacted(
+                "SparkConfig",
+                &format!("{:?}", spark),
+                &[
+                    "abandon abandon abandon",
+                    "spark-passphrase-secret",
+                    "spark-api-key-secret",
+                    "/tmp/lni-spark-secret-path",
+                ],
+            );
+        }
     }
 }

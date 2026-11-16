@@ -29,9 +29,6 @@ pub use strike::StrikeNode;
 mod speed;
 pub use speed::SpeedNode;
 
-mod spark;
-pub use spark::SparkNode;
-
 mod lexe;
 pub use lexe::LexeNode;
 
@@ -271,35 +268,6 @@ mod tests {
       "SpeedConfig.socks5_proxy",
       speed_config.socks5_proxy.as_deref().unwrap_or_default(),
       proxy,
-    );
-
-    let spark = crate::SparkNode::new(lni::spark::SparkConfig {
-      mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
-      passphrase: Some("spark-passphrase-secret".to_string()),
-      api_key: Some("spark-api-key-secret".to_string()),
-      storage_dir: "/tmp/lni-spark-secret-path".to_string(),
-      network: Some("mainnet".to_string()),
-    });
-    let spark_config = spark.get_config();
-    assert_redacted(
-      "SparkConfig.mnemonic",
-      &spark_config.mnemonic,
-      "abandon abandon abandon",
-    );
-    assert_redacted(
-      "SparkConfig.passphrase",
-      spark_config.passphrase.as_deref().unwrap_or_default(),
-      "spark-passphrase-secret",
-    );
-    assert_redacted(
-      "SparkConfig.api_key",
-      spark_config.api_key.as_deref().unwrap_or_default(),
-      "spark-api-key-secret",
-    );
-    assert_redacted(
-      "SparkConfig.storage_dir",
-      &spark_config.storage_dir,
-      "/tmp/lni-spark-secret-path",
     );
   }
 }

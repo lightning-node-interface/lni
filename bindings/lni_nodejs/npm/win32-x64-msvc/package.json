@@ -1,6 +1,6 @@
 {
-  "name": "lni_js-win32-x64-msvc",
-  "version": "0.0.0",
+  "name": "@sunnyln/lni-nodejs-win32-x64-msvc",
+  "version": "0.1.0",
   "os": [
     "win32"
   ],
@@ -11,8 +11,17 @@
   "files": [
     "lni_js.win32-x64-msvc.node"
   ],
+  "description": "Native Node.js bindings for Lightning Node Interface, including Lexe Connect",
   "license": "MIT",
   "engines": {
-    "node": ">= 10"
+    "node": ">=10.16"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/lni_nodejs"
   }
 }

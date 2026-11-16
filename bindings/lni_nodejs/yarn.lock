@@ -111,6 +111,64 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@sunnyln/lni-nodejs-darwin-arm64@npm:0.1.0, @sunnyln/lni-nodejs-darwin-arm64@workspace:npm/darwin-arm64":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs-darwin-arm64@workspace:npm/darwin-arm64"
+  languageName: unknown
+  linkType: soft
+
+"@sunnyln/lni-nodejs-darwin-x64@npm:0.1.0, @sunnyln/lni-nodejs-darwin-x64@workspace:npm/darwin-x64":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs-darwin-x64@workspace:npm/darwin-x64"
+  languageName: unknown
+  linkType: soft
+
+"@sunnyln/lni-nodejs-linux-arm64-gnu@npm:0.1.0, @sunnyln/lni-nodejs-linux-arm64-gnu@workspace:npm/linux-arm64-gnu":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs-linux-arm64-gnu@workspace:npm/linux-arm64-gnu"
+  languageName: unknown
+  linkType: soft
+
+"@sunnyln/lni-nodejs-linux-x64-gnu@npm:0.1.0, @sunnyln/lni-nodejs-linux-x64-gnu@workspace:npm/linux-x64-gnu":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs-linux-x64-gnu@workspace:npm/linux-x64-gnu"
+  languageName: unknown
+  linkType: soft
+
+"@sunnyln/lni-nodejs-win32-x64-msvc@npm:0.1.0, @sunnyln/lni-nodejs-win32-x64-msvc@workspace:npm/win32-x64-msvc":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs-win32-x64-msvc@workspace:npm/win32-x64-msvc"
+  languageName: unknown
+  linkType: soft
+
+"@sunnyln/lni-nodejs@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@sunnyln/lni-nodejs@workspace:."
+  dependencies:
+    "@napi-rs/cli": "npm:2.18.4"
+    "@sunnyln/lni-nodejs-darwin-arm64": "npm:0.1.0"
+    "@sunnyln/lni-nodejs-darwin-x64": "npm:0.1.0"
+    "@sunnyln/lni-nodejs-linux-arm64-gnu": "npm:0.1.0"
+    "@sunnyln/lni-nodejs-linux-x64-gnu": "npm:0.1.0"
+    "@sunnyln/lni-nodejs-win32-x64-msvc": "npm:0.1.0"
+    "@types/node": "npm:24.13.1"
+    ava: "npm:^6.4.1"
+    dotenv: "npm:^16.4.7"
+    typescript: "npm:5.9.3"
+  dependenciesMeta:
+    "@sunnyln/lni-nodejs-darwin-arm64":
+      optional: true
+    "@sunnyln/lni-nodejs-darwin-x64":
+      optional: true
+    "@sunnyln/lni-nodejs-linux-arm64-gnu":
+      optional: true
+    "@sunnyln/lni-nodejs-linux-x64-gnu":
+      optional: true
+    "@sunnyln/lni-nodejs-win32-x64-msvc":
+      optional: true
+  languageName: unknown
+  linkType: soft
+
 "@types/estree@npm:^1.0.0":
   version: 1.0.8
   resolution: "@types/estree@npm:1.0.8"
@@ -894,18 +952,6 @@ __metadata:
   checksum: 10c0/3261f25912f5dd76605e5993d0a126c2b6c346311885d3c483706cd722efe34f697ea0331f654ce27c00a42b426e524518ec89d65ed02ea47df8ad26dcc8ce69
   languageName: node
   linkType: hard
-
-"lni_js@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "lni_js@workspace:."
-  dependencies:
-    "@napi-rs/cli": "npm:2.18.4"
-    "@types/node": "npm:24.13.1"
-    ava: "npm:^6.4.1"
-    dotenv: "npm:^16.4.7"
-    typescript: "npm:5.9.3"
-  languageName: unknown
-  linkType: soft
 
 "load-json-file@npm:^7.0.1":
   version: 7.0.1

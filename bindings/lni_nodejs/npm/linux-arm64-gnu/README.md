@@ -1,3 +1,3 @@
-# `lni_js-linux-arm64-gnu`
+# `@sunnyln/lni-nodejs-linux-arm64-gnu`
 
-This is the **aarch64-unknown-linux-gnu** binary for `lni_js`
+This is the **aarch64-unknown-linux-gnu** binary for `@sunnyln/lni-nodejs`

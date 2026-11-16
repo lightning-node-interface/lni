@@ -1,0 +1,169 @@
+name: Build and release @sunnyln/lni-lexe-nodejs
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['lni-lexe-nodejs-v*']
+    paths:
+      - '.github/workflows/build-lexe-nodejs.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/lni/**'
+      - 'bindings/nodejs-lexe/**'
+      - 'bindings/lni_nodejs/**'
+  pull_request:
+    paths:
+      - '.github/workflows/build-lexe-nodejs.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/lni/**'
+      - 'bindings/nodejs-lexe/**'
+      - 'bindings/lni_nodejs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native builds against glibc 2.28, rather than the runner's newer libc.
+          - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            target: x86_64-unknown-linux-gnu
+            name: linux-x64-gnu
+          - os: ubuntu-22.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            target: aarch64-unknown-linux-gnu
+            name: linux-arm64-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            name: darwin-x64
+          - os: macos-15
+            target: aarch64-apple-darwin
+            name: darwin-arm64
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            name: win32-x64-msvc
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    name: Build and test ${{ matrix.name }}
+    defaults:
+      run:
+        working-directory: bindings/nodejs-lexe
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      # actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      # dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Install pinned JavaScript tools
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs install --immutable --mode=skip-build
+      - name: Check native dependency policy
+        run: node scripts/run.cjs check-native-deps
+      - name: Build release addon and regenerate bindings
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs build --target ${{ matrix.target }}
+      - name: Check committed generated bindings and shared runtime copies
+        run: git --no-pager diff --exit-code -- native.js generated/ index.js index.d.ts lexe-connect.js lexe-connect.d.ts lexe-events.js helpers/ lexe/ LEXE.md
+      - name: Check helper types and offline Lexe tests
+        run: |
+          node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs typecheck
+          node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs test
+      - name: Pack and test an isolated consumer install
+        run: node scripts/run.cjs test-install
+      # actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lni-lexe-nodejs-binding-${{ matrix.name }}
+          path: bindings/nodejs-lexe/lni_lexe.${{ matrix.name }}.node
+          if-no-files-found: error
+
+  package:
+    needs: build
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: bindings/nodejs-lexe
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install pinned packaging tools
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs install --immutable --mode=skip-build
+      - name: Test release validation gates
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs test:release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: lni-lexe-nodejs-binding-*
+          path: bindings/nodejs-lexe/artifacts
+      - name: Collect all five native binaries with napi-rs
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs artifacts --dir artifacts
+      - name: Pack root and platform tarballs
+        run: node scripts/run.cjs pack-platforms ./dist
+      - name: Test the final Linux tarballs
+        run: node scripts/run.cjs test-install ./dist
+      - name: Validate the complete release artifact set
+        run: |
+          export RELEASE_TAG="lni-lexe-nodejs-v$(node -p 'require("./package.json").version')"
+          node scripts/run.cjs check-release ./dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lni-lexe-nodejs-packages
+          path: bindings/nodejs-lexe/dist/
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/lni-lexe-nodejs-v') && github.event_name == 'push'
+    needs: package
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: lni-lexe-nodejs-packages
+          path: release
+      - name: Validate tag, complete package set, and tarball integrity
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node bindings/nodejs-lexe/scripts/run.cjs check-release release
+      - name: Publish tested platform packages, then root package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          node -e 'const fs = require("fs"); const m = require("./release/pack-manifest.json"); fs.writeFileSync("release/publish-order.txt", m.map(p => "release/" + p.filename).join("\n") + "\n")'
+          while IFS= read -r tarball; do
+            npm publish "$tarball" --ignore-scripts --access public --provenance --tag "$NPM_DIST_TAG"
+          done < release/publish-order.txt
+      # softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+        with:
+          files: |
+            release/*.tgz
+            release/pack-manifest.json
+          generate_release_notes: true
+          prerelease: ${{ steps.release.outputs.prerelease == 'true' }}

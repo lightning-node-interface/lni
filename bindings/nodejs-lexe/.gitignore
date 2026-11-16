@@ -1,0 +1,13 @@
+node_modules/
+.yarn/
+*.node
+*.tgz
+*.log
+/dist/
+/artifacts/
+/lexe-connect.test.js
+/lexe-events.test.js
+/lexe-monitor.test.js
+/helpers/lexe.test.js
+/npm/*/LICENSE
+.env*

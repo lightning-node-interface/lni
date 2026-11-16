@@ -37,7 +37,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.android-arm64.node')
           } else {
-            nativeBinding = require('lni_js-android-arm64')
+            nativeBinding = require('@sunnyln/lni-nodejs-android-arm64')
           }
         } catch (e) {
           loadError = e
@@ -49,7 +49,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.android-arm-eabi.node')
           } else {
-            nativeBinding = require('lni_js-android-arm-eabi')
+            nativeBinding = require('@sunnyln/lni-nodejs-android-arm-eabi')
           }
         } catch (e) {
           loadError = e
@@ -69,7 +69,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.win32-x64-msvc.node')
           } else {
-            nativeBinding = require('lni_js-win32-x64-msvc')
+            nativeBinding = require('@sunnyln/lni-nodejs-win32-x64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -83,7 +83,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.win32-ia32-msvc.node')
           } else {
-            nativeBinding = require('lni_js-win32-ia32-msvc')
+            nativeBinding = require('@sunnyln/lni-nodejs-win32-ia32-msvc')
           }
         } catch (e) {
           loadError = e
@@ -97,7 +97,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.win32-arm64-msvc.node')
           } else {
-            nativeBinding = require('lni_js-win32-arm64-msvc')
+            nativeBinding = require('@sunnyln/lni-nodejs-win32-arm64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -113,7 +113,7 @@ switch (platform) {
       if (localFileExisted) {
         nativeBinding = require('./lni_js.darwin-universal.node')
       } else {
-        nativeBinding = require('lni_js-darwin-universal')
+        nativeBinding = require('@sunnyln/lni-nodejs-darwin-universal')
       }
       break
     } catch {}
@@ -124,7 +124,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.darwin-x64.node')
           } else {
-            nativeBinding = require('lni_js-darwin-x64')
+            nativeBinding = require('@sunnyln/lni-nodejs-darwin-x64')
           }
         } catch (e) {
           loadError = e
@@ -138,7 +138,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.darwin-arm64.node')
           } else {
-            nativeBinding = require('lni_js-darwin-arm64')
+            nativeBinding = require('@sunnyln/lni-nodejs-darwin-arm64')
           }
         } catch (e) {
           loadError = e
@@ -157,7 +157,7 @@ switch (platform) {
       if (localFileExisted) {
         nativeBinding = require('./lni_js.freebsd-x64.node')
       } else {
-        nativeBinding = require('lni_js-freebsd-x64')
+        nativeBinding = require('@sunnyln/lni-nodejs-freebsd-x64')
       }
     } catch (e) {
       loadError = e
@@ -174,7 +174,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-x64-musl.node')
             } else {
-              nativeBinding = require('lni_js-linux-x64-musl')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-x64-musl')
             }
           } catch (e) {
             loadError = e
@@ -187,7 +187,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-x64-gnu.node')
             } else {
-              nativeBinding = require('lni_js-linux-x64-gnu')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-x64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -203,7 +203,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-arm64-musl.node')
             } else {
-              nativeBinding = require('lni_js-linux-arm64-musl')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-arm64-musl')
             }
           } catch (e) {
             loadError = e
@@ -216,7 +216,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-arm64-gnu.node')
             } else {
-              nativeBinding = require('lni_js-linux-arm64-gnu')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-arm64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -232,7 +232,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-arm-musleabihf.node')
             } else {
-              nativeBinding = require('lni_js-linux-arm-musleabihf')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-arm-musleabihf')
             }
           } catch (e) {
             loadError = e
@@ -245,7 +245,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-arm-gnueabihf.node')
             } else {
-              nativeBinding = require('lni_js-linux-arm-gnueabihf')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-arm-gnueabihf')
             }
           } catch (e) {
             loadError = e
@@ -261,7 +261,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-riscv64-musl.node')
             } else {
-              nativeBinding = require('lni_js-linux-riscv64-musl')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-riscv64-musl')
             }
           } catch (e) {
             loadError = e
@@ -274,7 +274,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./lni_js.linux-riscv64-gnu.node')
             } else {
-              nativeBinding = require('lni_js-linux-riscv64-gnu')
+              nativeBinding = require('@sunnyln/lni-nodejs-linux-riscv64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -289,7 +289,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./lni_js.linux-s390x-gnu.node')
           } else {
-            nativeBinding = require('lni_js-linux-s390x-gnu')
+            nativeBinding = require('@sunnyln/lni-nodejs-linux-s390x-gnu')
           }
         } catch (e) {
           loadError = e
@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { InvoiceType, SettlementType, SettlementState, OnchainFeeSpeed, OnchainFeePayer, OnchainFeePreferenceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, SparkNode, LexeNode, LexeConnectSession, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo, generateMnemonic, sayAfterWithTokio } = nativeBinding
+const { InvoiceType, SettlementType, SettlementState, OnchainFeeSpeed, OnchainFeePayer, OnchainFeePreferenceType, PhoenixdNode, ClnNode, LndNode, BlinkNode, NwcNode, StrikeNode, SpeedNode, LexeNode, LexeConnectSession, detectPaymentType, needsResolution, resolveToBolt11, getPaymentInfo, generateMnemonic, sayAfterWithTokio } = nativeBinding
 
 module.exports.InvoiceType = InvoiceType
 module.exports.SettlementType = SettlementType
@@ -325,7 +325,6 @@ module.exports.BlinkNode = BlinkNode
 module.exports.NwcNode = NwcNode
 module.exports.StrikeNode = StrikeNode
 module.exports.SpeedNode = SpeedNode
-module.exports.SparkNode = SparkNode
 module.exports.LexeNode = LexeNode
 module.exports.LexeConnectSession = LexeConnectSession
 module.exports.detectPaymentType = detectPaymentType

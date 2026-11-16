@@ -1,6 +1,6 @@
 {
-  "name": "lni_js-linux-arm64-gnu",
-  "version": "0.0.0",
+  "name": "@sunnyln/lni-nodejs-linux-arm64-gnu",
+  "version": "0.1.0",
   "os": [
     "linux"
   ],
@@ -11,9 +11,18 @@
   "files": [
     "lni_js.linux-arm64-gnu.node"
   ],
+  "description": "Native Node.js bindings for Lightning Node Interface, including Lexe Connect",
   "license": "MIT",
   "engines": {
-    "node": ">= 10"
+    "node": ">=10.16"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/lni_nodejs"
   },
   "libc": [
     "glibc"

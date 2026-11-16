@@ -1,3 +1,3 @@
-# `lni_js-darwin-x64`
+# `@sunnyln/lni-nodejs-darwin-x64`
 
-This is the **x86_64-apple-darwin** binary for `lni_js`
+This is the **x86_64-apple-darwin** binary for `@sunnyln/lni-nodejs`

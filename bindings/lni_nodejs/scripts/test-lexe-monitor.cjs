@@ -8,7 +8,7 @@
 const { spawnSync } = require('child_process')
 const { join, resolve } = require('path')
 
-const root = resolve(__dirname, '..')
+const { root, cargoPackage } = require('./package-context.cjs')
 const workspace = resolve(root, '../..')
 const run = (command, args, options) => {
   const result = spawnSync(command, args, { stdio: 'inherit', ...options })
@@ -16,11 +16,29 @@ const run = (command, args, options) => {
   if (result.status !== 0) process.exit(result.status === null ? 1 : result.status)
 }
 
-run('cargo', ['build', '-p', 'lni_napi_rs', '--features', 'lexe_monitor_test', '--locked', ...process.argv.slice(2)], {
-  cwd: workspace,
-})
-const library = { linux: 'liblni_napi_rs.so', darwin: 'liblni_napi_rs.dylib', win32: 'lni_napi_rs.dll' }[process.platform]
-const targetDir = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(workspace, 'target')
+run(
+  'cargo',
+  [
+    'build',
+    '-p',
+    cargoPackage,
+    '--features',
+    'lexe_monitor_test',
+    '--locked',
+    ...process.argv.slice(2),
+  ],
+  {
+    cwd: workspace,
+  }
+)
+const library = {
+  linux: `lib${cargoPackage}.so`,
+  darwin: `lib${cargoPackage}.dylib`,
+  win32: `${cargoPackage}.dll`,
+}[process.platform]
+const targetDir = process.env.CARGO_TARGET_DIR
+  ? resolve(process.env.CARGO_TARGET_DIR)
+  : join(workspace, 'target')
 run(process.execPath, ['--test', 'lexe-monitor.test.js'], {
   cwd: root,
   env: { ...process.env, LNI_MONITOR_TEST_ADDON: join(targetDir, 'debug', library) },

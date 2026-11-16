@@ -5,11 +5,11 @@
 // available), and the pack manifest contains every entry point but no tests.
 
 const { spawnSync } = require('child_process')
-const { mkdtempSync, readFileSync, rmSync } = require('fs')
+const { mkdtempSync, readFileSync, readdirSync, rmSync } = require('fs')
 const { tmpdir } = require('os')
 const { join, resolve } = require('path')
 
-const root = resolve(__dirname, '..')
+const { root } = require('./package-context.cjs')
 const failures = []
 
 function checkHelpersAreCurrent() {
@@ -22,10 +22,14 @@ function checkHelpersAreCurrent() {
   }
   const outDir = mkdtempSync(join(tmpdir(), 'lni-helpers-'))
   try {
-    const result = spawnSync(process.execPath, [tsc, '-p', 'tsconfig.helpers.json', '--outDir', outDir], {
-      cwd: root,
-      stdio: 'inherit',
-    })
+    const result = spawnSync(
+      process.execPath,
+      [tsc, '-p', 'tsconfig.helpers.json', '--outDir', outDir],
+      {
+        cwd: root,
+        stdio: 'inherit',
+      }
+    )
     if (result.status !== 0) {
       failures.push('helpers do not compile')
       return
@@ -55,6 +59,11 @@ function packedFiles() {
 checkHelpersAreCurrent()
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+for (const { path, content } of require('./runtime-files.cjs').entries()) {
+  if (readFileSync(join(root, path), 'utf8') !== content) {
+    failures.push(`${path} differs from the shared runtime; run sync:runtime`)
+  }
+}
 const exportTargets = Object.values(pkg.exports).flatMap((entry) => Object.values(entry))
 const required = [
   'package.json',
@@ -62,6 +71,7 @@ const required = [
   pkg.types,
   'native.js',
   'generated/index.d.ts',
+  'contracts.d.ts',
   'lexe-connect.js',
   'lexe-connect.d.ts',
   'lexe-events.js',
@@ -74,8 +84,51 @@ for (const path of new Set(required)) {
   if (!files.has(path)) failures.push(`package is missing ${path}`)
 }
 for (const path of files) {
-  if (/\.test\.js$|^helpers\/.*(?<!\.d)\.ts$|^scripts\/|^tsconfig|(^|\/)\.env/.test(path)) {
+  if (
+    /\.test\.js$|^helpers\/.*(?<!\.d)\.ts$|^scripts\/|^tsconfig|(^|\/)\.env|\.node$|^npm\/|^src\//.test(
+      path
+    )
+  ) {
     failures.push(`package must not include ${path}`)
+  }
+}
+
+// Local workspaces make unpublished platform packages resolvable for development.
+// Published optional dependencies must still use exact registry versions.
+const platforms = readdirSync(join(root, 'npm')).sort()
+const optional = pkg.optionalDependencies
+if (
+  !optional ||
+  platforms.length !== pkg.napi.triples.additional.length ||
+  pkg.napi.triples.defaults !== false
+) {
+  failures.push('platform directories must match the explicit napi target list')
+}
+if (Object.keys(optional || {}).length !== platforms.length) {
+  failures.push('optionalDependencies must contain exactly the supported platforms')
+}
+for (const platform of platforms) {
+  const platformPkg = JSON.parse(readFileSync(join(root, 'npm', platform, 'package.json'), 'utf8'))
+  const name = `${pkg.name}-${platform}`
+  if (
+    platformPkg.name !== name ||
+    platformPkg.version !== pkg.version ||
+    optional[name] !== pkg.version
+  ) {
+    failures.push(`${platform}: package name and exact version must match the parent`)
+  }
+  if (platformPkg.main !== `${pkg.napi.name}.${platform}.node`) {
+    failures.push(`${platform}: incorrect binary name`)
+  }
+}
+for (const file of ['native.js', 'generated/index.d.ts', 'index.d.ts']) {
+  const content = readFileSync(join(root, file), 'utf8')
+  const otherProviders = /(?:Lnd|Cln|Phoenixd|Blink|Strike|Speed|Nwc|Galoy|Flash)(?:Node|Config)/
+  if (
+    /Spark|Arkade|lni_js-/.test(content) ||
+    (pkg.lni?.lexeOnly && file !== 'generated/index.d.ts' && otherProviders.test(content))
+  ) {
+    failures.push(`${file}: stale or experimental native exports; regenerate bindings`)
   }
 }
 

@@ -3516,6 +3516,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lni_lexe_nodejs"
+version = "0.1.0"
+dependencies = [
+ "lni",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "lni_napi_rs"
 version = "0.26.1"
 dependencies = [

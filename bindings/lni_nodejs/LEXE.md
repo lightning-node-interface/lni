@@ -4,7 +4,7 @@
 It is available only in a Node.js process with a matching native `.node` addon.
 
 ```js
-const { LexeNode, LexeConnect } = require('lni_js')
+const { LexeNode, LexeConnect } = require('@sunnyln/lni-nodejs')
 
 const node = new LexeNode(process.env.LEXE_CLIENT_CREDENTIALS, 'mainnet')
 try {
@@ -67,7 +67,7 @@ The package build writes the napi-rs loader to `native.js`, declarations to
 `generated/`, and the platform addon beside the loader. Keep these declarations generated from Rust. The root entry
 point preserves the JavaScript Connect and invoice-event helpers when rebuilding.
 
-`lni_js/lexe` is a lazy entry point for stateless servers. Importing it does not
+`@sunnyln/lni-nodejs/lexe` is a lazy entry point for stateless servers. Importing it does not
 load the addon. `restoreLexeSession(options, seed, expiresAtMs)` restores an
 expiring request and provides `connectionString`, `acceptRedirect`,
 `pollMailbox`, and `close`. Every instance restored from the same seed can accept
