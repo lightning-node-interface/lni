@@ -33,24 +33,16 @@ import { withLexeNode } from '@sunnyln/lni-nodejs/lexe'
 const { LexeNode } = lni
 ```
 
-## Platform binaries
+## Platform binary
 
-The JavaScript and generated TypeScript declarations are in the root package.
-Exact-version optional dependencies supply one native binary per platform:
+The supported native target is Linux x64 with glibc, built on Ubuntu CI. The root
+package contains JavaScript and generated TypeScript declarations. Its
+exact-version optional dependency, `@sunnyln/lni-nodejs-linux-x64-gnu`, supplies
+the addon. Do not omit optional dependencies.
 
-| System       | Architecture  | Package suffix    |
-| ------------ | ------------- | ----------------- |
-| Linux, glibc | x64           | `linux-x64-gnu`   |
-| Linux, glibc | arm64         | `linux-arm64-gnu` |
-| macOS        | Intel         | `darwin-x64`      |
-| macOS        | Apple Silicon | `darwin-arm64`    |
-| Windows      | x64           | `win32-x64-msvc`  |
-
-For example, Linux x64 installs `@sunnyln/lni-nodejs-linux-x64-gnu`. Package
-managers select by OS, CPU, and libc. Do not omit optional dependencies. Linux
-musl, Windows ARM, Android, and other targets are not published by this workflow.
-Linux release binaries are built against glibc 2.28. Their generated napi-rs
-loader still uses the internal filename `lni_js.<platform>.node`.
+Other operating systems, ARM64, and musl are not release targets. Linux release
+binaries are built against glibc 2.28. The generated napi-rs loader still uses
+the internal filename `lni_js.linux-x64-gnu.node`.
 
 Use a Node.js server runtime, including serverless Node.js functions. This addon
 cannot load in an Edge runtime or browser. Configure your bundler to externalize
@@ -80,14 +72,14 @@ It checks that Lexe's receiving APIs are present and Spark and Arkade are absent
 It makes no provider requests and does not publish anything.
 
 ```sh
-# Keep tarballs for a local consumer. Build the current platform first.
+# Keep tarballs for a local consumer. Build Linux x64 first.
 corepack yarn pack:platforms ./dist linux-x64-gnu
 corepack yarn test:install ./dist
 ```
 
-The second command tests the existing tarballs. Without a platform argument,
-`pack:platforms` requires all five binaries and fails if any are missing. Root
-tarballs exclude binaries, tests, scripts, Rust source, and environment files.
+The second command tests the existing tarballs. `pack:platforms` requires the
+Linux x64 binary and fails if it is missing. Root tarballs exclude binaries,
+tests, scripts, Rust source, and environment files.
 
 When changing the npm version, update `package.json`, run
 `corepack yarn version:platforms`, and run `corepack yarn install` to update the
@@ -95,10 +87,9 @@ workspace lockfile. There is one package-manager lockfile, `yarn.lock`.
 
 ## Release workflow
 
-[build-nodejs.yml](../../.github/workflows/build-nodejs.yml) builds and tests each
-binary on its native architecture, tests a packed consumer install on each
-platform, and collects all five binaries with napi-rs before packing release
-tarballs. Release builds strip symbols. Pull requests, branch pushes, and manual
+[build-nodejs.yml](../../.github/workflows/build-nodejs.yml) builds and tests on
+Ubuntu x64, tests a packed consumer install, and collects the native binary with
+napi-rs before packing release tarballs. Release builds strip symbols. Pull requests, branch pushes, and manual
 workflow runs only build, test, and upload artifacts.
 
 Publishing requires a tag exactly matching `lni-nodejs-v<package.json version>`.
