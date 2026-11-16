@@ -27,16 +27,27 @@ Keep credentials and Connect seeds on the server. See [LEXE.md](LEXE.md) for
 scopes, session storage, expiry, cancellation, and the `checkAddress` calls
 required after detecting payments to exclusive addresses.
 
-## Platform binary
+## Platform binaries
 
-The supported native target is Linux x64 with glibc, built on Ubuntu CI. The root
-package contains JavaScript and generated TypeScript declarations. Its exact-version
-optional dependency, `@sunnyln/lni-lexe-nodejs-linux-x64-gnu`, supplies the addon.
-Do not omit optional dependencies. Linux CI builds use glibc 2.28.
+The root package contains JavaScript and generated TypeScript declarations.
+Exact-version optional dependencies supply the native binary for each target:
 
-Other operating systems, ARM64, and musl are not release targets. This package
-requires a Node.js server runtime and cannot load in a browser or Edge runtime.
-Externalize the package in server bundlers and preserve its native dependency.
+| System | Architecture | Package suffix |
+| --- | --- | --- |
+| Linux, glibc | x64 | `linux-x64-gnu` |
+| macOS | Apple Silicon | `darwin-arm64` |
+| macOS | Intel | `darwin-x64` |
+| Windows | x64 | `win32-x64-msvc` |
+
+Install `@sunnyln/lni-lexe-nodejs` and import it the same way on every supported
+platform. The package manager installs the matching optional dependency, and
+napi-rs loads its binary automatically. Do not omit optional dependencies.
+Linux CI builds use glibc 2.28. Linux ARM64, musl, and Windows ARM are not release
+targets.
+
+This package requires a Node.js server runtime and cannot load in a browser or
+Edge runtime. Externalize it in server bundlers and preserve its native
+optional dependency.
 
 `/lexe` is lazy: importing the helpers does not load the native addon. The root
 entry point loads the addon immediately. Runtime JavaScript preserves Node 10.16
@@ -85,14 +96,15 @@ builds and do not overwrite the packaged release addon.
 ## Packed consumer installation
 
 ```sh
-# Linux x64 is the supported native target.
+# Linux x64 example; use your platform suffix on macOS or Windows.
 corepack yarn pack:platforms ./dist linux-x64-gnu
 corepack yarn test:install ./dist
 ```
 
 The first command writes the root and platform tarballs plus an integrity
-manifest to `dist/`. It requires the Linux x64 binary and fails if it is missing. `test:install` creates a clean consumer with an
-isolated offline npm cache and installs both tarballs. It verifies real native
+manifest to `dist/`. Without a platform argument, it requires all four binaries
+and fails if any are missing. `test:install` creates a clean consumer with an
+isolated offline npm cache and installs the root and matching platform tarballs. It verifies real native
 loading from the platform package, CommonJS and ESM imports, generated types,
 Lexe Connect session restoration, receiving APIs, and the absence of other
 providers. It sends no wallet requests and does not publish anything.
@@ -101,28 +113,30 @@ To install the Linux x64 tarballs in another local project, copy them there and
 run:
 
 ```sh
-npm install ./sunnyln-lni-lexe-nodejs-0.1.0.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.0.tgz
+npm install ./sunnyln-lni-lexe-nodejs-0.1.0-beta.2.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.0-beta.2.tgz
 ```
 
-After publication, consumers can install `@sunnyln/lni-lexe-nodejs` directly.
-They do not need Rust or build tools.
+Consumers can install `@sunnyln/lni-lexe-nodejs@beta` from npm. They do not need
+Rust or build tools.
 
 ## Release workflow
 
 [build-lexe-nodejs.yml](../../.github/workflows/build-lexe-nodejs.yml) builds on
-Ubuntu x64, tests packed consumer installs, collects the native binary
-with napi-rs, and packs the complete release set. Branch and pull-request runs,
-and manual runs, only build and upload artifacts.
+Linux x64, macOS ARM64, macOS x64, and Windows x64. Each platform tests native
+loading, helper behavior and a packed consumer install. The package job collects
+all four binaries with napi-rs and packs the complete release set. Branch,
+pull-request and manual runs only build and upload artifacts.
 
-Only a pushed tag exactly matching `lni-lexe-nodejs-v<package.json version>` can
-publish. The workflow validates the package set, tag, and tarball integrity,
-publishes platform tarballs first and the root tarball last, and attaches the
-packages to a GitHub release. Beta releases use npm's `beta` tag, other
+The workflow publishes only for a pushed tag exactly matching
+`lni-lexe-nodejs-v<package.json version>`. It validates the package set, tag and
+tarball integrity, publishes platform tarballs first and the root tarball last,
+and attaches the packages to a GitHub release. Beta releases use npm's `beta`
+tag, other
 prereleases use `next`, and stable releases use `latest`. Publishing requires
 the repository's `NPM_TOKEN` secret.
 
-The first release is prepared as `0.1.0-beta.1`. Its release tag will be
-`lni-lexe-nodejs-v0.1.0-beta.1`. Pushing that tag publishes the package; do not
+Version `0.1.0-beta.2` adds the macOS and Windows binaries. Its release tag is
+`lni-lexe-nodejs-v0.1.0-beta.2`. Pushing that tag publishes the package; do not
 push it until npm authentication is configured and the release is approved.
 
 To change the npm version, edit `package.json`, run `corepack yarn

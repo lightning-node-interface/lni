@@ -1,0 +1,27 @@
+{
+  "name": "@sunnyln/lni-lexe-nodejs-darwin-arm64",
+  "version": "0.1.0-beta.2",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "lni_lexe.darwin-arm64.node",
+  "files": [
+    "lni_lexe.darwin-arm64.node"
+  ],
+  "description": "Lexe-only native Node.js bindings for LNI and Lexe Connect",
+  "license": "MPL-2.0",
+  "engines": {
+    "node": ">=10.16"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/nodejs-lexe"
+  }
+}
