@@ -7,7 +7,7 @@
 
 use std::{
     sync::Mutex,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use lexe_connect::{
@@ -15,6 +15,8 @@ use lexe_connect::{
     requester::PendingRequest,
     response::{CredentialResponse, CredentialResult},
 };
+
+use rand::SeedableRng;
 
 use crate::ApiError;
 
@@ -129,55 +131,10 @@ fn transport() -> ApiError {
 }
 
 impl LexeConnectSession {
-    fn with_pending<T>(
-        &self,
-        f: impl FnOnce(&PendingRequest) -> Result<T, ApiError>,
-    ) -> Result<T, ApiError> {
-        let mut state = self.lock()?;
-        f(self.pending(&mut state)?)
-    }
-
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, State>, ApiError> {
-        self.state
-            .lock()
-            .map_err(|_| invalid("LexeConnect session unavailable"))
-    }
-
-    fn pending<'a>(&self, state: &'a mut State) -> Result<&'a PendingRequest, ApiError> {
-        if matches!(state, State::Pending(_)) && Instant::now() >= self.deadline {
-            *state = State::Expired;
-        }
-        match state {
-            State::Pending(request) => Ok(request),
-            State::Completed => Err(invalid("LexeConnect session already completed")),
-            State::Cancelled => Err(invalid("LexeConnect session cancelled")),
-            State::Expired => Err(invalid("LexeConnect session expired")),
-        }
-    }
-
-    fn accept(
-        &self,
-        f: impl FnOnce(&PendingRequest) -> Result<CredentialResponse, ApiError>,
-    ) -> Result<LexeConnectResponse, ApiError> {
-        let mut state = self.lock()?;
-        let request = self.pending(&mut state)?;
-        let response = f(request)?;
-        // The protocol verifies account, secret and grants. Also require the
-        // optional metadata echo, and reject empty credentials without consuming.
-        if response.metadata != request.request().params.metadata
-            || matches!(&response.result, CredentialResult::Granted(grant) if grant.credential.is_empty())
-        {
-            return Err(invalid("Invalid LexeConnect response"));
-        }
-        *state = State::Completed;
-        Ok(response.into())
-    }
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl LexeConnectSession {
-    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    pub fn new(options: LexeConnectOptions) -> Result<Self, ApiError> {
+    fn build(
+        options: LexeConnectOptions,
+        rng: &mut (impl rand::RngCore + rand::CryptoRng),
+    ) -> Result<Self, ApiError> {
         let ttl = options.request_ttl_secs.unwrap_or(MAX_REQUEST_TTL_SECS);
         if ttl == 0 || ttl > MAX_REQUEST_TTL_SECS {
             return Err(invalid(
@@ -233,7 +190,7 @@ impl LexeConnectSession {
             label: options.label,
             expires_at,
         };
-        let request = PendingRequest::new(&mut rand::rngs::OsRng, params)
+        let request = PendingRequest::new(rng, params)
             .map_err(|_| invalid("Invalid LexeConnect request options"))?;
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -245,6 +202,86 @@ impl LexeConnectSession {
             deadline: Instant::now() + Duration::from_secs(u64::from(ttl)),
             http,
         })
+    }
+
+    fn with_pending<T>(
+        &self,
+        f: impl FnOnce(&PendingRequest) -> Result<T, ApiError>,
+    ) -> Result<T, ApiError> {
+        let mut state = self.lock()?;
+        f(self.pending(&mut state)?)
+    }
+
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, State>, ApiError> {
+        self.state
+            .lock()
+            .map_err(|_| invalid("LexeConnect session unavailable"))
+    }
+
+    fn pending<'a>(&self, state: &'a mut State) -> Result<&'a PendingRequest, ApiError> {
+        if matches!(state, State::Pending(_)) && Instant::now() >= self.deadline {
+            *state = State::Expired;
+        }
+        match state {
+            State::Pending(request) => Ok(request),
+            State::Completed => Err(invalid("LexeConnect session already completed")),
+            State::Cancelled => Err(invalid("LexeConnect session cancelled")),
+            State::Expired => Err(invalid("LexeConnect session expired")),
+        }
+    }
+
+    fn accept(
+        &self,
+        f: impl FnOnce(&PendingRequest) -> Result<CredentialResponse, ApiError>,
+    ) -> Result<LexeConnectResponse, ApiError> {
+        let mut state = self.lock()?;
+        let request = self.pending(&mut state)?;
+        let response = f(request)?;
+        // The protocol verifies account, secret and grants. Also require the
+        // optional metadata echo, and reject empty credentials without consuming.
+        if response.metadata != request.request().params.metadata
+            || matches!(&response.result, CredentialResult::Granted(grant) if grant.credential.is_empty())
+        {
+            return Err(invalid("Invalid LexeConnect response"));
+        }
+        *state = State::Completed;
+        Ok(response.into())
+    }
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl LexeConnectSession {
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    pub fn new(options: LexeConnectOptions) -> Result<Self, ApiError> {
+        Self::build(options, &mut rand::rngs::OsRng)
+    }
+
+    /// Reconstructs one request from a secret seed and an absolute deadline.
+    /// Store the seed encrypted and enforce single-use in durable storage:
+    /// restoring a completed request would otherwise permit response replay.
+    /// The same seed, options, deadline and pinned library version must be used.
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    pub fn restore(
+        options: LexeConnectOptions,
+        seed: Vec<u8>,
+        expires_at_ms: u64,
+    ) -> Result<Self, ApiError> {
+        let seed: [u8; 32] = seed
+            .try_into()
+            .map_err(|_| invalid("LexeConnect seed must be 32 bytes"))?;
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| invalid("Invalid system time"))?
+            .as_millis();
+        let remaining = u128::from(expires_at_ms)
+            .checked_sub(now_ms)
+            .filter(|remaining| {
+                *remaining > 0 && *remaining <= u128::from(MAX_REQUEST_TTL_SECS) * 1000
+            })
+            .ok_or_else(|| invalid("LexeConnect request expired or deadline is too far ahead"))?;
+        let mut session = Self::build(options, &mut rand::rngs::StdRng::from_seed(seed))?;
+        session.deadline = Instant::now() + Duration::from_millis(remaining as u64);
+        Ok(session)
     }
 
     /// Sensitive URL to open with the OS or render as a QR code. Never log it.
@@ -411,6 +448,34 @@ mod tests {
             }
             _ => panic!("expected HTTP delivery"),
         }
+    }
+
+    #[test]
+    fn restored_request_accepts_approval_from_previous_instance() {
+        let deadline = (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 60_000) as u64;
+        let first = LexeConnectSession::restore(options(), vec![42; 32], deadline).unwrap();
+        let body = delivered_body(&first, approval());
+        let url = first.connection_string().unwrap();
+        drop(first);
+        let restored = LexeConnectSession::restore(options(), vec![42; 32], deadline).unwrap();
+        assert_eq!(restored.connection_string().unwrap(), url);
+        assert_eq!(
+            restored
+                .accept_body(body.clone())
+                .unwrap()
+                .client_credentials
+                .as_deref(),
+            Some("test-only-credential")
+        );
+        assert!(restored.accept_body(body.clone()).is_err());
+        let other = LexeConnectSession::restore(options(), vec![43; 32], deadline).unwrap();
+        assert!(other.accept_body(body).is_err());
+        assert!(LexeConnectSession::restore(options(), vec![42; 31], deadline).is_err());
+        assert!(LexeConnectSession::restore(options(), vec![42; 32], 1).is_err());
     }
 
     #[test]

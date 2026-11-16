@@ -90,7 +90,7 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: |
-          yarn napi build --platform --release --target ${{ matrix.target }}
+          yarn build --target ${{ matrix.target }}
 
       - name: Upload artifact
         # actions/upload-artifact@v4
@@ -201,6 +201,12 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install dependencies
+        working-directory: bindings/lni_nodejs
+        # `npm publish` runs prepublishOnly (`napi prepublish`), which needs
+        # @napi-rs/cli. Dependency build scripts are not needed here.
+        run: yarn install --immutable --mode=skip-build
+
       - name: Download all artifacts
         # actions/download-artifact@v4
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -215,6 +221,12 @@ jobs:
             cp "$dir"/*.node . 2>/dev/null || true
           done
           ls -la *.node
+
+      - name: Check npm package contents
+        working-directory: bindings/lni_nodejs
+        # Compiled helpers and generated declarations are committed; this
+        # fails if an entry point such as `lni_js/lexe` would be missing.
+        run: node scripts/check-package.cjs
 
       - name: Publish to npm
         working-directory: bindings/lni_nodejs

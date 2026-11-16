@@ -13,6 +13,26 @@ use crate::{
     NodeInfo, Offer, PayInvoiceParams, PayInvoiceResponse, Permissions, Transaction,
 };
 
+use super::address;
+
+/// Receiving features supported by the authenticated node, not the mobile app.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LexeReceivingCapabilities {
+    pub node_version: String,
+    pub exclusive_addresses: bool,
+}
+
+/// The result of syncing an exclusive receiving address with Lexe.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[cfg_attr(feature = "napi_rs", napi(object))]
+#[derive(Clone, Debug)]
+pub struct LexeAddressCheck {
+    pub received_txids: Vec<String>,
+    pub synced_block_height: u32,
+}
+
 /// Authenticated credential grants returned by the Lexe node.
 /// Unlike `get_permissions`, this describes this client's authorization.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -163,6 +183,11 @@ impl LexeNode {
         crate::lexe::api::get_info(&self.wallet, &self.network).await
     }
 
+    /// Inspect receiving support without allocating an address. Requires read_info.
+    pub async fn get_receiving_capabilities(&self) -> Result<LexeReceivingCapabilities, ApiError> {
+        address::get_receiving_capabilities(&self.wallet).await
+    }
+
     pub async fn get_human_bitcoin_address(&self) -> Result<LexeHumanBitcoinAddress, ApiError> {
         crate::lexe::api::get_human_bitcoin_address(&self.wallet).await
     }
@@ -191,6 +216,22 @@ impl LexeNode {
                 reason: "Lexe receiving address has the wrong network".to_owned(),
             })?;
         Ok(address.to_string())
+    }
+
+    /// Return an address that is never issued to another caller or checkout.
+    /// Requires node v0.10.9; incoming funds must be synced with `check_address`.
+    pub async fn get_exclusive_address(&self) -> Result<String, ApiError> {
+        address::get_exclusive_address(&self.wallet, &self.network).await
+    }
+
+    /// Record incoming funds to an exclusive address in the Lexe wallet.
+    /// The synced chain height may be supplied on the next check.
+    pub async fn check_address(
+        &self,
+        address: String,
+        synced_block_height: Option<u32>,
+    ) -> Result<LexeAddressCheck, ApiError> {
+        address::check_address(&self.wallet, &self.network, &address, synced_block_height).await
     }
 
     pub async fn create_invoice(

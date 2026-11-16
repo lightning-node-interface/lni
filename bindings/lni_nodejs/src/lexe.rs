@@ -4,7 +4,8 @@ use napi::threadsafe_function::{
 };
 use napi::JsFunction;
 use napi_derive::napi;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use tokio::task::JoinHandle;
 
 struct InvoiceEventCallback {
   callback: ThreadsafeFunction<String, ErrorStrategy::Fatal>,
@@ -35,19 +36,60 @@ impl lni::OnInvoiceEventCallback for InvoiceEventCallback {
   }
 }
 
+/// An active invoice monitor. Aborting its callback discards queued events.
+struct Monitor {
+  id: u64,
+  task: JoinHandle<()>,
+  callback: ThreadsafeFunction<String, ErrorStrategy::Fatal>,
+}
+
+impl Monitor {
+  fn stop(self) {
+    self.task.abort();
+    // Abort rather than release, so Node drops events queued before close.
+    let _ = self.callback.abort();
+  }
+}
+
+#[derive(Default)]
+struct State {
+  node: Option<CoreLexeNode>,
+  closed: bool,
+  monitors: Vec<Monitor>,
+  next_monitor_id: u64,
+}
+
+fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
+  // State remains consistent at every await-free step, so recover after a panic.
+  state.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Deregisters a monitor however its task ends, releasing the callback.
+struct MonitorRegistration {
+  state: Arc<Mutex<State>>,
+  id: u64,
+}
+
+impl Drop for MonitorRegistration {
+  fn drop(&mut self) {
+    let id = self.id;
+    lock(&self.state)
+      .monitors
+      .retain(|monitor| monitor.id != id);
+  }
+}
+
 /// Lexe access for Node.js. Without a data directory, uses a stateless wallet.
 #[napi]
 pub struct LexeNode {
-  inner: Mutex<Option<CoreLexeNode>>,
+  state: Arc<Mutex<State>>,
   persistent: bool,
 }
 
 impl LexeNode {
   fn node(&self) -> napi::Result<CoreLexeNode> {
-    self
-      .inner
-      .lock()
-      .map_err(|_| napi::Error::from_reason("Lexe node unavailable"))?
+    lock(&self.state)
+      .node
       .clone()
       .ok_or_else(|| napi::Error::from_reason("Lexe node closed"))
   }
@@ -76,18 +118,27 @@ impl LexeNode {
     }
     .map_err(|_| napi::Error::from_reason("Failed to initialize Lexe node"))?;
     Ok(Self {
-      inner: Mutex::new(Some(inner)),
+      state: Arc::new(Mutex::new(State {
+        node: Some(inner),
+        ..State::default()
+      })),
       persistent: data_dir.is_some(),
     })
   }
 
+  /// Releases the wallet and stops invoice monitors without further callbacks.
+  /// Later calls reject; calls already in progress may still settle. Idempotent.
   #[napi]
   pub fn close(&self) -> napi::Result<()> {
-    self
-      .inner
-      .lock()
-      .map_err(|_| napi::Error::from_reason("Lexe node unavailable"))?
-      .take();
+    let monitors = {
+      let mut state = lock(&self.state);
+      state.node = None;
+      state.closed = true;
+      std::mem::take(&mut state.monitors)
+    };
+    for monitor in monitors {
+      monitor.stop();
+    }
     Ok(())
   }
 
@@ -119,6 +170,17 @@ impl LexeNode {
   }
 
   #[napi]
+  pub async fn get_receiving_capabilities(
+    &self,
+  ) -> napi::Result<lni::lexe::LexeReceivingCapabilities> {
+    self
+      .node()?
+      .get_receiving_capabilities()
+      .await
+      .map_err(|_| napi::Error::from_reason("Failed to inspect Lexe receiving capabilities"))
+  }
+
+  #[napi]
   pub async fn get_human_bitcoin_address(
     &self,
   ) -> napi::Result<lni::lexe::LexeHumanBitcoinAddress> {
@@ -136,6 +198,28 @@ impl LexeNode {
       .get_next_unused_address()
       .await
       .map_err(|_| napi::Error::from_reason("Failed to get Lexe receiving address"))
+  }
+
+  #[napi]
+  pub async fn get_exclusive_address(&self) -> napi::Result<String> {
+    self.node()?.get_exclusive_address().await.map_err(|_| {
+      napi::Error::from_reason(
+        "Failed to get Lexe exclusive address; node v0.10.9 or later is required",
+      )
+    })
+  }
+
+  #[napi]
+  pub async fn check_address(
+    &self,
+    address: String,
+    synced_block_height: Option<u32>,
+  ) -> napi::Result<lni::lexe::LexeAddressCheck> {
+    self
+      .node()?
+      .check_address(address, synced_block_height)
+      .await
+      .map_err(|_| napi::Error::from_reason("Failed to sync Lexe exclusive address"))
   }
 
   #[napi]
@@ -272,6 +356,7 @@ impl LexeNode {
 
   /// Starts native polling without blocking Node's event loop. Callback receives
   /// serialized event data, which the JavaScript entrypoint converts to LNI shape.
+  /// `close()` stops the monitor; no callback is delivered after it returns.
   #[napi]
   pub fn on_invoice_events_raw(
     &self,
@@ -283,16 +368,112 @@ impl LexeNode {
         "Lexe invoice monitoring requires dataDir",
       ));
     }
+    let inner = self.node()?;
+    self.spawn_monitor(callback, move |callback| async move {
+      inner.on_invoice_events(params, callback).await;
+    })
+  }
+}
+
+impl LexeNode {
+  /// Registers under the state lock, so `close()` either stops this monitor
+  /// or this call observes the closed node.
+  fn spawn_monitor<F, Fut>(&self, callback: JsFunction, run: F) -> napi::Result<()>
+  where
+    F: FnOnce(Arc<dyn lni::OnInvoiceEventCallback>) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+  {
+    let mut state = lock(&self.state);
+    if state.closed {
+      return Err(napi::Error::from_reason("Lexe node closed"));
+    }
     let callback: ThreadsafeFunction<String, ErrorStrategy::Fatal> = callback
       .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
         Ok(vec![ctx.env.create_string(&ctx.value)?])
       })?;
-    let inner = self.node()?;
-    tokio::spawn(async move {
-      inner
-        .on_invoice_events(params, Arc::new(InvoiceEventCallback { callback }))
-        .await;
+    let id = state.next_monitor_id;
+    state.next_monitor_id += 1;
+    let registration = MonitorRegistration {
+      state: self.state.clone(),
+      id,
+    };
+    let events = Arc::new(InvoiceEventCallback {
+      callback: callback.clone(),
     });
+    // The task cannot deregister before it is recorded: that needs this lock.
+    let task = tokio::spawn(async move {
+      let _registration = registration;
+      run(events).await;
+    });
+    state.monitors.push(Monitor { id, task, callback });
     Ok(())
+  }
+}
+
+/// Offline lifecycle checks for invoice monitors, built only with the
+/// `lexe_monitor_test` feature. They use the same registration and close path
+/// as `onInvoiceEventsRaw`, with a synthetic task and a drop-counted resource
+/// in place of Lexe polling and the cloned wallet. No wallet or network is used.
+#[cfg(feature = "lexe_monitor_test")]
+mod monitor_test {
+  use super::*;
+  use std::sync::atomic::{AtomicU32, Ordering};
+
+  static LIVE_RESOURCES: AtomicU32 = AtomicU32::new(0);
+
+  struct Resource;
+
+  impl Resource {
+    fn new() -> Self {
+      LIVE_RESOURCES.fetch_add(1, Ordering::SeqCst);
+      Self
+    }
+  }
+
+  impl Drop for Resource {
+    fn drop(&mut self) {
+      LIVE_RESOURCES.fetch_sub(1, Ordering::SeqCst);
+    }
+  }
+
+  #[napi]
+  impl LexeNode {
+    #[napi(factory)]
+    pub fn monitor_test_instance() -> Self {
+      Self {
+        state: Arc::new(Mutex::new(State::default())),
+        persistent: true,
+      }
+    }
+
+    /// Emits `pending` every `interval_ms`, then `success` after `count` events.
+    #[napi]
+    pub fn start_test_monitor(
+      &self,
+      interval_ms: u32,
+      count: u32,
+      callback: JsFunction,
+    ) -> napi::Result<()> {
+      // Captured at registration, like the wallet clone in onInvoiceEventsRaw.
+      let resource = Resource::new();
+      self.spawn_monitor(callback, move |callback| async move {
+        let _resource = resource;
+        for _ in 0..count {
+          tokio::time::sleep(std::time::Duration::from_millis(interval_ms.into())).await;
+          callback.pending(None);
+        }
+        callback.success(None);
+      })
+    }
+
+    #[napi]
+    pub fn active_monitor_count(&self) -> u32 {
+      lock(&self.state).monitors.len() as u32
+    }
+
+    #[napi]
+    pub fn live_test_resources() -> u32 {
+      LIVE_RESOURCES.load(Ordering::SeqCst)
+    }
   }
 }

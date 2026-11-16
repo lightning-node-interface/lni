@@ -115,6 +115,23 @@ impl LexeConnectSession {
     Ok(Self { inner })
   }
 
+  /// Restores one expiring request. The caller must encrypt the seed and
+  /// enforce single-use across all restored instances in durable storage.
+  #[napi(factory)]
+  pub fn restore(
+    options: LexeConnectOptions,
+    seed: Buffer,
+    expires_at_ms: i64,
+  ) -> napi::Result<Self> {
+    if expires_at_ms < 0 || expires_at_ms as u64 > MAX_SAFE_INTEGER {
+      return Err(napi::Error::from_reason("Invalid LexeConnect deadline"));
+    }
+    let inner =
+      CoreLexeConnectSession::restore(options.try_into()?, seed.to_vec(), expires_at_ms as u64)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    Ok(Self { inner })
+  }
+
   /// Sensitive URL for a link or QR code; do not log it.
   #[napi]
   pub fn connection_string(&self) -> napi::Result<String> {

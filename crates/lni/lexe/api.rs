@@ -463,6 +463,7 @@ pub async fn create_invoice(
             expiration_secs,
             amount: optional_amount_from_msats(params.amount_msats, "amount_msats")?,
             description: params.description,
+            description_hash: None,
             personal_note: None,
             partner_pk: None,
             partner_prop_fee: None,
@@ -505,6 +506,7 @@ pub async fn pay_invoice(
     let payment_hash = invoice.payment_hash().to_string();
     let request = LexePayInvoiceRequest {
         invoice,
+        lud12_comment: None,
         fallback_amount: optional_amount_from_msats(params.amount_msats, "amount_msats")?,
         personal_note: None,
         partner_pk: None,

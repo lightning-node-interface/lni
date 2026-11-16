@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
+const { spawnSync } = require('node:child_process')
 const { createLexeConnectClass } = require('./lexe-connect')
 
 class Session {
@@ -50,4 +51,145 @@ test('abort cancels the native session', async () => {
   controller.abort()
   await assert.rejects(pending, { name: 'AbortError' })
   assert.equal(native.cancelled, true)
+})
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+  return { promise, resolve, reject }
+}
+
+// Models native poll_mailbox: a verified response consumes the session.
+class DeferredSession extends Session {
+  constructor() {
+    super({})
+    this.requests = []
+    this.completed = false
+  }
+  pollMailbox() {
+    if (this.completed) return Promise.reject(new Error('LexeConnect session already completed'))
+    const request = deferred()
+    this.requests.push(request)
+    return request.promise.then((value) => {
+      if (value) this.completed = true
+      return value
+    })
+  }
+}
+
+const approval = { clientCredentials: 'test-only', scopes: ['receive'], permissions: [] }
+
+test('an approval arriving after an aborted poll is returned by the next poll', async () => {
+  const native = new DeferredSession()
+  const connect = new LexeConnect({}, native)
+  const controller = new AbortController()
+  const aborted = connect.pollMailbox(controller.signal)
+  await Promise.resolve()
+  controller.abort()
+  await assert.rejects(aborted, { name: 'AbortError' })
+  native.requests[0].resolve(approval)
+  await new Promise((resolve) => setImmediate(resolve))
+  const next = await connect.pollMailbox()
+  assert.equal(next.status, 'approved')
+  assert.equal(native.requests.length, 1, 'the retained response must not start another native poll')
+  await assert.rejects(connect.pollMailbox(), /already completed/)
+})
+
+test('a poll after an abort joins the in-flight native request', async () => {
+  const native = new DeferredSession()
+  const connect = new LexeConnect({}, native)
+  const controller = new AbortController()
+  const aborted = connect.pollMailbox(controller.signal)
+  await Promise.resolve()
+  controller.abort()
+  await assert.rejects(aborted, { name: 'AbortError' })
+  const retry = connect.pollMailbox()
+  native.requests[0].resolve(approval)
+  assert.equal((await retry).status, 'approved')
+  assert.equal(native.requests.length, 1)
+})
+
+test('an abandoned poll failure is not unhandled and the next poll retries', async () => {
+  const unhandled = []
+  const onUnhandled = (error) => unhandled.push(error)
+  process.on('unhandledRejection', onUnhandled)
+  try {
+    const native = new DeferredSession()
+    const connect = new LexeConnect({}, native)
+    const controller = new AbortController()
+    const aborted = connect.pollMailbox(controller.signal)
+    await Promise.resolve()
+    controller.abort()
+    await assert.rejects(aborted, { name: 'AbortError' })
+    native.requests[0].reject(new Error('LexeConnect mailbox request failed'))
+    await new Promise((resolve) => setImmediate(resolve))
+    const retry = connect.pollMailbox()
+    await Promise.resolve()
+    assert.equal(native.requests.length, 2)
+    native.requests[1].resolve(null)
+    assert.equal(await retry, undefined)
+    assert.deepEqual(unhandled, [])
+  } finally {
+    process.removeListener('unhandledRejection', onUnhandled)
+  }
+})
+
+test('a response verified before cancel took effect is not discarded', async () => {
+  const native = new DeferredSession()
+  const connect = new LexeConnect({}, native)
+  const waiting = connect.waitForResponse({ pollIntervalMs: 250 })
+  await Promise.resolve()
+  await Promise.resolve()
+  connect.cancel()
+  await assert.rejects(waiting, { name: 'AbortError' })
+  assert.equal(native.cancelled, true)
+  native.requests[0].resolve(approval)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal((await connect.pollMailbox()).status, 'approved')
+  connect.dispose()
+})
+
+test('dispose releases a retained response', async () => {
+  const native = new DeferredSession()
+  const connect = new LexeConnect({}, native)
+  const controller = new AbortController()
+  const aborted = connect.pollMailbox(controller.signal)
+  await Promise.resolve()
+  controller.abort()
+  await assert.rejects(aborted, { name: 'AbortError' })
+  native.requests[0].resolve(approval)
+  await new Promise((resolve) => setImmediate(resolve))
+  connect.dispose()
+  assert.equal(connect.retained, undefined)
+  await assert.rejects(connect.pollMailbox(), /disposed/)
+})
+
+test('works without global AbortController or AbortSignal (Node < 15)', () => {
+  const script = `
+    delete globalThis.AbortController
+    delete globalThis.AbortSignal
+    const assert = require('node:assert/strict')
+    const { createLexeConnectClass } = require(${JSON.stringify(require.resolve('./lexe-connect'))})
+    class Session {
+      constructor() { this.cancelled = false; this.polls = 0 }
+      connectionString() { return 'lexe://example' }
+      pollMailbox() { this.polls += 1; return this.polls < 3 ? Promise.resolve(null) : new Promise(() => {}) }
+      cancel() { this.cancelled = true }
+    }
+    const LexeConnect = createLexeConnectClass(Session)
+    const native = new Session()
+    const connect = new LexeConnect({}, native)
+    const pending = connect.waitForResponse({ pollIntervalMs: 250 })
+    setTimeout(() => connect.cancel(), 600)
+    pending.then(() => process.exit(2), (error) => {
+      assert.equal(error.name, 'AbortError')
+      assert.equal(native.cancelled, true)
+      assert.equal(native.polls, 3)
+      console.log('ok')
+    })
+  `
+  const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 10000 })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout.trim(), 'ok')
 })

@@ -10,22 +10,60 @@ function transactionFromRust(transaction) {
   return result
 }
 
+// Active monitors per node. close() settles them, so no promise is left pending.
+const activeMonitors = new WeakMap()
+
 function installLexeInvoiceEvents(LexeNode) {
+  const closeNative = LexeNode.prototype.close
+
+  /**
+   * Native close stops polling and discards queued events. Promises from
+   * onInvoiceEvents then resolve without a further callback.
+   */
+  LexeNode.prototype.close = function close() {
+    try {
+      return closeNative.apply(this, arguments)
+    } finally {
+      const monitors = activeMonitors.get(this)
+      if (monitors) {
+        activeMonitors.delete(this)
+        monitors.forEach((stop) => stop())
+      }
+    }
+  }
+
   LexeNode.prototype.onInvoiceEvents = function onInvoiceEvents(params, callback) {
     if (typeof callback !== 'function') throw new TypeError('callback must be a function')
+    const node = this
     return new Promise((resolve, reject) => {
+      let monitors = activeMonitors.get(node)
+      if (!monitors) {
+        monitors = new Set()
+        activeMonitors.set(node, monitors)
+      }
+      let settled = false
+      const settle = (error) => {
+        if (settled) return
+        settled = true
+        monitors.delete(stop)
+        if (error) reject(error)
+        else resolve()
+      }
+      const stop = () => settle()
+      monitors.add(stop)
       try {
-        this.onInvoiceEventsRaw(params, (payload) => {
+        node.onInvoiceEventsRaw(params, (payload) => {
+          if (settled) return
           try {
             const event = JSON.parse(payload)
             callback(event.status, transactionFromRust(event.transaction))
-            if (event.status === 'success' || event.status === 'failure') resolve()
+            if (event.status === 'success' || event.status === 'failure') settle()
           } catch (error) {
-            reject(error)
+            settle(error)
           }
         })
       } catch (error) {
-        reject(error)
+        settle(error)
       }
     })
   }

@@ -61,11 +61,19 @@ fn server(invalid_json: bool) -> PhoenixdConfig {
 
 #[tokio::test]
 async fn malformed_transaction_json_returns_error_without_panicking() {
-    assert!(
-        api::list_transactions(server(true), ListTransactionsParams { from: 0, limit: 10, payment_hash: None, search: None })
-            .await
-            .is_err()
-    );
+    assert!(api::list_transactions(
+        server(true),
+        ListTransactionsParams {
+            from: 0,
+            limit: 10,
+            payment_hash: None,
+            search: None,
+            created_after: None,
+            created_before: None,
+        },
+    )
+    .await
+    .is_err());
 }
 
 #[tokio::test]

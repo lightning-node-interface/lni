@@ -26,7 +26,9 @@
   "license": "MIT",
   "devDependencies": {
     "@napi-rs/cli": "2.18.4",
-    "ava": "^6.4.1"
+    "ava": "^6.4.1",
+    "typescript": "5.9.3",
+    "@types/node": "24.13.1"
   },
   "ava": {
     "timeout": "3m"
@@ -36,16 +38,29 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
+    "build": "node scripts/build-package.cjs --release",
+    "build:debug": "node scripts/build-package.cjs",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
-    "test:lexe": "node --test lexe-connect.test.js lexe-events.test.js",
+    "test:lexe": "node --test lexe-connect.test.js lexe-events.test.js helpers/lexe.test.js",
+    "test:lexe-monitor": "node scripts/test-lexe-monitor.cjs",
+    "check:package": "node scripts/check-package.cjs",
     "universal": "napi universal",
-    "version": "napi version"
+    "version": "napi version",
+    "typecheck:helpers": "tsc -p tsconfig.helpers.json --noEmit"
   },
   "packageManager": "yarn@4.6.0",
   "dependencies": {
     "dotenv": "^16.4.7"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./lexe": {
+      "types": "./helpers/lexe.d.ts",
+      "default": "./helpers/lexe.js"
+    }
   }
 }
