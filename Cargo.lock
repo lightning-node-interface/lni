@@ -3483,6 +3483,7 @@ dependencies = [
  "lightning 0.2.2",
  "lightning-invoice 0.34.0",
  "napi",
+ "napi-build",
  "napi-derive",
  "nostr",
  "nwc",
