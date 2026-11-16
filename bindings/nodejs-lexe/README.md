@@ -117,8 +117,13 @@ and manual runs, only build and upload artifacts.
 Only a pushed tag exactly matching `lni-lexe-nodejs-v<package.json version>` can
 publish. The workflow validates the package set, tag, and tarball integrity,
 publishes platform tarballs first and the root tarball last, and attaches the
-packages to a GitHub release. Prereleases use npm's `next` tag; stable releases
-use `latest`. Publishing requires the repository's `NPM_TOKEN` secret.
+packages to a GitHub release. Beta releases use npm's `beta` tag, other
+prereleases use `next`, and stable releases use `latest`. Publishing requires
+the repository's `NPM_TOKEN` secret.
+
+The first release is prepared as `0.1.0-beta.1`. Its release tag will be
+`lni-lexe-nodejs-v0.1.0-beta.1`. Pushing that tag publishes the package; do not
+push it until npm authentication is configured and the release is approved.
 
 To change the npm version, edit `package.json`, run `corepack yarn
 version:platforms`, then run `corepack yarn install` and commit the updated

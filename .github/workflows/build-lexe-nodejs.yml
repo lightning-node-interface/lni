@@ -57,7 +57,10 @@ jobs:
       - name: Build release addon and regenerate bindings
         run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs build --target x86_64-unknown-linux-gnu
       - name: Check committed generated bindings and shared runtime copies
-        run: git --no-pager diff --exit-code -- native.js generated/ index.js index.d.ts lexe-connect.js lexe-connect.d.ts lexe-events.js helpers/ lexe/ LEXE.md
+        working-directory: ${{ github.workspace }}
+        run: |
+          git --no-pager rev-parse --show-toplevel
+          git --no-pager diff --exit-code -- bindings/nodejs-lexe/native.js bindings/nodejs-lexe/generated/ bindings/nodejs-lexe/index.js bindings/nodejs-lexe/index.d.ts bindings/nodejs-lexe/lexe-connect.js bindings/nodejs-lexe/lexe-connect.d.ts bindings/nodejs-lexe/lexe-events.js bindings/nodejs-lexe/helpers/ bindings/nodejs-lexe/lexe/ bindings/nodejs-lexe/LEXE.md
       - name: Check helper types and offline Lexe tests
         run: |
           node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs typecheck

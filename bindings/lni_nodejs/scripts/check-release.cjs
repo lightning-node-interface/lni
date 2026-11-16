@@ -34,9 +34,12 @@ for (const entry of manifest) {
 }
 if (process.env.GITHUB_OUTPUT) {
   const prerelease = pkg.version.includes('-')
+  const distTag = /^\d+\.\d+\.\d+-beta(?:\.|$)/.test(pkg.version)
+    ? 'beta'
+    : prerelease ? 'next' : 'latest'
   appendFileSync(
     process.env.GITHUB_OUTPUT,
-    `prerelease=${prerelease}\ndist-tag=${prerelease ? 'next' : 'latest'}\n`
+    `prerelease=${prerelease}\ndist-tag=${distTag}\n`
   )
 }
 console.log(`Release package set and integrity OK: ${pkg.version}`)
