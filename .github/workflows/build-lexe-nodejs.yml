@@ -31,31 +31,10 @@ env:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Native builds against glibc 2.28, rather than the runner's newer libc.
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
-            target: x86_64-unknown-linux-gnu
-            name: linux-x64-gnu
-          - os: ubuntu-22.04-arm
-            container: quay.io/pypa/manylinux_2_28_aarch64
-            target: aarch64-unknown-linux-gnu
-            name: linux-arm64-gnu
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            name: darwin-x64
-          - os: macos-15
-            target: aarch64-apple-darwin
-            name: darwin-arm64
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            name: win32-x64-msvc
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
-    name: Build and test ${{ matrix.name }}
+    runs-on: ubuntu-22.04
+    # Keep the binary compatible with glibc 2.28 and newer server runtimes.
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    name: Build and test Ubuntu x64
     defaults:
       run:
         working-directory: bindings/nodejs-lexe
@@ -70,13 +49,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
+          targets: x86_64-unknown-linux-gnu
       - name: Install pinned JavaScript tools
         run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs install --immutable --mode=skip-build
       - name: Check native dependency policy
         run: node scripts/run.cjs check-native-deps
       - name: Build release addon and regenerate bindings
-        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs build --target ${{ matrix.target }}
+        run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs build --target x86_64-unknown-linux-gnu
       - name: Check committed generated bindings and shared runtime copies
         run: git --no-pager diff --exit-code -- native.js generated/ index.js index.d.ts lexe-connect.js lexe-connect.d.ts lexe-events.js helpers/ lexe/ LEXE.md
       - name: Check helper types and offline Lexe tests
@@ -88,8 +67,8 @@ jobs:
       # actions/upload-artifact@v4
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: lni-lexe-nodejs-binding-${{ matrix.name }}
-          path: bindings/nodejs-lexe/lni_lexe.${{ matrix.name }}.node
+          name: lni-lexe-nodejs-binding-linux-x64-gnu
+          path: bindings/nodejs-lexe/lni_lexe.linux-x64-gnu.node
           if-no-files-found: error
 
   package:
@@ -109,9 +88,9 @@ jobs:
         run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs test:release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: lni-lexe-nodejs-binding-*
+          name: lni-lexe-nodejs-binding-linux-x64-gnu
           path: bindings/nodejs-lexe/artifacts
-      - name: Collect all five native binaries with napi-rs
+      - name: Collect the Ubuntu x64 native binary with napi-rs
         run: node ../lni_nodejs/.yarn/releases/yarn-4.6.0.cjs artifacts --dir artifacts
       - name: Pack root and platform tarballs
         run: node scripts/run.cjs pack-platforms ./dist

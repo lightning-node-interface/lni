@@ -27,25 +27,16 @@ Keep credentials and Connect seeds on the server. See [LEXE.md](LEXE.md) for
 scopes, session storage, expiry, cancellation, and the `checkAddress` calls
 required after detecting payments to exclusive addresses.
 
-## Platform binaries
+## Platform binary
 
-The root package contains JavaScript and generated TypeScript declarations.
-Exact-version optional dependencies provide the native addon:
+The supported native target is Linux x64 with glibc, built on Ubuntu CI. The root
+package contains JavaScript and generated TypeScript declarations. Its exact-version
+optional dependency, `@sunnyln/lni-lexe-nodejs-linux-x64-gnu`, supplies the addon.
+Do not omit optional dependencies. Linux CI builds use glibc 2.28.
 
-| System       | Architecture  | Package suffix    |
-| ------------ | ------------- | ----------------- |
-| Linux, glibc | x64           | `linux-x64-gnu`   |
-| Linux, glibc | arm64         | `linux-arm64-gnu` |
-| macOS        | Intel         | `darwin-x64`      |
-| macOS        | Apple Silicon | `darwin-arm64`    |
-| Windows      | x64           | `win32-x64-msvc`  |
-
-For example, Linux x64 uses `@sunnyln/lni-lexe-nodejs-linux-x64-gnu`. The package
-manager installs the matching binary, so do not omit optional dependencies.
-Linux CI builds use glibc 2.28. Musl, Android, and Windows ARM are not release
-targets. This package requires a Node.js server runtime and cannot load in a
-browser or Edge runtime. Externalize the package in server bundlers and preserve
-its matching optional dependency.
+Other operating systems, ARM64, and musl are not release targets. This package
+requires a Node.js server runtime and cannot load in a browser or Edge runtime.
+Externalize the package in server bundlers and preserve its native dependency.
 
 `/lexe` is lazy: importing the helpers does not load the native addon. The root
 entry point loads the addon immediately. Runtime JavaScript preserves Node 10.16
@@ -94,14 +85,13 @@ builds and do not overwrite the packaged release addon.
 ## Packed consumer installation
 
 ```sh
-# Linux x64 example; use the current platform suffix on other machines.
+# Linux x64 is the supported native target.
 corepack yarn pack:platforms ./dist linux-x64-gnu
 corepack yarn test:install ./dist
 ```
 
 The first command writes the root and platform tarballs plus an integrity
-manifest to `dist/`. Without a platform argument it requires all five binaries
-and fails if any are missing. `test:install` creates a clean consumer with an
+manifest to `dist/`. It requires the Linux x64 binary and fails if it is missing. `test:install` creates a clean consumer with an
 isolated offline npm cache and installs both tarballs. It verifies real native
 loading from the platform package, CommonJS and ESM imports, generated types,
 Lexe Connect session restoration, receiving APIs, and the absence of other
@@ -119,8 +109,8 @@ They do not need Rust or build tools.
 
 ## Release workflow
 
-[build-lexe-nodejs.yml](../../.github/workflows/build-lexe-nodejs.yml) builds on all
-five native architectures, tests packed consumer installs, collects the binaries
+[build-lexe-nodejs.yml](../../.github/workflows/build-lexe-nodejs.yml) builds on
+Ubuntu x64, tests packed consumer installs, collects the native binary
 with napi-rs, and packs the complete release set. Branch and pull-request runs,
 and manual runs, only build and upload artifacts.
 

@@ -8,11 +8,7 @@
     "triples": {
       "defaults": false,
       "additional": [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-apple-darwin",
-        "aarch64-apple-darwin",
-        "x86_64-pc-windows-msvc"
+        "x86_64-unknown-linux-gnu"
       ]
     }
   },
@@ -80,11 +76,7 @@
     "LEXE.md"
   ],
   "optionalDependencies": {
-    "@sunnyln/lni-lexe-nodejs-darwin-arm64": "0.1.0",
-    "@sunnyln/lni-lexe-nodejs-darwin-x64": "0.1.0",
-    "@sunnyln/lni-lexe-nodejs-linux-arm64-gnu": "0.1.0",
-    "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "0.1.0",
-    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc": "0.1.0"
+    "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "0.1.0"
   },
   "lni": {
     "cargoPackage": "lni_lexe_nodejs",

@@ -14,33 +14,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sunnyln/lni-lexe-nodejs-darwin-arm64@npm:0.1.0, @sunnyln/lni-lexe-nodejs-darwin-arm64@workspace:npm/darwin-arm64":
-  version: 0.0.0-use.local
-  resolution: "@sunnyln/lni-lexe-nodejs-darwin-arm64@workspace:npm/darwin-arm64"
-  languageName: unknown
-  linkType: soft
-
-"@sunnyln/lni-lexe-nodejs-darwin-x64@npm:0.1.0, @sunnyln/lni-lexe-nodejs-darwin-x64@workspace:npm/darwin-x64":
-  version: 0.0.0-use.local
-  resolution: "@sunnyln/lni-lexe-nodejs-darwin-x64@workspace:npm/darwin-x64"
-  languageName: unknown
-  linkType: soft
-
-"@sunnyln/lni-lexe-nodejs-linux-arm64-gnu@npm:0.1.0, @sunnyln/lni-lexe-nodejs-linux-arm64-gnu@workspace:npm/linux-arm64-gnu":
-  version: 0.0.0-use.local
-  resolution: "@sunnyln/lni-lexe-nodejs-linux-arm64-gnu@workspace:npm/linux-arm64-gnu"
-  languageName: unknown
-  linkType: soft
-
 "@sunnyln/lni-lexe-nodejs-linux-x64-gnu@npm:0.1.0, @sunnyln/lni-lexe-nodejs-linux-x64-gnu@workspace:npm/linux-x64-gnu":
   version: 0.0.0-use.local
   resolution: "@sunnyln/lni-lexe-nodejs-linux-x64-gnu@workspace:npm/linux-x64-gnu"
-  languageName: unknown
-  linkType: soft
-
-"@sunnyln/lni-lexe-nodejs-win32-x64-msvc@npm:0.1.0, @sunnyln/lni-lexe-nodejs-win32-x64-msvc@workspace:npm/win32-x64-msvc":
-  version: 0.0.0-use.local
-  resolution: "@sunnyln/lni-lexe-nodejs-win32-x64-msvc@workspace:npm/win32-x64-msvc"
   languageName: unknown
   linkType: soft
 
@@ -49,23 +25,11 @@ __metadata:
   resolution: "@sunnyln/lni-lexe-nodejs@workspace:."
   dependencies:
     "@napi-rs/cli": "npm:2.18.4"
-    "@sunnyln/lni-lexe-nodejs-darwin-arm64": "npm:0.1.0"
-    "@sunnyln/lni-lexe-nodejs-darwin-x64": "npm:0.1.0"
-    "@sunnyln/lni-lexe-nodejs-linux-arm64-gnu": "npm:0.1.0"
     "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "npm:0.1.0"
-    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc": "npm:0.1.0"
     "@types/node": "npm:24.13.1"
     typescript: "npm:5.9.3"
   dependenciesMeta:
-    "@sunnyln/lni-lexe-nodejs-darwin-arm64":
-      optional: true
-    "@sunnyln/lni-lexe-nodejs-darwin-x64":
-      optional: true
-    "@sunnyln/lni-lexe-nodejs-linux-arm64-gnu":
-      optional: true
     "@sunnyln/lni-lexe-nodejs-linux-x64-gnu":
-      optional: true
-    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc":
       optional: true
   languageName: unknown
   linkType: soft
