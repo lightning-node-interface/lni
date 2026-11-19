@@ -112,7 +112,7 @@ To install the Linux x64 tarballs in another local project, copy them there and
 run:
 
 ```sh
-npm install ./sunnyln-lni-lexe-nodejs-0.1.0.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.0.tgz
+npm install ./sunnyln-lni-lexe-nodejs-0.1.1.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.1.tgz
 ```
 
 Consumers install `@sunnyln/lni-lexe-nodejs` from npm. They do not need Rust or
