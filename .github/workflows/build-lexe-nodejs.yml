@@ -158,11 +158,13 @@ jobs:
       - name: Publish tested platform packages, then root package
         env:
           NPM_DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+        # Tarball paths keep the leading ./ because npm 11 reads release/x.tgz
+        # as a GitHub owner/repo shorthand and tries to clone it.
         # Authenticates through GitHub OIDC; no npm token is stored. A rerun
         # skips packages already on npm, so a partial publish can finish
         # without a new version number.
         run: |
-          node -e 'const fs = require("fs"); const m = require("./release/pack-manifest.json"); fs.writeFileSync("release/publish-order.txt", m.map(p => [p.name + "@" + p.version, "release/" + p.filename].join(" ")).join("\n") + "\n")'
+          node -e 'const fs = require("fs"); const m = require("./release/pack-manifest.json"); fs.writeFileSync("release/publish-order.txt", m.map(p => [p.name + "@" + p.version, "./release/" + p.filename].join(" ")).join("\n") + "\n")'
           while read -r spec tarball; do
             if npm view "$spec" version >/dev/null 2>&1; then
               echo "$spec is already published, skipping"
