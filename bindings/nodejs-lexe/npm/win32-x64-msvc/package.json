@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-lexe-nodejs-win32-x64-msvc",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0",
   "os": [
     "win32"
   ],
