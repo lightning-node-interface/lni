@@ -113,11 +113,11 @@ To install the Linux x64 tarballs in another local project, copy them there and
 run:
 
 ```sh
-npm install ./sunnyln-lni-lexe-nodejs-0.1.0-beta.2.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.0-beta.2.tgz
+npm install ./sunnyln-lni-lexe-nodejs-0.1.0-rc.1.tgz ./sunnyln-lni-lexe-nodejs-linux-x64-gnu-0.1.0-rc.1.tgz
 ```
 
-Consumers can install `@sunnyln/lni-lexe-nodejs@beta` from npm. They do not need
-Rust or build tools.
+Consumers install `@sunnyln/lni-lexe-nodejs` from npm. They do not need Rust or
+build tools.
 
 ## Release workflow
 
@@ -131,13 +131,16 @@ The workflow publishes only for a pushed tag exactly matching
 `lni-lexe-nodejs-v<package.json version>`. It validates the package set, tag and
 tarball integrity, publishes platform tarballs first and the root tarball last,
 and attaches the packages to a GitHub release. Beta releases use npm's `beta`
-tag, other
-prereleases use `next`, and stable releases use `latest`. Publishing requires
-the repository's `NPM_TOKEN` secret.
+tag, other prereleases use `next`, and stable releases use `latest`.
 
-Version `0.1.0-beta.2` adds the macOS and Windows binaries. Its release tag is
-`lni-lexe-nodejs-v0.1.0-beta.2`. Pushing that tag publishes the package; do not
-push it until npm authentication is configured and the release is approved.
+Publishing uses npm trusted publishing: each of the five packages trusts this
+workflow in the `npm-publish` GitHub environment, so no npm token is stored.
+That environment accepts only `lni-lexe-nodejs-v*` tags and waits for a
+maintainer to approve the publish job. A rerun skips packages already on npm,
+so a partial publish can finish under the same version.
+
+To release, push the tag `lni-lexe-nodejs-v<version>` on the commit that sets
+that version, then approve the publish job in the Actions run.
 
 To change the npm version, edit `package.json`, run `corepack yarn
 version:platforms`, then run `corepack yarn install` and commit the updated

@@ -1,6 +1,6 @@
 {
   "name": "@sunnyln/lni-lexe-nodejs",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-rc.1",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
@@ -79,10 +79,10 @@
     "LEXE.md"
   ],
   "optionalDependencies": {
-    "@sunnyln/lni-lexe-nodejs-darwin-arm64": "0.1.0-beta.2",
-    "@sunnyln/lni-lexe-nodejs-darwin-x64": "0.1.0-beta.2",
-    "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "0.1.0-beta.2",
-    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc": "0.1.0-beta.2"
+    "@sunnyln/lni-lexe-nodejs-darwin-arm64": "0.1.0-rc.1",
+    "@sunnyln/lni-lexe-nodejs-darwin-x64": "0.1.0-rc.1",
+    "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "0.1.0-rc.1",
+    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc": "0.1.0-rc.1"
   },
   "lni": {
     "cargoPackage": "lni_lexe_nodejs",
