@@ -107,6 +107,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/lni-nodejs-v') && github.event_name == 'push'
     needs: package
     runs-on: ubuntu-22.04
+    # npm trusts only this workflow in this environment (trusted publishing),
+    # and the environment waits for a maintainer's approval.
+    environment: npm-publish
     permissions:
       contents: write
       id-token: write
@@ -116,6 +119,9 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - name: Install npm with trusted publishing support
+        run: npm install -g npm@11.21.3
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: lni-nodejs-packages
@@ -127,12 +133,19 @@ jobs:
         run: node bindings/lni_nodejs/scripts/check-release.cjs release
       - name: Publish tested platform packages, then root package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+        # Tarball paths keep the leading ./ because npm 11 reads release/x.tgz
+        # as a GitHub owner/repo shorthand and tries to clone it.
+        # Authenticates through GitHub OIDC; no npm token is stored. A rerun
+        # skips packages already on npm, so a partial publish can finish
+        # without a new version number.
         run: |
-          test -n "$NODE_AUTH_TOKEN"
-          node -e 'const fs = require("fs"); const m = require("./release/pack-manifest.json"); fs.writeFileSync("release/publish-order.txt", m.map(p => "release/" + p.filename).join("\n") + "\n")'
-          while IFS= read -r tarball; do
+          node -e 'const fs = require("fs"); const m = require("./release/pack-manifest.json"); fs.writeFileSync("release/publish-order.txt", m.map(p => [p.name + "@" + p.version, "./release/" + p.filename].join(" ")).join("\n") + "\n")'
+          while read -r spec tarball; do
+            if npm view "$spec" version >/dev/null 2>&1; then
+              echo "$spec is already published, skipping"
+              continue
+            fi
             npm publish "$tarball" --ignore-scripts --access public --provenance --tag "$NPM_DIST_TAG"
           done < release/publish-order.txt
       # softprops/action-gh-release@v2

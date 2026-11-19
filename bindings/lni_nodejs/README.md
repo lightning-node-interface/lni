@@ -94,6 +94,13 @@ workflow runs only build, test, and upload artifacts.
 
 Publishing requires a tag exactly matching `lni-nodejs-v<package.json version>`.
 Generic repository tags such as `v0.26.1` do not release this package. The publish
-job needs the repository's `NPM_TOKEN` secret and publishes the tested platform
-tarballs first, followed by the root tarball. It never runs `napi prepublish`,
-which can publish packages as a lifecycle side effect.
+job runs in the `npm-publish` GitHub environment, which waits for a maintainer's
+approval, and authenticates with npm trusted publishing, so no npm token is
+stored. It publishes the tested platform tarballs first, followed by the root
+tarball, and a rerun skips packages already on npm. It never runs
+`napi prepublish`, which can publish packages as a lifecycle side effect.
+
+npm can only trust a workflow for a package that already exists. Before the
+first release, a maintainer publishes each package once by hand, then adds the
+trusted publisher (repository `lightning-node-interface/lni`, workflow
+`build-nodejs.yml`, environment `npm-publish`) to each of them.
