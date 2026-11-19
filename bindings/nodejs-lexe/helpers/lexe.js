@@ -3,8 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.restoreLexeSession = restoreLexeSession;
 exports.withLexeNode = withLexeNode;
 // Keep importing server-side helpers cheap and independent of native artifacts.
+// Load through the package entry point, so errors carry `error.code` and
+// LexeNode has its JavaScript helpers.
 const getBinding = () => {
-    const binding = require('../native');
+    const binding = require('../index');
     return binding;
 };
 /**

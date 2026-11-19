@@ -1,8 +1,10 @@
 import type { LexeConnectOptions, LexeNode } from '../generated'
 
 // Keep importing server-side helpers cheap and independent of native artifacts.
+// Load through the package entry point, so errors carry `error.code` and
+// LexeNode has its JavaScript helpers.
 const getBinding = () => {
-  const binding: typeof import('../generated') = require('../native')
+  const binding: typeof import('../generated') = require('../index')
   return binding
 }
 

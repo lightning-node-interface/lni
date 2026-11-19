@@ -659,9 +659,15 @@ export declare class LexeNode {
   /**
    * Starts native polling without blocking Node's event loop. Callback receives
    * serialized event data, which the JavaScript entrypoint converts to LNI shape.
-   * `close()` stops the monitor; no callback is delivered after it returns.
+   * Returns the monitor's id for `stopInvoiceEvents()`. `close()` stops every
+   * monitor; no callback is delivered after either returns.
    */
-  onInvoiceEventsRaw(params: OnInvoiceEventParams, callback: (...args: any[]) => any): void
+  onInvoiceEventsRaw(params: OnInvoiceEventParams, callback: (...args: any[]) => any): number
+  /**
+   * Stops one monitor without further callbacks. Unknown or finished ids are
+   * ignored, so this is idempotent.
+   */
+  stopInvoiceEvents(monitorId: number): void
 }
 /** One in-memory LexeConnect attempt. Keep this instance until delivery. */
 export declare class LexeConnectSession {

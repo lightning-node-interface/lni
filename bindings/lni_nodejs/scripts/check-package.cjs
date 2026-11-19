@@ -75,6 +75,7 @@ const required = [
   'lexe-connect.js',
   'lexe-connect.d.ts',
   'lexe-events.js',
+  'lexe-errors.js',
   'lexe/package.json',
   ...exportTargets,
 ].map((path) => path.replace(/^\.\//, ''))

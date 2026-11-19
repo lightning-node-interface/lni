@@ -11,6 +11,7 @@ const files = [
   'lexe-connect.js',
   'lexe-connect.d.ts',
   'lexe-events.js',
+  'lexe-errors.js',
   'helpers/lexe.ts',
   'helpers/lexe.js',
   'helpers/lexe.d.ts',
@@ -20,6 +21,7 @@ const files = [
 const tests = [
   'lexe-connect.test.js',
   'lexe-events.test.js',
+  'lexe-errors.test.js',
   'lexe-monitor.test.js',
   'helpers/lexe.test.js',
 ]

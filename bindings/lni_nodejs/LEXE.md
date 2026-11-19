@@ -44,6 +44,32 @@ polling is cancelled, events already queued for JavaScript are discarded, and no
 stopped monitor resolves without a further callback. Starting a monitor on a
 closed node rejects. Calling `close()` again does nothing.
 
+`onInvoiceEvents(params, callback)` follows the LNI-wide status rules in
+[docs/invoice-events.md](../../docs/invoice-events.md): a failed Lexe sync or
+lookup reports `pending` and polling continues, so one network error never ends
+a monitor. `failure` means `maxPollingSec` elapsed, the parameters cannot be
+monitored, or Lexe reports the payment failed. If `callback` throws, the promise
+rejects with that error and the native monitor stops.
+
+## Errors
+
+Every error from `LexeNode`, `LexeConnect` and `LexeConnectSession` has a stable
+`error.code`. Branch on the code, not on `error.message`, which may change. The
+exceptions are an aborted signal, which rejects with `name === 'AbortError'`, and
+an error thrown by your own `onInvoiceEvents` callback, which is passed through.
+
+| Code | Meaning | What to do |
+| --- | --- | --- |
+| `LEXE_INVALID_INPUT` | The request was rejected before anything was sent: bad credentials, network, address, amount or option. The message says which. | Fix the input; retrying the same request fails again. |
+| `LEXE_PAYMENT_INDETERMINATE` | A payment may have been sent: a Lightning payment timed out, or an on-chain send failed after submission or returned an unreadable response. | Do not prepare a new payment. Call `lookupInvoice` with the payment hash, or check `listTransactions`; an on-chain retry must reuse the same prepared transaction (same payment id). |
+| `LEXE_REQUEST_FAILED` | Lexe or the network failed. No payment outcome is in doubt. | Retry later. The message omits upstream detail, which may be sensitive. |
+| `LEXE_NODE_CLOSED` | `close()` was already called. | Create a new `LexeNode`. |
+| `LEXE_CONNECT_UNAVAILABLE` | A LexeConnect mailbox request failed; the attempt is still live. | Poll again. `waitForResponse()` retries with backoff. |
+| `LEXE_CONNECT_EXPIRED` | The LexeConnect attempt passed its deadline. | Start a new attempt. |
+| `LEXE_CONNECT_CANCELLED` | The LexeConnect attempt was cancelled. | Start a new attempt. |
+| `LEXE_CONNECT_COMPLETED` | The LexeConnect attempt already delivered its response. | Use the response already returned. |
+| `LEXE_CONNECT_DISPOSED` | `dispose()` was already called on this `LexeConnect`. | Start a new attempt. |
+
 One LexeConnect attempt owns a private response key in memory. Keep the same
 `LexeConnect` instance through approval. A Vercel function cannot rely on a
 later request reaching the same process, so a merchant Connect flow needs a
@@ -113,6 +139,15 @@ node's regular sync. After detecting a payment externally, call
 returns `{ receivedTxids, syncedBlockHeight }`. The chain source can lag an
 external mempool watcher, so retry if the expected transaction is absent.
 Both methods validate the address network. No shared-address fallback is used.
+
+`receivedTxids` lists the address's receives that are unconfirmed, or confirmed
+at or after the `syncedBlockHeight` you passed in. Omit the height on the first
+check, and pass the returned `syncedBlockHeight` to the next check to skip
+receives already confirmed before it. Save the txids before you save the new height: if
+the process stops in between, the next check with the old height returns them
+again, while a check with the new height would skip any that confirmed earlier.
+`receivedTxids` records receives in Lexe; it is not proof of payment. Verify the
+amount and confirmations from your own chain source before crediting an order.
 
 The address check uses the typed gateway client from released `lexe-api` v0.1.29
 through the SDK's `unstable` client access. The public wallet check also fetches

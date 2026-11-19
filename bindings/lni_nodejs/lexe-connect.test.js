@@ -193,3 +193,55 @@ test('works without global AbortController or AbortSignal (Node < 15)', () => {
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout.trim(), 'ok')
 })
+
+function codedError(code, message) {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
+
+test('waitForResponse retries failed mailbox requests until a response arrives', async () => {
+  const native = new Session({})
+  const outcomes = [
+    codedError('LEXE_CONNECT_UNAVAILABLE', 'LexeConnect mailbox request failed'),
+    codedError('LEXE_CONNECT_UNAVAILABLE', 'LexeConnect mailbox request failed'),
+    { error: 'user_rejected', scopes: [], permissions: [] },
+  ]
+  native.pollMailbox = async () => {
+    const next = outcomes.shift()
+    if (next instanceof Error) throw next
+    return next
+  }
+  const connect = new LexeConnect({}, native)
+  const started = Date.now()
+  const result = await connect.waitForResponse({ pollIntervalMs: 250 })
+  assert.equal(result.status, 'rejected')
+  assert.equal(outcomes.length, 0)
+  // Backoff doubles from the poll interval: 500 ms, then 1000 ms.
+  assert.ok(Date.now() - started >= 1400)
+})
+
+test('waitForResponse stops on errors that are not transient', async () => {
+  const native = new Session({})
+  let polls = 0
+  native.pollMailbox = async () => {
+    polls += 1
+    throw codedError('LEXE_CONNECT_EXPIRED', 'LexeConnect session expired')
+  }
+  const connect = new LexeConnect({}, native)
+  await assert.rejects(connect.waitForResponse({ pollIntervalMs: 250 }), { code: 'LEXE_CONNECT_EXPIRED' })
+  assert.equal(polls, 1)
+})
+
+test('abort stops a retry backoff', async () => {
+  const native = new Session({})
+  native.pollMailbox = async () => {
+    throw codedError('LEXE_CONNECT_UNAVAILABLE', 'LexeConnect mailbox request failed')
+  }
+  const connect = new LexeConnect({}, native)
+  const controller = new AbortController()
+  const pending = connect.waitForResponse({ signal: controller.signal, pollIntervalMs: 5000 })
+  setTimeout(() => controller.abort(), 20)
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(native.cancelled, true)
+})

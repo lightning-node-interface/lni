@@ -116,6 +116,35 @@ test('a wrapper monitor resolves on its terminal event', { skip }, async () => {
   node.close()
 })
 
+test('stopInvoiceEvents stops one monitor and releases its resources', { skip }, async () => {
+  const node = LexeNode.monitorTestInstance()
+  const events = []
+  const first = node.startTestMonitor(1, 1000000, (payload) => events.push(JSON.parse(payload).status))
+  node.startTestMonitor(1, 1000000, () => {})
+  assert.equal(node.activeMonitorCount(), 2)
+  node.stopInvoiceEvents(first)
+  assert.equal(node.activeMonitorCount(), 1)
+  const delivered = events.length
+  await sleep(50)
+  assert.equal(events.length, delivered, 'no callback may run after stop')
+  node.stopInvoiceEvents(first)
+  closeNative.call(node)
+  await until(() => LexeNode.liveTestResources() === 0, 'monitor resources released')
+})
+
+test('a throwing wrapper callback stops its native monitor', { skip }, async () => {
+  const node = LexeNode.monitorTestInstance()
+  await assert.rejects(
+    node.onInvoiceEvents({ intervalMs: 2, count: 1000000 }, () => {
+      throw new Error('callback failed')
+    }),
+    /callback failed/
+  )
+  assert.equal(node.activeMonitorCount(), 0)
+  await until(() => LexeNode.liveTestResources() === 0, 'monitor resources released')
+  node.close()
+})
+
 test('no unhandled rejections', { skip }, async () => {
   await sleep(20)
   assert.deepEqual(unhandled, [])

@@ -106,8 +106,20 @@ try {
     '-e',
     `
     import pkg from '${pkg.name}'
+    import { LexeNode, LexeConnect, LexeConnectSession } from '${pkg.name}'
     import { withLexeNode } from '${pkg.name}/lexe'
     if (typeof pkg.LexeNode !== 'function' || typeof withLexeNode !== 'function') throw new Error('ESM imports failed')
+    // Named imports need names Node can detect in the CommonJS entry point.
+    if (LexeNode !== pkg.LexeNode || LexeConnect !== pkg.LexeConnect || LexeConnectSession !== pkg.LexeConnectSession) {
+      throw new Error('ESM named imports failed')
+    }
+    // Native errors carry a stable code.
+    try {
+      new LexeNode('', 'mainnet')
+      throw new Error('empty credentials were accepted')
+    } catch (error) {
+      if (error.code !== 'LEXE_INVALID_INPUT') throw error
+    }
   `,
   ])
   // The helper entry point must import without any installed native package.
@@ -156,6 +168,17 @@ try {
     void [address, checked, capabilities, onchain, monitor, LexeConnect, restoreLexeSession, withLexeNode]
   `
   )
+  // ESM TypeScript consumers resolve the same declarations through named imports.
+  writeFileSync(
+    join(scratch, 'consumer.mts'),
+    `
+    import { LexeNode, LexeConnect } from '${pkg.name}'
+    import { withLexeNode } from '${pkg.name}/lexe'
+    const node = null! as LexeNode
+    const address: Promise<string> = node.getExclusiveAddress()
+    void [address, LexeConnect, withLexeNode]
+  `
+  )
   const tsc = require.resolve('typescript/bin/tsc', { paths: [root] })
   run(process.execPath, [
     tsc,
@@ -168,6 +191,7 @@ try {
     '--target',
     'ES2020',
     'consumer.cts',
+    'consumer.mts',
   ])
   console.log(
     `Packed install OK: ${pkg.name}@${pkg.version} + ${platform}; native loading, Lexe APIs, CommonJS, ESM, types, lazy helper, no Spark/Arkade.`

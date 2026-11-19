@@ -151,8 +151,11 @@ export default async function handler(request: ConnectRequest, response: Connect
         }
       } catch (error) {
         if (disconnected) break;
+        // The raw addon keeps the stable error code at the start of the message
+        // (the package entry point moves it to error.code). This code means the
+        // mailbox request failed and the attempt is still live.
         const message = error instanceof Error ? error.message : '';
-        if (message.includes('mailbox request failed') && Date.now() < deadline) {
+        if (message.startsWith('LEXE_CONNECT_UNAVAILABLE:') && Date.now() < deadline) {
           mailboxFailures += 1;
           if (mailboxFailures === 1) send(response, 'retrying', {});
           await delay(Math.min(1000 * 2 ** Math.min(mailboxFailures, 3), 5000));

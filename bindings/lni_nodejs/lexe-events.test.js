@@ -85,3 +85,52 @@ test('monitors still settle if native close throws', async () => {
   assert.throws(() => node.close(), /native close failed/)
   await done
 })
+
+// Models native monitor ids: onInvoiceEventsRaw returns one, stopInvoiceEvents ends it.
+class StoppableNode {
+  constructor({ emitDuringStart = false } = {}) {
+    this.emitDuringStart = emitDuringStart
+    this.callbacks = new Map()
+    this.stopped = []
+    this.nextId = 7
+  }
+  onInvoiceEventsRaw(_params, callback) {
+    const id = this.nextId++
+    this.callbacks.set(id, callback)
+    if (this.emitDuringStart) callback(pending)
+    return id
+  }
+  stopInvoiceEvents(id) {
+    this.stopped.push(id)
+    this.callbacks.delete(id)
+  }
+  close() {}
+}
+installLexeInvoiceEvents(StoppableNode)
+
+test('a throwing callback rejects and stops its native monitor', async () => {
+  const node = new StoppableNode()
+  const done = node.onInvoiceEvents({}, () => {
+    throw new Error('callback failed')
+  })
+  node.callbacks.get(7)(pending)
+  await assert.rejects(done, /callback failed/)
+  assert.deepEqual(node.stopped, [7])
+})
+
+test('a callback that throws before the monitor id is known still stops it', async () => {
+  const node = new StoppableNode({ emitDuringStart: true })
+  const done = node.onInvoiceEvents({}, () => {
+    throw new Error('callback failed')
+  })
+  await assert.rejects(done, /callback failed/)
+  assert.deepEqual(node.stopped, [7])
+})
+
+test('a monitor that ends normally is not stopped again', async () => {
+  const node = new StoppableNode()
+  const done = node.onInvoiceEvents({}, () => {})
+  node.callbacks.get(7)(JSON.stringify({ status: 'success', transaction: null }))
+  await done
+  assert.deepEqual(node.stopped, [])
+})

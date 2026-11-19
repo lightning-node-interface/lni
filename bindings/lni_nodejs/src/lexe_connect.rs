@@ -7,6 +7,30 @@ use napi_derive::napi;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// Native errors start with a stable code, `LEXE_<NAME>: message`. The
+/// JavaScript entry point moves it to `error.code`; LEXE.md lists the codes.
+fn coded(code: &str, message: &str) -> napi::Error {
+  napi::Error::from_reason(format!("{code}: {message}"))
+}
+
+/// The core's LexeConnect errors are fixed strings without secrets. A failed
+/// mailbox request leaves the attempt live, so it gets a retryable code.
+fn connect_error(error: lni::ApiError) -> napi::Error {
+  match error {
+    lni::ApiError::InvalidInput(message) => {
+      let code = match message.as_str() {
+        "LexeConnect session expired" => "LEXE_CONNECT_EXPIRED",
+        "LexeConnect session cancelled" => "LEXE_CONNECT_CANCELLED",
+        "LexeConnect session already completed" => "LEXE_CONNECT_COMPLETED",
+        _ => "LEXE_INVALID_INPUT",
+      };
+      coded(code, &message)
+    }
+    lni::ApiError::Api { reason } => coded("LEXE_CONNECT_UNAVAILABLE", &reason),
+    other => coded("LEXE_REQUEST_FAILED", &other.to_string()),
+  }
+}
+
 /// Requester options. With no destination, Lexe's encrypted mailbox is used.
 #[napi(object)]
 pub struct LexeConnectOptions {
@@ -32,7 +56,8 @@ impl TryFrom<LexeConnectOptions> for CoreLexeConnectOptions {
       .expires_at_ms
       .map(|ms| {
         if ms < 0 || ms as u64 > MAX_SAFE_INTEGER {
-          Err(napi::Error::from_reason(
+          Err(coded(
+            "LEXE_INVALID_INPUT",
             "expiresAtMs must be a non-negative safe integer",
           ))
         } else {
@@ -78,7 +103,8 @@ impl TryFrom<CoreLexeConnectResponse> for LexeConnectResponse {
       .expires_at_ms
       .map(|ms| {
         if ms > MAX_SAFE_INTEGER {
-          Err(napi::Error::from_reason(
+          Err(coded(
+            "LEXE_INVALID_INPUT",
             "LexeConnect expiry exceeds JavaScript's safe integer range",
           ))
         } else {
@@ -110,8 +136,7 @@ impl LexeConnectSession {
   #[napi(constructor)]
   pub fn new(options: LexeConnectOptions) -> napi::Result<Self> {
     let options = options.try_into()?;
-    let inner = CoreLexeConnectSession::new(options)
-      .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    let inner = CoreLexeConnectSession::new(options).map_err(connect_error)?;
     Ok(Self { inner })
   }
 
@@ -124,29 +149,23 @@ impl LexeConnectSession {
     expires_at_ms: i64,
   ) -> napi::Result<Self> {
     if expires_at_ms < 0 || expires_at_ms as u64 > MAX_SAFE_INTEGER {
-      return Err(napi::Error::from_reason("Invalid LexeConnect deadline"));
+      return Err(coded("LEXE_INVALID_INPUT", "Invalid LexeConnect deadline"));
     }
     let inner =
       CoreLexeConnectSession::restore(options.try_into()?, seed.to_vec(), expires_at_ms as u64)
-        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+        .map_err(connect_error)?;
     Ok(Self { inner })
   }
 
   /// Sensitive URL for a link or QR code; do not log it.
   #[napi]
   pub fn connection_string(&self) -> napi::Result<String> {
-    self
-      .inner
-      .connection_string()
-      .map_err(|error| napi::Error::from_reason(error.to_string()))
+    self.inner.connection_string().map_err(connect_error)
   }
 
   #[napi]
   pub fn accept_redirect(&self, url: String) -> napi::Result<LexeConnectResponse> {
-    let response = self
-      .inner
-      .accept_redirect(url)
-      .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    let response = self.inner.accept_redirect(url).map_err(connect_error)?;
     response.try_into()
   }
 
@@ -156,7 +175,7 @@ impl LexeConnectSession {
     let response = self
       .inner
       .accept_body(body.to_vec())
-      .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+      .map_err(connect_error)?;
     response.try_into()
   }
 
@@ -167,16 +186,13 @@ impl LexeConnectSession {
       .inner
       .poll_mailbox()
       .await
-      .map_err(|error| napi::Error::from_reason(error.to_string()))?
+      .map_err(connect_error)?
       .map(TryInto::try_into)
       .transpose()
   }
 
   #[napi]
   pub fn cancel(&self) -> napi::Result<()> {
-    self
-      .inner
-      .cancel()
-      .map_err(|error| napi::Error::from_reason(error.to_string()))
+    self.inner.cancel().map_err(connect_error)
   }
 }

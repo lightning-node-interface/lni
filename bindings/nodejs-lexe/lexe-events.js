@@ -33,7 +33,11 @@ function installLexeInvoiceEvents(LexeNode) {
   }
 
   LexeNode.prototype.onInvoiceEvents = function onInvoiceEvents(params, callback) {
-    if (typeof callback !== 'function') throw new TypeError('callback must be a function')
+    if (typeof callback !== 'function') {
+      const error = new TypeError('callback must be a function')
+      error.code = 'LEXE_INVALID_INPUT'
+      throw error
+    }
     const node = this
     return new Promise((resolve, reject) => {
       let monitors = activeMonitors.get(node)
@@ -42,17 +46,33 @@ function installLexeInvoiceEvents(LexeNode) {
         activeMonitors.set(node, monitors)
       }
       let settled = false
+      // The native monitor's id, and whether it must stop as soon as it is known
+      // (the native callback can run before onInvoiceEventsRaw returns).
+      let monitorId
+      let stopNative = false
+      const stopMonitor = () => {
+        stopNative = true
+        if (monitorId === undefined || typeof node.stopInvoiceEvents !== 'function') return
+        try {
+          node.stopInvoiceEvents(monitorId)
+        } catch (_) {
+          // Already finished or closed: nothing left to stop.
+        }
+      }
       const settle = (error) => {
         if (settled) return
         settled = true
         monitors.delete(stop)
-        if (error) reject(error)
-        else resolve()
+        if (error) {
+          // A throwing callback ends the monitor; native polling must end too.
+          stopMonitor()
+          reject(error)
+        } else resolve()
       }
       const stop = () => settle()
       monitors.add(stop)
       try {
-        node.onInvoiceEventsRaw(params, (payload) => {
+        monitorId = node.onInvoiceEventsRaw(params, (payload) => {
           if (settled) return
           try {
             const event = JSON.parse(payload)
@@ -62,6 +82,7 @@ function installLexeInvoiceEvents(LexeNode) {
             settle(error)
           }
         })
+        if (stopNative) stopMonitor()
       } catch (error) {
         settle(error)
       }

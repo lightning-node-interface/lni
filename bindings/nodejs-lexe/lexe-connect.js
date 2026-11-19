@@ -2,6 +2,16 @@
 
 // Keep this file within Node 10 syntax and APIs: the root entry loads it for every backend.
 
+// Longest wait between retries of a failed mailbox request.
+const MAX_RETRY_DELAY_MS = 10000
+
+// Errors thrown here carry a code, like native ones (see lexe-errors.js).
+function codedError(code, message) {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
+
 function abortError() {
   const error = new Error('LexeConnect cancelled')
   error.name = 'AbortError'
@@ -77,11 +87,11 @@ function createLexeConnectClass(NativeSession) {
     constructor(config, native) {
       if (config.expiresAtMs !== undefined &&
           (!Number.isSafeInteger(config.expiresAtMs) || config.expiresAtMs < 0)) {
-        throw new Error('expiresAtMs must be a non-negative safe integer')
+        throw codedError('LEXE_INVALID_INPUT', 'expiresAtMs must be a non-negative safe integer')
       }
       if (config.requestTtlSecs !== undefined &&
           (!Number.isInteger(config.requestTtlSecs) || config.requestTtlSecs < 1 || config.requestTtlSecs > 300)) {
-        throw new Error('requestTtlSecs must be between 1 and 300')
+        throw codedError('LEXE_INVALID_INPUT', 'requestTtlSecs must be between 1 and 300')
       }
       this.native = native || new NativeSession(config)
       this.disposed = false
@@ -93,7 +103,7 @@ function createLexeConnectClass(NativeSession) {
     }
 
     assertLive() {
-      if (this.disposed) throw new Error('LexeConnect disposed')
+      if (this.disposed) throw codedError('LEXE_CONNECT_DISPOSED', 'LexeConnect disposed')
     }
 
     connectionString() {
@@ -165,21 +175,33 @@ function createLexeConnectClass(NativeSession) {
 
     async waitForResponse(options = {}) {
       this.assertLive()
-      if (this.waiter) throw new Error('LexeConnect is already waiting')
+      if (this.waiter) throw codedError('LEXE_INVALID_INPUT', 'LexeConnect is already waiting')
       const interval = options.pollIntervalMs === undefined || options.pollIntervalMs === null
         ? 1000
         : options.pollIntervalMs
       if (!Number.isInteger(interval) || interval < 250 || interval > 5000) {
-        throw new Error('pollIntervalMs must be between 250 and 5000')
+        throw codedError('LEXE_INVALID_INPUT', 'pollIntervalMs must be between 250 and 5000')
       }
       const source = createAbortSource()
       this.waiter = source
       const stopListening = onAbort(options.signal, () => this.cancel())
       try {
         if (options.signal && options.signal.aborted) this.cancel()
+        let failures = 0
         for (;;) {
           if (source.signal.aborted) throw abortError()
-          const response = await this.pollMailbox(source.signal)
+          let response
+          try {
+            response = await this.pollMailbox(source.signal)
+          } catch (error) {
+            // A failed mailbox request leaves the attempt live. Back off and
+            // retry; the native deadline ends it with LEXE_CONNECT_EXPIRED.
+            if (!error || error.code !== 'LEXE_CONNECT_UNAVAILABLE') throw error
+            failures += 1
+            await delay(Math.min(interval * Math.pow(2, failures), MAX_RETRY_DELAY_MS), source.signal)
+            continue
+          }
+          failures = 0
           if (response !== undefined) return response
           await delay(interval, source.signal)
         }

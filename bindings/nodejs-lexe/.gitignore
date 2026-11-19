@@ -7,6 +7,7 @@ node_modules/
 /artifacts/
 /lexe-connect.test.js
 /lexe-events.test.js
+/lexe-errors.test.js
 /lexe-monitor.test.js
 /helpers/lexe.test.js
 /npm/*/LICENSE

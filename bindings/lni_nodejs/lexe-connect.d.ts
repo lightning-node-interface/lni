@@ -20,7 +20,11 @@ export declare class LexeConnect {
    * the next `pollMailbox()` or `waitForResponse()`. Use `cancel()` to end the attempt.
    */
   pollMailbox(signal?: LexeAbortSignal): Promise<LexeConnectResult | undefined>
-  /** Polls until a response arrives. Aborting `signal` cancels the attempt. */
+  /**
+   * Polls until a response arrives. A failed mailbox request
+   * (`LEXE_CONNECT_UNAVAILABLE`) is retried with backoff until the attempt
+   * expires (`LEXE_CONNECT_EXPIRED`). Aborting `signal` cancels the attempt.
+   */
   waitForResponse(options?: { signal?: LexeAbortSignal, pollIntervalMs?: number }): Promise<LexeConnectResult>
   /**
    * Ends the attempt. A response verified before cancellation took effect is

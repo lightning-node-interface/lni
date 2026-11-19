@@ -38,7 +38,7 @@ impl lni::OnInvoiceEventCallback for InvoiceEventCallback {
 
 /// An active invoice monitor. Aborting its callback discards queued events.
 struct Monitor {
-  id: u64,
+  id: u32,
   task: JoinHandle<()>,
   callback: ThreadsafeFunction<String, ErrorStrategy::Fatal>,
 }
@@ -56,7 +56,7 @@ struct State {
   node: Option<CoreLexeNode>,
   closed: bool,
   monitors: Vec<Monitor>,
-  next_monitor_id: u64,
+  next_monitor_id: u32,
 }
 
 fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
@@ -64,10 +64,35 @@ fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
   state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Native errors start with a stable code, `LEXE_<NAME>: message`. The
+/// JavaScript entry point moves it to `error.code`; LEXE.md lists the codes.
+fn coded(code: &str, message: &str) -> napi::Error {
+  napi::Error::from_reason(format!("{code}: {message}"))
+}
+
+fn closed() -> napi::Error {
+  coded("LEXE_NODE_CLOSED", "Lexe node closed")
+}
+
+/// Input errors keep the core's message so callers can tell a request to fix
+/// from a failure to retry; Lexe Lightning payments that timed out report
+/// their unknown outcome. Everything else uses `fallback`, because upstream SDK
+/// errors may carry sensitive detail.
+fn lexe_error(fallback: &'static str) -> impl FnOnce(lni::ApiError) -> napi::Error {
+  move |error| match error {
+    lni::ApiError::InvalidInput(message) => coded("LEXE_INVALID_INPUT", &message),
+    lni::ApiError::Nwc { code, .. } if code == "PAYMENT_INDETERMINATE" => coded(
+      "LEXE_PAYMENT_INDETERMINATE",
+      "Lexe payment outcome is unknown; call lookupInvoice with the payment hash before retrying",
+    ),
+    _ => coded("LEXE_REQUEST_FAILED", fallback),
+  }
+}
+
 /// Deregisters a monitor however its task ends, releasing the callback.
 struct MonitorRegistration {
   state: Arc<Mutex<State>>,
-  id: u64,
+  id: u32,
 }
 
 impl Drop for MonitorRegistration {
@@ -88,10 +113,7 @@ pub struct LexeNode {
 
 impl LexeNode {
   fn node(&self) -> napi::Result<CoreLexeNode> {
-    lock(&self.state)
-      .node
-      .clone()
-      .ok_or_else(|| napi::Error::from_reason("Lexe node closed"))
+    lock(&self.state).node.clone().ok_or_else(closed)
   }
 }
 
@@ -104,7 +126,7 @@ impl LexeNode {
     data_dir: Option<String>,
   ) -> napi::Result<Self> {
     if data_dir.as_deref() == Some("") {
-      return Err(napi::Error::from_reason("dataDir must not be empty"));
+      return Err(coded("LEXE_INVALID_INPUT", "dataDir must not be empty"));
     }
     let config = LexeConfig {
       client_credentials,
@@ -116,7 +138,14 @@ impl LexeNode {
     } else {
       CoreLexeNode::new_stateless(config)
     }
-    .map_err(|_| napi::Error::from_reason("Failed to initialize Lexe node"))?;
+    // Credential parse errors may echo the credential, so keep a fixed message.
+    .map_err(|error| match error {
+      lni::ApiError::InvalidInput(_) => coded(
+        "LEXE_INVALID_INPUT",
+        "Invalid Lexe client credentials, network or dataDir",
+      ),
+      _ => coded("LEXE_REQUEST_FAILED", "Failed to initialize Lexe node"),
+    })?;
     Ok(Self {
       state: Arc::new(Mutex::new(State {
         node: Some(inner),
@@ -148,7 +177,7 @@ impl LexeNode {
       .node()?
       .get_permissions()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to get Lexe permissions"))
+      .map_err(lexe_error("Failed to get Lexe permissions"))
   }
 
   #[napi]
@@ -157,7 +186,7 @@ impl LexeNode {
       .node()?
       .get_client_info()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to get Lexe client info"))
+      .map_err(lexe_error("Failed to get Lexe client info"))
   }
 
   #[napi]
@@ -166,7 +195,7 @@ impl LexeNode {
       .node()?
       .get_info()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to get Lexe node info"))
+      .map_err(lexe_error("Failed to get Lexe node info"))
   }
 
   #[napi]
@@ -177,7 +206,7 @@ impl LexeNode {
       .node()?
       .get_receiving_capabilities()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to inspect Lexe receiving capabilities"))
+      .map_err(lexe_error("Failed to inspect Lexe receiving capabilities"))
   }
 
   #[napi]
@@ -188,7 +217,7 @@ impl LexeNode {
       .node()?
       .get_human_bitcoin_address()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to get Lexe human Bitcoin address"))
+      .map_err(lexe_error("Failed to get Lexe human Bitcoin address"))
   }
 
   #[napi]
@@ -197,16 +226,18 @@ impl LexeNode {
       .node()?
       .get_next_unused_address()
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to get Lexe receiving address"))
+      .map_err(lexe_error("Failed to get Lexe receiving address"))
   }
 
   #[napi]
   pub async fn get_exclusive_address(&self) -> napi::Result<String> {
-    self.node()?.get_exclusive_address().await.map_err(|_| {
-      napi::Error::from_reason(
+    self
+      .node()?
+      .get_exclusive_address()
+      .await
+      .map_err(lexe_error(
         "Failed to get Lexe exclusive address; node v0.10.9 or later is required",
-      )
-    })
+      ))
   }
 
   #[napi]
@@ -219,7 +250,7 @@ impl LexeNode {
       .node()?
       .check_address(address, synced_block_height)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to sync Lexe exclusive address"))
+      .map_err(lexe_error("Failed to sync Lexe exclusive address"))
   }
 
   #[napi]
@@ -231,7 +262,7 @@ impl LexeNode {
       .node()?
       .create_invoice(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to create Lexe invoice"))
+      .map_err(lexe_error("Failed to create Lexe invoice"))
   }
 
   #[napi]
@@ -243,7 +274,7 @@ impl LexeNode {
       .node()?
       .pay_invoice(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to pay Lexe invoice"))
+      .map_err(lexe_error("Failed to pay Lexe invoice"))
   }
 
   #[napi]
@@ -255,7 +286,7 @@ impl LexeNode {
       .node()?
       .prepare_onchain_transaction(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to prepare Lexe on-chain transaction"))
+      .map_err(lexe_error("Failed to prepare Lexe on-chain transaction"))
   }
 
   #[napi]
@@ -268,7 +299,15 @@ impl LexeNode {
       .node()?
       .pay_onchain_with_options(transaction, options.unwrap_or_default())
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to pay Lexe on-chain transaction"))
+      // The core rejects bad input before sending; any later error may follow
+      // a completed send, so it never reads as a plain failure.
+      .map_err(|error| match error {
+        lni::ApiError::InvalidInput(message) => coded("LEXE_INVALID_INPUT", &message),
+        _ => coded(
+          "LEXE_PAYMENT_INDETERMINATE",
+          lni::lexe::onchain::ONCHAIN_OUTCOME_UNKNOWN,
+        ),
+      })
   }
 
   #[napi]
@@ -277,7 +316,7 @@ impl LexeNode {
       .node()?
       .create_offer(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to create Lexe offer"))
+      .map_err(lexe_error("Failed to create Lexe offer"))
   }
 
   #[napi]
@@ -286,7 +325,7 @@ impl LexeNode {
       .node()?
       .get_offer(search)
       .await
-      .map_err(|_| napi::Error::from_reason("Lexe getOffer is unavailable"))
+      .map_err(lexe_error("Lexe getOffer is unavailable"))
   }
 
   #[napi]
@@ -295,7 +334,7 @@ impl LexeNode {
       .node()?
       .list_offers(search)
       .await
-      .map_err(|_| napi::Error::from_reason("Lexe listOffers is unavailable"))
+      .map_err(lexe_error("Lexe listOffers is unavailable"))
   }
 
   #[napi]
@@ -309,7 +348,7 @@ impl LexeNode {
       .node()?
       .pay_offer(offer, amount_msats, payer_note)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to pay Lexe offer"))
+      .map_err(lexe_error("Failed to pay Lexe offer"))
   }
 
   #[napi]
@@ -321,7 +360,7 @@ impl LexeNode {
       .node()?
       .lookup_invoice(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to look up Lexe invoice"))
+      .map_err(lexe_error("Failed to look up Lexe invoice"))
   }
 
   #[napi]
@@ -333,7 +372,7 @@ impl LexeNode {
       .node()?
       .list_transactions(params)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to list Lexe transactions"))
+      .map_err(lexe_error("Failed to list Lexe transactions"))
   }
 
   #[napi]
@@ -342,7 +381,7 @@ impl LexeNode {
       .node()?
       .decode(value)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to decode Lexe payment"))
+      .map_err(lexe_error("Failed to decode Lexe payment"))
   }
 
   #[napi]
@@ -351,20 +390,22 @@ impl LexeNode {
       .node()?
       .decode_offer(offer)
       .await
-      .map_err(|_| napi::Error::from_reason("Failed to decode Lexe offer"))
+      .map_err(lexe_error("Failed to decode Lexe offer"))
   }
 
   /// Starts native polling without blocking Node's event loop. Callback receives
   /// serialized event data, which the JavaScript entrypoint converts to LNI shape.
-  /// `close()` stops the monitor; no callback is delivered after it returns.
+  /// Returns the monitor's id for `stopInvoiceEvents()`. `close()` stops every
+  /// monitor; no callback is delivered after either returns.
   #[napi]
   pub fn on_invoice_events_raw(
     &self,
     params: lni::OnInvoiceEventParams,
     callback: JsFunction,
-  ) -> napi::Result<()> {
+  ) -> napi::Result<u32> {
     if !self.persistent {
-      return Err(napi::Error::from_reason(
+      return Err(coded(
+        "LEXE_INVALID_INPUT",
         "Lexe invoice monitoring requires dataDir",
       ));
     }
@@ -373,26 +414,43 @@ impl LexeNode {
       inner.on_invoice_events(params, callback).await;
     })
   }
+
+  /// Stops one monitor without further callbacks. Unknown or finished ids are
+  /// ignored, so this is idempotent.
+  #[napi]
+  pub fn stop_invoice_events(&self, monitor_id: u32) {
+    let monitor = {
+      let mut state = lock(&self.state);
+      let index = state
+        .monitors
+        .iter()
+        .position(|monitor| monitor.id == monitor_id);
+      index.map(|index| state.monitors.swap_remove(index))
+    };
+    if let Some(monitor) = monitor {
+      monitor.stop();
+    }
+  }
 }
 
 impl LexeNode {
   /// Registers under the state lock, so `close()` either stops this monitor
   /// or this call observes the closed node.
-  fn spawn_monitor<F, Fut>(&self, callback: JsFunction, run: F) -> napi::Result<()>
+  fn spawn_monitor<F, Fut>(&self, callback: JsFunction, run: F) -> napi::Result<u32>
   where
     F: FnOnce(Arc<dyn lni::OnInvoiceEventCallback>) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
   {
     let mut state = lock(&self.state);
     if state.closed {
-      return Err(napi::Error::from_reason("Lexe node closed"));
+      return Err(closed());
     }
     let callback: ThreadsafeFunction<String, ErrorStrategy::Fatal> = callback
       .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
         Ok(vec![ctx.env.create_string(&ctx.value)?])
       })?;
     let id = state.next_monitor_id;
-    state.next_monitor_id += 1;
+    state.next_monitor_id = state.next_monitor_id.wrapping_add(1);
     let registration = MonitorRegistration {
       state: self.state.clone(),
       id,
@@ -406,7 +464,7 @@ impl LexeNode {
       run(events).await;
     });
     state.monitors.push(Monitor { id, task, callback });
-    Ok(())
+    Ok(id)
   }
 }
 
@@ -453,7 +511,7 @@ mod monitor_test {
       interval_ms: u32,
       count: u32,
       callback: JsFunction,
-    ) -> napi::Result<()> {
+    ) -> napi::Result<u32> {
       // Captured at registration, like the wallet clone in onInvoiceEventsRaw.
       let resource = Resource::new();
       self.spawn_monitor(callback, move |callback| async move {
