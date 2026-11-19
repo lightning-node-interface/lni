@@ -467,7 +467,9 @@ fn process_invoice_lookup_result(
                 ("pending".to_string(), Some(transaction))
             }
         }
-        Err(_) => ("error".to_string(), None),
+        // A failed lookup is not evidence that the invoice failed: report
+        // pending and retry until max_polling_sec (docs/invoice-events.md).
+        Err(_) => ("pending".to_string(), None),
     }
 }
 
@@ -480,10 +482,6 @@ where
         "settled" => {
             callback("success".to_string(), transaction);
             false // Stop polling
-        }
-        "error" => {
-            callback("failure".to_string(), transaction);
-            true // Continue polling on error
         }
         _ => {
             callback("pending".to_string(), transaction);

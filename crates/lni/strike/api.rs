@@ -1577,16 +1577,15 @@ pub async fn poll_invoice_events<F>(
                     ("pending".to_string(), Some(transaction))
                 }
             }
-            Err(_) => ("error".to_string(), None),
+            // A failed lookup is not evidence that the invoice failed: report
+            // pending and retry until max_polling_sec (docs/invoice-events.md).
+            Err(_) => ("pending".to_string(), None),
         };
 
         match status.as_str() {
             "settled" => {
                 callback("success".to_string(), transaction);
                 break;
-            }
-            "error" => {
-                callback("failure".to_string(), transaction);
             }
             _ => {
                 callback("pending".to_string(), transaction);

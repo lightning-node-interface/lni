@@ -646,7 +646,9 @@ pub async fn poll_invoice_events<F>(
                     ("pending".to_string(), Some(transaction))
                 }
             }
-            Err(_) => ("error".to_string(), None),
+            // A failed lookup is not evidence that the invoice failed: report
+            // pending and retry until max_polling_sec (docs/invoice-events.md).
+            Err(_) => ("pending".to_string(), None),
         };
 
         callback(status.clone(), transaction.clone());

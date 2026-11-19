@@ -640,6 +640,8 @@ await node.payInvoice({ invoice: bolt11 });
 
 LNI does some simple event polling over http to get some basic invoice status events. 
 Polling is used instead of a heavier grpc/pubsub (for now) to make sure the lib runs cross platform and stays lightweight.
+A failed lookup reports `pending` and polling continues; `failure` means `max_polling_sec` elapsed without settlement.
+Every provider and binding follows the same rules: see [docs/invoice-events.md](docs/invoice-events.md).
 
 Typescript for react-native
 ```typescript

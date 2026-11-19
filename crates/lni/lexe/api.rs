@@ -683,17 +683,15 @@ pub async fn on_invoice_events(
                                 }
                             }
                         }
-                        Err(_) => {
-                            callback.failure(None);
-                            return;
-                        }
+                        // Not evidence that the invoice failed; retry below.
+                        Err(_) => callback.pending(None),
                     }
                 }
             }
-            Err(_) => {
-                callback.failure(last_transaction);
-                return;
-            }
+            // A failed sync or lookup is not evidence that the invoice failed:
+            // report pending and retry until max_polling_sec
+            // (docs/invoice-events.md). Only Lexe's own Failed status is final.
+            Err(_) => callback.pending(None),
         }
 
         tokio::time::sleep(polling_delay).await;
