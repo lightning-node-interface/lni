@@ -1,0 +1,13 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "functions": {
+    "api/probe.ts": {
+      "includeFiles": "native/*.node",
+      "maxDuration": 30
+    },
+    "api/connect.ts": {
+      "includeFiles": "native/*.node",
+      "maxDuration": 290
+    }
+  }
+}

@@ -865,19 +865,16 @@ pub async fn poll_invoice_events<F>(
                     }
                 }
             }
-            Err(_) => ("error".to_string(), None),
+            // A failed HTTP poll is not evidence that the invoice failed: report
+            // pending and retry until max_polling_sec (docs/invoice-events.md).
+            // Consumers may tear down a live Tor circuit on a terminal failure.
+            Err(_) => ("pending".to_string(), None),
         };
 
         match status.as_str() {
             "settled" => {
                 callback("success".to_string(), transaction);
                 break;
-            }
-            "error" => {
-                // A failed HTTP poll is not evidence that the invoice failed.
-                // Keep retrying until the payment window expires; consumers
-                // may tear down a live Tor circuit on a terminal failure.
-                callback("pending".to_string(), transaction);
             }
             _ => {
                 callback("pending".to_string(), transaction);

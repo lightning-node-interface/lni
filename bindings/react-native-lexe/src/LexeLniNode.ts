@@ -76,6 +76,17 @@ export type LexeHumanBitcoinAddress = {
   updatable: boolean;
 };
 
+/** Receiving support reported by the authenticated node, not the mobile app. */
+export type LexeReceivingCapabilities = {
+  nodeVersion: string;
+  exclusiveAddresses: boolean;
+};
+
+export type LexeAddressCheck = {
+  receivedTxids: string[];
+  syncedBlockHeight: number;
+};
+
 type NativeLexeNode = NativeLexeNodeLike & {
   uniffiDestroy(): void;
 };
@@ -487,6 +498,46 @@ export class LexeLniNode implements LightningNode, OnchainPayments {
 
   async getInfo(): Promise<NodeInfo> {
     return toNodeInfo(await this.#call(() => this.#nativeNode.getInfo()));
+  }
+
+  async getReceivingCapabilities(): Promise<LexeReceivingCapabilities> {
+    const capabilities = await this.#call(() =>
+      this.#nativeNode.getReceivingCapabilities()
+    );
+    return {
+      nodeVersion: capabilities.nodeVersion,
+      exclusiveAddresses: capabilities.exclusiveAddresses,
+    };
+  }
+
+  /** Requires node v0.10.9 or later. Sync incoming funds with checkAddress. */
+  async getExclusiveAddress(): Promise<string> {
+    return this.#call(() => this.#nativeNode.getExclusiveAddress());
+  }
+
+  /** Sync an exclusive address; pass the returned height on subsequent checks. */
+  async checkAddress(
+    address: string,
+    syncedBlockHeight?: number
+  ): Promise<LexeAddressCheck> {
+    if (
+      syncedBlockHeight !== undefined &&
+      (!Number.isInteger(syncedBlockHeight) ||
+        syncedBlockHeight < 0 ||
+        syncedBlockHeight > 0xffffffff)
+    ) {
+      throw new LniError(
+        'InvalidInput',
+        'syncedBlockHeight must be an unsigned 32-bit integer'
+      );
+    }
+    const check = await this.#call(() =>
+      this.#nativeNode.checkAddress(address, syncedBlockHeight)
+    );
+    return {
+      receivedTxids: [...check.receivedTxids],
+      syncedBlockHeight: check.syncedBlockHeight,
+    };
   }
 
   async getHumanBitcoinAddress(): Promise<LexeHumanBitcoinAddress> {

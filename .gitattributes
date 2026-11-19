@@ -1,0 +1,5 @@
+# Generated Node.js runtime files must match across release platforms.
+bindings/lni_nodejs/**/*.js text eol=lf
+bindings/lni_nodejs/**/*.ts text eol=lf
+bindings/nodejs-lexe/**/*.js text eol=lf
+bindings/nodejs-lexe/**/*.ts text eol=lf

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>LexeConnect on Vercel · LNI native Node.js demo</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: #f5f6f8; background: radial-gradient(circle at 82% 0%, #203b51 0, #101821 34%, #090d12 72%); }
+      main { width: min(100% - 40px, 820px); margin: 0 auto; padding: 52px 0 80px; }
+      .eyebrow { color: #6fd9be; font-size: 13px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { margin: 24px 0 14px; font-size: clamp(42px, 8vw, 70px); line-height: 1.02; letter-spacing: -.06em; }
+      h2 { margin: 12px 0; font-size: clamp(25px, 4vw, 34px); letter-spacing: -.035em; }
+      .intro { max-width: 650px; color: #a7b6c2; font-size: 18px; line-height: 1.55; }
+      .card { margin-top: 28px; padding: clamp(24px, 5vw, 40px); border: 1px solid #304352; border-radius: 24px; background: #14202bcf; box-shadow: 0 24px 80px #0005; }
+      .card.primary { margin-top: 42px; border-color: #4a8b80; background: linear-gradient(145deg, #18352f, #14202b 65%); }
+      .label { color: #92a8b7; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+      .primary .label { color: #86e8cb; }
+      .copy { max-width: 650px; color: #b3c5ce; line-height: 1.55; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 22px; }
+      button, .button { appearance: none; display: inline-block; border: 0; border-radius: 11px; padding: 12px 18px; background: #7ce5c7; color: #09231d; font: inherit; font-weight: 750; text-decoration: none; cursor: pointer; }
+      button.secondary { border: 1px solid #486071; background: transparent; color: #e1eef5; }
+      button:disabled { opacity: .5; cursor: wait; }
+      .status { margin: 20px 0 0; color: #b2c5d0; font-size: 14px; line-height: 1.5; }
+      .flow { margin-top: 25px; padding-top: 24px; border-top: 1px solid #38554f; }
+      .flow h3 { margin: 0; font-size: 18px; }
+      .flow p { color: #b3c5ce; line-height: 1.5; }
+      .connect-qr { display: block; width: min(100%, 320px); height: auto; margin: 20px 0; border: 10px solid white; border-radius: 12px; background: white; }
+      .result { display: grid; gap: 20px; margin-top: 28px; padding-top: 25px; border-top: 1px solid #38554f; }
+      .result-row { display: grid; gap: 8px; }
+      .result code, #address { display: block; color: #fff; font-size: clamp(17px, 2.9vw, 22px); line-height: 1.5; overflow-wrap: anywhere; user-select: all; }
+      #address { min-height: 42px; margin: 20px 0; }
+      .note { margin-top: 22px; color: #91a4b2; font-size: 14px; line-height: 1.55; }
+      .links { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 44px; font-size: 14px; }
+      a { color: #87dfcf; text-underline-offset: 3px; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">Lexe × Vercel × napi-rs</div>
+      <h1>Connect a Lexe wallet on Vercel.</h1>
+      <p class="intro">This demo uses LNI’s Rust binding inside a Vercel Node.js function. Approve read-only and receive access in Lexe to see your Lightning and Bitcoin addresses.</p>
+
+      <section class="card primary" aria-labelledby="connect-title">
+        <div class="label">Your wallet · LexeConnect</div>
+        <h2 id="connect-title">Connect with Lexe</h2>
+        <p class="copy">Start a connection and scan the QR code with Lexe on your phone. Keep this page open; your addresses will appear here after approval.</p>
+        <div class="actions">
+          <button id="start-connect">Start connection</button>
+          <button id="cancel-connect" class="secondary" hidden>Cancel</button>
+        </div>
+        <p id="connect-status" class="status" role="status">Ready to connect.</p>
+        <div id="approval-flow" class="flow" hidden>
+          <h3>Approve in Lexe</h3>
+          <p>Scan this QR code with the Lexe app on your phone. This page will update automatically after you approve.</p>
+          <img id="connect-qr" class="connect-qr" alt="LexeConnect QR code to scan with the Lexe app" width="320" height="320" hidden>
+          <p>Using Lexe on this device? Open the approval link in a new tab, then return here after approving.</p>
+          <div class="actions">
+            <a id="open-lexe" class="button" target="_blank" rel="noopener noreferrer" hidden>Open Lexe approval</a>
+            <button id="copy-connect" class="secondary" hidden>Copy connection link</button>
+          </div>
+        </div>
+        <div id="connected-result" class="result" hidden>
+          <div class="result-row">
+            <div class="label">Lightning address</div>
+            <code id="lightning-address"></code>
+          </div>
+          <div class="result-row">
+            <div class="label">Bitcoin receiving address</div>
+            <code id="connected-bitcoin-address"></code>
+          </div>
+          <div id="human-bitcoin-row" class="result-row" hidden>
+            <div class="label">Human Bitcoin address</div>
+            <code id="human-bitcoin-address"></code>
+          </div>
+        </div>
+        <p class="note">The approved credential stays in the server request and is discarded after the addresses are fetched. This demo does not save your connection.</p>
+      </section>
+
+      <section class="card" aria-labelledby="demo-title">
+        <div class="label">Existing server credential · separate test wallet</div>
+        <h2 id="demo-title">Native Bitcoin address probe</h2>
+        <p class="copy">This address comes from the test credential already configured in the Vercel project.</p>
+        <code id="address" aria-live="polite">Loading address…</code>
+        <div class="actions">
+          <button id="copy" disabled>Copy address</button>
+          <button id="refresh" class="secondary">Refresh</button>
+        </div>
+        <p id="status" class="status" role="status">Connecting to Lexe…</p>
+        <p class="note">Refreshing can return the same unused address until the wallet uses it. The test credential remains on the server.</p>
+      </section>
+      <nav class="links" aria-label="Technical checks">
+        <a href="/api/probe">Vercel runtime</a>
+        <a href="/api/probe?mode=load">Native addon check</a>
+        <a href="/api/probe?mode=connect">LexeConnect check</a>
+      </nav>
+    </main>
+    <script>
+      const addressElement = document.querySelector('#address');
+      const statusElement = document.querySelector('#status');
+      const copyButton = document.querySelector('#copy');
+      const refreshButton = document.querySelector('#refresh');
+      let currentAddress = '';
+
+      async function loadAddress() {
+        refreshButton.disabled = true;
+        statusElement.textContent = 'Connecting to Lexe…';
+        try {
+          const response = await fetch('/api/probe?mode=address', { cache: 'no-store' });
+          const result = await response.json();
+          if (!response.ok || !result.ok || typeof result.address !== 'string') throw new Error('Address unavailable');
+          currentAddress = result.address;
+          addressElement.textContent = currentAddress;
+          copyButton.disabled = false;
+          statusElement.textContent = 'Fetched live from the test Lexe wallet.';
+        } catch {
+          addressElement.textContent = 'Address unavailable';
+          statusElement.textContent = 'The wallet request failed. Please try again.';
+          copyButton.disabled = true;
+        } finally {
+          refreshButton.disabled = false;
+        }
+      }
+
+      copyButton.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(currentAddress);
+          statusElement.textContent = 'Address copied.';
+        } catch {
+          statusElement.textContent = 'Could not copy. Select the address above to copy it manually.';
+        }
+      });
+      refreshButton.addEventListener('click', loadAddress);
+
+      const startConnectButton = document.querySelector('#start-connect');
+      const cancelConnectButton = document.querySelector('#cancel-connect');
+      const connectStatus = document.querySelector('#connect-status');
+      const approvalFlow = document.querySelector('#approval-flow');
+      const connectQr = document.querySelector('#connect-qr');
+      const openLexeLink = document.querySelector('#open-lexe');
+      const copyConnectButton = document.querySelector('#copy-connect');
+      const connectedResult = document.querySelector('#connected-result');
+      let connectController;
+      let connectionString = '';
+      let connectionFinished = false;
+
+      function clearConnectionLink() {
+        connectionString = '';
+        connectQr.removeAttribute('src');
+        connectQr.hidden = true;
+        openLexeLink.removeAttribute('href');
+        openLexeLink.hidden = true;
+        copyConnectButton.hidden = true;
+      }
+
+      function handleConnectEvent(event, data) {
+        if (event === 'ready') {
+          const url = new URL(data.connectionString);
+          if (url.protocol !== 'https:' || url.hostname !== 'lexe.app' || url.pathname !== '/connect') {
+            throw new Error('Unexpected Lexe approval link');
+          }
+          if (typeof data.qrDataUrl !== 'string' || !data.qrDataUrl.startsWith('data:image/png;base64,')) {
+            throw new Error('Lexe approval QR missing');
+          }
+          connectionString = url.toString();
+          connectQr.src = data.qrDataUrl;
+          connectQr.hidden = false;
+          openLexeLink.href = connectionString;
+          openLexeLink.hidden = false;
+          copyConnectButton.hidden = false;
+          approvalFlow.hidden = false;
+          connectStatus.textContent = 'Waiting for approval in Lexe. This request expires in about four minutes.';
+        } else if (event === 'retrying') {
+          connectStatus.textContent = 'The Lexe mailbox is temporarily unavailable. Retrying while this page stays open…';
+        } else if (event === 'waiting') {
+          connectStatus.textContent = 'Waiting for approval in Lexe. Keep this page open.';
+        } else if (event === 'lookup_retrying') {
+          connectStatus.textContent = 'Lexe approved the connection. Retrying the wallet address lookup…';
+        } else if (event === 'approved') {
+          if (typeof data.bitcoinAddress !== 'string' || !data.bitcoinAddress) throw new Error('Bitcoin address missing');
+          document.querySelector('#lightning-address').textContent = data.lightningAddress || 'Not configured in this wallet';
+          document.querySelector('#connected-bitcoin-address').textContent = data.bitcoinAddress;
+          const humanRow = document.querySelector('#human-bitcoin-row');
+          humanRow.hidden = !data.humanBitcoinAddress;
+          document.querySelector('#human-bitcoin-address').textContent = data.humanBitcoinAddress || '';
+          connectedResult.hidden = false;
+          approvalFlow.hidden = true;
+          clearConnectionLink();
+          connectStatus.textContent = 'Connected. These addresses came from the wallet you approved.';
+          connectionFinished = true;
+        } else if (event === 'rejected') {
+          connectStatus.textContent = data.reason === 'rejected' ? 'The request was declined in Lexe.' : 'Lexe could not approve this request.';
+          connectionFinished = true;
+        } else if (event === 'expired') {
+          connectStatus.textContent = 'The request expired. Start a new connection to try again.';
+          connectionFinished = true;
+        } else if (event === 'error') {
+          connectStatus.textContent = ['wallet_init', 'wallet_addresses'].includes(data.stage)
+            ? 'Lexe approved the connection, but address lookup failed. Start a new connection to retry.'
+            : 'The connection failed. Start again to retry.';
+          connectionFinished = true;
+        }
+        if (connectionFinished) {
+          approvalFlow.hidden = true;
+          clearConnectionLink();
+        }
+      }
+
+      function parseConnectChunk(chunk) {
+        let event = '';
+        let data = '';
+        for (const line of chunk.split(/\r?\n/)) {
+          if (line.startsWith('event: ')) event = line.slice(7);
+          if (line.startsWith('data: ')) data += line.slice(6);
+        }
+        if (event && data) handleConnectEvent(event, JSON.parse(data));
+      }
+
+      async function startConnect() {
+        connectController?.abort();
+        connectController = new AbortController();
+        const controller = connectController;
+        connectionFinished = false;
+        connectedResult.hidden = true;
+        approvalFlow.hidden = true;
+        clearConnectionLink();
+        startConnectButton.disabled = true;
+        cancelConnectButton.hidden = false;
+        connectStatus.textContent = 'Creating a secure LexeConnect request…';
+        try {
+          const response = await fetch('/api/connect', {
+            method: 'POST',
+            headers: { Accept: 'text/event-stream' },
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          if (!response.ok || !response.body) throw new Error('Connection endpoint unavailable');
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+            let boundary;
+            while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+              parseConnectChunk(buffer.slice(0, boundary));
+              buffer = buffer.slice(boundary + 2);
+            }
+            if (done || connectionFinished) {
+              if (connectionFinished) await reader.cancel();
+              break;
+            }
+          }
+          if (!connectionFinished) throw new Error('Connection ended before approval');
+        } catch (error) {
+          const wasCancelled = controller.signal.aborted;
+          controller.abort();
+          if (wasCancelled) {
+            connectStatus.textContent = 'Connection cancelled.';
+          } else {
+            connectStatus.textContent = 'Connection ended before approval. Start again to retry.';
+          }
+          approvalFlow.hidden = true;
+          clearConnectionLink();
+        } finally {
+          if (connectController === controller) connectController = undefined;
+          startConnectButton.disabled = false;
+          cancelConnectButton.hidden = true;
+        }
+      }
+
+      startConnectButton.addEventListener('click', startConnect);
+      cancelConnectButton.addEventListener('click', () => connectController?.abort());
+      copyConnectButton.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(connectionString);
+          connectStatus.textContent = 'Connection link copied. Open it in Lexe to approve.';
+        } catch {
+          connectStatus.textContent = 'Could not copy the link. Use the Open Lexe button instead.';
+        }
+      });
+      loadAddress();
+    </script>
+  </body>
+</html>

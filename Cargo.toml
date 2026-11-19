@@ -3,7 +3,17 @@ resolver = "2"
 members = [
     "crates/lni",
     "bindings/lni_nodejs",
+    "bindings/nodejs-lexe",
     "bindings/kotlin",
     "bindings/swift",
     "bindings/react-native-lexe/rust",
 ]
+
+# Keep size optimization scoped to the standalone Lexe Node.js addon.
+[profile.lexe-nodejs-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+debug = 0

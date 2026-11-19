@@ -120,6 +120,51 @@ const stringConverter = (() => {
 })();
 const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
 
+export type AddressCheck = {
+  receivedTxids: Array<string>;
+  syncedBlockHeight: number;
+};
+
+/**
+ * Generated factory for {@link AddressCheck} record objects.
+ */
+export const AddressCheck = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<AddressCheck, ReturnType<typeof defaults>>(
+      defaults
+    );
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<AddressCheck>,
+  });
+})();
+
+const FfiConverterTypeAddressCheck = (() => {
+  type TypeName = AddressCheck;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        receivedTxids: FfiConverterSequenceString.read(from),
+        syncedBlockHeight: FfiConverterUInt32.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterSequenceString.write(value.receivedTxids, into);
+      FfiConverterUInt32.write(value.syncedBlockHeight, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterSequenceString.allocationSize(value.receivedTxids) +
+        FfiConverterUInt32.allocationSize(value.syncedBlockHeight)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type ClientInfo = {
   kind: string;
   clientPubkey?: string;
@@ -1642,6 +1687,52 @@ const FfiConverterTypePrepareOnchainTransactionParams = (() => {
   return new FFIConverter();
 })();
 
+export type ReceivingCapabilities = {
+  nodeVersion: string;
+  exclusiveAddresses: boolean;
+};
+
+/**
+ * Generated factory for {@link ReceivingCapabilities} record objects.
+ */
+export const ReceivingCapabilities = (() => {
+  const defaults = () => ({});
+  const create = (() => {
+    return uniffiCreateRecord<
+      ReceivingCapabilities,
+      ReturnType<typeof defaults>
+    >(defaults);
+  })();
+  return Object.freeze({
+    create,
+    new: create,
+    defaults: () => Object.freeze(defaults()) as Partial<ReceivingCapabilities>,
+  });
+})();
+
+const FfiConverterTypeReceivingCapabilities = (() => {
+  type TypeName = ReceivingCapabilities;
+  class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+    read(from: RustBuffer): TypeName {
+      return {
+        nodeVersion: FfiConverterString.read(from),
+        exclusiveAddresses: FfiConverterBool.read(from),
+      };
+    }
+    write(value: TypeName, into: RustBuffer): void {
+      FfiConverterString.write(value.nodeVersion, into);
+      FfiConverterBool.write(value.exclusiveAddresses, into);
+    }
+    allocationSize(value: TypeName): number {
+      return (
+        FfiConverterString.allocationSize(value.nodeVersion) +
+        FfiConverterBool.allocationSize(value.exclusiveAddresses)
+      );
+    }
+  }
+  return new FFIConverter();
+})();
+
 export type Transaction = {
   type: string;
   invoice: string;
@@ -2327,6 +2418,11 @@ const uniffiCallbackInterfaceOnInvoiceEventCallback: {
 };
 
 export interface LexeNodeLike {
+  checkAddress(
+    address: string,
+    syncedBlockHeight: number | undefined,
+    asyncOpts_?: { signal: AbortSignal }
+  ) /*throws*/ : Promise<AddressCheck>;
   createInvoice(
     params: CreateInvoiceParams,
     asyncOpts_?: { signal: AbortSignal }
@@ -2346,6 +2442,9 @@ export interface LexeNodeLike {
   getClientInfo(asyncOpts_?: {
     signal: AbortSignal;
   }) /*throws*/ : Promise<ClientInfo>;
+  getExclusiveAddress(asyncOpts_?: {
+    signal: AbortSignal;
+  }) /*throws*/ : Promise<string>;
   getHumanBitcoinAddress(asyncOpts_?: {
     signal: AbortSignal;
   }) /*throws*/ : Promise<HumanBitcoinAddress>;
@@ -2357,6 +2456,9 @@ export interface LexeNodeLike {
   getPermissions(asyncOpts_?: {
     signal: AbortSignal;
   }) /*throws*/ : Promise<Permissions>;
+  getReceivingCapabilities(asyncOpts_?: {
+    signal: AbortSignal;
+  }) /*throws*/ : Promise<ReceivingCapabilities>;
   listOffers(
     search: string | undefined,
     asyncOpts_?: { signal: AbortSignal }
@@ -2423,6 +2525,55 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
     this[pointerLiteralSymbol] = pointer;
     this[destructorGuardSymbol] =
       uniffiTypeLexeNodeObjectFactory.bless(pointer);
+  }
+
+  async checkAddress(
+    address: string,
+    syncedBlockHeight: number | undefined,
+    asyncOpts_?: { signal: AbortSignal }
+  ): Promise<AddressCheck> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_check_address(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this),
+            FfiConverterString.lower(address, nativeModule().rustbuffer_alloc),
+            FfiConverterOptionalUInt32.lower(
+              syncedBlockHeight,
+              nativeModule().rustbuffer_alloc
+            )
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypeAddressCheck.lift.bind(
+          FfiConverterTypeAddressCheck
+        ),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
   }
 
   async createInvoice(
@@ -2643,6 +2794,46 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
     }
   }
 
+  async getExclusiveAddress(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<string> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_exclusive_address(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
   async getHumanBitcoinAddress(asyncOpts_?: {
     signal: AbortSignal;
   }): Promise<HumanBitcoinAddress> /*throws*/ {
@@ -2799,6 +2990,48 @@ export class LexeNode extends UniffiAbstractObject implements LexeNodeLike {
         // here using the per-callable return-type converter.
         /*liftFunc:*/ FfiConverterTypePermissions.lift.bind(
           FfiConverterTypePermissions
+        ),
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+        /*asyncOpts:*/ asyncOpts_,
+        /*errorHandler:*/ FfiConverterTypeLexeError.lift.bind(
+          FfiConverterTypeLexeError
+        )
+      );
+    } catch (__error: any) {
+      if (uniffiIsDebug && __error instanceof Error) {
+        __error.stack = __stack;
+      }
+      throw __error;
+    }
+  }
+
+  async getReceivingCapabilities(asyncOpts_?: {
+    signal: AbortSignal;
+  }): Promise<ReceivingCapabilities> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+      return await uniffiRustCallAsync(
+        /*rustCaller:*/ uniffiCaller,
+        /*rustFutureFunc:*/ () => {
+          return nativeModule().ubrn_uniffi_react_native_lexe_fn_method_lexenode_get_receiving_capabilities(
+            uniffiTypeLexeNodeObjectFactory.clonePointer(this)
+          );
+        },
+        /*pollFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_poll_rust_buffer,
+        /*cancelFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_cancel_rust_buffer,
+        /*completeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_complete_rust_buffer,
+        /*freeFunc:*/ nativeModule()
+          .ubrn_ffi_react_native_lexe_rust_future_free_rust_buffer,
+        // Async returns always go through the JS-side converter: the
+        // FFI symbol returns the future handle (u64), and the user-level
+        // RustBuffer comes back via the shared `rust_future_complete_*`
+        // export. The bytes the runtime hands back must be deserialized
+        // here using the per-callable return-type converter.
+        /*liftFunc:*/ FfiConverterTypeReceivingCapabilities.lift.bind(
+          FfiConverterTypeReceivingCapabilities
         ),
         /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
         /*asyncOpts:*/ asyncOpts_,
@@ -3280,14 +3513,14 @@ const FfiConverterTypeLexeNode = new FfiConverterObject(
   uniffiTypeLexeNodeObjectFactory
 );
 
+// FfiConverter for Array<string>
+const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
+
 // FfiConverter for string | undefined
 const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
 
 // FfiConverter for bigint | undefined
 const FfiConverterOptionalInt64 = new FfiConverterOptional(FfiConverterInt64);
-
-// FfiConverter for Array<string>
-const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
 
 // FfiConverter for InvoiceType | undefined
 const FfiConverterOptionalTypeInvoiceType = new FfiConverterOptional(
@@ -3427,6 +3660,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_check_address() !==
+    40212
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_check_address'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_create_invoice() !==
     15605
   ) {
@@ -3467,6 +3708,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address() !==
+    53415
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_get_exclusive_address'
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_human_bitcoin_address() !==
     60227
   ) {
@@ -3496,6 +3745,14 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       'uniffi_react_native_lexe_checksum_method_lexenode_get_permissions'
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities() !==
+    14244
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      'uniffi_react_native_lexe_checksum_method_lexenode_get_receiving_capabilities'
     );
   }
   if (
@@ -3593,6 +3850,7 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeAddressCheck,
     FfiConverterTypeClientInfo,
     FfiConverterTypeCreateInvoiceParams,
     FfiConverterTypeCreateOfferParams,
@@ -3622,6 +3880,7 @@ export default Object.freeze({
     FfiConverterTypePayOnchainResponse,
     FfiConverterTypePermissions,
     FfiConverterTypePrepareOnchainTransactionParams,
+    FfiConverterTypeReceivingCapabilities,
     FfiConverterTypeTransaction,
   },
 });

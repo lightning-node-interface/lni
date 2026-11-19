@@ -10,4 +10,10 @@ yarn.lock
 *.node
 .yarn
 __test__
+*.test.js
 renovate.json
+helpers/*.ts
+!helpers/*.d.ts
+helpers/*.test.js
+tsconfig.helpers.json
+scripts

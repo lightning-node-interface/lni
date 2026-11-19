@@ -589,10 +589,6 @@ where
             callback("success".to_string(), transaction);
             false // Stop polling
         }
-        "error" => {
-            callback("failure".to_string(), transaction);
-            true // Continue polling on error
-        }
         _ => {
             callback("pending".to_string(), transaction);
             true // Continue polling

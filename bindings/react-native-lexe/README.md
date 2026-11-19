@@ -249,3 +249,39 @@ send. Run it only deliberately with `LEXE_ONCHAIN_SEND_CONFIRM=YES`,
 `LEXE_ONCHAIN_IDEMPOTENCY_KEY` set. It uses mainnet and spends real funds.
 
 API reference: [Lexe pay-onchain](https://docs.lexe.tech/cli/#pay-onchain).
+
+### Exclusive Bitcoin receiving addresses
+
+`getReceivingCapabilities()` queries the authenticated node. Check
+`exclusiveAddresses` before enabling onchain receiving. The required **node**
+version is v0.10.9 or later; the installed mobile app has its own version.
+
+```ts
+const capabilities = await node.getReceivingCapabilities();
+if (!capabilities.exclusiveAddresses) {
+  throw new Error(`Update Lexe node ${capabilities.nodeVersion} before receiving`);
+}
+const address = await node.getExclusiveAddress();
+// Persist this address against its checkout/order and reuse it on refresh.
+const firstCheck = await node.checkAddress(address);
+const nextCheck = await node.checkAddress(address, firstCheck.syncedBlockHeight);
+// nextCheck.receivedTxids identifies incoming transactions found by the check.
+```
+
+Each `getExclusiveAddress()` call allocates an address exclusive to that caller.
+The wrapper does not cache addresses. Applications must retain an order's address
+and periodically call `checkAddress` to sync incoming funds into the Lexe wallet.
+The optional previous height is an unsigned 32-bit integer, including zero.
+`LexeReceivingCapabilities` and `LexeAddressCheck` are exported wrapper types.
+
+Receiving support is separate from credential authorization. Use
+`getClientInfo()` to inspect the actual grant. Capability inspection needs read
+info access; address allocation and the receive-only sync use receiving access.
+These calls do not request spending permissions.
+
+The native methods use the released
+[Lexe Rust SDK v0.1.29](https://github.com/lexe-app/lexe-public/blob/lexe-sdk-rust-v0.1.29/lexe/src/wallet.rs)
+through LNI's core Rust implementation. Generated TypeScript, FFI and C++ files
+must be regenerated together after changing the Rust bridge. Consumers must
+rebuild their Android/iOS native libraries and app before using these methods;
+updating JavaScript alone does not update an installed app's native API.

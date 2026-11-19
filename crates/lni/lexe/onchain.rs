@@ -198,10 +198,22 @@ pub async fn pay(
     let req = request(&transaction, network)?;
     // Never trust caller-provided fee_sats: Lexe cannot enforce that fee.
     validate_execution(&options)?;
-    let payment = wallet.pay_onchain(req).await.map_err(|_| ApiError::Api {
-        reason: "Lexe on-chain send failed or its outcome is unknown; reconcile payment history or retry with the same prepared payment id".to_owned(),
-    })?;
-    response(&payment, transaction.address)
+    let payment = wallet
+        .pay_onchain(req)
+        .await
+        .map_err(|_| outcome_unknown())?;
+    // Lexe accepted the send, so a response we cannot read is not a failure.
+    response(&payment, transaction.address).map_err(|_| outcome_unknown())
+}
+
+/// The send may have happened. Callers must reconcile before preparing a new
+/// transaction, or retry with the same prepared payment id (idempotent).
+pub const ONCHAIN_OUTCOME_UNKNOWN: &str = "Lexe on-chain send failed or its outcome is unknown; reconcile payment history or retry with the same prepared payment id";
+
+fn outcome_unknown() -> ApiError {
+    ApiError::Api {
+        reason: ONCHAIN_OUTCOME_UNKNOWN.to_owned(),
+    }
 }
 
 fn response(payment: &Payment, address: String) -> Result<PayOnchainResponse, ApiError> {

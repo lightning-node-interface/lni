@@ -1,0 +1,92 @@
+{
+  "name": "@sunnyln/lni-lexe-nodejs",
+  "version": "0.1.1",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "lni_lexe",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  },
+  "license": "MPL-2.0",
+  "devDependencies": {
+    "@napi-rs/cli": "2.18.4",
+    "@types/node": "24.13.1",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=10.16"
+  },
+  "scripts": {
+    "build": "node scripts/run.cjs build-package --profile lexe-nodejs-release",
+    "build:debug": "node scripts/run.cjs build-package",
+    "sync:runtime": "node scripts/run.cjs sync-runtime",
+    "artifacts": "napi artifacts",
+    "typecheck": "node scripts/run.cjs sync-runtime && tsc -p tsconfig.helpers.json --noEmit",
+    "test": "node scripts/run.cjs sync-runtime && node --test lexe-connect.test.js lexe-events.test.js lexe-errors.test.js helpers/lexe.test.js",
+    "test:lexe-monitor": "node scripts/run.cjs test-lexe-monitor",
+    "check:native-deps": "node scripts/run.cjs check-native-deps",
+    "check:package": "node scripts/run.cjs check-package",
+    "pack:dry-run": "node scripts/run.cjs check-package",
+    "pack:platforms": "node scripts/run.cjs pack-platforms",
+    "test:install": "node scripts/run.cjs test-install",
+    "test:release": "node scripts/run.cjs check-release.test",
+    "prepublishOnly": "node scripts/run.cjs check-package",
+    "version:platforms": "napi create-npm-dir -t ."
+  },
+  "packageManager": "yarn@4.6.0",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./lexe": {
+      "types": "./helpers/lexe.d.ts",
+      "default": "./helpers/lexe.js"
+    }
+  },
+  "description": "Lexe-only native Node.js bindings for LNI and Lexe Connect",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/nodejs-lexe"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "workspaces": [
+    "npm/*"
+  ],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "contracts.d.ts",
+    "native.js",
+    "generated/index.d.ts",
+    "lexe-events.js",
+    "lexe-errors.js",
+    "lexe-connect.js",
+    "lexe-connect.d.ts",
+    "helpers/lexe.js",
+    "helpers/lexe.d.ts",
+    "lexe/package.json",
+    "LEXE.md"
+  ],
+  "optionalDependencies": {
+    "@sunnyln/lni-lexe-nodejs-darwin-arm64": "0.1.1",
+    "@sunnyln/lni-lexe-nodejs-darwin-x64": "0.1.1",
+    "@sunnyln/lni-lexe-nodejs-linux-x64-gnu": "0.1.1",
+    "@sunnyln/lni-lexe-nodejs-win32-x64-msvc": "0.1.1"
+  },
+  "lni": {
+    "cargoPackage": "lni_lexe_nodejs",
+    "lexeOnly": true
+  }
+}

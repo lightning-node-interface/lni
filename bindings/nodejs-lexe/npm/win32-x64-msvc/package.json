@@ -1,0 +1,27 @@
+{
+  "name": "@sunnyln/lni-lexe-nodejs-win32-x64-msvc",
+  "version": "0.1.1",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "lni_lexe.win32-x64-msvc.node",
+  "files": [
+    "lni_lexe.win32-x64-msvc.node"
+  ],
+  "description": "Lexe-only native Node.js bindings for LNI and Lexe Connect",
+  "license": "MPL-2.0",
+  "engines": {
+    "node": ">=10.16"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lightning-node-interface/lni.git",
+    "directory": "bindings/nodejs-lexe"
+  }
+}

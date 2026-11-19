@@ -315,6 +315,10 @@ Node adapters expose `await node.decodeOffer(offer)`, which returns the decoded 
 
 Poll for invoice settlement after creating an invoice. The callback fires with `'success'`, `'pending'`, or `'failure'`.
 
+A failed lookup reports `'pending'` and polling continues; `'failure'` means
+`maxPollingSec` elapsed. Every LNI binding follows these rules: see
+[docs/invoice-events.md](../../docs/invoice-events.md).
+
 ```ts
 await node.onInvoiceEvents(
   {

@@ -1,0 +1,4 @@
+{
+  "main": "../helpers/lexe.js",
+  "types": "../helpers/lexe.d.ts"
+}

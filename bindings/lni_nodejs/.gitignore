@@ -121,7 +121,7 @@ dist
 .AppleDouble
 .LSOverride
 
-# Icon must end with two 
+# Icon must end with two
 Icon
 
 
@@ -195,3 +195,6 @@ Cargo.lock
 !.yarn/versions
 
 *.node
+
+# helpers/*.js and helpers/*.d.ts are committed build output, like native.js
+# and generated/, so a fresh checkout can be packed. `check:package` detects drift.

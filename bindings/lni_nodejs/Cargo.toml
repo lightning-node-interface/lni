@@ -30,5 +30,7 @@ napi-build = "2.0.1"
 
 [features]
 napi_rs = []
+# Offline invoice-monitor lifecycle hooks for tests; never enable in releases.
+lexe_monitor_test = []
 default = ["napi_rs"]
 
